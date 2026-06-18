@@ -1,0 +1,6 @@
+Cmnd_Alias DNS_SYNC_BOOTSTRAP_INSTALL = /usr/bin/install -o root -g root -m 0750 /tmp/dns-panel-ns2-agent.*/* /usr/local/bin/*, /usr/bin/install -o root -g dns-sync -m 0750 /tmp/dns-panel-ns2-agent.*/dns-sync-command.sh /usr/local/bin/dns-sync-command.sh, /usr/bin/install -o root -g root -m 0440 /tmp/dns-panel-ns2-agent.*/dns-sync.sudoers /etc/sudoers.d/dns-sync
+Cmnd_Alias DNS_SYNC_BOOTSTRAP_USER = /usr/sbin/groupadd --system dns-sync, /usr/sbin/usermod -a -G dns-sync dns-sync
+Cmnd_Alias DNS_SYNC_BOOTSTRAP_VALIDATE = /usr/sbin/visudo -cf /tmp/dns-panel-ns2-agent.*/dns-sync.sudoers, /usr/sbin/visudo -c, /usr/bin/grep -R * /etc/sudoers /etc/sudoers.d
+Cmnd_Alias DNS_SYNC_BOOTSTRAP_CLEAN = /bin/rm -f /etc/sudoers.d/dns-sync-bootstrap
+
+dns-sync ALL=(root) NOPASSWD: DNS_SYNC_BOOTSTRAP_INSTALL, DNS_SYNC_BOOTSTRAP_USER, DNS_SYNC_BOOTSTRAP_VALIDATE, DNS_SYNC_BOOTSTRAP_CLEAN

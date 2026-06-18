@@ -1,0 +1,7 @@
+dns-sync ALL=(root) NOPASSWD: /usr/local/bin/dns-slave-add-zone.sh
+dns-sync ALL=(root) NOPASSWD: /usr/local/bin/dns-slave-remove-zone.sh
+dns-sync ALL=(root) NOPASSWD: /usr/local/bin/dns-slave-reload.sh
+dns-sync ALL=(root) NOPASSWD: /usr/local/bin/dns-slave-migrate-layout.sh
+dns-sync ALL=(root) NOPASSWD: /usr/local/bin/dns-slave-status.sh
+dns-sync ALL=(root) NOPASSWD: /usr/local/bin/dns-slave-check-transfer.sh
+dns-sync ALL=(root) NOPASSWD: /usr/local/bin/dns-zone-inventory.sh

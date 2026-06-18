@@ -1,0 +1,22 @@
+Painel DNS Trevizam Network
+Versao: 1.0
+Data: 15/06/2026
+Status: Producao inicial - apto com pendencias controladas
+
+Recursos:
+- Dashboard operacional
+- Gerenciamento DNS Forward
+- Gerenciamento Reverso IPv4/IPv6
+- Auditoria DNS V1
+- Usuarios e perfis
+- Servicos
+- Firewall
+- Exportacao CSV
+- Historico por dominio
+
+Backup da versao:
+/home/cnetwork/backups/painel_dns_v1_20260615_142415
+/home/cnetwork/backups/painel_dns_v1_20260615_142415.tar.gz
+
+Checksum SHA-256 do tar.gz:
+Disponivel no arquivo painel_dns_v1_20260615_142415.tar.gz.sha256.
