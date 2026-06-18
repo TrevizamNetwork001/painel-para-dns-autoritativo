@@ -1,0 +1,268 @@
+<?php
+require "config.php";
+
+if (!isset($_SESSION['logado'])) {
+    header("Location: login.php");
+    exit;
+}
+
+$domain = $_GET['domain'] ?? array_key_first($domains);
+$file = $domains[$domain];
+
+$ipv6_file = "/var/cache/bind/master-rev/2804.52bc.rev";
+
+function reload_dns() {
+    exec("sudo rndc reload");
+}
+
+function is_valid_ip($ip, $type) {
+    if ($type == "A") return filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4);
+    if ($type == "AAAA") return filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV6);
+    return true;
+}
+
+function record_exists($file, $name, $type, $value) {
+    foreach (file($file) as $line) {
+        if (str_contains($line, $name) && str_contains($line, $type) && str_contains($line, $value)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+function get_records($file) {
+    $records = [];
+    foreach (file($file) as $line) {
+        if (preg_match('/^(\S+)\s+IN\s+(A|AAAA|CNAME|TXT)\s+(.+)$/', trim($line), $m)) {
+            $records[] = ['raw'=>$line,'name'=>$m[1],'type'=>$m[2],'value'=>$m[3]];
+        }
+    }
+    return $records;
+}
+
+function get_ptr_v6($file) {
+    $records = [];
+    foreach (file($file) as $line) {
+        if (preg_match('/^([0-9a-f\.]+)\s+IN\s+PTR\s+(.+)$/i', trim($line), $m)) {
+            $records[] = ['raw'=>trim($line),'ptr'=>$m[1],'host'=>$m[2]];
+        }
+    }
+    return $records;
+}
+
+function ipv6_to_ptr_full($ipv6) {
+    $bin = inet_pton($ipv6);
+    if ($bin === false) return false;
+
+    $hex = unpack("H*", $bin)[1];
+    return implode('.', array_reverse(str_split($hex)));
+}
+
+function ptr_to_ipv6($ptr) {
+    $nibbles = explode('.', $ptr);
+    $nibbles = array_slice($nibbles, 0, 32);
+    $hex = implode('', array_reverse($nibbles));
+    return strtolower(implode(':', str_split($hex, 4)));
+}
+
+function ptr_ipv6_exists($file, $ipv6) {
+
+    // gera o PTR exatamente como será salvo
+    $ptr = ipv6_to_ptr_full($ipv6);
+    $ptr = preg_replace('/(\.c\.b\.2\.5\.4\.0\.8\.2)+$/','',$ptr);
+
+    foreach (file($file) as $line) {
+
+        // remove espaços extras
+        $line = trim($line);
+
+        // compara direto
+        if (stripos($line, $ptr . " IN PTR") === 0) {
+            return true;
+        }
+    }
+
+    return false;
+}
+function update_serial($file) {
+    $lines = file($file);
+    foreach ($lines as $i=>$line) {
+        if (strpos($line,'serial') !== false) {
+            preg_match('/\d+/',$line,$m);
+            $cur = $m[0] ?? date('Ymd00');
+            $today = date('Ymd');
+            $num = substr($cur,8,2);
+            $new = (substr($cur,0,8)==$today)
+                ? $today . str_pad($num+1,2,'0',STR_PAD_LEFT)
+                : $today."01";
+            $lines[$i] = preg_replace('/\d+/',$new,$line);
+            break;
+        }
+    }
+    file_put_contents($file, implode("",$lines));
+}
+
+# ADD
+$erro = null;
+
+if (isset($_POST['add'])) {
+
+    $name  = trim($_POST['name']);
+    $type  = $_POST['type'];
+    $value = trim($_POST['value']);
+
+    if ($type == "PTRv6") {
+
+        if (!filter_var($name, FILTER_VALIDATE_IP, FILTER_FLAG_IPV6)) {
+            $erro = "IPv6 inválido!";
+        }
+        elseif (ptr_ipv6_exists($ipv6_file, $name)) {
+            $erro = "Já existe PTR para esse IPv6!";
+        }
+        else {
+
+            $ptr = ipv6_to_ptr_full($name);
+            $ptr = preg_replace('/(\.c\.b\.2\.5\.4\.0\.8\.2)+$/','',$ptr);
+
+            $host = rtrim($value, '.') . '.';
+
+            file_put_contents($ipv6_file, "$ptr IN PTR $host\n", FILE_APPEND);
+
+            update_serial($ipv6_file);
+            reload_dns();
+        }
+
+    } else {
+
+        if (!is_valid_ip($value,$type)) {
+            $erro="IP inválido!";
+        }
+        elseif (record_exists($file,$name,$type,$value)) {
+            $erro="Registro já existe!";
+        }
+        else {
+
+            file_put_contents($file,
+                sprintf("%-20s IN %-6s %s\n",$name,$type,$value),
+                FILE_APPEND
+            );
+
+            update_serial($file);
+            reload_dns();
+        }
+    }
+}
+
+# DELETE PTR
+if (isset($_POST['delete_ptr'])) {
+    $target = trim($_POST['ptr_raw']);
+    $new=[];
+    foreach (file($ipv6_file) as $l) {
+        if (trim($l)!==$target) $new[]=$l;
+    }
+    file_put_contents($ipv6_file,implode("",$new));
+    update_serial($ipv6_file);
+    reload_dns();
+}
+
+# DELETE NORMAL
+if (isset($_POST['delete'])) {
+    $target = trim($_POST['raw']);
+    $new=[];
+    foreach (file($file) as $l) {
+        if (trim($l)!==$target) $new[]=$l;
+    }
+    file_put_contents($file,implode("",$new));
+    update_serial($file);
+    reload_dns();
+}
+
+$records = get_records($file);
+$ptrv6_records = get_ptr_v6($ipv6_file);
+?>
+
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Painel DNS</title>
+
+<style>
+body { margin:0; font-family: Arial; background:#0f172a; color:#e2e8f0; }
+.container { width:90%; margin:auto; padding:20px; }
+h2 { color:#38bdf8; }
+.card { background:#020617; padding:20px; border-radius:10px; margin-bottom:20px; }
+input, select { padding:10px; margin-top:5px; background:#020617; border:1px solid #334155; color:#e2e8f0; border-radius:5px; width:250px; }
+button { margin-top:15px; padding:10px 15px; background:#3b82f6; border:none; border-radius:6px; color:white; }
+.delete { background:#ef4444; }
+table { width:100%; border-collapse: collapse; }
+td, th { padding:10px; border-bottom:1px solid #1e293b; }
+</style>
+</head>
+
+<body>
+<div class="container">
+
+<h2>🚀 Painel DNS</h2>
+<?php if (!empty($erro)): ?>
+    <div style="background:#dc2626;color:white;padding:12px;border-radius:8px;margin-bottom:15px;">
+        ⚠️ <?= $erro ?>
+    </div>
+<?php endif; ?>
+
+<form method="POST">
+<input name="name" placeholder="Nome ou IPv6" required>
+<select name="type">
+<option>A</option>
+<option>AAAA</option>
+<option>CNAME</option>
+<option>TXT</option>
+<option>PTRv6</option>
+</select>
+<input name="value" placeholder="Valor" required>
+<button name="add">Adicionar</button>
+</form>
+</div>
+
+<div class="card">
+<h3>Registros</h3>
+<table>
+<tr><th>Nome</th><th>Tipo</th><th>Valor</th><th>Ação</th></tr>
+<?php foreach ($records as $r): ?>
+<tr>
+<td><?= $r['name'] ?></td>
+<td><?= $r['type'] ?></td>
+<td><?= $r['value'] ?></td>
+<td>
+<form method="POST">
+<input type="hidden" name="raw" value="<?= htmlspecialchars(trim($r['raw'])) ?>">
+<button class="delete" name="delete">Remover</button>
+</form>
+</td>
+</tr>
+<?php endforeach; ?>
+</table>
+</div>
+
+<div class="card">
+<h3>IPv6 Reverse (PTR)</h3>
+<table>
+<tr><th>PTR</th><th>Hostname</th><th>Ação</th></tr>
+<?php foreach ($ptrv6_records as $r): ?>
+<tr>
+<td><?= $r['ptr'] ?></td>
+<td><?= $r['host'] ?></td>
+<td>
+<form method="POST">
+<input type="hidden" name="ptr_raw" value="<?= htmlspecialchars($r['raw']) ?>">
+<button class="delete" name="delete_ptr">Remover</button>
+</form>
+</td>
+</tr>
+<?php endforeach; ?>
+</table>
+</div>
+
+</div>
+</body>
+</html>

@@ -1,0 +1,52 @@
+Causa raiz
+==========
+O bloco SSH remoto montava o comando install usando '$remote_dir'/'$f'.
+Como '$f' estava dentro de aspas simples no comando enviado ao host remoto,
+o shell remoto tratava $f como texto literal em vez de expandir a variavel do
+loop. Isso fazia o install procurar caminhos como:
+
+/tmp/dns-panel-ns2-agent.<pid>/$f
+
+Correcao aplicada
+=================
+Arquivo alterado:
+/var/www/html/painel/scripts/ns2/install-ns2-agent.sh
+
+No loop de instalacao dos scripts, a composicao dos caminhos foi corrigida
+para manter remote_dir expandido pelo shell local e permitir que f seja
+expandido pelo shell remoto:
+
+sudo -n install -o root -g root -m 0750 '$remote_dir'/"$f" /usr/local/bin/"$f"
+
+Nenhuma alteracao foi feita na arquitetura do agente.
+Nenhuma alteracao foi feita em sudoers.
+Nenhuma alteracao foi feita em dns-servers.php.
+
+Validacoes executadas
+=====================
+1. Sintaxe do instalador:
+   sh -n /var/www/html/painel/scripts/ns2/install-ns2-agent.sh
+
+   Resultado: OK, sem erros de sintaxe.
+
+2. Reexecucao solicitada:
+   /var/www/html/painel/scripts/ns2/install-ns2-agent.sh 45.162.196.243 dns-sync 22
+
+   Primeira tentativa no sandbox: falhou antes do SSH porque a chave
+   /var/www/.ssh/id_ed25519_dns_sync nao estava legivel no ambiente restrito.
+
+   Segunda tentativa com permissao elevada: o instalador avancou ate o bloco
+   remoto, sem reproduzir o erro de caminho literal '$f'. A execucao parou em:
+
+   sudo: uma senha e necessaria
+   ERRO: falha ao instalar ou validar agente no NS2
+
+Resultado final
+===============
+O bug de instalacao causado pela nao expansao de $f no shell remoto foi
+corrigido.
+
+A instalacao remota nao foi concluida nesta reexecucao porque o usuario
+dns-sync no NS2 exigiu senha para algum comando sudo -n. Esse bloqueio e
+posterior ao bug corrigido e nao foi tratado porque a solicitacao determina
+nao alterar sudoers.

@@ -1,0 +1,117 @@
+HANDOFF_BOOTSTRAP_COMMAND_MISMATCH_NS2
+
+Comandos reais executados
+
+1. Falha original corrigida no instalador antigo:
+
+sudo -n /usr/sbin/visudo -c
+
+Esse comando era executado depois de remover o bootstrap temporario com:
+
+sudo -n /bin/rm -f /etc/sudoers.d/dns-sync-bootstrap
+
+2. Falha real observada em 2026-06-16 apos instrumentacao:
+
+sudo -n /usr/bin/install -o root -g root -m 0750 /tmp/dns-panel-ns2-agent.9532/dns-slave-status.sh /usr/local/bin/dns-slave-status.sh
+
+Saida do instalador:
+
+ERRO: comando sudo -n falhou: sudo -n /usr/bin/install -o root -g root -m 0750 /tmp/dns-panel-ns2-agent.9532/dns-slave-status.sh /usr/local/bin/dns-slave-status.sh
+ERRO: sudoers bootstrap ausente ou insuficiente no NS2
+Instale temporariamente /etc/sudoers.d/dns-sync-bootstrap a partir de dns-sync-bootstrap.sudoers e rode visudo -c.
+
+Regra sudoers correspondente
+
+Para a falha antiga de visudo:
+
+DNS_SYNC_BOOTSTRAP_VALIDATE permitia:
+/usr/sbin/visudo -c
+
+Para a falha atual de install:
+
+DNS_SYNC_BOOTSTRAP_INSTALL permite:
+/usr/bin/install -o root -g root -m 0750 /tmp/dns-panel-ns2-agent.*/* /usr/local/bin/*
+
+Diferenca encontrada
+
+A falha antiga era de ordem de execucao: o comando sudo -n /usr/sbin/visudo -c
+correspondia ao bootstrap, mas era executado depois que o proprio bootstrap ja
+tinha sido removido. Nesse ponto ficava ativo apenas o sudoers final restrito,
+que corretamente nao autoriza visudo.
+
+A falha atual nao e mismatch de argumentos. O comando real de install corresponde
+a regra DNS_SYNC_BOOTSTRAP_INSTALL. O problema observado no NS2 em 2026-06-16 e
+que /etc/sudoers.d/dns-sync-bootstrap nao esta instalado no NS2.
+
+Comprovacao no NS2:
+
+sudo -n -l para dns-sync lista apenas o sudoers final restrito:
+
+(root) NOPASSWD: /usr/local/bin/dns-slave-add-zone.sh
+(root) NOPASSWD: /usr/local/bin/dns-slave-remove-zone.sh
+(root) NOPASSWD: /usr/local/bin/dns-slave-reload.sh
+(root) NOPASSWD: /usr/local/bin/dns-slave-status.sh
+(root) NOPASSWD: /usr/local/bin/dns-slave-check-transfer.sh
+
+ls -l /etc/sudoers.d /etc/sudoers.d/dns-sync-bootstrap /etc/sudoers.d/dns-sync mostrou:
+
+ls: nao foi possivel acessar '/etc/sudoers.d/dns-sync-bootstrap': Arquivo ou diretorio inexistente
+-r--r----- 1 root root 340 jun 16 11:15 /etc/sudoers.d/dns-sync
+
+Correcao aplicada
+
+1. scripts/ns2/install-ns2-agent.sh foi instrumentado com sudo_n(), que imprime o
+comando sudo -n completo quando uma etapa privilegiada falha.
+
+2. O instalador nao executa mais sudo -n /usr/sbin/visudo -c depois de remover
+/etc/sudoers.d/dns-sync-bootstrap. A validacao com visudo -c fica antes da
+remocao do bootstrap; depois da remocao o instalador faz a validacao operacional
+com:
+
+sudo -n /usr/local/bin/dns-slave-status.sh
+
+3. scripts/ns2/dns-sync-bootstrap.sudoers teve a regra de grep ajustada de:
+
+/usr/bin/grep -R *
+
+para:
+
+/usr/bin/grep -R * /etc/sudoers /etc/sudoers.d
+
+Isso mantem o bootstrap temporario restrito aos caminhos consultados pelo
+instalador para bloquear NOPASSWD: ALL.
+
+Validacao final
+
+Validacoes locais executadas no NS1:
+
+sh -n scripts/ns2/install-ns2-agent.sh: OK
+/usr/sbin/visudo -cf scripts/ns2/dns-sync-bootstrap.sudoers: parsed OK
+/usr/sbin/visudo -cf scripts/ns2/dns-sync.sudoers: parsed OK
+
+Validacao remota sem alterar zonas DNS:
+
+ssh como dns-sync para 45.162.196.243 funcionou.
+sudo -n /usr/local/bin/dns-slave-status.sh funcionou e retornou:
+
+hostname=ns2.conectanetwork.net.br
+debian_version=13.5
+bind_version=9.20.23-1~deb13u1-Debian (Stable Release) <id:>
+bind_active=active
+bind_enabled=alias
+named_checkconf=ok
+slave_zones=6
+directories=/var/cache/bind/slave-aut,/var/cache/bind/slave-rev
+timestamp=2026-06-16T14:49:17Z
+
+Estado final
+
+O agente final atualmente instalado no NS2 esta operacional para status. A
+reinstalacao/atualizacao completa pelo modelo bootstrap ainda depende de
+reinstalar temporariamente /etc/sudoers.d/dns-sync-bootstrap no NS2, porque ele
+esta ausente neste momento e nao ha chave administrativa disponivel em
+/tmp/codex_ns2_upgrade neste ambiente.
+
+Comando para concluir apos reinstalar o bootstrap no NS2:
+
+scripts/ns2/install-ns2-agent.sh 45.162.196.243 dns-sync 22

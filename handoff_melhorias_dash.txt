@@ -1,0 +1,179 @@
+============================================================
+HANDOFF - UX SIDEBAR AGRUPADA E INTEGRADA
+============================================================
+
+Data:
+15/06/2026
+
+Projeto:
+Painel DNS PHP para BIND9
+
+Diretório:
+/var/www/html/painel
+
+Objetivo:
+Melhorar a organização visual do menu lateral, agrupando itens relacionados
+em menus recolhíveis, e remover a faixa/linha clara entre sidebar e conteúdo
+principal.
+
+IMPORTANTE:
+Não alterar a lógica das páginas.
+Não alterar permissões.
+Não remover páginas.
+Não alterar dashboard além do necessário para o layout.
+A alteração deve ser majoritariamente HTML/CSS/JavaScript leve.
+
+============================================================
+1. PROBLEMA VISUAL ENTRE SIDEBAR E CONTEÚDO
+============================================================
+
+Problema:
+Existe uma faixa vertical clara/branca entre o menu lateral e o conteúdo
+principal, dando a sensação de que são dois painéis separados.
+
+Objetivo:
+Integrar visualmente a sidebar à dashboard.
+
+Ações:
+- Remover linha clara/branca.
+- Verificar border-right, margin-left, padding, gap, box-shadow e largura.
+- Usar, no máximo, uma divisão discreta:
+  border-right: 1px solid #1e293b;
+- O fundo da área entre sidebar e conteúdo deve seguir o tema escuro.
+- Não deve haver faixa branca visível.
+
+============================================================
+2. MENU LATERAL COM GRUPOS RECOLHÍVEIS
+============================================================
+
+Problema:
+O menu lateral possui muitos itens soltos, deixando a navegação extensa.
+
+Objetivo:
+Agrupar itens relacionados em blocos clicáveis/recolhíveis.
+
+Exemplo desejado:
+
+DNS
+  - Domínios
+  - Zonas DNS
+  - Zonas Reversas
+  - ACL IPv4
+  - ACL IPv6
+
+Logs / Segurança
+  - Logs Sistema
+  - Logs BIND
+  - SSH/Auth
+  - Security DNS
+  - Fail2Ban
+  - Fail2Ban BIND
+  - Auditoria
+
+Sistema
+  - Serviços
+  - Firewall
+
+Conta
+  - Usuários
+  - Alterar senha
+  - Sair
+
+============================================================
+3. COMPORTAMENTO
+============================================================
+
+- Cada grupo deve abrir/fechar ao clicar.
+- Usar seta ou ícone indicando estado:
+  ▸ fechado
+  ▾ aberto
+- Se o usuário estiver em uma página pertencente ao grupo, o grupo deve
+  iniciar aberto.
+- O item atual deve ficar destacado.
+- Em desktop, o menu lateral continua fixo.
+- Em celular, preservar o comportamento responsivo já implementado.
+
+============================================================
+4. PERMISSÕES
+============================================================
+
+- O item Usuários deve continuar aparecendo somente para administrador.
+- Moderador não deve ver Usuários no menu.
+- Não alterar regras de autenticação.
+- Não alterar usuarios.php.
+
+============================================================
+5. IMPLEMENTAÇÃO TÉCNICA
+============================================================
+
+Preferência:
+Implementar com CSS puro e JavaScript leve.
+
+Sugestão:
+- Criar botões de grupo com class="sidebar-group-toggle".
+- Criar lista interna com class="sidebar-submenu".
+- Usar JS apenas para alternar classe "open".
+- Salvar estado aberto/fechado em localStorage é opcional.
+- Não usar Bootstrap, Tailwind, React ou bibliotecas externas.
+
+============================================================
+6. ACESSIBILIDADE
+============================================================
+
+- Botões de grupo devem usar aria-expanded.
+- Submenus devem ser navegáveis por teclado.
+- Links devem continuar sendo links reais <a href="">.
+- Não transformar links em botões sem necessidade.
+
+============================================================
+7. NÃO ALTERAR
+============================================================
+
+Não alterar:
+- dashboard cards
+- saúde do servidor
+- últimas atividades
+- acesso rápido
+- auditoria
+- serviços
+- firewall
+- lógica DNS
+- banco SQLite
+
+O bloco "Acesso Rápido" da dashboard deve permanecer como está.
+
+============================================================
+8. VALIDAÇÃO
+============================================================
+
+Executar:
+
+php -l /var/www/html/painel/dashboard.php
+
+E se houver include de menu/sidebar:
+
+php -l /var/www/html/painel/includes/sidebar.php
+
+Testar no navegador:
+
+[ ] Linha branca entre sidebar e conteúdo desapareceu
+[ ] Menu DNS abre/fecha
+[ ] Menu Logs/Segurança abre/fecha
+[ ] Menu Sistema abre/fecha
+[ ] Menu Conta abre/fecha
+[ ] Página atual fica destacada
+[ ] Grupo da página atual inicia aberto
+[ ] Usuário administrador vê Usuários
+[ ] Moderador não vê Usuários
+[ ] Dashboard mantém Acesso Rápido
+[ ] Layout mobile continua funcional
+
+============================================================
+OBJETIVO FINAL
+============================================================
+
+Deixar o menu lateral mais limpo, organizado e profissional, sem remover
+o menu atual nem substituir o Acesso Rápido.
+
+O menu lateral será a navegação completa do sistema.
+O Acesso Rápido continuará sendo a navegação operacional da dashboard.

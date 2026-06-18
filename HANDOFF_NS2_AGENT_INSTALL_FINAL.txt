@@ -1,0 +1,142 @@
+HANDOFF - NS2 AGENT INSTALL FINAL
+Data: 2026-06-16
+Escopo: corrigir bootstrap/install do agente NS2 sem alterar zonas DNS, sem rebuild e sem sync automatico.
+
+1. RESUMO
+
+O fluxo local do NS1 foi corrigido para separar bootstrap temporario e sudoers final restrito.
+O painel tambem passou a expor o teste de transferencia de zona pela web, usando o script remoto permitido.
+
+O instalador nao usa NOPASSWD: ALL.
+O pacote nao altera zonas DNS.
+O pacote nao executa rebuild de zonas.
+O pacote nao implementa sync automatico.
+
+2. ARQUIVOS ALTERADOS/CRIADOS
+
+- scripts/ns2/install-ns2-agent.sh
+  - exige dns-sync-bootstrap.sudoers no pacote;
+  - copia o pacote para /tmp/dns-panel-ns2-agent.<pid> no NS2;
+  - usa o bootstrap temporario apenas para instalar scripts em /usr/local/bin;
+  - valida dns-sync.sudoers com visudo -cf antes de instalar;
+  - instala o sudoers final em /etc/sudoers.d/dns-sync;
+  - valida sudoers completo com visudo -c;
+  - bloqueia NOPASSWD: ALL para dns-sync;
+  - remove /etc/sudoers.d/dns-sync-bootstrap antes do teste final;
+  - depois executa somente sudo -n /usr/local/bin/dns-slave-status.sh.
+
+- scripts/ns2/dns-sync-bootstrap.sudoers
+  - sudoers temporario de instalacao;
+  - permite somente install dos arquivos do pacote, visudo/grep de validacao e remocao do proprio bootstrap;
+  - nao permite NOPASSWD: ALL;
+  - deve existir no NS2 somente durante a instalacao.
+
+- scripts/ns2/test-ns2-agent-final.sh
+  - teste automatizado final via NS1:
+    1) SSH como www-data;
+    2) install do agente;
+    3) dns-slave-status.sh;
+    4) dns-slave-check-transfer.sh conectanetwork.net.br;
+    5) validacao do registro do painel.
+
+- includes/dns_servers.php
+  - adicionada validacao de nome de zona;
+  - adicionada execucao remota permitida do teste transfer:
+    sudo -n /usr/local/bin/dns-slave-check-transfer.sh ZONA.
+
+- dns-servers.php
+  - adicionada acao web testar_transferencia;
+  - adicionada area no card do NS2 para informar zona e testar transferencia pela web.
+
+3. ESTADO DO NS2 OBSERVADO
+
+NS2 cadastrado no painel:
+- id: 3
+- nome: ns2
+- hostname/IP: 45.162.196.243
+- IPv6: 2804:52bc::243
+- usuario SSH: dns-sync
+- porta: 22
+- painel: agente=instalado, bind=ok, zonas_slave=6, ultimo_status=online
+
+Testes executados em 2026-06-16:
+
+3.1 SSH como www-data
+Resultado: OK
+Saida: SSH_OK
+
+3.2 dns-slave-status.sh
+Resultado: OK
+Resumo:
+- hostname=ns2.conectanetwork.net.br
+- debian_version=13.5
+- bind_version=9.20.23-1~deb13u1-Debian
+- bind_active=active
+- named_checkconf=ok
+- slave_zones=6
+- directories=/var/cache/bind/slave-aut,/var/cache/bind/slave-rev
+
+3.3 dns-slave-check-transfer.sh conectanetwork.net.br
+Resultado: OK
+Resumo:
+- zone=conectanetwork.net.br
+- authoritative=yes
+- serial=2026051906
+- arquivo slave: /var/cache/bind/slave-aut/conectanetwork.net.br.hosts
+
+3.4 Teste pela funcao PHP usada pela web
+Resultado: OK
+A funcao dns_server_executar_teste(..., transfer, conectanetwork.net.br) retornou SOA e zonestatus corretamente.
+
+4. PENDENCIA UNICA NO NS2
+
+O instalador corrigido foi executado como www-data pelo caminho do painel e falhou de forma controlada porque o NS2 ainda nao tem o bootstrap temporario:
+
+ERRO: sudoers bootstrap ausente ou insuficiente no NS2
+Instale temporariamente /etc/sudoers.d/dns-sync-bootstrap a partir de dns-sync-bootstrap.sudoers e rode visudo -c.
+ERRO: falha ao instalar ou validar agente no NS2
+
+Isso e esperado: o usuario dns-sync nao pode conceder a si mesmo permissao para instalar arquivos em /usr/local/bin ou /etc/sudoers.d.
+
+Ajuste necessario no NS2, uma unica vez, com root ou conta administrativa:
+
+install -o root -g root -m 0440 /CAMINHO/dns-sync-bootstrap.sudoers /etc/sudoers.d/dns-sync-bootstrap
+visudo -c
+
+Depois disso, usar somente a web:
+- abrir dns-servers.php;
+- clicar Instalar agente NS2;
+- clicar Testar conexao SSH;
+- clicar Testar BIND no NS2;
+- usar Testar transferencia com conectanetwork.net.br.
+
+O proprio instalador remove /etc/sudoers.d/dns-sync-bootstrap ao final e deixa apenas /etc/sudoers.d/dns-sync restrito.
+
+5. SUDOERS FINAL ESPERADO
+
+dns-sync ALL=(root) NOPASSWD: /usr/local/bin/dns-slave-add-zone.sh
+dns-sync ALL=(root) NOPASSWD: /usr/local/bin/dns-slave-remove-zone.sh
+dns-sync ALL=(root) NOPASSWD: /usr/local/bin/dns-slave-reload.sh
+dns-sync ALL=(root) NOPASSWD: /usr/local/bin/dns-slave-status.sh
+dns-sync ALL=(root) NOPASSWD: /usr/local/bin/dns-slave-check-transfer.sh
+
+Nao liberar:
+- dns-sync ALL=(ALL) NOPASSWD: ALL
+- dns-sync ALL=(root) NOPASSWD: ALL
+
+6. VALIDACOES LOCAIS
+
+- sh -n scripts/ns2/install-ns2-agent.sh: OK
+- sh -n scripts/ns2/test-ns2-agent-final.sh: OK
+- php -l includes/dns_servers.php: OK
+- php -l dns-servers.php: OK
+- verificacao byte a byte de NUL nos PHP editados: OK
+
+7. OBSERVACOES OPERACIONAIS
+
+- Nenhuma zona DNS foi alterada.
+- Nenhum rebuild foi executado.
+- Nenhum sync automatico foi implementado.
+- O teste de transferencia e somente leitura: consulta SOA local e rndc zonestatus.
+- Para nao depender da CLI no uso diario, a pagina dns-servers.php agora cobre instalacao, SSH, BIND e transferencia.
+- O bootstrap inicial ainda exige privilegio administrativo no NS2 por desenho de seguranca; depois disso, o fluxo fica pela web.

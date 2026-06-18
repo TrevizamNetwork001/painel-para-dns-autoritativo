@@ -1,0 +1,71 @@
+HANDOFF FIX V3 - PROVISION REGISTER SQLITE
+Data: 2026-06-16
+Escopo: BUG HOMOLOG V3.1 - NS03 provisionado mas nao cadastrado no banco
+
+Resumo
+- Ajustado o fluxo de cadastro em dns-servers.php para nao abortar automaticamente quando o bootstrap remoto retorna codigo != 0.
+- Agora, apos o bootstrap, o painel sempre executa o status remoto via dns-sync.
+- Se o status remoto comprovar agente instalado e BIND OK, o servidor e cadastrado no SQLite mesmo que o bootstrap tenha retornado falha parcial.
+- Nao foram alteradas zonas DNS.
+- Nao foi executado cluster.
+- Nao foi implementado sync automatico.
+
+Arquivos alterados
+- dns-servers.php
+- includes/dns_servers.php
+
+Diagnostico
+- O parser de status nao rejeitava directories=unavailable.
+- O parser ja aceitava slave_zones=0 via ctype_digit(), resultando em zonas_slave=0.
+- hostname=NS03 retornado pelo agente nao bloqueia cadastro; o hostname do formulario e normalizado em minusculas e o hostname do status nao participa do INSERT.
+- O problema estava no fluxo: se dns_server_bootstrap() retornasse ok=false, dns-servers.php redirecionava com "Bootstrap falhou" antes de consultar o status final e antes do INSERT em dns_servers.
+
+Nova regra de cadastro pos-bootstrap
+Se o status remoto retornar:
+- bind_active=active
+- named_checkconf=ok
+- comando de status com exit code 0
+
+Entao o painel cadastra o servidor com:
+- agente_status=instalado
+- bind_status=ok
+- zonas_slave=0 quando slave_zones=0
+- modo_instalacao=provisionado para modo provisionar
+- modo_instalacao=provision_clean para modo provision_clean
+
+Tratamento de modo_instalacao
+- dns_server_validar_bootstrap() agora aceita: adotar, provisionar, provision_clean.
+- provisionar continua sendo usado como acao de UI/bootstrap, mas e gravado no banco como provisionado.
+- provision_clean e tratado como provisionamento no bootstrap e gravado como provision_clean.
+- O esquema SQLite atual aceita esses valores porque modo_instalacao e TEXT sem CHECK.
+
+Mensagens e etapas
+- O bootstrap remoto agora emite marcadores ETAPA= para localizar falhas:
+  - ETAPA=pacotes
+  - ETAPA=dns-sync
+  - ETAPA=agente
+  - ETAPA=status
+- A tela passa a exibir "Bootstrap do servidor DNS falhou na etapa: <etapa>." quando o bootstrap e o status final nao comprovam instalacao valida.
+- Falhas no INSERT agora aparecem como etapa de cadastro SQLite:
+  - "Cadastro SQLite falhou: ja existe um servidor com esse nome ou hostname."
+  - "Cadastro SQLite falhou: nao foi possivel gravar o servidor."
+
+Validacoes executadas
+- php -l dns-servers.php: OK
+- php -l includes/dns_servers.php: OK
+- Parser validado com a saida informada do NS03:
+  hostname=NS03
+  bind_active=active
+  named_checkconf=ok
+  slave_zones=0
+  directories=unavailable
+
+Resultado da validacao do parser:
+- agente_status=instalado
+- bind_status=ok
+- zonas_slave=0
+
+Observacoes operacionais
+- Se o bootstrap falhar antes de instalar/autorizar dns-sync, o teste de status continuara falhando e o painel exibira a etapa status ou a ultima ETAPA= conhecida.
+- Se o bootstrap falhar depois de instalar agente/sudoers, mas o status remoto responder OK, o cadastro SQLite sera feito.
+- Nenhuma rotina de transferencia, sincronizacao de zonas ou cluster foi acionada por esta correcao.

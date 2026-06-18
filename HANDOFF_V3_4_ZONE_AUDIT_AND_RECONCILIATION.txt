@@ -1,0 +1,88 @@
+Handoff V3.4_ZONE_AUDIT_AND_RECONCILIATION
+
+Contexto:
+- Projeto: Painel DNS PHP para BIND9.
+- Fase: V3.4_ZONE_AUDIT_AND_RECONCILIATION.
+- Objetivo: melhorar visibilidade e governança das divergências antes de qualquer remoção automática.
+- Remoção automática continua explicitamente bloqueada.
+
+Base homologada anterior:
+- V3.3_ZONE_SYNC_ACTIONS concluída.
+- NS1: 18 zonas.
+- NS2: 23 zonas.
+  - 18 sincronizadas com NS1.
+  - 5 extras pré-existentes.
+- NS03: 18 zonas.
+- Inventário, comparação, sync, transferência DNS, BIND e SOA validados.
+
+Arquivos alterados:
+- includes/dns_zones.php
+- zones.php
+
+Implementado em includes/dns_zones.php:
+- dns_zones_estado_codigo(string $estado): string
+  - Normaliza estados internos para códigos operacionais.
+- dns_zones_resumo_classificacao(?array $comparacao = null): array
+  - Conta divergências por categoria.
+- dns_zones_extras_por_servidor(?array $comparacao = null): array
+  - Agrupa zonas extras por slave.
+- dns_zones_eventos_auditoria(int $limite = 30): array
+  - Lista eventos recentes de auditoria DNS_ZONE%.
+- dns_zones_status_falha_coleta(): array
+  - Lista servidores com falha na última coleta.
+
+Implementado em zones.php:
+- Texto atualizado para V3.4: auditoria e reconciliacao visual.
+- Card Classificacao das divergencias.
+- Card Zonas extras nos slaves.
+- Aviso claro: Remocao bloqueada.
+- Card Auditoria DNS recente.
+- Ações destrutivas continuam ausentes.
+- Sync de ausentes permanece disponível, mas atualmente não há ausentes.
+
+Classificações exibidas:
+- OK
+- AUSENTE_NO_SLAVE
+- SERIAL_DIFERENTE
+- EXTRA_NO_SLAVE
+- SOA_MASTER_INDISPONIVEL
+- SOA_SLAVE_INDISPONIVEL
+- FALHA_COLETA
+
+Estado validado pelos helpers:
+- OK: 18
+- AUSENTE_NO_SLAVE: 0
+- SERIAL_DIFERENTE: 0
+- EXTRA_NO_SLAVE: 5
+- SOA_MASTER_INDISPONIVEL: 0
+- SOA_SLAVE_INDISPONIVEL: 18
+- FALHA_COLETA: 0
+
+Zonas extras detectadas no NS2:
+- 196.162.45.in-addr.arpa
+- 197.162.45.in-addr.arpa
+- 198.162.45.in-addr.arpa
+- 199.162.45.in-addr.arpa
+- c.b.2.5.4.0.8.2.ip6.arpa
+
+Observação:
+- As zonas extras podem ser legítimas.
+- Não há evidência de bug de sync.
+- Nenhuma remoção automática deve ser implementada sem etapa adicional de classificação/aceite manual.
+
+Validação executada:
+- php -l includes/dns_zones.php OK
+- php -l zones.php OK
+- php -l dashboard.php OK
+
+Próximas melhorias recomendadas:
+1. Histórico por zona com filtro.
+2. Explicação detalhada por tipo de divergência.
+3. Tela/modal de inspeção de zona.
+4. Marcar zona extra como legítima/ignorada, sem remover.
+5. Só depois discutir fluxo seguro de remoção manual, com dupla confirmação e auditoria forte.
+
+Observação de ambiente:
+- O sandbox continua apresentando falha recorrente:
+  bwrap: Can't mkdir /var/www/html/painel/.git: Permission denied
+- Comandos foram executados com escalonamento quando necessário.

@@ -1,0 +1,137 @@
+============================================================
+HANDOFF V3 - AJUSTE DO RESUMO DNS DA DASHBOARD
+============================================================
+
+Data:
+15/06/2026
+
+Projeto:
+Painel Web para gerenciamento de DNS BIND9
+
+Diretorio:
+/var/www/html/painel
+
+Arquivo alterado:
+/var/www/html/painel/dashboard.php
+
+Status:
+IMPLEMENTACAO CONCLUIDA E VALIDADA
+
+============================================================
+OBJETIVO
+============================================================
+
+Corrigir a metrica do card "Registros DNS" para apresentar somente
+os registros forward administrados no uso diario.
+
+O total deixou de misturar registros forward com registros PTR,
+diretivas $GENERATE e registros provenientes de zonas reversas.
+
+============================================================
+ALTERACAO IMPLEMENTADA
+============================================================
+
+O card "Registros DNS" agora contabiliza somente:
+
+- A
+- AAAA
+- CNAME
+- MX
+- TXT
+
+Foram excluidos da metrica:
+
+- PTR
+- $GENERATE
+- registros de zonas reversas IPv4
+- registros de zonas reversas IPv6
+- expansoes ou estimativas de registros reversos
+
+O texto auxiliar do card foi atualizado para:
+
+A, AAAA, CNAME, MX e TXT
+
+============================================================
+RESULTADO VALIDADO
+============================================================
+
+Resumo exibido no ambiente atual:
+
+- Dominios: 7
+- Registros DNS: 47
+- Zonas reversas: 21
+
+Composicao dos 47 registros forward:
+
+- A: 24
+- AAAA: 20
+- CNAME: 1
+- MX: 1
+- TXT: 1
+
+============================================================
+ESCOPO PRESERVADO
+============================================================
+
+Nao foram modificados:
+
+- card "Dominios"
+- card "Zonas reversas"
+- Saude do servidor
+- Ultimas atividades
+- Acesso rapido
+- menu lateral
+- rodape
+- responsividade
+- auditoria
+- demais paginas do painel
+
+O bloco "Acesso rapido" permanece na dashboard principal e deve ser
+preservado nas proximas evolucoes, conforme a decisao de UX anterior.
+
+============================================================
+OBSERVACAO SOBRE IPV4 E IPV6
+============================================================
+
+A exibicao opcional da quantidade separada de zonas reversas IPv4 e
+IPv6 nao foi adicionada.
+
+Foi mantido o texto existente "IPv4 + IPv6" para evitar alteracoes
+fora da logica solicitada para o card "Registros DNS".
+
+============================================================
+VALIDACOES EXECUTADAS
+============================================================
+
+1. Sintaxe PHP:
+
+php -l dashboard.php
+
+Resultado:
+
+No syntax errors detected in dashboard.php
+
+2. Conferencia das zonas forward:
+
+- 7 arquivos .hosts encontrados
+- 47 registros forward reconhecidos
+- somente A, AAAA, CNAME, MX e TXT considerados
+
+3. Verificacao de referencias removidas:
+
+- o card nao soma mais $ptrRecords
+- a funcao de expansao de $GENERATE foi removida da dashboard
+- o texto "Forward + PTR" foi removido
+
+============================================================
+ESTADO FINAL
+============================================================
+
+A dashboard apresenta uma visao executiva coerente:
+
+- quantidade de dominios forward
+- quantidade de registros forward gerenciaveis
+- quantidade total de zonas reversas
+
+PTR e $GENERATE nao fazem mais parte do total de "Registros DNS".
+

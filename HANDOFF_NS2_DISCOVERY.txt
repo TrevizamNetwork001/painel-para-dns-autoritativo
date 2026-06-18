@@ -1,0 +1,317 @@
+============================================================
+HANDOFF - DIAGNOSTICO INICIAL DO NS2 EXISTENTE
+============================================================
+
+Data: 15/06/2026
+Tag: [V2_NS2_DISCOVERY]
+Escopo: coleta somente leitura
+
+Nenhuma configuracao, zona, servico, usuario, sudoers ou script foi
+alterado no NS2 durante este diagnostico.
+
+============================================================
+1. RESUMO EXECUTIVO
+============================================================
+
+O NS2 ja existe e esta configurado como servidor slave, mas sua estrutura
+esta desatualizada em relacao ao NS1.
+
+Resultado principal:
+
+- A zona forward conectanetwork.net.br esta consistente entre NS1 e NS2.
+- O NS2 possui cinco zonas reversas legadas declaradas como slave.
+- Essas zonas reversas nao estao declaradas no named.conf.local atual do NS1.
+- Os logs do NS2 registram falhas recorrentes NOTAUTH e REFUSED ao tentar
+  atualizar as reversas.
+- Zonas forward novas do NS1, como bug.com.br, nao existem no NS2.
+- O NS2 recebe notify dessas zonas, mas registra "not authoritative".
+- A conectividade IPv4 com o NS2 tornou-se indisponivel durante o
+  diagnostico. O DNS continuou respondendo pelo IPv6.
+
+Decisao recomendada:
+
+C) Reconfigurar parcialmente, aproveitando o NS2 existente.
+
+Nao recriar o servidor do zero. Primeiro alinhar a lista de zonas, revisar
+conectividade IPv4/firewall e atualizar o sistema operacional e o BIND.
+
+============================================================
+2. DADOS DO NS1
+============================================================
+
+Hostname: ns1
+FQDN retornado: ns1
+IPv4: 45.162.196.242/27
+IPv6: 2804:52bc::242/123
+Sistema operacional: Debian GNU/Linux 13.5 (trixie)
+Kernel: 6.12.85+deb13-amd64
+BIND: 9.20.23-1~deb13u1-Debian
+BIND ativo: sim
+BIND habilitado no boot: sim (systemctl retornou "alias")
+Configuracao principal: /etc/bind/named.conf
+Configuracao de zonas: /etc/bind/named.conf.local
+Diretorio forward: /var/cache/bind/master-aut
+Diretorio reverso: /var/cache/bind/master-rev
+named-checkconf: sem erros
+
+O NS1 possui configuracao global:
+
+allow-transfer { 45.162.196.243; 2804:52bc::243; };
+also-notify { 45.162.196.243; 2804:52bc::243; };
+
+Essa configuracao esta em /etc/bind/named.conf.options.
+
+============================================================
+3. DADOS DO NS2
+============================================================
+
+Hostname: ns2
+FQDN: ns2.conectanetwork.net.br
+IPv4: 45.162.196.243/27
+IPv6: 2804:52bc::243/123
+Sistema operacional: Debian GNU/Linux 10 (buster)
+Kernel: 4.19.0-27-amd64
+BIND: 9.11.5-P4-5.1+deb10u11-Debian
+BIND ativo: sim
+BIND habilitado no boot: sim
+Configuracao principal: /etc/bind/named.conf
+Configuracao de zonas slave: /etc/bind/named.conf.local
+named-checkconf: sem erros
+rndc status: nao executado; usuario conecta nao pode ler rndc.key
+
+Includes ativos:
+
+- /etc/bind/named.conf.options
+- /etc/bind/named.conf.local
+- /etc/bind/named.conf.default-zones
+
+Usa named.conf.local: sim
+Usa named.conf.default-zones: sim
+Usa include dedicado para slaves: nao
+Existe named.conf.slaves: nao foi encontrado
+
+Diretorios de zonas slave:
+
+- Forward: /var/cache/bind/slave-aut
+- Reversas: /var/cache/bind/slave-rev
+
+Atalhos existentes:
+
+- /etc/bind/slave-aut -> /var/cache/bind/slave-aut
+- /etc/bind/slave-rev -> /var/cache/bind/slave-rev
+
+Nao existem:
+
+- /var/cache/bind/slaves
+- /var/lib/bind/slaves
+
+============================================================
+4. ZONAS SLAVE ENCONTRADAS NO NS2
+============================================================
+
+Total: 6 zonas
+
+Forward:
+
+1. conectanetwork.net.br
+   Arquivo: /var/cache/bind/slave-aut/conectanetwork.net.br.hosts
+   Master: 45.162.196.242
+   allow-notify: 45.162.196.242
+
+Reversas IPv4:
+
+2. 196.162.45.in-addr.arpa
+   Arquivo: /var/cache/bind/slave-rev/45.162.196.rev
+
+3. 197.162.45.in-addr.arpa
+   Arquivo: /var/cache/bind/slave-rev/45.162.197.rev
+
+4. 198.162.45.in-addr.arpa
+   Arquivo: /var/cache/bind/slave-rev/45.162.198.rev
+
+5. 199.162.45.in-addr.arpa
+   Arquivo: /var/cache/bind/slave-rev/45.162.199.rev
+
+Reversa IPv6:
+
+6. c.b.2.5.4.0.8.2.ip6.arpa
+   Arquivo: /var/cache/bind/slave-rev/2804.52bc.rev
+
+Todas usam:
+
+masters { 45.162.196.242; };
+allow-notify { 45.162.196.242; };
+
+============================================================
+5. COMPARACAO COM AS ZONAS ATUAIS DO NS1
+============================================================
+
+O NS1 possui atualmente 18 zonas master declaradas.
+
+Entre as seis zonas declaradas no NS2, somente conectanetwork.net.br
+continua declarada no named.conf.local atual do NS1.
+
+As cinco reversas legadas do NS2 nao aparecem no named.conf.local atual
+do NS1:
+
+- 196.162.45.in-addr.arpa
+- 197.162.45.in-addr.arpa
+- 198.162.45.in-addr.arpa
+- 199.162.45.in-addr.arpa
+- c.b.2.5.4.0.8.2.ip6.arpa
+
+Os arquivos correspondentes ainda existem no disco do NS1, mas nao estao
+carregados como zonas master. Isso explica os retornos NOTAUTH e REFUSED
+observados no NS2.
+
+O NS1 tambem possui varias zonas atuais que nao estao declaradas no NS2,
+incluindo:
+
+- zebratelecom.net.br
+- batatatelecom.com.br
+- teste-template.com.br
+- gato.net.br
+- tiringa.com.br
+- pizza.com.br
+- bug.com.br
+- reversas e IPv6 associadas a essas zonas
+
+============================================================
+6. TESTES DE SERIAL E RESPOSTAS DNS
+============================================================
+
+Zona testada: conectanetwork.net.br
+
+NS1 SOA:
+ns1.conectanetwork.net.br. hostmaster.conectanetwork.net.br.
+serial 2026051906
+
+NS2 SOA:
+ns1.conectanetwork.net.br. hostmaster.conectanetwork.net.br.
+serial 2026051906
+
+Resultado: serial igual. A zona forward existente esta sincronizada.
+
+NS1 e NS2 retornaram os NS:
+
+- ns1.conectanetwork.net.br.
+- ns2.conectanetwork.net.br.
+
+Zona testada: bug.com.br
+
+NS1:
+- SOA serial 2026061502
+- NS1 e NS2 publicados como servidores autoritativos
+
+NS2:
+- sem resposta autoritativa para a zona
+- logs mostram notify recebido e "not authoritative"
+
+Reversas:
+
+- NS1 nao respondeu SOA para as cinco zonas legadas porque elas nao estao
+  carregadas em sua configuracao atual.
+- NS2 registrou NOTAUTH para as reversas IPv4.
+- NS2 registrou REFUSED para a reversa IPv6.
+- Nao foi feita qualquer tentativa de forcar transferencia.
+
+============================================================
+7. LOGS RECENTES DE TRANSFERENCIA
+============================================================
+
+O log dedicado do NS2 esta em:
+
+/var/log/named/named.log
+
+Eventos observados em 14 e 15/06/2026:
+
+- Transferencias das reversas IPv4 iniciadas e encerradas com NOTAUTH.
+- Transferencias da reversa IPv6 iniciadas e encerradas com REFUSED.
+- Notify de bug.com.br recebido pelos enderecos IPv4 e IPv6 do NS1.
+- Resposta do NS2 para bug.com.br: "not authoritative".
+
+O usuario conecta nao possui acesso ao journal completo do systemd, mas os
+arquivos dedicados do BIND estavam legiveis e forneceram os eventos acima.
+
+============================================================
+8. CONECTIVIDADE OBSERVADA
+============================================================
+
+No inicio do diagnostico:
+
+- SSH IPv4 para 45.162.196.243: funcionou.
+- DNS IPv4 respondeu para conectanetwork.net.br.
+- DNS IPv6 respondeu para conectanetwork.net.br.
+
+Durante o diagnostico:
+
+- A sessao SSH deixou de responder.
+- Nova conexao SSH IPv4 expirou por timeout.
+- DNS IPv4 passou a expirar por timeout.
+- ICMP IPv4 e IPv6 nao respondeu.
+- DNS IPv6 continuou respondendo e retornou o serial correto da zona
+  conectanetwork.net.br.
+
+Essa assimetria deve ser investigada antes de qualquer automacao. Possiveis
+causas incluem firewall, rate limit, protecao automatica, rota IPv4 ou
+instabilidade do host. Nenhuma regra foi consultada ou alterada nesta etapa.
+
+Fingerprint SSH ED25519 apresentado:
+
+SHA256:gBFIzY7Bujjd2kh3wV7hiA7taa7OkHVDODgNz9IuJAk
+
+O fingerprint deve ser validado pelo operador por canal confiavel antes de
+ser usado na futura configuracao automatizada.
+
+============================================================
+9. RISCOS ENCONTRADOS
+============================================================
+
+1. Debian 10 esta obsoleto e fora do ciclo normal de suporte.
+2. BIND 9.11 e significativamente mais antigo que o BIND 9.20 do NS1.
+3. A lista de zonas do NS2 esta desatualizada.
+4. Cinco zonas reversas configuradas no NS2 nao existem mais no BIND ativo
+   do NS1.
+5. Zonas novas do NS1 nao sao criadas automaticamente no NS2.
+6. A configuracao global de also-notify envia notificacoes para zonas que
+   o NS2 nao conhece, produzindo ruido de log.
+7. A conectividade IPv4/SSH tornou-se indisponivel durante o diagnostico.
+8. O usuario conecta nao executa rndc e nao possui sudo instalado/disponivel.
+9. Nao existe arquivo dedicado named.conf.slaves.
+10. A senha administrativa foi compartilhada durante o atendimento e deve
+    ser trocada pelo operador; ela nao foi gravada neste relatorio.
+
+============================================================
+10. RECOMENDACAO DA PROXIMA ETAPA
+============================================================
+
+Classificacao: C) Reconfigurar parcialmente.
+
+Ordem recomendada:
+
+1. Investigar a perda de conectividade IPv4/SSH antes de novas mudancas.
+2. Validar o fingerprint SSH por canal confiavel.
+3. Trocar a credencial administrativa compartilhada no atendimento.
+4. Planejar atualizacao do Debian 10 e do BIND 9.11.
+5. Definir a lista oficial de zonas que devem existir no NS2.
+6. Decidir se as cinco reversas legadas devem ser reativadas no NS1 ou
+   removidas do NS2 em manutencao controlada.
+7. Sincronizar primeiro uma zona descartavel ou de baixo risco.
+8. Aproveitar os diretorios slave-aut e slave-rev existentes, ou migrar
+   gradualmente para um include dedicado, sem recriar o NS2 do zero.
+9. Somente depois implantar usuario restrito, chave SSH e scripts dns-sync.
+10. Integrar o painel apenas apos validar transferencia e serial em ambos
+    os protocolos.
+
+============================================================
+11. CONCLUSAO
+============================================================
+
+O NS2 funciona parcialmente como slave e nao deve ser recriado do zero.
+A zona conectanetwork.net.br esta operacional e sincronizada, mas o
+servidor mantem configuracao legada para reversas e nao acompanha as zonas
+novas do NS1.
+
+A proxima atividade deve ser manutencao de alinhamento e conectividade,
+nao automacao imediata.
+

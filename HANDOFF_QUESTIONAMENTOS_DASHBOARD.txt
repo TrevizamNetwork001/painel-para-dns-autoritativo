@@ -1,0 +1,384 @@
+============================================================
+HANDOFF - QUESTIONAMENTOS DA DASHBOARD PRINCIPAL
+============================================================
+
+Data: 15/06/2026
+
+Projeto:
+Painel Web para gerenciamento de DNS BIND9
+
+Documento analisado:
+/var/www/html/painel/dashbord_principal.txt
+
+Arquivo que será alterado após as definições:
+/var/www/html/painel/dashboard.php
+
+Objetivo deste handoff:
+Registrar decisões que precisam ser confirmadas antes da implementação,
+evitando métricas imprecisas, comportamento inesperado e problemas em
+telas menores.
+
+Responda às perguntas diretamente neste chat. Pode usar somente o número
+e a opção escolhida, por exemplo:
+
+1-B
+2-A
+3-A
+
+============================================================
+1. MÉTRICA DE CPU
+============================================================
+
+O arquivo solicita a exibição de CPU em porcentagem, mas sugere usar
+/proc/loadavg. Load average representa carga do sistema e não percentual
+real de utilização da CPU.
+
+Qual abordagem deve ser usada?
+
+A) Exibir "Carga do sistema" usando /proc/loadavg.
+   Exemplo: 0.35 / 0.42 / 0.31.
+
+B) Calcular o percentual aproximado de CPU usando duas leituras de
+   /proc/stat em um pequeno intervalo.
+   Exemplo: CPU 18%.
+
+C) Exibir load average normalizado pela quantidade de CPUs.
+   Exemplo: carga estimada de 18%.
+
+Recomendação:
+Opção B, porque corresponde melhor ao rótulo "CPU %" solicitado.
+
+============================================================
+2. CONTAGEM DE REGISTROS DNS
+============================================================
+
+A implementação atual conta somente:
+
+- A
+- AAAA
+- CNAME
+- MX
+- TXT
+
+Ela não inclui PTR, SRV, CAA e outros registros válidos.
+
+O card "Registros DNS" deve contar:
+
+A) Somente A, AAAA, CNAME, MX e TXT das zonas forward.
+
+B) Todos os registros funcionais das zonas forward, excluindo:
+   - comentários
+   - linhas vazias
+   - SOA
+   - NS
+   - diretivas como $TTL e $ORIGIN
+
+C) Todos os registros funcionais, incluindo zonas forward e registros
+   PTR das zonas reversas.
+
+Recomendação:
+Opção C, porque representa melhor o total real de registros administrados
+pelo painel.
+
+============================================================
+3. CONTAGEM DE $GENERATE
+============================================================
+
+Uma diretiva $GENERATE pode criar vários registros PTR, mesmo aparecendo
+em somente uma linha do arquivo.
+
+Como ela deve ser contabilizada?
+
+A) Cada linha $GENERATE conta como um registro.
+
+B) Interpretar o intervalo da diretiva e contabilizar todos os registros
+   gerados.
+
+C) Não incluir registros gerados por $GENERATE.
+
+Recomendação:
+Opção B, desde que a sintaxe encontrada seja válida. Em caso de formato
+desconhecido, contar a diretiva como um registro para evitar falha.
+
+============================================================
+4. FALHA NA LEITURA DE MÉTRICAS DO SERVIDOR
+============================================================
+
+As leituras de /proc/meminfo, /proc/stat, /proc/uptime e informações do
+disco podem falhar por restrições de permissão ou ambiente.
+
+Qual comportamento deve ser usado?
+
+A) Mostrar "Indisponível" somente na métrica que falhou e manter o
+   restante da dashboard funcionando.
+
+B) Ocultar o card da métrica que falhou.
+
+C) Mostrar uma única mensagem informando que a saúde do servidor está
+   indisponível.
+
+Recomendação:
+Opção A, com registro técnico no error_log e sem exibir detalhes internos
+ao usuário.
+
+============================================================
+5. ÚLTIMAS ATIVIDADES
+============================================================
+
+O documento solicita os últimos 10 eventos. Em telas menores, uma tabela
+com cinco colunas pode exigir rolagem horizontal.
+
+Qual apresentação deve ser usada?
+
+A) Tabela no desktop e cards compactos no celular.
+
+B) Tabela em todas as telas, com rolagem horizontal no celular.
+
+C) Lista textual simples em todas as telas.
+
+Recomendação:
+Opção A, porque mantém boa leitura tanto no desktop quanto no celular.
+
+============================================================
+6. DATA E HORA DAS ATIVIDADES
+============================================================
+
+O SQLite usa CURRENT_TIMESTAMP, que normalmente grava em UTC. O servidor
+e o usuário podem operar no horário de Brasília.
+
+Como a data deve ser exibida?
+
+A) Exibir exatamente o valor gravado no banco.
+
+B) Converter de UTC para America/Sao_Paulo.
+
+C) Usar o fuso configurado atualmente pelo PHP, sem conversão explícita.
+
+Recomendação:
+Confirmar primeiro como os registros atuais estão sendo gravados. Se
+estiverem em UTC, usar a opção B.
+
+============================================================
+7. NORMALIZAÇÃO DE DOMÍNIOS E PTR IPV6
+============================================================
+
+O documento determina que não sejam exibidos nibbles IPv6 nem nomes
+terminados em .rev6.
+
+Quando não for possível converter um valor técnico para uma apresentação
+amigável, a dashboard deve:
+
+A) Mostrar somente o domínio base ou o campo nome_registro disponível.
+
+B) Mostrar o valor técnico original.
+
+C) Mostrar "Registro reverso IPv6" sem revelar o valor técnico.
+
+Recomendação:
+Opção A, usando a opção C como fallback quando não houver domínio ou nome
+legível.
+
+============================================================
+8. AÇÕES DE AUDITORIA NÃO MAPEADAS
+============================================================
+
+Podem existir ações novas ou não listadas no documento.
+
+Como uma ação desconhecida deve aparecer?
+
+A) Substituir "_" por espaços e aplicar capitalização.
+   Exemplo: ALTERAR_CONFIGURACAO -> Alterar configuracao.
+
+B) Mostrar "Outra atividade".
+
+C) Mostrar o código original.
+
+Recomendação:
+Opção A, escapando sempre o conteúdo antes de exibi-lo.
+
+============================================================
+9. ACESSO RÁPIDO PARA USUÁRIOS MODERADORES
+============================================================
+
+A página usuarios.php já bloqueia usuários que não são administradores.
+
+Na dashboard de um moderador, o atalho "Usuários" deve:
+
+A) Ficar oculto.
+
+B) Continuar visível e retornar acesso negado ao clicar.
+
+C) Ficar visível, mas desabilitado e identificado como restrito.
+
+Recomendação:
+Opção A, seguindo o comportamento atual do menu lateral.
+
+============================================================
+10. COMPORTAMENTO DO MENU EM TELAS MENORES
+============================================================
+
+O menu lateral atual é fixo e ocupa 230 pixels, enquanto o conteúdo usa
+uma margem fixa. Isso pode comprometer telas pequenas.
+
+Qual comportamento deve ser implementado?
+
+A) Transformar o menu em botão recolhível no celular.
+
+B) Manter o menu fixo e permitir rolagem horizontal.
+
+C) Exibir o menu acima do conteúdo no celular.
+
+Recomendação:
+Opção A. Caso não seja desejado adicionar JavaScript para o menu, usar a
+opção C como solução somente com CSS.
+
+============================================================
+11. ATUALIZAÇÃO AUTOMÁTICA
+============================================================
+
+A dashboard atual recarrega a página automaticamente a cada 60 segundos.
+Isso pode interromper leitura, navegação por teclado ou interação com o
+menu.
+
+Qual comportamento deve ser mantido?
+
+A) Manter atualização automática a cada 60 segundos.
+
+B) Remover a atualização automática.
+
+C) Atualizar somente as métricas por JavaScript, sem recarregar a página.
+
+Recomendação:
+Opção B nesta etapa. A opção C exige um endpoint adicional e aumenta o
+escopo da implementação.
+
+============================================================
+12. CORES DAS BARRAS DE RECURSOS
+============================================================
+
+As barras devem usar somente cores fixas por recurso ou também indicar
+níveis de atenção?
+
+A) Cor fixa:
+   - CPU azul
+   - RAM roxo
+   - Disco laranja
+
+B) Cor por nível de uso:
+   - normal
+   - atenção
+   - crítico
+
+C) Cor base por recurso, mudando para amarelo ou vermelho em níveis
+   elevados.
+
+Recomendação:
+Opção C, usando limites claros e consistentes.
+
+Sugestão de limites:
+
+- Normal: abaixo de 75%
+- Atenção: de 75% a 89%
+- Crítico: 90% ou mais
+
+============================================================
+13. CARD DE UPTIME
+============================================================
+
+Uptime não é percentual, portanto uma barra de progresso não possui um
+limite natural.
+
+Como deve ser apresentado?
+
+A) Somente texto, como "45 dias e 6 horas".
+
+B) Barra visual decorativa sem representar percentual.
+
+C) Percentual em relação a um período arbitrário, como 30 dias.
+
+Recomendação:
+Opção A, evitando uma representação visual enganosa.
+
+============================================================
+14. SUBTÍTULO E INFORMAÇÕES DO TOPO
+============================================================
+
+O documento solicita:
+
+- Título: Dashboard
+- Subtítulo: Visão geral do ambiente DNS
+
+A dashboard atual também mostra hostname, horário, IP do cliente e
+usuário.
+
+O topo deve:
+
+A) Manter hostname, horário, IP e usuário.
+
+B) Manter somente hostname e usuário.
+
+C) Mostrar somente título e subtítulo.
+
+Recomendação:
+Opção B, pois preserva contexto operacional sem excesso de informação.
+
+============================================================
+15. ESCOPO DA ALTERAÇÃO
+============================================================
+
+O dashboard.php possui CSS, HTML, consultas e funções no mesmo arquivo.
+
+Nesta etapa, deve-se:
+
+A) Alterar somente dashboard.php, conforme o handoff original.
+
+B) Criar um include auxiliar para funções e manter o layout em
+   dashboard.php.
+
+C) Separar funções, CSS e JavaScript em arquivos próprios.
+
+Recomendação:
+Opção A para manter o escopo controlado. Uma separação estrutural pode
+ser feita posteriormente, se necessária.
+
+============================================================
+RESPOSTAS NECESSÁRIAS
+============================================================
+
+[ ] 1. Métrica de CPU
+[ ] 2. Contagem de registros DNS
+[ ] 3. Contagem de $GENERATE
+[ ] 4. Falha nas métricas
+[ ] 5. Apresentação das atividades
+[ ] 6. Fuso horário
+[ ] 7. Normalização de PTR IPv6
+[ ] 8. Ações não mapeadas
+[ ] 9. Atalho de usuários
+[ ] 10. Menu em telas menores
+[ ] 11. Atualização automática
+[ ] 12. Cores e níveis de uso
+[ ] 13. Apresentação do uptime
+[ ] 14. Informações do topo
+[ ] 15. Escopo dos arquivos
+
+============================================================
+RESPOSTA RÁPIDA COM TODAS AS RECOMENDAÇÕES
+============================================================
+
+1-B
+2-C
+3-B
+4-A
+5-A
+6-B, se o banco estiver em UTC
+7-A
+8-A
+9-A
+10-A
+11-B
+12-C
+13-A
+14-B
+15-A
+
+============================================================

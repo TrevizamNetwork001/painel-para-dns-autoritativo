@@ -1,0 +1,507 @@
+============================================================
+HANDOFF - MELHORIA DA DASHBOARD PRINCIPAL
+============================================================
+
+Data: 15/06/2026
+
+Projeto:
+Painel Web para gerenciamento de DNS BIND9
+
+Diretório ativo:
+/var/www/html/painel
+
+Arquivo principal a alterar:
+/var/www/html/painel/dashboard.php
+
+Objetivo:
+Melhorar a dashboard principal para virar uma visão operacional limpa,
+sem poluir com métricas redundantes. A dashboard deve mostrar apenas
+informações úteis para o administrador bater o olho e entender o estado
+geral do ambiente DNS.
+
+============================================================
+CONTEXTO ATUAL DO PROJETO
+============================================================
+
+O painel já possui:
+
+- Login e logout
+- Controle de usuários
+- Perfis administrador/moderador
+- Auditoria DNS V1 completa
+- Gerenciamento de domínios
+- Gerenciamento de zonas forward
+- Gerenciamento de zonas reversas IPv4
+- Gerenciamento de zonas reversas IPv6
+- PTR IPv6
+- Serviços
+- Firewall NFTables
+- Exportação CSV da auditoria
+- Histórico por domínio
+- Paginação na auditoria
+
+A dashboard atual deve ser melhorada visualmente e funcionalmente.
+
+============================================================
+DIRETRIZ DE DESIGN
+============================================================
+
+Manter a stack atual:
+
+- PHP puro
+- HTML
+- CSS puro
+- JavaScript leve
+- SQLite via PDO
+
+Não usar:
+
+- Bootstrap
+- Tailwind
+- React
+- Vue
+- frameworks externos
+
+Manter o tema escuro já usado no painel.
+
+Visual desejado:
+
+- Cards arredondados
+- Fundo escuro
+- Bordas discretas
+- Ícones simples
+- Espaçamento confortável
+- Layout limpo
+- Sem excesso de informação
+
+============================================================
+O QUE DEVE ENTRAR NA DASHBOARD
+============================================================
+
+A dashboard deve ter 4 áreas principais:
+
+1. Resumo DNS
+2. Saúde do servidor
+3. Últimas atividades
+4. Acesso rápido
+
+============================================================
+1. RESUMO DNS
+============================================================
+
+Criar primeira linha com 4 cards:
+
+- Domínios Forward
+- Zonas IPv4
+- Zonas IPv6
+- Registros DNS
+
+Exemplo visual:
+
+[🌐 Domínios Forward]  128
+[🔄 Zonas IPv4]        32
+[🧬 Zonas IPv6]        24
+[📄 Registros DNS]     2457
+
+Os números devem vir dos dados reais do painel.
+
+Sugestões de origem:
+
+Domínios Forward:
+- contar arquivos de zona forward
+- ou usar lógica já existente no dashboard atual
+
+Zonas IPv4:
+- contar zonas/arquivos *.rev
+
+Zonas IPv6:
+- contar zonas/arquivos *.rev6
+
+Registros DNS:
+- contar registros válidos nas zonas
+- ignorar comentários, SOA, NS técnicos, linhas vazias e diretivas quando possível
+
+Não precisa gráfico nessa etapa.
+
+============================================================
+2. SAÚDE DO SERVIDOR
+============================================================
+
+Criar bloco de saúde do servidor com:
+
+- CPU
+- RAM
+- Disco
+- Uptime
+
+Exemplo:
+
+CPU
+18%
+
+RAM
+42%
+3.2 GB / 7.7 GB
+
+Disco /
+35%
+35 GB / 98 GB
+
+Uptime
+45 dias
+
+Implementação sugerida:
+
+CPU:
+- Pode usar load average inicialmente
+- /proc/loadavg
+- ou top/vmstat se já houver função
+
+RAM:
+- Ler /proc/meminfo
+- Calcular uso aproximado:
+  MemTotal - MemAvailable
+
+Disco:
+- usar disk_total_space('/')
+- usar disk_free_space('/')
+- calcular percentual usado
+
+Uptime:
+- ler /proc/uptime
+- converter segundos em dias/horas
+
+Visual:
+- usar barras horizontais simples com CSS puro
+- cada barra com cor discreta:
+  CPU azul
+  RAM roxo
+  Disco laranja
+  Uptime verde/azul
+
+============================================================
+3. ÚLTIMAS ATIVIDADES
+============================================================
+
+Criar card "Últimas atividades".
+
+Deve buscar os últimos eventos da tabela audit_logs.
+
+Exibir os últimos 10 eventos.
+
+Campos sugeridos:
+
+- Hora/data curta
+- Usuário
+- Ação amigável
+- Domínio ou registro
+- Status
+
+Exemplo:
+
+18:07 admin adicionou PTR IPv6 em pizza.com.br OK
+18:05 admin adicionou AAAA www em pizza.com.br OK
+18:03 admin criou domínio pizza.com.br OK
+17:50 admin recarregou BIND OK
+
+Ações devem ser amigáveis, não códigos crus.
+
+Exemplos:
+
+ADICIONAR_REGISTRO -> Adicionou registro
+EDITAR_REGISTRO -> Editou registro
+REMOVER_REGISTRO -> Removeu registro
+ADICIONAR_PTR_IPV6 -> Adicionou PTR IPv6
+EDITAR_PTR_IPV6 -> Editou PTR IPv6
+REMOVER_PTR_IPV6 -> Removeu PTR IPv6
+CRIAR_DOMINIO -> Criou domínio
+REMOVER_DOMINIO -> Removeu domínio
+RELOAD_BIND -> Recarregou BIND
+RESTART_BIND -> Reiniciou BIND
+LOGIN_SUCESSO -> Login realizado
+LOGIN_FALHA -> Falha de login
+LOGOUT -> Logout
+
+Importante:
+- Não mostrar SQL bruto
+- Não mostrar nibbles reversos IPv6
+- Não mostrar .rev6 se puder normalizar visualmente
+
+Se o banco SQLite estiver indisponível:
+- A dashboard não deve quebrar
+- Mostrar mensagem:
+  "Auditoria indisponível no momento"
+
+============================================================
+4. ACESSO RÁPIDO
+============================================================
+
+Criar bloco "Acesso rápido" com cards/botões grandes.
+
+Itens sugeridos:
+
+- Novo Domínio
+  Link: domains.php
+
+- Zonas DNS
+  Link: zones.php
+
+- Zonas Reversas
+  Link: reverse-zones.php
+
+- Auditoria
+  Link: auditoria.php
+
+- Usuários
+  Link: usuarios.php
+  Observação: se o usuário não for administrador, pode ocultar ou deixar o auth bloquear.
+
+- Serviços
+  Link: services.php
+
+- Firewall
+  Link: firewall.php
+
+Visual:
+- cards pequenos com ícone
+- título
+- subtítulo curto
+
+Exemplo:
+
+[🌐 Novo Domínio]
+Criar zona DNS
+
+[📋 Auditoria]
+Ver histórico
+
+[⚙️ Serviços]
+Gerenciar serviços
+
+============================================================
+O QUE NÃO DEVE ENTRAR NA DASHBOARD
+============================================================
+
+Não incluir, por enquanto:
+
+- Card "Alterações hoje"
+- Card "Logins hoje"
+- Card "Falhas de login"
+- Card "Ações de serviço"
+
+Motivo:
+Esses dados já aparecem naturalmente nas últimas atividades e auditoria.
+
+Não incluir status detalhado de serviços na dashboard principal:
+
+- BIND Online
+- SSH Online
+- Fail2Ban Online
+- Firewall Online
+
+Motivo:
+Já existe a página services.php para isso.
+
+A dashboard deve ser limpa e não duplicar páginas específicas.
+
+============================================================
+LAYOUT SUGERIDO
+============================================================
+
+Estrutura:
+
+Topo:
+- Título: Dashboard
+- Subtítulo: Visão geral do ambiente DNS
+
+Linha 1:
+- Cards de resumo DNS
+
+Linha 2:
+- Saúde do servidor
+- Últimas atividades
+
+Linha 3:
+- Acesso rápido
+
+Exemplo:
+
+------------------------------------------------------------
+Dashboard
+Visão geral do ambiente DNS
+------------------------------------------------------------
+
+[Domínios] [Zonas IPv4] [Zonas IPv6] [Registros]
+
+[Saúde do servidor]        [Últimas atividades]
+
+[Acesso rápido]
+[Novo Domínio] [Zonas DNS] [Zonas Reversas]
+[Auditoria] [Usuários] [Serviços] [Firewall]
+
+============================================================
+REQUISITOS TÉCNICOS
+============================================================
+
+1. Usar require_once nos includes.
+
+2. Não quebrar autenticação atual.
+
+3. Não remover menus existentes.
+
+4. Não alterar lógica de DNS.
+
+5. Não alterar auditoria.php.
+
+6. Se consultar SQLite:
+   - usar try/catch
+   - se falhar, mostrar mensagem amigável
+   - não derrubar dashboard
+
+7. Se consultar arquivos de zona:
+   - validar existência do arquivo/diretório
+   - ignorar erros silenciosamente ou registrar no error_log
+
+8. Código deve passar em:
+
+php -l /var/www/html/painel/dashboard.php
+
+============================================================
+FUNÇÕES SUGERIDAS
+============================================================
+
+Criar funções auxiliares dentro do dashboard.php ou em include futuro.
+
+Exemplos:
+
+formatar_bytes($bytes)
+
+formatar_uptime($segundos)
+
+percentual_uso_disco()
+
+info_memoria()
+
+ultimas_atividades()
+
+acao_dashboard_legivel($acao)
+
+dominio_dashboard_legivel($dominio)
+
+============================================================
+EXEMPLO DE DADOS DE SAÚDE DO SERVIDOR
+============================================================
+
+RAM:
+
+$meminfo = file('/proc/meminfo');
+
+Extrair:
+MemTotal
+MemAvailable
+
+Usado:
+MemTotal - MemAvailable
+
+Disco:
+
+$total = disk_total_space('/');
+$free = disk_free_space('/');
+$used = $total - $free;
+$percent = ($used / $total) * 100;
+
+Uptime:
+
+$uptime = file_get_contents('/proc/uptime');
+$segundos = (int) explode(' ', $uptime)[0];
+
+============================================================
+EXEMPLO DE SQL PARA ÚLTIMAS ATIVIDADES
+============================================================
+
+SELECT
+    usuario,
+    acao,
+    dominio,
+    nome_registro,
+    valor_antigo,
+    valor_novo,
+    status,
+    criado_em
+FROM audit_logs
+ORDER BY id DESC
+LIMIT 10;
+
+============================================================
+ESTILO VISUAL
+============================================================
+
+Manter tema escuro:
+
+body:
+background #0f172a
+color #e2e8f0
+
+cards:
+background #020617
+border #1e293b
+border-radius 12px ou 14px
+
+links:
+#38bdf8
+
+OK:
+verde #22c55e
+
+ERRO:
+vermelho #ef4444
+
+Usar grid CSS:
+
+display: grid;
+grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+gap: 18px;
+
+============================================================
+VALIDAÇÃO APÓS IMPLEMENTAÇÃO
+============================================================
+
+Rodar:
+
+php -l /var/www/html/painel/dashboard.php
+
+Testar no navegador:
+
+/painel/dashboard.php
+
+Verificar:
+
+[ ] Dashboard abre sem erro 500
+[ ] Cards DNS carregam
+[ ] Saúde do servidor aparece
+[ ] Últimas atividades aparecem
+[ ] Acesso rápido funciona
+[ ] Layout não estoura em tela menor
+[ ] Usuário moderador não consegue acessar usuários.php
+[ ] Footer continua aparecendo
+[ ] Menu lateral continua funcional
+
+============================================================
+OBJETIVO FINAL
+============================================================
+
+A dashboard deve funcionar como centro operacional do painel DNS.
+
+Ela deve responder rapidamente:
+
+- Quantos domínios existem?
+- Quantas zonas reversas existem?
+- Quantos registros existem?
+- Como está a saúde do servidor?
+- O que aconteceu recentemente?
+- Para onde o operador deve ir rapidamente?
+
+Evitar excesso de métricas decorativas.
+
+Priorizar clareza, velocidade e operação diária.
+============================================================

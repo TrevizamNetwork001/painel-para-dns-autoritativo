@@ -1,0 +1,346 @@
+============================================================
+HANDOFF - RESPOSTAS AOS QUESTIONAMENTOS DA DASHBOARD
+============================================================
+
+Data: 15/06/2026
+
+Projeto:
+Painel Web para gerenciamento de DNS BIND9
+
+Diretório ativo:
+/var/www/html/painel
+
+Arquivo alvo:
+/var/www/html/painel/dashboard.php
+
+Objetivo:
+Responder às decisões pendentes levantadas antes da implementação da nova
+dashboard principal.
+
+============================================================
+RESPOSTAS DEFINIDAS
+============================================================
+
+1. MÉTRICA DE CPU
+Resposta:
+1-B
+
+Usar percentual aproximado de CPU com duas leituras de /proc/stat em pequeno
+intervalo.
+
+Motivo:
+O card será chamado de CPU, então deve exibir percentual real aproximado,
+não apenas load average.
+
+------------------------------------------------------------
+
+2. CONTAGEM DE REGISTROS DNS
+Resposta:
+2-C
+
+Contar registros funcionais das zonas forward e também PTR das zonas
+reversas.
+
+Incluir:
+- A
+- AAAA
+- CNAME
+- MX
+- TXT
+- PTR
+- outros registros funcionais válidos, se já forem suportados pelo parser
+
+Excluir:
+- comentários
+- linhas vazias
+- SOA
+- NS técnicos
+- diretivas $TTL e $ORIGIN
+
+------------------------------------------------------------
+
+3. CONTAGEM DE $GENERATE
+Resposta:
+3-B
+
+Interpretar o intervalo da diretiva $GENERATE e contabilizar todos os
+registros gerados.
+
+Fallback:
+Se o formato for desconhecido, contar a diretiva como 1 registro e não
+quebrar a dashboard.
+
+------------------------------------------------------------
+
+4. FALHA NA LEITURA DE MÉTRICAS
+Resposta:
+4-A
+
+Mostrar "Indisponível" somente na métrica que falhou e manter o restante da
+dashboard funcionando.
+
+Também registrar detalhes técnicos no error_log.
+
+------------------------------------------------------------
+
+5. ÚLTIMAS ATIVIDADES
+Resposta:
+5-A
+
+Usar tabela no desktop e cards compactos no celular.
+
+Motivo:
+Mantém boa leitura no desktop e evita rolagem horizontal ruim em telas
+menores.
+
+------------------------------------------------------------
+
+6. DATA E HORA DAS ATIVIDADES
+Resposta:
+6-B, se o banco estiver em UTC.
+
+Regra:
+- Se audit_logs.criado_em estiver em UTC, converter para America/Sao_Paulo.
+- Se já estiver gravando no horário local do servidor/Brasília, manter como
+  está para evitar conversão dupla.
+
+Antes de implementar:
+Confirmar com registros recentes se o horário exibido bate com o horário
+real local.
+
+------------------------------------------------------------
+
+7. NORMALIZAÇÃO DE DOMÍNIOS E PTR IPv6
+Resposta:
+7-A
+
+Mostrar somente domínio base ou nome_registro disponível.
+
+Fallback:
+Se não houver campo legível, mostrar "Registro reverso IPv6".
+
+Nunca mostrar:
+- nibble reverso IPv6 gigante
+- domínio com sufixo .rev6 na dashboard
+
+------------------------------------------------------------
+
+8. AÇÕES DE AUDITORIA NÃO MAPEADAS
+Resposta:
+8-A
+
+Substituir "_" por espaços e aplicar capitalização.
+
+Exemplo:
+ALTERAR_CONFIGURACAO -> Alterar configuracao
+
+Sempre escapar o conteúdo antes de exibir.
+
+------------------------------------------------------------
+
+9. ACESSO RÁPIDO PARA USUÁRIOS MODERADORES
+Resposta:
+9-A
+
+Ocultar o atalho "Usuários" para moderadores.
+
+Motivo:
+A página usuarios.php já retorna HTTP 403, mas a interface deve evitar
+mostrar opção que o usuário não pode usar.
+
+------------------------------------------------------------
+
+10. MENU EM TELAS MENORES
+Resposta:
+10-A
+
+Transformar o menu em botão recolhível no celular.
+
+Fallback:
+Se não for desejado adicionar JavaScript agora, usar opção C:
+menu acima do conteúdo no celular via CSS.
+
+------------------------------------------------------------
+
+11. ATUALIZAÇÃO AUTOMÁTICA
+Resposta:
+11-B
+
+Remover atualização automática da página inteira.
+
+Motivo:
+Evita interromper leitura, navegação por teclado e interação com o menu.
+
+Atualização parcial via JavaScript pode ser feita em fase futura.
+
+------------------------------------------------------------
+
+12. CORES DAS BARRAS DE RECURSOS
+Resposta:
+12-C
+
+Usar cor base por recurso, mas mudar para amarelo/vermelho conforme nível.
+
+Limites:
+- Normal: abaixo de 75%
+- Atenção: de 75% a 89%
+- Crítico: 90% ou mais
+
+------------------------------------------------------------
+
+13. CARD DE UPTIME
+Resposta:
+13-A
+
+Exibir somente texto.
+
+Exemplo:
+45 dias e 6 horas
+
+Não usar barra de progresso para uptime, pois não há percentual natural.
+
+------------------------------------------------------------
+
+14. INFORMAÇÕES DO TOPO
+Resposta:
+14-B
+
+Manter somente:
+- hostname
+- usuário
+
+Remover excesso de informação do topo principal para manter a dashboard
+limpa.
+
+------------------------------------------------------------
+
+15. ESCOPO DA ALTERAÇÃO
+Resposta:
+15-A
+
+Alterar somente dashboard.php nesta etapa.
+
+Motivo:
+Manter escopo controlado e evitar refatoração estrutural agora.
+
+Separação em includes, CSS e JS próprios pode ser feita futuramente.
+
+============================================================
+DIRETRIZES ADICIONAIS
+============================================================
+
+1. Não incluir cards de status dos serviços na dashboard principal.
+
+Motivo:
+Status e ações de BIND, SSH, Fail2Ban e Firewall já possuem tela própria:
+
+/var/www/html/painel/services.php
+
+------------------------------------------------------------
+
+2. Manter a dashboard com apenas quatro áreas:
+
+- Resumo DNS
+- Saúde do servidor
+- Últimas atividades
+- Acesso rápido
+
+------------------------------------------------------------
+
+3. Não incluir nesta etapa:
+
+- Alterações hoje
+- Logins hoje
+- Falhas de login
+- Ações de serviço
+
+Essas informações já aparecem naturalmente nas últimas atividades e na
+auditoria completa.
+
+------------------------------------------------------------
+
+4. Acesso rápido sugerido:
+
+- Novo Domínio -> domains.php
+- Zonas DNS -> zones.php
+- Zonas Reversas -> reverse-zones.php
+- Auditoria -> auditoria.php
+- Usuários -> usuarios.php somente para administrador
+- Serviços -> services.php
+- Firewall -> firewall.php
+
+------------------------------------------------------------
+
+5. Rodapé
+
+Manter ou atualizar para:
+
+Painel DNS Trevizam Network
+Desenvolvido com ❤️ para facilitar sua gestão de DNS
+
+Se já existir footer.php global, alterar somente nele.
+
+============================================================
+RESUMO RÁPIDO PARA IMPLEMENTAÇÃO
+============================================================
+
+1-B
+2-C
+3-B
+4-A
+5-A
+6-B se UTC; caso contrário A
+7-A
+8-A
+9-A
+10-A
+11-B
+12-C
+13-A
+14-B
+15-A
+
+============================================================
+VALIDAÇÃO APÓS IMPLEMENTAÇÃO
+============================================================
+
+Rodar:
+
+php -l /var/www/html/painel/dashboard.php
+
+Testar:
+
+/painel/dashboard.php
+
+Checklist:
+
+[ ] Dashboard abre sem erro 500
+[ ] CPU aparece como percentual
+[ ] RAM aparece corretamente
+[ ] Disco aparece corretamente
+[ ] Uptime aparece como texto
+[ ] Cards DNS carregam dados reais
+[ ] Últimas atividades aparecem
+[ ] Horário das atividades está correto
+[ ] PTR IPv6 não mostra nibble reverso
+[ ] .rev6 não aparece na dashboard
+[ ] Atalho Usuários aparece somente para administrador
+[ ] Auto refresh foi removido
+[ ] Layout funciona em tela menor
+[ ] Footer permanece funcional
+
+============================================================
+OBJETIVO FINAL
+============================================================
+
+A dashboard deve ficar limpa, operacional e objetiva.
+
+Ela deve responder rapidamente:
+
+- Quantos domínios e registros existem?
+- Como está a saúde do servidor?
+- O que aconteceu recentemente?
+- Quais atalhos principais o operador precisa?
+
+Sem duplicar informações que já existem em Serviços, Auditoria ou Firewall.
+============================================================

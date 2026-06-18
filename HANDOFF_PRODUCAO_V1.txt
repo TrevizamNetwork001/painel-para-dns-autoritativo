@@ -1,0 +1,103 @@
+HANDOFF DE PRODUCAO V1
+======================
+
+Data: 15/06/2026
+Versao: 1.0
+Projeto: Painel DNS PHP para BIND9
+Diretorio: /var/www/html/painel
+Status: APTO PARA PRODUCAO V1 COM PENDENCIAS CONTROLADAS
+
+BACKUP
+------
+Diretorio: /home/cnetwork/backups/painel_dns_v1_20260615_142415
+Arquivo: /home/cnetwork/backups/painel_dns_v1_20260615_142415.tar.gz
+Conteudo: projeto, snapshot SQLite, sudoers, BIND, nftables e zonas master-aut/master-rev.
+Integridade do tar.gz: OK
+Integridade do snapshot SQLite: OK
+
+VALIDACOES EXECUTADAS
+---------------------
+[OK] 37 arquivos PHP validados com php -l, sem erros.
+[OK] SQLite com PRAGMA integrity_check = ok.
+[OK] Escrita SQLite por www-data testada em transacao com rollback.
+[OK] Tabelas audit_logs e usuarios presentes.
+[OK] 2 administradores ativos.
+[OK] Senhas armazenadas como hashes bcrypt; nenhum hash completo foi exportado no relatorio.
+[OK] Eventos recentes de login, logout e operacoes presentes na auditoria.
+[OK] password_hash, password_verify e password_needs_rehash em uso.
+[OK] CSRF presente nos formularios POST criticos.
+[OK] usuarios.php exige perfil administrador.
+[OK] Protecoes contra remover a propria conta e o ultimo administrador ativo presentes.
+[OK] Troca obrigatoria e alteracao da propria senha implementadas.
+[OK] Nenhum arquivo PHP world-writable.
+[OK] Apache executando workers como www-data.
+[OK] db com modo 775 e SQLite com modo 664, ambos www-data:www-data.
+[OK] visudo -c sem erros.
+[OK] Sudoers sem NOPASSWD: ALL; comandos privilegiados sao especificos.
+[OK] Adicionadas somente as permissoes exatas de fail2ban-client status sshd e status bind9, usadas pelo painel.
+[OK] named-checkconf sem erros.
+[OK] named-checkconf -z carregou todas as zonas declaradas sem erros.
+[OK] rndc status: servidor ativo.
+[OK] rndc reload direto e como www-data: sucesso.
+[OK] Apache, BIND9, Fail2Ban, SSH e nftables ativos e habilitados.
+[OK] Fail2Ban respondeu pong; jails sshd e bind9 operacionais.
+[OK] nftables validado com nft -c antes da recarga.
+[OK] Recarga nftables pelo comando do painel concluida; servicos permaneceram ativos.
+[OK] Ruleset possui regras e drops IPv4/IPv6.
+[OK] Login local responde HTTP 200.
+[OK] Paginas protegidas redirecionam sessao anonima para login.
+[OK] Access log de 15/06/2026 comprova login, dashboard, auditoria, usuarios, servicos, zonas, zonas reversas e logout com respostas esperadas.
+[OK] Auditoria comprova LOGIN_SUCESSO e LOGOUT recentes.
+[OK] Journal dos servicos sem avisos apos as recargas desta preparacao.
+
+TESTES NAO DESTRUTIVOS EVITADOS
+-------------------------------
+[NAO EXECUTADO] Stop/restart de BIND9.
+[NAO EXECUTADO] Restart de SSH.
+[NAO EXECUTADO] Stop de qualquer servico critico.
+
+TESTES PENDENTES
+----------------
+[PENDENTE] Fluxo completo no navegador para firewall e todas as paginas de acesso rapido em uma unica sessao autenticada.
+[PENDENTE] Teste com perfil moderador; nao existe moderador cadastrado no momento.
+[PENDENTE] CRUD de dominio e registro A descartavel; nao autorizado para zonas reais.
+[PENDENTE] CRUD de PTR IPv6 descartavel; nao autorizado para zonas reais.
+[PENDENTE] Confirmar auditoria de um novo CRUD DNS/PTR em janela controlada.
+
+RISCOS CONHECIDOS
+-----------------
+- /etc/sudoers.d/rndc duplica a permissao de rndc reload existente em painel-dns. E valido, mas deve ser consolidado futuramente.
+- O painel possui comandos especificos para restart/stop de servicos. Nao sao amplos, mas exigem controle estrito do perfil administrador.
+- A pagina logs.php referencia /var/log/auth.log, ausente neste Debian; a centralizacao de logs permanece fase pos-V1.
+- Parte do projeto usa modo 664 e diretorios 775. Nao ha escrita para outros, mas o grupo de cada arquivo deve continuar controlado.
+- Apache informa ServerName global nao definido. Nao impede operacao, mas deve ser saneado na configuracao do host.
+- Nao ha repositorio Git no diretorio; versionamento segue como proxima fase.
+
+CRITERIOS DE LIBERACAO
+----------------------
+[OK] php -l sem erros
+[OK] dashboard sem evidencia de erro 500
+[OK] login funcionando conforme auditoria e access log
+[OK] logout funcionando conforme auditoria e access log
+[OK] auditoria gravando
+[OK] SQLite acessivel e gravavel por www-data
+[OK] pelo menos 1 administrador ativo
+[OK] BIND valido
+[OK] rndc reload bem-sucedido
+[OK] sudoers valido
+[OK] servicos seguros testados
+[OK] firewall lendo e recarregando ruleset validado
+[OK] backup criado e verificado
+
+DECISAO
+-------
+Liberacao tecnica autorizada para a V1, mantendo os testes CRUD DNS/PTR e moderador como pendencias controladas. Nao executar alteracoes destrutivas de DNS, SSH, BIND ou firewall fora de janela e backup.
+
+PROXIMOS PASSOS
+---------------
+1. Executar smoke test autenticado final no navegador.
+2. Criar usuario moderador de teste e validar bloqueio de usuarios.php.
+3. Em janela controlada, executar CRUD descartavel de dominio, A e PTR com conferencia da auditoria.
+4. Consolidar sudoers duplicado de rndc.
+5. Adequar logs.php ao journal do Debian.
+6. Inicializar Git/versionamento e definir politica de releases.

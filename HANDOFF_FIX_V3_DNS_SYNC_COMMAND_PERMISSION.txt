@@ -1,0 +1,77 @@
+HANDOFF FIX V3 - dns-sync-command.sh Permission denied
+
+Data: 2026-06-16
+Servidor homologacao: NS03
+IP: 45.162.196.244
+
+Problema
+- O servidor foi adotado/registrado com sucesso, mas o teste remoto falhou em STATUS.
+- Erro observado:
+  sh: 1: /usr/local/bin/dns-sync-command.sh: Permission denied
+- Validacao no NS03 mostrou:
+  - /usr/local/bin/dns-sync-command.sh estava como root:root 0750.
+  - O usuario dns-sync nao pertence ao grupo root.
+- Como o forced command do SSH executa /usr/local/bin/dns-sync-command.sh diretamente como dns-sync, o arquivo precisa ser executavel por esse usuario.
+
+Correcao aplicada
+- includes/dns_servers.php
+  - Garante que o grupo dns-sync exista no bootstrap.
+  - Garante que o usuario dns-sync pertenca ao grupo dns-sync.
+  - Mantem scripts chamados via sudo como root:root 0750:
+    - dns-slave-status.sh
+    - dns-slave-reload.sh
+    - dns-slave-check-transfer.sh
+    - dns-slave-add-zone.sh
+    - dns-slave-remove-zone.sh
+  - Instala dns-sync-command.sh como root:dns-sync 0750.
+
+- scripts/ns2/install-ns2-agent.sh
+  - Aplica a mesma separacao no fluxo standalone de atualizar/reinstalar agente.
+  - Garante grupo dns-sync e membership antes de instalar dns-sync-command.sh como root:dns-sync 0750.
+
+- scripts/ns2/dns-sync-bootstrap.sudoers
+  - Autoriza o bootstrap temporario a instalar dns-sync-command.sh como root:dns-sync 0750.
+  - Autoriza groupadd --system dns-sync e usermod -a -G dns-sync dns-sync quando necessarios.
+  - Mantem o sudoers final restrito, sem NOPASSWD: ALL.
+
+Scripts chamados diretamente por dns-sync
+- O unico script chamado diretamente pelo forced command e:
+  - /usr/local/bin/dns-sync-command.sh
+- Ele despacha os comandos permitidos via sudo -n para os scripts privilegiados.
+- Os scripts privilegiados continuam root:root 0750, pois sao executados via sudo restrito.
+
+Validacao realizada no NS03
+- Teste SSH forced command connection-only executado pelo painel/chave dns-sync:
+  sudo -u www-data ssh ... dns-sync@45.162.196.244 'sudo -n /usr/local/bin/dns-slave-status.sh --connection-only'
+  Resultado: SSH_OK
+
+- Teste de status/BIND executado pelo painel/chave dns-sync:
+  sudo -u www-data ssh ... dns-sync@45.162.196.244 'sudo -n /usr/local/bin/dns-slave-status.sh'
+  Resultado:
+  hostname=NS03
+  debian_version=13.5
+  bind_version=9.20.23-1~deb13u1-Debian (Stable Release) <id:>
+  bind_active=active
+  bind_enabled=alias
+  named_checkconf=ok
+  slave_zones=0
+  directories=unavailable
+  timestamp=2026-06-16T17:41:00Z
+
+- Teste de transferencia nao foi forcado porque o proprio status remoto informou slave_zones=0.
+  O script dns-slave-check-transfer.sh exige uma zona carregada e falharia com "zona nao carregada no BIND" para uma zona inexistente.
+
+Validacao recomendada apos nova adocao/reinstalacao
+1. Conferir permissoes:
+   ls -l /usr/local/bin/dns-sync-command.sh
+   Resultado esperado:
+   -rwxr-x--- 1 root dns-sync ... /usr/local/bin/dns-sync-command.sh
+2. Conferir acesso direto sem Permission denied:
+   sudo -u dns-sync /usr/local/bin/dns-sync-command.sh status
+   Observacao: sem SSH_ORIGINAL_COMMAND, o script deve negar comando nao permitido, mas nao deve retornar Permission denied.
+
+Restricoes respeitadas
+- Nao foram alteradas zonas DNS.
+- Nao foi executado cluster.
+- Nao foi implementado sync automatico.
+- Nao houve alteracao em NS1/NS2 fora dos arquivos locais do painel/agente.

@@ -1,0 +1,507 @@
+============================================================
+HANDOFF - V2 NS2 REBUILD PLAN
+============================================================
+
+Data: 15/06/2026
+Tag: [V2_NS2_REBUILD_PLAN]
+Escopo executado: inventario, diagnostico e plano de limpeza
+Escopo nao executado: qualquer alteracao no NS1 ou no NS2
+
+Fonte unica da verdade:
+- NS1, configuracao ativa em /etc/bind/named.conf.local.
+- Zonas carregadas e validadas pelo BIND do NS1 em 15/06/2026.
+- Arquivos legados existentes em disco, mas nao declarados no BIND ativo,
+  nao fazem parte do inventario oficial.
+
+Gate de mudanca:
+- As classificacoes abaixo sao a proposta tecnica.
+- Nenhuma remocao, recriacao, recarga ou transferencia foi executada.
+- A Etapa 4 depende de aprovacao explicita do operador.
+
+============================================================
+1. ESTADO VALIDADO DO NS1
+============================================================
+
+Servidor:
+- Hostname: ns1
+- IPv4: 45.162.196.242
+- IPv6: 2804:52bc::242
+- BIND: 9.20.23
+
+Validacoes:
+- named-checkconf: OK
+- named-checkconf -z: OK para todas as 18 zonas master
+- rndc status: servidor ativo
+- Zonas oficiais: 18
+- Forward: 8
+- Reverse IPv4: 7
+- Reverse IPv6: 3
+
+O BIND informa 19 zonas no total porque a contagem inclui a zona de controle
+interna; o inventario de zonas master administradas possui 18 zonas.
+
+============================================================
+2. LISTA OFICIAL DE ZONAS DO NS1
+============================================================
+
+2.1 FORWARD - 8 ZONAS
+
+1. conectanetwork.net.br
+   Arquivo: /var/cache/bind/master-aut/conectanetwork.net.br.hosts
+   Serial: 2026051906
+
+2. zebratelecom.net.br
+   Arquivo: /var/cache/bind/master-aut/zebratelecom.net.br.hosts
+   Serial: 2026060901
+
+3. batatatelecom.com.br
+   Arquivo: /var/cache/bind/master-aut/batatatelecom.com.br.hosts
+   Serial: 2026050301
+
+4. teste-template.com.br
+   Arquivo: /var/cache/bind/master-aut/teste-template.com.br.hosts
+   Serial: 2026061101
+
+5. gato.net.br
+   Arquivo: /var/cache/bind/master-aut/gato.net.br.hosts
+   Serial: 2026061101
+
+6. tiringa.com.br
+   Arquivo: /var/cache/bind/master-aut/tiringa.com.br.hosts
+   Serial: 2026061230
+
+7. pizza.com.br
+   Arquivo: /var/cache/bind/master-aut/pizza.com.br.hosts
+   Serial: 2026061305
+
+8. bug.com.br
+   Arquivo: /var/cache/bind/master-aut/bug.com.br.hosts
+   Serial: 2026061502
+
+2.2 REVERSE IPv4 - 7 ZONAS
+
+1. 10.168.192.in-addr.arpa
+   Arquivo: /var/cache/bind/master-rev/192.168.10.rev
+   Serial: 2026061101
+
+2. 0.50.198.in-addr.arpa
+   Arquivo: /var/cache/bind/master-rev/198.50.0.rev
+   Serial: 2026061101
+
+3. 1.50.198.in-addr.arpa
+   Arquivo: /var/cache/bind/master-rev/198.50.1.rev
+   Serial: 2026061101
+
+4. 2.50.198.in-addr.arpa
+   Arquivo: /var/cache/bind/master-rev/198.50.2.rev
+   Serial: 2026061101
+
+5. 3.50.198.in-addr.arpa
+   Arquivo: /var/cache/bind/master-rev/198.50.3.rev
+   Serial: 2026061101
+
+6. 0.60.10.in-addr.arpa
+   Arquivo: /var/cache/bind/master-rev/10.60.0.rev
+   Serial: 2026061101
+
+7. 11.168.192.in-addr.arpa
+   Arquivo: /var/cache/bind/master-rev/192.168.11.rev
+   Serial: 2026061301
+
+2.3 REVERSE IPv6 - 3 ZONAS
+
+1. 7.b.d.0.2.0.0.2.ip6.arpa
+   Arquivo: /var/cache/bind/master-rev/gato.net.br.rev6
+   Serial: 2026061101
+
+2. 8.b.d.0.1.0.0.2.ip6.arpa
+   Arquivo: /var/cache/bind/master-rev/tiringa.com.br.rev6
+   Serial: 2026061208
+
+3. 9.b.d.0.1.0.0.2.ip6.arpa
+   Arquivo: /var/cache/bind/master-rev/pizza.com.br.rev6
+   Serial: 2026061305
+
+============================================================
+3. MAPA ATUAL DO NS2
+============================================================
+
+Fontes:
+- Coleta SSH somente leitura realizada em 15/06/2026 e registrada em
+  HANDOFF_NS2_DISCOVERY.txt.
+- Consultas DNS ao vivo por IPv4 e IPv6 em 15/06/2026.
+
+Limitacao da coleta atual:
+- Uma nova autenticacao SSH nao ficou disponivel durante esta etapa.
+- A declaracao interna e os caminhos abaixo usam a coleta anterior do mesmo
+  dia; autoridade e seriais foram retestados ao vivo nos dois protocolos.
+- Antes da mudanca, deve ser feita nova captura local do NS2 com privilegio
+  administrativo para confirmar que nao houve alteracao entre as coletas.
+
+3.1 ZONAS ATIVAS
+
+1. conectanetwork.net.br
+   Tipo atual: slave
+   Arquivo historicamente mapeado:
+   /var/cache/bind/slave-aut/conectanetwork.net.br.hosts
+   Resposta IPv4: autoritativa
+   Resposta IPv6: autoritativa
+   Serial NS2: 2026051906
+   Serial NS1: 2026051906
+   Situacao: ativa, oficial e sincronizada
+
+2. c.b.2.5.4.0.8.2.ip6.arpa
+   Tipo atual: slave
+   Arquivo historicamente mapeado:
+   /var/cache/bind/slave-rev/2804.52bc.rev
+   Resposta IPv4: autoritativa
+   Resposta IPv6: autoritativa
+   Serial NS2: 2026050201
+   NS1: zona nao declarada; resposta REFUSED
+   Situacao: ativa no NS2, mas legada e orfa
+
+3.2 ZONAS LEGADAS CONFIGURADAS, SEM TRANSFERENCIA VALIDA
+
+1. 196.162.45.in-addr.arpa
+2. 197.162.45.in-addr.arpa
+3. 198.162.45.in-addr.arpa
+4. 199.162.45.in-addr.arpa
+
+Estado:
+- Declaradas historicamente como slave no NS2.
+- Resposta atual do NS2: SERVFAIL por IPv4 e IPv6.
+- Nao existem na configuracao ativa do NS1.
+- O NS1 responde REFUSED.
+- Sao referencias antigas sem master autoritativo ativo.
+
+3.3 ZONAS ORFAS
+
+Orfa ativa:
+- c.b.2.5.4.0.8.2.ip6.arpa
+
+Orfas quebradas:
+- 196.162.45.in-addr.arpa
+- 197.162.45.in-addr.arpa
+- 198.162.45.in-addr.arpa
+- 199.162.45.in-addr.arpa
+
+Definicao usada:
+- Zona existente ou declarada no NS2 que nao pertence ao inventario oficial
+  do NS1.
+
+3.4 ZONAS OFICIAIS AUSENTES NO NS2
+
+Forward:
+- zebratelecom.net.br
+- batatatelecom.com.br
+- teste-template.com.br
+- gato.net.br
+- tiringa.com.br
+- pizza.com.br
+- bug.com.br
+
+Reverse IPv4:
+- 10.168.192.in-addr.arpa
+- 0.50.198.in-addr.arpa
+- 1.50.198.in-addr.arpa
+- 2.50.198.in-addr.arpa
+- 3.50.198.in-addr.arpa
+- 0.60.10.in-addr.arpa
+- 11.168.192.in-addr.arpa
+
+Reverse IPv6:
+- 7.b.d.0.2.0.0.2.ip6.arpa
+- 8.b.d.0.1.0.0.2.ip6.arpa
+- 9.b.d.0.1.0.0.2.ip6.arpa
+
+Total ausente: 17 zonas.
+
+Observacao importante:
+- O NS2 pode retornar AA/NXDOMAIN ou SOA serial 0 para algumas reversas
+  privadas e para 2001:db8 por causa das zonas vazias automaticas do BIND.
+- Essas respostas pertencem a uma zona ancestral ou vazia local, nao a uma
+  copia slave da zona oficial do NS1.
+- A validacao deve exigir que o owner do SOA seja exatamente a zona testada
+  e que o serial seja igual ao NS1.
+
+============================================================
+4. PLANO DE LIMPEZA E CLASSIFICACAO
+============================================================
+
+[MANTER]
+
+- conectanetwork.net.br
+
+Justificativa:
+- Pertence ao inventario oficial.
+- Esta autoritativa e com serial igual nos dois servidores.
+- Durante a reorganizacao, preservar a disponibilidade desta zona.
+- Se a declaracao for migrada para um novo include, a zona logica continua
+  classificada como MANTER, mesmo que o bloco slave seja recriado.
+
+[REMOVER]
+
+- 196.162.45.in-addr.arpa
+- 197.162.45.in-addr.arpa
+- 198.162.45.in-addr.arpa
+- 199.162.45.in-addr.arpa
+- c.b.2.5.4.0.8.2.ip6.arpa
+
+Justificativa:
+- Nao pertencem a configuracao ativa do NS1.
+- O NS1 e a fonte unica da verdade.
+- Quatro estao quebradas com SERVFAIL.
+- A reversa IPv6 continua autoritativa apenas no NS2 e representa autoridade
+  orfa, divergente da base oficial.
+
+[RECRIAR]
+
+Forward:
+- zebratelecom.net.br
+- batatatelecom.com.br
+- teste-template.com.br
+- gato.net.br
+- tiringa.com.br
+- pizza.com.br
+- bug.com.br
+
+Reverse IPv4:
+- 10.168.192.in-addr.arpa
+- 0.50.198.in-addr.arpa
+- 1.50.198.in-addr.arpa
+- 2.50.198.in-addr.arpa
+- 3.50.198.in-addr.arpa
+- 0.60.10.in-addr.arpa
+- 11.168.192.in-addr.arpa
+
+Reverse IPv6:
+- 7.b.d.0.2.0.0.2.ip6.arpa
+- 8.b.d.0.1.0.0.2.ip6.arpa
+- 9.b.d.0.1.0.0.2.ip6.arpa
+
+Total RECRIAR: 17 zonas.
+
+Resumo da proposta:
+- MANTER: 1
+- REMOVER: 5
+- RECRIAR: 17
+- Estado final esperado no NS2: exatamente 18 zonas slave oficiais.
+
+============================================================
+5. ZONAS APROVADAS PARA O ESTADO FINAL
+============================================================
+
+A base tecnica aprovada pela regra "NS1 e a fonte unica da verdade" e:
+
+- As 18 zonas listadas na secao 2.
+- Nenhuma outra zona deve permanecer declarada como slave no NS2.
+
+Esta aprovacao define o inventario de destino, mas nao autoriza ainda a
+execucao da Etapa 4. A execucao requer confirmacao explicita do operador.
+
+============================================================
+6. PROCEDIMENTO PROPOSTO APOS APROVACAO
+============================================================
+
+6.1 PRE-CHECK
+
+1. Restaurar acesso administrativo confiavel ao NS2.
+2. Confirmar fingerprint SSH por canal confiavel.
+3. Confirmar conectividade IPv4 e IPv6 entre NS1 e NS2 nas portas DNS
+   TCP/UDP 53.
+4. Capturar novamente:
+   - /etc/bind/named.conf
+   - /etc/bind/named.conf.local
+   - /etc/bind/named.conf.options
+   - todos os includes ativos
+   - lista e metadados dos arquivos slave
+   - named-checkconf
+   - rndc status
+   - rndc zonestatus para zonas existentes
+5. Comparar a nova captura com este plano antes de alterar.
+
+6.2 BACKUP OBRIGATORIO
+
+Criar backup datado no NS2 contendo:
+- /etc/bind completo
+- /var/cache/bind/slave-aut
+- /var/cache/bind/slave-rev
+- permissoes, proprietarios e links simbolicos
+- saida de named-checkconf -p
+- saida de rndc status
+- lista de arquivos com tamanho e data
+
+Calcular checksum do backup e manter uma copia fora do NS2.
+
+6.3 RECRIACAO CONTROLADA
+
+1. Criar uma configuracao slave dedicada, mantendo compatibilidade com a
+   versao atual do BIND do NS2.
+2. Declarar como masters apenas os enderecos oficiais do NS1:
+   - 45.162.196.242
+   - 2804:52bc::242
+3. Criar as 17 zonas ausentes em lotes pequenos:
+   - primeiro uma zona forward de baixo risco
+   - depois as demais forwards
+   - depois reverse IPv4
+   - por ultimo reverse IPv6
+4. Preservar conectanetwork.net.br durante os testes.
+5. Para cada lote, executar named-checkconf antes de reconfigurar.
+6. Confirmar transferencia AXFR/IXFR e serial antes de continuar.
+7. Remover as cinco zonas legadas somente depois que as 18 oficiais estiverem
+   validadas e o backup estiver confirmado.
+8. Nao excluir imediatamente os arquivos antigos: mover para quarentena
+   datada fora dos diretorios ativos e remover apenas apos a janela de
+   observacao.
+
+============================================================
+7. VALIDACOES DA ETAPA 4
+============================================================
+
+Validacoes obrigatorias no NS2:
+
+1. named-checkconf
+   Resultado esperado: codigo 0, sem erros.
+
+2. rndc status
+   Resultado esperado: servidor ativo e configuracao carregada.
+
+3. rndc zonestatus <zona>
+   Resultado esperado: cada uma das 18 zonas reconhecida como slave.
+
+4. SOA local no NS2
+   Consultar cada apex com +norecurse.
+   Resultado esperado:
+   - status NOERROR
+   - flag AA
+   - owner SOA exatamente igual ao apex consultado
+   - serial igual ao NS1
+
+5. Comparacao IPv4 e IPv6
+   Consultar todas as zonas em:
+   - 45.162.196.242
+   - 2804:52bc::242
+   - 45.162.196.243
+   - 2804:52bc::243
+
+6. Transferencias
+   Confirmar nos logs:
+   - transferencia concluida
+   - ausencia de NOTAUTH
+   - ausencia de REFUSED
+   - ausencia de SERVFAIL para os apex oficiais
+
+7. Remocao de legado
+   Resultado esperado no NS2:
+   - nenhuma das cinco zonas legadas aparece em named-checkconf -p
+   - nenhum arquivo legado permanece em diretorio ativo
+   - nenhuma zona legada responde com AA
+
+8. Observacao
+   Manter monitoramento durante uma janela operacional antes de apagar a
+   quarentena.
+
+============================================================
+8. ZONAS REMOVIDAS NO ESTADO FINAL PROPOSTO
+============================================================
+
+- 196.162.45.in-addr.arpa
+- 197.162.45.in-addr.arpa
+- 198.162.45.in-addr.arpa
+- 199.162.45.in-addr.arpa
+- c.b.2.5.4.0.8.2.ip6.arpa
+
+Estado atual deste documento:
+- Remocao proposta.
+- Remocao ainda nao executada.
+
+============================================================
+9. ZONAS RECRIADAS NO ESTADO FINAL PROPOSTO
+============================================================
+
+- As 17 zonas listadas em [RECRIAR].
+
+Estado atual deste documento:
+- Recriacao proposta.
+- Recriacao ainda nao executada.
+
+============================================================
+10. RISCOS
+============================================================
+
+1. NS2 usa Debian 10 e BIND 9.11, ambos antigos em relacao ao NS1.
+2. O acesso SSH administrativo nao autenticou nesta etapa.
+3. Houve instabilidade IPv4 no diagnostico anterior.
+4. Respostas de zonas vazias automaticas podem gerar falso positivo de
+   autoridade se o owner do SOA nao for conferido.
+5. As 18 zonas publicam NS1 e NS2 em seus registros NS; manter o NS2
+   incompleto prolonga respostas inconsistentes.
+6. Remover a reversa IPv6 orfa pode afetar consumidores que ainda dependam
+   indevidamente dela, apesar de ela nao existir no NS1.
+7. Arquivos legados ainda existem no disco do NS1. Eles nao podem ser usados
+   como referencia nem reativados acidentalmente.
+8. Alterar todas as zonas em um unico reload aumenta o impacto e dificulta
+   identificar a zona causadora de falha.
+9. Permissoes incorretas nos diretorios slave impedem gravacao das
+   transferencias pelo usuario bind.
+10. Serial igual nao basta sozinho; autoridade, owner SOA e logs de
+    transferencia tambem devem ser validados.
+
+============================================================
+11. ROLLBACK
+============================================================
+
+Gatilhos:
+- named-checkconf falha
+- rndc reconfig/reload falha
+- conectanetwork.net.br deixa de responder autoritativamente
+- qualquer zona oficial permanece sem transferencia
+- aumento de SERVFAIL, REFUSED ou NOTAUTH
+- perda de conectividade DNS por IPv4 ou IPv6
+
+Procedimento:
+
+1. Interromper a inclusao de novos lotes.
+2. Restaurar os arquivos de configuracao do backup datado.
+3. Restaurar os arquivos slave e suas permissoes.
+4. Executar named-checkconf.
+5. Executar rndc reconfig; usar restart do servico somente se o reconfig nao
+   recuperar o estado anterior.
+6. Validar conectanetwork.net.br nos dois protocolos e confirmar o serial
+   2026051906 ou o serial mais recente vigente no NS1 no momento do rollback.
+7. Validar as demais zonas que existiam antes da janela.
+8. Preservar logs, diff e backup para analise.
+
+Observacao:
+- Se o rollback restaurar temporariamente zonas legadas, isso deve ser tratado
+  apenas como retorno ao estado anterior, nao como aprovacao dessas zonas.
+
+============================================================
+12. FORA DE ESCOPO
+============================================================
+
+Nao implementar antes da conclusao e validacao do rebuild:
+- Cluster DNS
+- Sync Automatico
+- dns-sync
+- automacao SSH
+- wizard
+
+============================================================
+13. CRITERIO DE CONCLUSAO DO REBUILD
+============================================================
+
+O rebuild somente pode ser considerado concluido quando:
+
+- O NS2 possuir exatamente as 18 zonas oficiais do NS1.
+- As cinco zonas legadas nao estiverem ativas.
+- named-checkconf estiver sem erros.
+- rndc status estiver normal.
+- Todas as zonas responderem AA no apex correto por IPv4 e IPv6.
+- Todos os seriais SOA do NS2 forem iguais aos seriais vigentes do NS1.
+- Os logs nao mostrarem falhas de transferencia.
+- O rollback estiver testado documentalmente e o backup preservado.
+
+============================================================
+FIM
+============================================================

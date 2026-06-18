@@ -1,0 +1,134 @@
+AJUSTE PONTUAL - RESUMO DNS DA DASHBOARD
+
+Data: 15/06/2026
+
+Arquivo:
+dashboard.php
+
+Objetivo:
+Corrigir a métrica exibida no card "Registros DNS".
+
+Atualmente o card "Registros DNS" está contabilizando:
+
+registros forward
+registros PTR
+expansões oriundas de $GENERATE
+registros provenientes das zonas reversas
+
+Exemplo atual:
+
+Domínios: 7
+Registros DNS: 4415
+Zonas Reversas: 21
+
+O número fica excessivamente alto e não representa aquilo que o
+administrador normalmente gerencia no dia a dia.
+
+A dashboard principal deve ter caráter executivo e operacional,
+não técnico.
+
+O card "Registros DNS" deve contabilizar apenas registros forward.
+
+Incluir:
+
+A
+AAAA
+CNAME
+MX
+TXT
+
+Excluir:
+
+PTR
+$GENERATE
+registros derivados de zonas reversas
+contagens estimadas de reversas
+
+Exemplo:
+
+🌐 Domínios
+7
+
+📄 Registros DNS
+47
+
+🔄 Zonas Reversas
+21
+
+Caso seja simples de implementar, exibir abaixo do card
+"Zonas Reversas":
+
+IPv4: 15 | IPv6: 6
+
+Somente como informação complementar.
+
+Não modificar:
+
+Saúde do Servidor
+Últimas Atividades
+Acesso Rápido
+Menu lateral
+Rodapé
+Responsividade
+
+Esta tarefa deve alterar apenas a lógica do card
+"Registros DNS".
+
+A dashboard deve mostrar números coerentes para uma visão geral
+do ambiente.
+
+O administrador deve enxergar:
+
+Quantos domínios existem
+Quantos registros forward existem
+Quantas zonas reversas existem
+Sem misturar métricas de PTR e $GENERATE no total de registros.
+
+
+
+
+OBSERVAÇÃO DE UX - ACESSO RÁPIDO
+
+Durante a validação da nova dashboard foi identificado que o bloco
+"Acesso Rápido" foi a melhoria mais bem recebida da interface.
+
+Decisão:
+
+Manter o bloco "Acesso Rápido" exatamente na dashboard principal.
+
+Importante:
+
+Não remover o menu lateral.
+Não substituir o menu lateral pelo acesso rápido.
+Não mover o acesso rápido para outra página.
+
+O objetivo é manter os dois mecanismos de navegação:
+
+Menu lateral
+Navegação completa do sistema.
+Acesso rápido da dashboard
+Navegação operacional para as áreas mais utilizadas.
+
+Motivo:
+
+O acesso rápido tornou a dashboard muito mais prática para uso diário,
+reduzindo cliques e facilitando o acesso às funções principais.
+
+Os atalhos atuais foram considerados adequados:
+
+Novo Domínio
+Zonas DNS
+Zonas Reversas
+Auditoria
+Serviços
+Firewall
+Usuários
+
+Portanto, nas próximas evoluções da dashboard, o bloco "Acesso Rápido"
+deve ser preservado como elemento permanente da página inicial.
+
+Prioridade:
+
+ALTA
+
+Não remover nem substituir esse componente sem nova validação.

@@ -1,0 +1,384 @@
+============================================================
+HANDOFF - IMPLEMENTACAO DA NOVA DASHBOARD
+============================================================
+
+Data:
+15/06/2026
+
+Projeto:
+Painel Web para gerenciamento de DNS BIND9
+
+Diretorio:
+/var/www/html/painel
+
+Arquivo alterado:
+/var/www/html/painel/dashboard.php
+
+Status:
+IMPLEMENTACAO CONCLUIDA
+
+============================================================
+OBJETIVO
+============================================================
+
+Transformar dashboard.php em um centro operacional simples, limpo,
+responsivo e objetivo.
+
+A dashboard agora apresenta somente quatro areas principais:
+
+- Resumo DNS
+- Saude do servidor
+- Ultimas atividades
+- Acesso rapido
+
+============================================================
+ESCOPO DA ALTERACAO
+============================================================
+
+Alterado:
+
+- dashboard.php
+
+Preservados sem alteracao:
+
+- includes/footer.php
+- auditoria.php
+- services.php
+- demais paginas do painel
+
+============================================================
+ALTERACOES IMPLEMENTADAS
+============================================================
+
+1. METRICA DE CPU
+
+- Removido o uso de load average como indicador de CPU.
+- Implementadas duas leituras de /proc/stat.
+- Adicionado intervalo aproximado de 200 ms entre as leituras.
+- O card exibe o percentual aproximado de uso da CPU.
+- O valor e limitado ao intervalo de 0% a 100%.
+
+------------------------------------------------------------
+
+2. METRICA DE RAM
+
+- Leitura realizada por /proc/meminfo.
+- Calculo baseado em MemTotal e MemAvailable.
+- O card exibe o percentual de memoria em uso.
+
+------------------------------------------------------------
+
+3. METRICA DE DISCO
+
+- Uso calculado com disk_total_space() e disk_free_space().
+- A medicao considera a particao /.
+- O card exibe o percentual utilizado.
+
+------------------------------------------------------------
+
+4. UPTIME
+
+- Leitura realizada por /proc/uptime.
+- Exibicao somente em texto.
+- Formato com dias, horas ou minutos, conforme o tempo ligado.
+- Removida qualquer barra de progresso para uptime.
+
+------------------------------------------------------------
+
+5. TRATAMENTO DE FALHAS DAS METRICAS
+
+- CPU, RAM, disco e uptime possuem tratamento independente.
+- A falha de uma metrica nao interrompe as demais.
+- Em caso de falha, o card correspondente exibe:
+
+Indisponivel
+
+- Detalhes tecnicos sao registrados no error_log.
+
+------------------------------------------------------------
+
+6. CORES DAS BARRAS
+
+Faixas implementadas:
+
+- Normal: 0% ate 74% - verde
+- Atencao: 75% ate 89% - amarelo
+- Critico: 90% ou mais - vermelho
+
+------------------------------------------------------------
+
+7. RESUMO DNS
+
+Cards implementados:
+
+- Dominios
+- Registros DNS
+- Zonas reversas
+
+Dominios:
+
+- Contagem dos arquivos .hosts das zonas forward.
+
+Registros DNS:
+
+- Total consolidado de registros forward e PTR.
+- Tipos forward considerados:
+  A, AAAA, CNAME, MX e TXT.
+- Registros PTR considerados nas zonas reversas IPv4 e IPv6.
+- SOA, NS, comentarios, linhas vazias, $TTL e $ORIGIN nao entram na
+  contagem.
+
+Zonas reversas:
+
+- Contagem consolidada das zonas IPv4 e IPv6.
+- A interface nao exibe nomes de arquivos .rev6.
+
+------------------------------------------------------------
+
+8. DIRETIVA $GENERATE
+
+Formatos suportados:
+
+- $GENERATE inicio-fim
+- $GENERATE inicio-fim/passo
+
+Exemplos validados:
+
+- $GENERATE 1-254 = 254 registros
+- $GENERATE 0-255/2 = 128 registros
+
+Implementacao:
+
+- A quantidade e calculada matematicamente.
+- Os registros nao sao expandidos em memoria.
+- Sintaxe invalida ou desconhecida conta como 1 registro.
+- Uma diretiva invalida nao interrompe a dashboard.
+
+------------------------------------------------------------
+
+9. ULTIMAS ATIVIDADES
+
+- Consulta dos seis eventos mais recentes de audit_logs.
+- Exibicao em tabela no desktop.
+- Conversao em cards compactos no celular por CSS responsivo.
+- Conteudos dinamicos passam por htmlspecialchars().
+- Falha de acesso ao banco exibe mensagem localizada sem derrubar a pagina.
+
+------------------------------------------------------------
+
+10. DATA E HORA DA AUDITORIA
+
+- audit_logs.criado_em e tratado como UTC.
+- Conversao explicita para America/Sao_Paulo.
+- Formato exibido:
+
+dd/mm/AAAA HH:mm:ss
+
+Validacao realizada:
+
+- 15/06/2026 15:13:13 UTC
+- 15/06/2026 12:13:13 America/Sao_Paulo
+
+------------------------------------------------------------
+
+11. ACOES DE AUDITORIA
+
+- Acoes conhecidas continuam com nomes amigaveis.
+- Acoes desconhecidas recebem:
+  substituicao de "_" por espaco;
+  conversao para minusculas;
+  capitalizacao.
+- Foi mantido fallback para ambientes sem a extensao mbstring.
+- A saida final e escapada com htmlspecialchars().
+
+------------------------------------------------------------
+
+12. DOMINIOS E PTR IPV6
+
+- Sufixos .rev e .rev6 sao removidos da apresentacao.
+- Nibbles reversos IPv6 extensos nao sao exibidos.
+- O sistema prioriza dominio base ou nome_registro legivel.
+- Para eventos PTR IPv6 sem informacao amigavel, o fallback e:
+
+Registro reverso IPv6
+
+------------------------------------------------------------
+
+13. TOPO DA DASHBOARD
+
+Mantidos:
+
+- hostname
+- usuario autenticado
+
+Removidos:
+
+- IP do cliente
+- horario de atualizacao
+- informacoes operacionais excedentes
+
+------------------------------------------------------------
+
+14. ACESSO RAPIDO
+
+Atalhos implementados:
+
+- Novo Dominio
+- Zonas DNS
+- Zonas Reversas
+- Auditoria
+- Servicos
+- Firewall
+
+Atalho Usuarios:
+
+- Exibido somente para administradores.
+- Oculto para moderadores.
+
+------------------------------------------------------------
+
+15. MENU RESPONSIVO
+
+- Adicionado botao recolhivel em telas de ate 760 px.
+- Adicionado fundo de sobreposicao ao abrir o menu.
+- O menu fecha ao tocar fora dele.
+- O menu fecha apos selecionar um link no celular.
+- Estado de abertura informado por aria-expanded.
+
+------------------------------------------------------------
+
+16. ATUALIZACAO AUTOMATICA
+
+- Removido o setInterval que recarregava a pagina a cada 60 segundos.
+- Nao foi implementada atualizacao parcial nesta etapa.
+
+------------------------------------------------------------
+
+17. ITENS REMOVIDOS DA DASHBOARD
+
+Nao existem mais cards principais de:
+
+- Status BIND
+- Status Firewall
+- Status Fail2Ban
+- Status IPv6
+- Load average
+- Sistema operacional
+- Total de eventos da auditoria
+- Total de erros da auditoria
+
+Essas informacoes permanecem disponiveis nas paginas especificas quando
+aplicavel.
+
+============================================================
+VALIDACOES EXECUTADAS
+============================================================
+
+1. Sintaxe PHP
+
+Comando:
+
+php -l /var/www/html/painel/dashboard.php
+
+Resultado:
+
+No syntax errors detected in dashboard.php
+
+------------------------------------------------------------
+
+2. Contagem $GENERATE
+
+Resultados:
+
+- 1-254 = 254
+- 0-255/2 = 128
+- formato invalido = 1
+
+------------------------------------------------------------
+
+3. Dados DNS encontrados no servidor durante o teste
+
+- Dominios: 7
+- Registros forward: 47
+- Registros PTR, incluindo $GENERATE: 4368
+- Registros consolidados: 4415
+- Zonas reversas: 21
+
+Esses valores sao dinamicos e podem mudar conforme os arquivos do BIND.
+
+------------------------------------------------------------
+
+4. Fontes das metricas
+
+Resultado durante o teste:
+
+- CPU: leitura funcional
+- /proc/meminfo: leitura funcional
+- /proc/uptime: leitura funcional
+- disk_total_space(): funcional
+
+Uma amostra de CPU durante a validacao apresentou aproximadamente 12%.
+
+------------------------------------------------------------
+
+5. Resposta HTTP
+
+Acesso sem sessao:
+
+http://127.0.0.1/painel/dashboard.php
+
+Resultado:
+
+- HTTP 302
+- Redirecionamento para login.php
+- Sem erro HTTP 500
+
+O redirecionamento e o comportamento esperado para usuario nao autenticado.
+
+------------------------------------------------------------
+
+6. Footer
+
+- includes/footer.php nao foi alterado.
+- A dashboard continua carregando o footer global existente.
+
+============================================================
+VALIDACAO MANUAL RECOMENDADA
+============================================================
+
+Realizar acesso autenticado pelo navegador e conferir:
+
+[ ] Dashboard abre com HTTP 200 apos login
+[ ] CPU, RAM, disco e uptime aparecem corretamente
+[ ] Total de registros corresponde aos arquivos atuais do BIND
+[ ] Horarios da auditoria correspondem ao horario de Brasilia
+[ ] Nenhum nibble IPv6 extenso aparece
+[ ] Nenhum nome .rev6 aparece nas atividades
+[ ] Administrador visualiza o atalho Usuarios
+[ ] Moderador nao visualiza o atalho Usuarios
+[ ] Menu abre e fecha corretamente no celular
+[ ] Atividades aparecem como cards no celular
+[ ] Barras mudam de cor nos limites definidos
+[ ] Nao ocorre atualizacao automatica da pagina
+[ ] Footer permanece funcional
+
+Observacao:
+
+Foi tentado um teste autenticado com sessao temporaria criada pelo PHP CLI,
+mas Apache e CLI nao compartilharam essa sessao no ambiente atual. Nenhuma
+permissao do servidor foi alterada para forcar o teste.
+
+============================================================
+RESULTADO FINAL
+============================================================
+
+A dashboard foi reorganizada como centro operacional com quatro areas:
+
+- Resumo DNS
+- Saude do servidor
+- Ultimas atividades
+- Acesso rapido
+
+O arquivo esta sintaticamente valido, utiliza dados reais do servidor,
+possui tratamento localizado de falhas e preserva o restante do projeto.
+============================================================

@@ -1,0 +1,381 @@
+============================================================
+HANDOFF - ALINHAMENTO DNS NS1 x NS2
+============================================================
+
+Data: 15/06/2026
+Tag: [V2_NS1_NS2_ALIGNMENT]
+Escopo: operacional, somente leitura
+
+Objetivo:
+Catalogar e comparar as zonas DNS conhecidas do NS1 e do NS2 antes de
+qualquer automacao, Cluster DNS, sync automatico ou wizard novo.
+
+Fonte usada nesta apuracao:
+- Consultas SOA autoritativas em NS1 e NS2.
+- Handoff anterior do NS2.
+- Auditoria local do painel.
+- Nenhuma alteracao funcional foi feita no painel, no SQLite, no firewall
+  ou nos servicos durante esta etapa.
+
+============================================================
+1. RESUMO EXECUTIVO
+============================================================
+
+O alinhamento esta parcial.
+
+Totais confirmados nesta apuracao:
+- NS1: 8 zonas autoritativas confirmadas por SOA.
+- NS2: 6 zonas historicas documentadas no diagnóstico anterior, sendo 2
+  que responderam SOA nesta apuracao.
+
+Confirmado hoje:
+- `conectanetwork.net.br` esta sincronizada entre NS1 e NS2, com serial igual.
+- NS1 responde autoritativamente para varias zonas forward ativas.
+- NS2 responde autoritativamente apenas para `conectanetwork.net.br` e para
+  a reversa IPv6 legada `c.b.2.5.4.0.8.2.ip6.arpa`.
+- As reversas IPv4 antigas `196.162.45.in-addr.arpa` a `199.162.45.in-addr.arpa`
+  nao estao alinhadas com o NS1 e nao respondem de forma autoritativa no teste
+  atual do NS2.
+
+Conclusao operacional:
+- Existe uma zona sincronizada.
+- Existem zonas presentes apenas no NS1.
+- Existem zonas legadas/órfãs no NS2.
+- Existem divergencias de serial e de autoridade para as zonas nao sincronizadas.
+
+============================================================
+2. INVENTARIO CONFIRMADO DO NS1
+============================================================
+
+Zonas que responderam SOA autoritativo no NS1 nesta apuracao:
+
+1. conectanetwork.net.br
+   Serial: 2026051906
+   Status: autoritativa
+
+2. bug.com.br
+   Serial: 2026061502
+   Status: autoritativa
+
+3. pizza.com.br
+   Serial: 2026061305
+   Status: autoritativa
+
+4. tiringa.com.br
+   Serial: 2026061230
+   Status: autoritativa
+
+5. zebratelecom.net.br
+   Serial: 2026060901
+   Status: autoritativa
+
+6. batatatelecom.com.br
+   Serial: 2026050301
+   Status: autoritativa
+
+7. teste-template.com.br
+   Serial: 2026061101
+   Status: autoritativa
+
+8. gato.net.br
+   Serial: 2026061101
+   Status: autoritativa
+
+Zonas testadas e nao carregadas no NS1:
+
+- 196.162.45.in-addr.arpa
+- 197.162.45.in-addr.arpa
+- 198.162.45.in-addr.arpa
+- 199.162.45.in-addr.arpa
+- c.b.2.5.4.0.8.2.ip6.arpa
+
+Resposta do NS1 para essas zonas:
+- `REFUSED`
+
+Leitura operacional:
+- As reversas antigas nao estao carregadas como zonas autoritativas no NS1.
+
+============================================================
+3. INVENTARIO CONFIRMADO DO NS2
+============================================================
+
+Zonas historicas documentadas no NS2:
+
+1. conectanetwork.net.br
+   Serial: 2026051906
+   Status atual: autoritativa
+
+2. 196.162.45.in-addr.arpa
+   Status atual: nao autoritativa no teste, resposta `SERVFAIL`
+
+3. 197.162.45.in-addr.arpa
+   Status atual: nao autoritativa no teste, resposta `SERVFAIL`
+
+4. 198.162.45.in-addr.arpa
+   Status atual: nao autoritativa no teste, resposta `SERVFAIL`
+
+5. 199.162.45.in-addr.arpa
+   Status atual: nao autoritativa no teste, resposta `SERVFAIL`
+
+6. c.b.2.5.4.0.8.2.ip6.arpa
+   Serial: 2026050201
+   Status atual: autoritativa
+
+Zonas que responderam SOA no NS2 nesta apuracao:
+
+1. conectanetwork.net.br
+   Serial: 2026051906
+   Status: autoritativa
+
+2. c.b.2.5.4.0.8.2.ip6.arpa
+   Serial: 2026050201
+   Status: autoritativa
+
+Zonas testadas no NS2 sem resposta autoritativa:
+
+- bug.com.br
+- pizza.com.br
+- tiringa.com.br
+- zebratelecom.net.br
+- batatatelecom.com.br
+- teste-template.com.br
+- gato.net.br
+
+Resposta observada:
+- `REFUSED` nas zonas forward acima.
+
+Zonas reversas IPv4 testadas no NS2:
+
+- 196.162.45.in-addr.arpa
+- 197.162.45.in-addr.arpa
+- 198.162.45.in-addr.arpa
+- 199.162.45.in-addr.arpa
+
+Resposta observada:
+- `SERVFAIL`
+
+Leitura operacional:
+- O NS2 continua com a reversa IPv6 legada carregada.
+- As reversas IPv4 antigas existem no historico do ambiente, mas hoje nao
+  respondem de forma autoritativa no teste direto.
+
+============================================================
+4. CLASSIFICACAO DAS ZONAS
+============================================================
+
+[OK]
+Existe nos dois e responde com serial igual.
+
+- conectanetwork.net.br
+
+[FALTANDO NS2]
+Existe e responde no NS1, mas nao responde no NS2.
+
+- bug.com.br
+- pizza.com.br
+- tiringa.com.br
+- zebratelecom.net.br
+- batatatelecom.com.br
+- teste-template.com.br
+- gato.net.br
+
+[FALTANDO NS1]
+Existe/responde no NS2, mas nao responde no NS1.
+
+- c.b.2.5.4.0.8.2.ip6.arpa
+
+[LEGADA]
+Zona antiga sem uso operacional conhecido ou sem alinhamento com a malha
+atual do NS1.
+
+- 196.162.45.in-addr.arpa
+- 197.162.45.in-addr.arpa
+- 198.162.45.in-addr.arpa
+- 199.162.45.in-addr.arpa
+- c.b.2.5.4.0.8.2.ip6.arpa
+
+Nota:
+- `c.b.2.5.4.0.8.2.ip6.arpa` aparece tanto como `[FALTANDO NS1]` quanto como
+  `[LEGADA]` porque esta carregada no NS2, mas nao faz parte da configuracao
+  atual do NS1 e vem do historico antigo do ambiente.
+
+============================================================
+5. ZONAS SINCRONIZADAS
+============================================================
+
+Total confirmado: 1
+
+- conectanetwork.net.br
+
+Serial igual:
+- NS1: 2026051906
+- NS2: 2026051906
+
+Resultado:
+- sincronizada corretamente.
+
+============================================================
+6. ZONAS EM FALTA
+============================================================
+
+Faltando no NS2:
+
+- bug.com.br
+- pizza.com.br
+- tiringa.com.br
+- zebratelecom.net.br
+- batatatelecom.com.br
+- teste-template.com.br
+- gato.net.br
+
+Inventario historico do NS2 que nao responde mais como autoritativo:
+
+- 196.162.45.in-addr.arpa
+- 197.162.45.in-addr.arpa
+- 198.162.45.in-addr.arpa
+- 199.162.45.in-addr.arpa
+
+Faltando no NS1:
+
+- c.b.2.5.4.0.8.2.ip6.arpa
+
+============================================================
+7. ZONAS LEGADAS
+============================================================
+
+Zonas reversas antigas encontradas no diagnostico:
+
+- 196.162.45.in-addr.arpa
+- 197.162.45.in-addr.arpa
+- 198.162.45.in-addr.arpa
+- 199.162.45.in-addr.arpa
+- c.b.2.5.4.0.8.2.ip6.arpa
+
+Classificacao:
+- 196.162.45.in-addr.arpa -> legada
+- 197.162.45.in-addr.arpa -> legada
+- 198.162.45.in-addr.arpa -> legada
+- 199.162.45.in-addr.arpa -> legada
+- c.b.2.5.4.0.8.2.ip6.arpa -> legada / órfã
+
+Observacao:
+- As reversas IPv4 antigas nao estao mais carregadas no NS1.
+- A reversa IPv6 antiga continua respondendo no NS2.
+
+============================================================
+8. DIVERGENCIAS DE SERIAL
+============================================================
+
+Divergencias com serial comparavel:
+
+- Nenhuma entre as zonas presentes em ambos os servidores.
+
+Zona com serial igual:
+
+- conectanetwork.net.br
+  - NS1: 2026051906
+  - NS2: 2026051906
+
+Zonas com serial nao comparavel porque faltam em um dos lados:
+
+- bug.com.br
+  - NS1: 2026061502
+  - NS2: sem resposta autoritativa
+
+- pizza.com.br
+  - NS1: 2026061305
+  - NS2: sem resposta autoritativa
+
+- tiringa.com.br
+  - NS1: 2026061230
+  - NS2: sem resposta autoritativa
+
+- zebratelecom.net.br
+  - NS1: 2026060901
+  - NS2: sem resposta autoritativa
+
+- batatatelecom.com.br
+  - NS1: 2026050301
+  - NS2: sem resposta autoritativa
+
+- teste-template.com.br
+  - NS1: 2026061101
+  - NS2: sem resposta autoritativa
+
+- gato.net.br
+  - NS1: 2026061101
+  - NS2: sem resposta autoritativa
+
+- c.b.2.5.4.0.8.2.ip6.arpa
+  - NS1: sem zona carregada
+  - NS2: 2026050201
+
+============================================================
+9. RESULTADO DOS TESTES DE TRANSFERENCIA
+============================================================
+
+Testes executados:
+
+- `dig @45.162.196.242 <zona> SOA +norecurse`
+- `dig @45.162.196.243 <zona> SOA +norecurse`
+
+Resultado por grupo:
+
+1. `conectanetwork.net.br`
+   - NS1: `NOERROR` + `aa`
+   - NS2: `NOERROR` + `aa`
+   - Transferencia e autoridade consistentes.
+
+2. Forwards novos do NS1
+   - NS1: `NOERROR` + `aa`
+   - NS2: `REFUSED`
+   - Nao ha transferencia funcionando para essas zonas no NS2.
+
+3. Reversa IPv6 legada
+   - NS1: `REFUSED`
+   - NS2: `NOERROR` + `aa`
+   - A zona esta no NS2 e nao esta mais no NS1.
+
+4. Reversas IPv4 antigas
+   - NS1: `REFUSED`
+   - NS2: `SERVFAIL`
+   - Nao estao alinhadas e precisam de revisao manual antes de qualquer
+     automacao.
+
+Conclusao:
+- Nao existe, nesta apuracao, evidencia de transferencia bidirecional
+  funcionando para a base completa.
+- Apenas a zona `conectanetwork.net.br` esta efetivamente alinhada.
+
+============================================================
+10. RECOMENDACOES
+============================================================
+
+1. Tratar a lista atual de zonas do NS1 como base oficial.
+2. Atualizar o NS2 apenas apos decidir explicitamente quais zonas devem
+   sobreviver na nova topologia.
+3. Remover ou desativar as reversas legadas do NS2 somente em manutencao
+   controlada, depois de confirmar que nao ha dependencia operacional.
+4. Antes de automatizar, definir uma lista unica de zonas aprovadas:
+   - forward
+   - reverse IPv4
+   - reverse IPv6
+5. Só depois iniciar:
+   - Cluster DNS
+   - Sync Automático
+   - Wizard V2
+   - Cadastro automático de zonas slave
+6. Manter este handoff como base de referencia para a fase seguinte.
+
+============================================================
+11. ENCERRAMENTO
+============================================================
+
+Estado final:
+- NS1 e NS2 ainda nao estao alinhados como conjunto completo.
+- A base pronta para continuidade e a zona operacional minima confirmada e
+  `conectanetwork.net.br`.
+- As demais zonas precisam de decisao de mantenedor antes de qualquer
+  automacao.
+
+============================================================

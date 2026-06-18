@@ -1,0 +1,360 @@
+<?php
+require "config.php";
+
+if (!isset($_SESSION['logado'])) {
+    header("Location: login.php");
+    exit;
+}
+
+$erro = null;
+$sucesso = null;
+
+if (isset($_POST['delete_domain'])) {
+
+    $dom = $_POST['delete_domain'];
+
+    $zonefile = "/var/cache/bind/master-aut/$dom.hosts";
+
+    // remove arquivo
+    if (file_exists($zonefile)) {
+        unlink($zonefile);
+    }
+
+// remove reverse vinculados ao domínio
+
+    foreach (glob("/var/cache/bind/master-rev/*.rev") as $revfile) {
+
+        $content = file_get_contents($revfile);
+
+        if (str_contains($content, $dom)) {
+
+            unlink($revfile);
+        }
+    }
+
+    // remove named.conf.local
+    $conf = file_get_contents("/etc/bind/named.conf.local");
+
+$conf = preg_replace(
+
+    '/zone ".*?" \{
+.*?
+file ".*?' . preg_quote($dom, '/') . '.*?";
+.*?
+\};\n/s',
+
+    '',
+
+    $conf
+);
+
+    file_put_contents("/etc/bind/named.conf.local", $conf);
+
+    exec("sudo rndc reload");
+
+    $_SESSION['flash_ok'] = "Domínio removido!";
+
+    header("Location: domains.php");
+    exit;
+
+    header("Location: domains.php");
+    exit;
+}
+
+if (isset($_POST['create_domain'])) {
+
+    $dom = preg_replace('/[^a-z0-9\.\-]/i', '', $_POST['new_domain']);
+    $ip4 = trim($_POST['ipv4']);
+    $ip6 = trim($_POST['ipv6']);
+
+    $ip4_ns2 = trim($_POST['ipv4_ns2']);
+    $ip6_ns2 = trim($_POST['ipv6_ns2']);
+    $rev_start = trim($_POST['rev_start']);
+    $rev_count = intval($_POST['rev_count']);
+
+$rev_list = [];
+
+if (!empty($rev_start) && $rev_count > 0) {
+
+    $parts = explode('.', $rev_start);
+
+    $base1 = $parts[0] ?? 0;
+    $base2 = $parts[1] ?? 0;
+    $base3 = intval($parts[2] ?? 0);
+
+    for ($i = 0; $i < $rev_count; $i++) {
+
+        $rev_list[] =
+            $base1 . "." .
+            $base2 . "." .
+            ($base3 + $i);
+    }
+}
+
+$rev = implode(';', $rev_list);
+
+if (empty($dom) || empty($ip4)) {
+
+    $erro = "Preencha domínio e IPv4!";
+
+} elseif (!filter_var($ip4, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4)) {
+
+    $erro = "IPv4 do NS1 inválido!";
+
+} elseif (!empty($ip6) &&
+    !filter_var($ip6, FILTER_VALIDATE_IP, FILTER_FLAG_IPV6)) {
+
+    $erro = "IPv6 do NS1 inválido!";
+
+} elseif (!empty($ip4_ns2) &&
+    !filter_var($ip4_ns2, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4)) {
+
+    $erro = "IPv4 do NS2 inválido!";
+
+} elseif (!empty($ip6_ns2) &&
+    !filter_var($ip6_ns2, FILTER_VALIDATE_IP, FILTER_FLAG_IPV6)) {
+
+    $erro = "IPv6 do NS2 inválido!";
+
+} else {
+
+        exec(
+            "sudo /usr/local/bin/add-domain-full.sh "
+            . escapeshellarg($dom) . " "
+            . escapeshellarg($ip4) . " "
+            . escapeshellarg($ip6) . " "
+            . escapeshellarg($ip4_ns2) . " "
+            . escapeshellarg($ip6_ns2) . " "
+            . escapeshellarg($rev)
+            . " 2>&1",
+            $out,
+            $ret
+        );
+
+        if ($ret !== 0) {
+
+            $erro = implode("<br>", $out);
+
+        } else {
+
+            $_SESSION['flash_ok'] = "Domínio criado com sucesso!";
+            header("Location: domains.php");
+            exit;
+        }
+    }
+}
+
+?>
+
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Gerenciar Domínios</title>
+
+<style>
+
+body{
+    margin:0;
+    font-family:Arial;
+    background:#0f172a;
+    color:#e2e8f0;
+}
+
+.container{
+    width:700px;
+    margin:50px auto;
+}
+
+.card{
+    background:#020617;
+    padding:25px;
+    border-radius:12px;
+}
+
+h2{
+    color:#38bdf8;
+}
+
+input{
+    width:100%;
+    padding:12px;
+    margin-top:10px;
+    border-radius:6px;
+    border:1px solid #334155;
+    background:#020617;
+    color:white;
+    box-sizing:border-box;
+}
+
+button{
+    margin-top:15px;
+    padding:12px 20px;
+    background:#3b82f6;
+    border:none;
+    border-radius:6px;
+    color:white;
+    cursor:pointer;
+}
+
+button:hover{
+    opacity:0.9;
+}
+
+.alert{
+    padding:12px;
+    border-radius:6px;
+    margin-bottom:15px;
+}
+
+.error{
+    background:#dc2626;
+}
+
+.ok{
+    background:#16a34a;
+}
+
+a{
+    color:#38bdf8;
+    text-decoration:none;
+}
+
+</style>
+</head>
+
+<body>
+
+<div class="container">
+
+<div class="card">
+
+<h2>🌐 Criar novo domínio</h2>
+
+<?php if ($erro): ?>
+<div id="alertaErro" class="alert error">
+<?= $erro ?>
+</div>
+<?php endif; ?>
+
+<?php if (isset($_SESSION['flash_ok'])): ?>
+
+<div class="alert ok">
+<?= $_SESSION['flash_ok'] ?>
+</div>
+
+<?php unset($_SESSION['flash_ok']); ?>
+
+<?php endif; ?>
+
+<form method="POST">
+
+<input name="new_domain"
+placeholder="Domínio (ex: ajustefino.com.br)"
+required>
+
+<input name="ipv4"
+placeholder="IPv4 do NS1 (ex: 198.50.0.242)"
+required>
+
+<input name="ipv6"
+placeholder="IPv6 do NS1 (ex: 2001:abcd:5000::242)">
+
+<input name="ipv4_ns2"
+placeholder="IPv4 do NS2 (ex: 198.50.0.243)">
+
+<input name="ipv6_ns2"
+placeholder="IPv6 do NS2 (ex: 2001:abcd:5000::243)">
+
+<input name="rev_start"
+placeholder="Primeiro bloco reverse (ex: 198.50.0)">
+
+<input name="rev_count"
+type="number"
+min="1"
+max="256"
+value="1"
+placeholder="Quantidade de blocos">
+
+<button name="create_domain">
+Criar domínio
+</button>
+
+</form>
+
+<br>
+
+<a href="index.php">← Voltar ao painel DNS</a>
+<hr style="margin:30px 0;border-color:#1e293b;">
+
+<h3>🌐 Domínios cadastrados</h3>
+
+<table style="width:100%;margin-top:15px;">
+
+<?php foreach ($domains as $d => $path): ?>
+
+<tr>
+
+<td><?= $d ?></td>
+
+<td style="text-align:right;">
+
+<form method="POST"
+onsubmit="return confirm('Deseja remover este domínio?');">
+
+<input type="hidden"
+name="delete_domain"
+value="<?= $d ?>">
+
+<button style="
+background:#ef4444;
+border:none;
+padding:8px 12px;
+border-radius:6px;
+color:white;
+">
+Excluir
+</button>
+
+</form>
+
+</td>
+
+</tr>
+<?php endforeach; ?>
+
+</table>
+</div>
+
+</div>
+<script>
+
+setTimeout(function() {
+
+    alert("Sessão expirada!");
+
+    window.location.href = "logout.php";
+
+}, 900000);
+
+setTimeout(function() {
+
+    let el = document.getElementById("alertaErro");
+
+    if(el){
+
+        el.style.transition = "opacity 0.5s";
+
+        el.style.opacity = "0";
+
+        setTimeout(function(){
+
+            el.remove();
+
+        }, 500);
+    }
+
+}, 3000);
+</script>
+</body>
+</html>

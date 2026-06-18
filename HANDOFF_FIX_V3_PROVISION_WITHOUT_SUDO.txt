@@ -1,0 +1,132 @@
+HANDOFF_FIX_V3_PROVISION_WITHOUT_SUDO
+Data: 2026-06-16
+Projeto: V3.1_NATIVE_DNS_NODES_HOMOLOG
+Escopo: corrigir bootstrap/provisionamento para Debian limpo sem sudo.
+
+1. BUG HOMOLOGADO
+
+Servidor testado:
+- Nome: NS03
+- IP: 45.162.196.244
+- Sistema: Debian 13.5
+- Usuario SSH usado: conecta
+
+Erro exibido antes da correcao:
+
+[BOOTSTRAP]
+debian_version=13.5
+
+sh: 22: sudo: not found
+
+Validacao manual no NS03:
+- which sudo: sem saida
+- dpkg -l sudo: nenhum pacote encontrado correspondente a sudo
+
+Diagnostico:
+O fluxo de provisionamento chamava sudo mesmo quando o servidor Debian limpo nao tinha o pacote sudo instalado. Isso quebra quando o login administrativo nao e root.
+
+2. CORRECAO IMPLEMENTADA
+
+Arquivo alterado:
+- /var/www/html/painel/includes/dns_servers.php
+
+O bootstrap remoto agora seleciona metodo de elevacao:
+
+1. Se o usuario remoto ja for root:
+   - ROOT_METHOD=direct
+   - nao usa sudo
+   - executa comandos diretamente
+
+2. Se o usuario remoto nao for root e sudo existir:
+   - ROOT_METHOD=sudo
+   - usa sudo -n quando possivel
+   - usa sudo -S com senha informada quando necessario
+
+3. Se o usuario remoto nao for root, sudo nao existir, mas houver senha root/sudo informada:
+   - tenta su - root -c 'true'
+   - se autenticar, usa su - root -c para executar comandos privilegiados
+
+4. Se o usuario remoto nao for root, sudo nao existir e nao houver senha root valida:
+   - falha com mensagem amigavel:
+
+ERRO: sudo não está instalado no servidor remoto. Use root ou forneça a senha root no campo sudo/root para continuar o provisionamento.
+
+O mesmo padrao tambem foi aplicado ao fluxo de remocao/desativacao do agente remoto.
+
+3. INTERFACE ATUALIZADA
+
+Arquivo alterado:
+- /var/www/html/painel/dns-servers.php
+
+Texto adicionado na tela de adicionar servidor:
+
+Para provisionar Debian limpo sem sudo, use login root ou informe a senha root no campo sudo/root. Usuário comum sem sudo não consegue provisionar servidor limpo.
+
+Campo renomeado visualmente:
+- de: Senha sudo
+- para: Senha sudo/root
+
+4. FLUXO RECOMENDADO PARA NS03
+
+Como foi decidido permitir root direto, usar no painel:
+
+- Modo: Provisionar servidor novo
+- Nome: NS03
+- Hostname/IP: 45.162.196.244
+- IPv4: 45.162.196.244
+- IPv6: opcional
+- Porta SSH: 22
+- Usuario administrativo: root
+- Autenticacao: senha ou chave SSH do root
+- Senha SSH: senha do root, se usar senha
+- Senha sudo/root: pode ficar vazio quando o login ja e root
+- Usuario gerenciado: dns-sync
+
+Esse e o caminho mais simples e robusto para Debian limpo sem sudo.
+
+5. ALTERNATIVAS SUPORTADAS
+
+Usuario comum com sudo instalado:
+- informar usuario comum
+- informar senha SSH
+- informar senha sudo/root se sudo exigir senha
+
+Usuario comum sem sudo:
+- somente funciona se a senha root for informada no campo Senha sudo/root e se su - root estiver permitido
+- caso contrario, o painel deve negar com mensagem amigavel
+
+6. VALIDACOES EXECUTADAS
+
+Comandos executados:
+
+php -l includes/dns_servers.php
+php -l dns-servers.php
+php -r 'require "includes/dns_servers.php"; file_put_contents("/tmp/v3_bootstrap_remote.sh", dns_server_remote_bootstrap_script("provisionar", "ssh-ed25519 AAAATEST painel"));'
+sh -n /tmp/v3_bootstrap_remote.sh
+
+Resultados:
+- PHP sem erros de sintaxe
+- shell remoto gerado sem erro de sintaxe
+
+7. NAO EXECUTADO
+
+Nao executei novo provisionamento real no NS03 porque as credenciais root ainda nao foram informadas nesta sessao.
+Nao alterei zonas DNS.
+Nao executei cluster.
+Nao implementei sync automatico.
+
+8. PROXIMO PASSO DE HOMOLOGACAO
+
+Repetir o provisionamento do NS03 pelo painel usando root direto.
+Resultado esperado:
+
+- apt-get update executado como root sem sudo
+- bind9, bind9utils, dnsutils, sudo, nftables e fail2ban instalados
+- usuario dns-sync criado
+- chave do painel instalada
+- agente copiado para /usr/local/bin
+- sudoers restrito instalado em /etc/sudoers.d/dns-sync
+- named.conf.slaves criado/incluido
+- named-checkconf OK
+- bind9 ativo
+- registro DNS_SERVER_ADD e DNS_SERVER_AGENT_INSTALL gravados na auditoria
