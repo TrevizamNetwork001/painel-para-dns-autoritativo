@@ -68,6 +68,8 @@ function acao_legivel(string $acao): string
         'DNS_SERVER_SLAVE_LAYOUT_MIGRATE' => '🔄 Migrar layout',
         'DNS_SERVER_INVENTORY'     => '🧭 Inventário do servidor',
         'DNS_ZONE_INVENTORY_REFRESH' => '🧭 Inventário DNS',
+        'DNS_ZONE_GOVERNANCE_UPDATE' => '🛡️ Governança DNS',
+        'DNS_SERVER_GOVERNANCE_NOTE' => '📝 Observação do servidor',
         'DNS_ZONE_SLAVE_SYNC_ONE', 'DNS_ZONE_SLAVE_SYNC_MISSING' => '🔄 Sincronizar zona',
         default            => $acao,
     };

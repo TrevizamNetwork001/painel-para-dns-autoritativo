@@ -56,6 +56,28 @@ function dns_zones_garantir_esquema(): void
         . ")"
     );
 
+    db()->exec(""
+        . "CREATE TABLE IF NOT EXISTS dns_zone_governance ("
+        . "server_key TEXT NOT NULL,"
+        . "zone_name TEXT NOT NULL COLLATE NOCASE,"
+        . "classification TEXT NOT NULL DEFAULT 'revisar' CHECK (classification IN ('legitima', 'ignorada', 'revisar')),"
+        . "zone_note TEXT,"
+        . "classified_by TEXT,"
+        . "classified_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,"
+        . "PRIMARY KEY (server_key, zone_name)"
+        . ")"
+    );
+
+    db()->exec(""
+        . "CREATE TABLE IF NOT EXISTS dns_server_governance ("
+        . "server_key TEXT PRIMARY KEY,"
+        . "server_nome TEXT,"
+        . "note TEXT,"
+        . "updated_by TEXT,"
+        . "updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP"
+        . ")"
+    );
+
     $pronto = true;
 }
 
@@ -491,6 +513,144 @@ function dns_zones_ignores_map(): array
     return $map;
 }
 
+function dns_zones_governance_map(): array
+{
+    dns_zones_garantir_esquema();
+    $rows = db()->query('SELECT * FROM dns_zone_governance')->fetchAll(PDO::FETCH_ASSOC);
+    $map = [];
+
+    foreach ($rows as $row) {
+        $key = dns_zones_extra_ignore_key((string) $row['server_key'], (string) $row['zone_name']);
+        $map[$key] = $row;
+    }
+
+    foreach (dns_zones_ignores_map() as $key => $legacy) {
+        if (isset($map[$key])) {
+            continue;
+        }
+        $map[$key] = [
+            'server_key' => $legacy['server_key'],
+            'zone_name' => $legacy['zone_name'],
+            'classification' => 'legitima',
+            'zone_note' => $legacy['note'] ?? null,
+            'classified_by' => $legacy['ignored_by'] ?? null,
+            'classified_at' => $legacy['ignored_at'] ?? null,
+        ];
+    }
+
+    return $map;
+}
+
+function dns_zones_server_governance_map(): array
+{
+    dns_zones_garantir_esquema();
+    $rows = db()->query('SELECT * FROM dns_server_governance')->fetchAll(PDO::FETCH_ASSOC);
+    $map = [];
+    foreach ($rows as $row) {
+        $map[(string) $row['server_key']] = $row;
+    }
+    return $map;
+}
+
+function dns_zones_classificacao_aprovada(?string $classificacao): bool
+{
+    return in_array($classificacao, ['legitima', 'ignorada'], true);
+}
+
+function dns_zones_salvar_governanca(
+    string $zona,
+    string $serverKey,
+    string $classificacao,
+    string $observacaoZona = '',
+    string $observacaoServidor = '',
+    ?string $usuario = null
+): array {
+    dns_zones_garantir_esquema();
+    $zona = strtolower(rtrim(trim($zona), '.'));
+    $classificacao = strtolower(trim($classificacao));
+    if (!dns_server_zone_name_valido($zona)) {
+        throw new RuntimeException('Zona invalida.');
+    }
+    if (!in_array($classificacao, ['legitima', 'ignorada', 'revisar'], true)) {
+        throw new RuntimeException('Classificacao de governanca invalida.');
+    }
+
+    $linha = dns_zones_comparacao_por_zona_servidor($zona, $serverKey);
+    if (!$linha || ($linha['estado_base'] ?? $linha['estado']) === 'ok') {
+        throw new RuntimeException('A governanca pode ser aplicada apenas a divergencias atuais.');
+    }
+
+    $pdo = db();
+    $pdo->beginTransaction();
+    try {
+        $stmt = $pdo->prepare(""
+            . "INSERT INTO dns_zone_governance (server_key, zone_name, classification, zone_note, classified_by, classified_at) "
+            . "VALUES (:server_key, :zone_name, :classification, :zone_note, :classified_by, CURRENT_TIMESTAMP) "
+            . "ON CONFLICT(server_key, zone_name) DO UPDATE SET "
+            . "classification = excluded.classification, zone_note = excluded.zone_note, "
+            . "classified_by = excluded.classified_by, classified_at = CURRENT_TIMESTAMP"
+        );
+        $stmt->execute([
+            ':server_key' => $serverKey,
+            ':zone_name' => $zona,
+            ':classification' => $classificacao,
+            ':zone_note' => trim(substr($observacaoZona, 0, 1000)),
+            ':classified_by' => $usuario !== null ? substr($usuario, 0, 80) : null,
+        ]);
+
+        $serverStmt = $pdo->prepare(""
+            . "INSERT INTO dns_server_governance (server_key, server_nome, note, updated_by, updated_at) "
+            . "VALUES (:server_key, :server_nome, :note, :updated_by, CURRENT_TIMESTAMP) "
+            . "ON CONFLICT(server_key) DO UPDATE SET "
+            . "server_nome = excluded.server_nome, note = excluded.note, "
+            . "updated_by = excluded.updated_by, updated_at = CURRENT_TIMESTAMP"
+        );
+        $serverStmt->execute([
+            ':server_key' => $serverKey,
+            ':server_nome' => $linha['server_nome'],
+            ':note' => trim(substr($observacaoServidor, 0, 1000)),
+            ':updated_by' => $usuario !== null ? substr($usuario, 0, 80) : null,
+        ]);
+
+        $pdo->commit();
+    } catch (Throwable $e) {
+        $pdo->rollBack();
+        throw $e;
+    }
+
+    return $linha;
+}
+
+function dns_zones_salvar_observacao_servidor(
+    string $serverKey,
+    string $serverNome,
+    string $observacao,
+    ?string $usuario = null
+): void {
+    dns_zones_garantir_esquema();
+    $servidoresValidos = [];
+    foreach (dns_zones_status_servidores() as $servidor) {
+        $servidoresValidos[(string) $servidor['server_key']] = (string) $servidor['server_nome'];
+    }
+    if (!isset($servidoresValidos[$serverKey])) {
+        throw new RuntimeException('Servidor de inventario invalido.');
+    }
+
+    $stmt = db()->prepare(""
+        . "INSERT INTO dns_server_governance (server_key, server_nome, note, updated_by, updated_at) "
+        . "VALUES (:server_key, :server_nome, :note, :updated_by, CURRENT_TIMESTAMP) "
+        . "ON CONFLICT(server_key) DO UPDATE SET "
+        . "server_nome = excluded.server_nome, note = excluded.note, "
+        . "updated_by = excluded.updated_by, updated_at = CURRENT_TIMESTAMP"
+    );
+    $stmt->execute([
+        ':server_key' => $serverKey,
+        ':server_nome' => $servidoresValidos[$serverKey] ?: $serverNome,
+        ':note' => trim(substr($observacao, 0, 1000)),
+        ':updated_by' => $usuario !== null ? substr($usuario, 0, 80) : null,
+    ]);
+}
+
 function dns_zones_extra_ignore_key(string $serverKey, string $zona): string
 {
     return $serverKey . "|" . strtolower(rtrim(trim($zona), '.'));
@@ -549,9 +709,12 @@ function dns_zones_resumo(): array
     $status = dns_zones_status_servidores();
     $divergencias = dns_zones_comparar();
     $totalDivergencias = 0;
+    $totalExcecoes = 0;
 
     foreach ($divergencias as $linha) {
-        if (!in_array($linha['estado'], ['ok', 'extra_on_slave_ignored'], true)) {
+        if (!empty($linha['governance_approved'])) {
+            $totalExcecoes++;
+        } elseif (($linha['estado_base'] ?? $linha['estado']) !== 'ok') {
             $totalDivergencias++;
         }
     }
@@ -559,6 +722,7 @@ function dns_zones_resumo(): array
     return [
         'servidores' => $status,
         'divergencias' => $totalDivergencias,
+        'excecoes_aprovadas' => $totalExcecoes,
         'zonas_unicas' => (int) db()->query(""
             . "SELECT COUNT(DISTINCT zone_name) FROM dns_zone_inventory "
             . "WHERE server_key = 'local:NS1' "
@@ -574,7 +738,8 @@ function dns_zones_comparar(): array
     $masters = [];
     $slaves = [];
     $slaveNames = [];
-    $ignores = dns_zones_ignores_map();
+    $governance = dns_zones_governance_map();
+    $serverGovernance = dns_zones_server_governance_map();
 
     foreach ($rows as $row) {
         if ($row['server_role'] === 'master') {
@@ -613,6 +778,8 @@ function dns_zones_comparar(): array
                 $detalhe = 'Serial divergente';
             }
 
+            $governanca = $governance[dns_zones_extra_ignore_key($slaveKey, $zone)] ?? null;
+            $classificacao = $governanca['classification'] ?? 'revisar';
             $comparacao[] = [
                 'zone_name' => $zone,
                 'server_key' => $slaveKey,
@@ -620,7 +787,14 @@ function dns_zones_comparar(): array
                 'master_serial' => $master['serial'],
                 'slave_serial' => $slave['serial'] ?? null,
                 'estado' => $estado,
+                'estado_base' => $estado,
                 'detalhe' => $detalhe,
+                'governance_classification' => $classificacao,
+                'governance_approved' => $estado !== 'ok' && dns_zones_classificacao_aprovada($classificacao),
+                'zone_note' => $governanca['zone_note'] ?? null,
+                'server_note' => $serverGovernance[$slaveKey]['note'] ?? null,
+                'classified_by' => $governanca['classified_by'] ?? null,
+                'classified_at' => $governanca['classified_at'] ?? null,
             ];
         }
     }
@@ -628,18 +802,27 @@ function dns_zones_comparar(): array
     foreach ($slaves as $slaveKey => $zones) {
         foreach ($zones as $zone => $slave) {
             if (!isset($masters[$zone])) {
-                $ignore = $ignores[dns_zones_extra_ignore_key($slaveKey, $zone)] ?? null;
+                $governanca = $governance[dns_zones_extra_ignore_key($slaveKey, $zone)] ?? null;
+                $classificacao = $governanca['classification'] ?? 'revisar';
+                $aprovada = dns_zones_classificacao_aprovada($classificacao);
                 $comparacao[] = [
                     'zone_name' => $zone,
                     'server_key' => $slaveKey,
                     'server_nome' => $slave['server_nome'],
                     'master_serial' => null,
                     'slave_serial' => $slave['serial'],
-                    'estado' => $ignore ? 'extra_on_slave_ignored' : 'extra_on_slave',
-                    'detalhe' => $ignore ? 'Zona extra marcada como legitima/ignorada' : 'Zona existe no slave e nao existe no master',
-                    'ignore_note' => $ignore['note'] ?? null,
-                    'ignored_by' => $ignore['ignored_by'] ?? null,
-                    'ignored_at' => $ignore['ignored_at'] ?? null,
+                    'estado' => $aprovada ? 'extra_on_slave_ignored' : 'extra_on_slave',
+                    'estado_base' => 'extra_on_slave',
+                    'detalhe' => $aprovada ? 'Zona extra aprovada pela governanca' : 'Zona existe no slave e nao existe no master',
+                    'governance_classification' => $classificacao,
+                    'governance_approved' => $aprovada,
+                    'zone_note' => $governanca['zone_note'] ?? null,
+                    'server_note' => $serverGovernance[$slaveKey]['note'] ?? null,
+                    'classified_by' => $governanca['classified_by'] ?? null,
+                    'classified_at' => $governanca['classified_at'] ?? null,
+                    'ignore_note' => $governanca['zone_note'] ?? null,
+                    'ignored_by' => $governanca['classified_by'] ?? null,
+                    'ignored_at' => $governanca['classified_at'] ?? null,
                 ];
             }
         }
@@ -681,9 +864,14 @@ function dns_zones_resumo_classificacao(?array $comparacao = null): array
         'SOA_MASTER_INDISPONIVEL' => 0,
         'SOA_SLAVE_INDISPONIVEL' => 0,
         'FALHA_COLETA' => 0,
+        'EXCECOES_APROVADAS' => 0,
     ];
 
     foreach ($comparacao as $linha) {
+        if (!empty($linha['governance_approved'])) {
+            $base['EXCECOES_APROVADAS']++;
+            continue;
+        }
         $codigo = dns_zones_estado_codigo((string) $linha['estado']);
         $base[$codigo] = ($base[$codigo] ?? 0) + 1;
     }

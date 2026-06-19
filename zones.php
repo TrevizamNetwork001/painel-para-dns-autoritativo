@@ -160,13 +160,72 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             zones_redirect('Zona extra restaurada para alertas.');
         }
 
+        if ($acao === 'salvar_governanca') {
+            $zona = (string) ($_POST['zona'] ?? '');
+            $serverKey = (string) ($_POST['server_key'] ?? '');
+            $classificacao = (string) ($_POST['classificacao'] ?? 'revisar');
+            $observacaoZona = (string) ($_POST['observacao_zona'] ?? '');
+            $observacaoServidor = (string) ($_POST['observacao_servidor'] ?? '');
+            $linha = dns_zones_salvar_governanca(
+                $zona,
+                $serverKey,
+                $classificacao,
+                $observacaoZona,
+                $observacaoServidor,
+                $_SESSION['usuario'] ?? null
+            );
+
+            registrar_auditoria([
+                'acao' => 'DNS_ZONE_GOVERNANCE_UPDATE',
+                'dominio' => $linha['zone_name'],
+                'tipo_registro' => 'DNS_ZONE',
+                'nome_registro' => $linha['server_nome'],
+                'valor_antigo' => strtoupper((string) ($linha['governance_classification'] ?? 'revisar')),
+                'valor_novo' => strtoupper($classificacao),
+                'status' => 'OK',
+                'mensagem' => substr(trim(implode(' | ', array_filter([
+                    $observacaoZona !== '' ? 'Zona: ' . $observacaoZona : '',
+                    $observacaoServidor !== '' ? 'Servidor: ' . $observacaoServidor : '',
+                ]))) ?: 'Classificacao de governanca atualizada.', 0, 1000),
+            ]);
+
+            zones_redirect('Governanca da divergencia atualizada.');
+        }
+
+        if ($acao === 'salvar_observacao_servidor') {
+            $serverKey = (string) ($_POST['server_key'] ?? '');
+            $serverNome = (string) ($_POST['server_nome'] ?? '');
+            $observacaoServidor = (string) ($_POST['observacao_servidor'] ?? '');
+            dns_zones_salvar_observacao_servidor(
+                $serverKey,
+                $serverNome,
+                $observacaoServidor,
+                $_SESSION['usuario'] ?? null
+            );
+            registrar_auditoria([
+                'acao' => 'DNS_SERVER_GOVERNANCE_NOTE',
+                'tipo_registro' => 'DNS_SERVER',
+                'nome_registro' => $serverNome,
+                'valor_novo' => 'OBSERVACAO_OPERACIONAL',
+                'status' => 'OK',
+                'mensagem' => substr($observacaoServidor !== '' ? $observacaoServidor : 'Observacao operacional removida.', 0, 1000),
+            ]);
+            zones_redirect('Observacao do servidor atualizada.');
+        }
+
         throw new RuntimeException('Acao invalida.');
     } catch (Throwable $e) {
         $erro = $e->getMessage();
         registrar_auditoria([
-            'acao' => 'DNS_ZONE_INVENTORY_REFRESH',
-            'tipo_registro' => 'DNS_ZONE',
-            'nome_registro' => 'inventario',
+            'acao' => match ($acao) {
+                'salvar_governanca' => 'DNS_ZONE_GOVERNANCE_UPDATE',
+                'salvar_observacao_servidor' => 'DNS_SERVER_GOVERNANCE_NOTE',
+                default => 'DNS_ZONE_INVENTORY_REFRESH',
+            },
+            'tipo_registro' => $acao === 'salvar_observacao_servidor' ? 'DNS_SERVER' : 'DNS_ZONE',
+            'nome_registro' => $acao === 'salvar_observacao_servidor'
+                ? (string) ($_POST['server_nome'] ?? 'servidor')
+                : 'inventario',
             'status' => 'ERRO',
             'mensagem' => substr($erro, 0, 1000),
         ]);
@@ -178,7 +237,12 @@ $comparacao = dns_zones_comparar();
 $inventario = dns_zones_inventario();
 $divergencias = array_values(array_filter(
     $comparacao,
-    static fn(array $linha): bool => !in_array($linha['estado'], ['ok', 'extra_on_slave_ignored'], true)
+    static fn(array $linha): bool => ($linha['estado_base'] ?? $linha['estado']) !== 'ok'
+        && empty($linha['governance_approved'])
+));
+$excecoesAprovadas = array_values(array_filter(
+    $comparacao,
+    static fn(array $linha): bool => !empty($linha['governance_approved'])
 ));
 $zonasAusentes = array_values(array_filter($comparacao, static fn(array $linha): bool => $linha['estado'] === 'missing_on_slave'));
 $resumoClassificacao = dns_zones_resumo_classificacao($comparacao);
@@ -186,12 +250,14 @@ $extrasPorServidor = dns_zones_extras_por_servidor($comparacao);
 $extrasIgnoradasPorServidor = dns_zones_extras_por_servidor($comparacao, true);
 $falhasColeta = dns_zones_status_falha_coleta();
 $eventosAuditoriaDns = dns_zones_eventos_auditoria(25);
+$observacoesServidores = dns_zones_server_governance_map();
 $statusFiltro = trim((string) ($_GET['status'] ?? ''));
-$statusFiltro = in_array($statusFiltro, ['ok', 'divergencias', 'extras'], true) ? $statusFiltro : '';
+$statusFiltro = in_array($statusFiltro, ['ok', 'divergencias', 'extras', 'excecoes'], true) ? $statusFiltro : '';
 $statusFiltroLabels = [
     'ok' => 'zonas sincronizadas',
     'divergencias' => 'divergencias',
     'extras' => 'zonas extras',
+    'excecoes' => 'excecoes aprovadas',
 ];
 $comparacaoExibida = array_values(array_filter(
     $comparacao,
@@ -200,10 +266,14 @@ $comparacaoExibida = array_values(array_filter(
             return $linha['estado'] === 'ok';
         }
         if ($statusFiltro === 'divergencias') {
-            return !in_array($linha['estado'], ['ok', 'extra_on_slave_ignored'], true);
+            return ($linha['estado_base'] ?? $linha['estado']) !== 'ok'
+                && empty($linha['governance_approved']);
         }
         if ($statusFiltro === 'extras') {
             return $linha['estado'] === 'extra_on_slave';
+        }
+        if ($statusFiltro === 'excecoes') {
+            return !empty($linha['governance_approved']);
         }
 
         return true;
@@ -245,9 +315,9 @@ function zone_estado_label(string $estado): string
     };
 }
 
-function zone_estado_class(string $estado): string
+function zone_estado_class(string $estado, bool $excecaoAprovada = false): string
 {
-    return in_array($estado, ['ok', 'extra_on_slave_ignored'], true) ? 'ok' : 'warn';
+    return $excecaoAprovada || in_array($estado, ['ok', 'extra_on_slave_ignored'], true) ? 'ok' : 'warn';
 }
 
 function zone_estado_explicacao(string $estado): string
@@ -273,6 +343,7 @@ function zone_estado_explicacao(string $estado): string
 <title>Inventario de Zonas DNS</title>
 <style>
 *{box-sizing:border-box}body{margin:0;font-family:Arial,sans-serif;background:#0f172a;color:#e2e8f0}.container{max-width:1280px;margin:36px auto;padding:0 20px}a{color:#38bdf8;text-decoration:none}h1,h2{margin-top:0}.lead,.meta{color:#94a3b8}.grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px}.card{background:#020617;border:1px solid #1e293b;border-radius:8px;padding:20px;margin-bottom:18px}.stat{min-height:132px}.value{font-size:30px;font-weight:bold;color:#38bdf8;margin:10px 0}.badge{display:inline-block;border-radius:999px;padding:5px 9px;font-size:12px;font-weight:bold;background:#1e293b}.ok{color:#4ade80}.warn{color:#facc15}.error{color:#f87171}.message{padding:12px;border-radius:8px;margin-bottom:18px}.message.error{background:#7f1d1d;color:#fecaca}.message.success{background:#14532d;color:#bbf7d0}button{width:auto;padding:10px 14px;border:1px solid #2563eb;border-radius:8px;background:#2563eb;color:#fff;font:inherit;cursor:pointer}.toolbar{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap}.notice{border-color:#854d0e;background:#1c1917}.table-wrap{overflow:auto;border:1px solid #1e293b;border-radius:8px}table{width:100%;border-collapse:collapse;min-width:900px}th,td{padding:11px 12px;border-bottom:1px solid #1e293b;text-align:left;font-size:13px;vertical-align:top}th{color:#94a3b8;text-transform:uppercase;font-size:11px;background:#071226}tr:last-child td{border-bottom:0}.result{white-space:pre-wrap;overflow-wrap:anywhere;background:#071226;border:1px solid #334155;border-radius:8px;padding:12px;color:#cbd5e1;margin-top:10px;max-height:220px;overflow:auto}.tabs{display:flex;gap:8px;margin-bottom:12px}.tab{border:1px solid #334155;background:#0f172a;color:#cbd5e1;border-radius:8px;padding:8px 10px}.search{width:100%;padding:10px;margin:0 0 12px;background:#0f172a;border:1px solid #334155;border-radius:8px;color:#fff}.muted{color:#64748b}.sync-form{display:flex;gap:10px;align-items:end;flex-wrap:wrap}.sync-form label{display:block;color:#94a3b8;font-size:13px;margin-bottom:5px}.sync-form input,.dialog textarea{padding:10px;border:1px solid #334155;border-radius:8px;background:#0f172a;color:#fff}.dialog textarea{width:100%;min-height:82px;resize:vertical}.inline-form{display:inline}.action-row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.small-button{padding:7px 10px;font-size:12px}.muted-button{background:#334155;border-color:#475569}.class-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}.class-item{background:#071226;border:1px solid #1e293b;border-radius:8px;padding:14px}.class-item strong{display:block;font-size:22px;color:#38bdf8;margin-top:6px}.extra-list{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}.zone-list{margin:8px 0 0;padding-left:18px}.zone-list li{margin:5px 0}.blocked{border-color:#7f1d1d;background:#190b0b}.blocked .badge{background:#7f1d1d;color:#fecaca}.ignored{border-color:#166534;background:#06130b}.dialog{width:min(680px,calc(100vw - 28px));border:1px solid #334155;border-radius:8px;background:#020617;color:#e2e8f0;padding:20px}.dialog::backdrop{background:#020617cc}.dialog-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin:14px 0}.dialog-field{background:#071226;border:1px solid #1e293b;border-radius:8px;padding:10px}.dialog-field span{display:block;color:#94a3b8;font-size:11px;text-transform:uppercase;margin-bottom:5px}.dialog-actions{display:flex;justify-content:flex-end;gap:8px;flex-wrap:wrap;margin-top:14px}@media(max-width:900px){.class-grid,.extra-list,.dialog-grid{grid-template-columns:1fr}}@media(max-width:900px){.grid{grid-template-columns:1fr}.toolbar{align-items:flex-start}table{min-width:820px}}
+.dialog select{width:100%;padding:10px;border:1px solid #334155;border-radius:8px;background:#0f172a;color:#fff}.governance-fields{display:grid;gap:12px}.governance-fields label{display:block;color:#94a3b8;font-size:12px;margin-bottom:5px}.server-note-form{margin-top:12px}.server-note-form textarea{width:100%;min-height:58px;padding:9px;border:1px solid #334155;border-radius:8px;background:#0f172a;color:#fff;resize:vertical}.server-note-form button{margin-top:7px}
 </style>
 </head>
 <body>
@@ -312,7 +383,7 @@ function zone_estado_explicacao(string $estado): string
 <div class="class-grid">
 <?php foreach ($resumoClassificacao as $codigo => $total): ?>
 <div class="class-item">
-<span class="badge <?= $total > 0 && !in_array($codigo, ['OK', 'EXTRA_IGNORADA'], true) ? 'warn' : 'ok' ?>"><?= htmlspecialchars($codigo) ?></span>
+<span class="badge <?= $total > 0 && !in_array($codigo, ['OK', 'EXTRA_IGNORADA', 'EXCECOES_APROVADAS'], true) ? 'warn' : 'ok' ?>"><?= htmlspecialchars($codigo) ?></span>
 <strong><?= (int) $total ?></strong>
 </div>
 <?php endforeach; ?>
@@ -345,10 +416,10 @@ function zone_estado_explicacao(string $estado): string
 <?php if ($extrasIgnoradasPorServidor): ?>
 <section class="card ignored">
 <div class="toolbar">
-<h2>Extras ignoradas</h2>
-<span class="badge ok">Legitimas</span>
+<h2>Excecoes aprovadas entre extras</h2>
+<span class="badge ok">Governanca</span>
 </div>
-<p class="lead">Estas zonas extras foram marcadas como legitimas e ficam separadas dos alertas acionaveis.</p>
+<p class="lead">Estas zonas extras foram classificadas como legitimas ou ignoradas e ficam separadas dos alertas acionaveis.</p>
 <div class="extra-list">
 <?php foreach ($extrasIgnoradasPorServidor as $grupo): ?>
 <article class="class-item">
@@ -402,13 +473,28 @@ function zone_estado_explicacao(string $estado): string
 <div class="value"><?= (int) $server['total_zones'] ?></div>
 <p class="meta">Total de zonas · Atualizado em <?= htmlspecialchars(zones_data_sao_paulo($server['checked_at'] ?? null)) ?></p>
 <?php if (!$server['last_ok'] && $server['last_error']): ?><p class="error"><?= htmlspecialchars($server['last_error']) ?></p><?php endif; ?>
+<form method="POST" class="server-note-form">
+<?= csrf_field() ?>
+<input type="hidden" name="acao" value="salvar_observacao_servidor">
+<input type="hidden" name="server_key" value="<?= htmlspecialchars((string) $server['server_key']) ?>">
+<input type="hidden" name="server_nome" value="<?= htmlspecialchars((string) $server['server_nome']) ?>">
+<label class="meta">Observacao operacional</label>
+<textarea name="observacao_servidor" maxlength="1000" placeholder="Ex.: Slave temporario."><?= htmlspecialchars((string) ($observacoesServidores[$server['server_key']]['note'] ?? '')) ?></textarea>
+<button type="submit" class="small-button muted-button">Salvar observacao</button>
+</form>
 </article>
 <?php endforeach; ?>
 <article class="card stat">
 <span class="badge <?= $divergencias ? 'warn' : 'ok' ?>">Comparacao</span>
-<h2>Divergencias</h2>
+<h2>Divergencias reais</h2>
 <div class="value"><?= count($divergencias) ?></div>
 <p class="meta">Presenca de zona e serial SOA master/slave.</p>
+</article>
+<article class="card stat">
+<span class="badge ok">Governanca</span>
+<h2>Excecoes aprovadas</h2>
+<div class="value"><?= count($excecoesAprovadas) ?></div>
+<p class="meta">Divergencias legitimas ou ignoradas.</p>
 </article>
 </section>
 
@@ -442,8 +528,8 @@ function zone_estado_explicacao(string $estado): string
 <td><?= htmlspecialchars($linha['server_nome']) ?></td>
 <td><?= htmlspecialchars((string) ($linha['master_serial'] ?? 'indisponivel')) ?></td>
 <td><?= htmlspecialchars((string) ($linha['slave_serial'] ?? 'indisponivel')) ?></td>
-<td class="<?= zone_estado_class($linha['estado']) ?>"><strong><?= htmlspecialchars(zone_estado_label($linha['estado'])) ?></strong></td>
-<td><?= htmlspecialchars($linha['detalhe']) ?></td>
+<td class="<?= zone_estado_class($linha['estado'], !empty($linha['governance_approved'])) ?>"><strong><?= htmlspecialchars(zone_estado_label($linha['estado'])) ?></strong><?php if (!empty($linha['governance_approved'])): ?><br><span class="badge ok"><?= htmlspecialchars(strtoupper((string) $linha['governance_classification'])) ?></span><?php endif; ?></td>
+<td><?= htmlspecialchars($linha['detalhe']) ?><?php if (!empty($linha['zone_note'])): ?><br><span class="muted"><?= htmlspecialchars((string) $linha['zone_note']) ?></span><?php endif; ?></td>
 <td>
 <div class="action-row">
 <button type="button" class="small-button muted-button inspect-zone"
@@ -451,13 +537,16 @@ function zone_estado_explicacao(string $estado): string
     data-server="<?= htmlspecialchars($linha['server_nome']) ?>"
     data-server-key="<?= htmlspecialchars($linha['server_key']) ?>"
     data-state="<?= htmlspecialchars($linha['estado']) ?>"
+    data-state-base="<?= htmlspecialchars((string) ($linha['estado_base'] ?? $linha['estado'])) ?>"
     data-state-label="<?= htmlspecialchars(zone_estado_label($linha['estado'])) ?>"
     data-detail="<?= htmlspecialchars($linha['detalhe']) ?>"
     data-explanation="<?= htmlspecialchars(zone_estado_explicacao($linha['estado'])) ?>"
     data-master="<?= htmlspecialchars((string) ($linha['master_serial'] ?? 'indisponivel')) ?>"
     data-slave="<?= htmlspecialchars((string) ($linha['slave_serial'] ?? 'indisponivel')) ?>"
-    data-note="<?= htmlspecialchars((string) ($linha['ignore_note'] ?? '')) ?>">Inspecionar</button>
-<?php if ($linha['estado'] === 'missing_on_slave'): ?>
+    data-classification="<?= htmlspecialchars((string) ($linha['governance_classification'] ?? 'revisar')) ?>"
+    data-zone-note="<?= htmlspecialchars((string) ($linha['zone_note'] ?? '')) ?>"
+    data-server-note="<?= htmlspecialchars((string) ($linha['server_note'] ?? '')) ?>">Inspecionar</button>
+<?php if ($linha['estado'] === 'missing_on_slave' && empty($linha['governance_approved'])): ?>
 <form method="POST" class="inline-form" onsubmit="return confirm('Criar zona slave <?= htmlspecialchars($linha['zone_name']) ?> em <?= htmlspecialchars($linha['server_nome']) ?>?');">
 <?= csrf_field() ?>
 <input type="hidden" name="acao" value="sync_zona_ausente">
@@ -549,22 +638,17 @@ function zone_estado_explicacao(string $estado): string
 <div class="dialog-field"><span>Detalhe</span><strong id="dialog-detail"></strong></div>
 </div>
 <p class="lead" id="dialog-explanation"></p>
-<p class="meta" id="dialog-note-wrap">Nota: <span id="dialog-note"></span></p>
-<form method="POST" id="ignore-form">
+<form method="POST" id="governance-form">
 <?= csrf_field() ?>
-<input type="hidden" name="acao" value="ignorar_extra">
-<input type="hidden" name="zona" id="ignore-zone">
-<input type="hidden" name="server_key" id="ignore-server-key">
-<label class="meta" for="ignore-note">Nota opcional</label>
-<textarea name="nota" id="ignore-note" maxlength="500" placeholder="Ex.: zona legada mantida somente neste slave"></textarea>
-<div class="dialog-actions"><button type="submit">Marcar como legitima</button></div>
-</form>
-<form method="POST" id="restore-form">
-<?= csrf_field() ?>
-<input type="hidden" name="acao" value="restaurar_extra">
-<input type="hidden" name="zona" id="restore-zone">
-<input type="hidden" name="server_key" id="restore-server-key">
-<div class="dialog-actions"><button type="submit" class="muted-button">Restaurar alerta</button></div>
+<input type="hidden" name="acao" value="salvar_governanca">
+<input type="hidden" name="zona" id="governance-zone">
+<input type="hidden" name="server_key" id="governance-server-key">
+<div class="governance-fields">
+<div><label for="governance-classification">Classificacao manual</label><select name="classificacao" id="governance-classification"><option value="revisar">Revisar</option><option value="legitima">Legitima</option><option value="ignorada">Ignorada</option></select></div>
+<div><label for="governance-zone-note">Observacao da zona</label><textarea name="observacao_zona" id="governance-zone-note" maxlength="1000" placeholder="Ex.: Zona herdada de migracao."></textarea></div>
+<div><label for="governance-server-note">Observacao do servidor</label><textarea name="observacao_servidor" id="governance-server-note" maxlength="1000" placeholder="Ex.: Slave temporario."></textarea></div>
+</div>
+<div class="dialog-actions"><button type="submit">Salvar governanca</button></div>
 </form>
 </dialog>
 </main>
@@ -583,8 +667,7 @@ bindFilter('filtro-comparacao','tabela-comparacao');
 bindFilter('filtro-inventario','tabela-inventario');
 
 const zoneDialog=document.getElementById('zone-dialog');
-const ignoreForm=document.getElementById('ignore-form');
-const restoreForm=document.getElementById('restore-form');
+const governanceForm=document.getElementById('governance-form');
 function setText(id,value){const el=document.getElementById(id);if(el)el.textContent=value||'-';}
 document.querySelectorAll('.inspect-zone').forEach(button=>{
     button.addEventListener('click',()=>{
@@ -596,15 +679,12 @@ document.querySelectorAll('.inspect-zone').forEach(button=>{
         setText('dialog-state',d.stateLabel);
         setText('dialog-detail',d.detail);
         setText('dialog-explanation',d.explanation);
-        setText('dialog-note',d.note);
-        document.getElementById('dialog-note-wrap').style.display=d.note?'':'none';
-        document.getElementById('ignore-zone').value=d.zone;
-        document.getElementById('ignore-server-key').value=d.serverKey;
-        document.getElementById('ignore-note').value=d.note||'';
-        document.getElementById('restore-zone').value=d.zone;
-        document.getElementById('restore-server-key').value=d.serverKey;
-        ignoreForm.style.display=d.state==='extra_on_slave'?'':'none';
-        restoreForm.style.display=d.state==='extra_on_slave_ignored'?'':'none';
+        document.getElementById('governance-zone').value=d.zone;
+        document.getElementById('governance-server-key').value=d.serverKey;
+        document.getElementById('governance-classification').value=d.classification||'revisar';
+        document.getElementById('governance-zone-note').value=d.zoneNote||'';
+        document.getElementById('governance-server-note').value=d.serverNote||'';
+        governanceForm.style.display=d.stateBase==='ok'?'none':'';
         if(typeof zoneDialog.showModal==='function')zoneDialog.showModal();
     });
 });
