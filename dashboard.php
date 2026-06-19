@@ -88,6 +88,10 @@ function auditAction(string $action): string {
         'REMOVER_DNS_SERVER'=>'Remover servidor DNS','TESTAR_DNS_SERVER'=>'Testar servidor DNS',
         'DNS_SERVER_ADD'=>'Cadastrar servidor DNS','DNS_SERVER_UPDATE'=>'Alterar servidor DNS',
         'DNS_SERVER_REMOVE'=>'Remover servidor DNS','DNS_SERVER_TEST'=>'Testar servidor DNS',
+        'TESTE_SSH_OK'=>'SSH OK','TESTE_SSH_FALHA'=>'SSH falhou',
+        'TESTE_BIND_OK'=>'BIND OK','TESTE_BIND_FALHA'=>'BIND falhou',
+        'TESTE_AXFR_OK'=>'AXFR OK','TESTE_AXFR_FALHA'=>'AXFR falhou',
+        'AGENTE_OK'=>'Agente OK','AGENTE_FALHA'=>'Agente falhou',
         'DNS_SERVER_AGENT_INSTALL'=>'Instalar agente DNS','DNS_SERVER_AGENT_UPDATE'=>'Atualizar agente DNS',
         'DNS_SERVER_AGENT_REMOVE'=>'Remover agente DNS','DNS_SERVER_INVENTORY'=>'Inventário do servidor',
         'DNS_SERVER_SLAVE_LAYOUT_MIGRATE'=>'Migrar layout slave',
@@ -144,8 +148,17 @@ try {
     metricError('inventario_zonas', $e->getMessage());
 }
 $dnsServers = [];
+$dnsHealthSummary = [
+    'servidores_ok' => 0,
+    'servidores_falha' => 0,
+    'ssh_ok' => 0,
+    'bind_ok' => 0,
+    'axfr_ok' => 0,
+    'agentes_ok' => 0,
+];
 try {
     $dnsServers = dns_servers_listar();
+    $dnsHealthSummary = dns_servers_resumo_saude($dnsServers);
 } catch (Throwable $e) {
     metricError('servidores_dns', $e->getMessage());
 }
@@ -292,6 +305,14 @@ $serverOperationalRows[0]['ip'] = $serverIp;
 <div class="stat"><div class="icon"><svg class="metric-icon" aria-hidden="true"><use href="#icon-reverse"></use></svg></div><div class="label">Zonas reversas</div><div class="value"><?= count($reverseFiles) ?></div><small>IPv4 + IPv6</small></div>
 <a class="stat stat-link" href="dns-servers.php"><div class="icon"><svg class="metric-icon" aria-hidden="true"><use href="#icon-server"></use></svg></div><div class="label">Servidores DNS</div><div class="value"><?= $totalDnsServers ?></div><small>NS1 + servidores cadastrados</small></a>
 <a class="stat stat-link" href="dns-servers.php"><div class="icon"><svg class="metric-icon" aria-hidden="true"><use href="#icon-server"></use></svg></div><div class="label">Servidores online</div><div class="value"><?= $onlineDnsServers ?></div><small><?= $totalDnsServers - $onlineDnsServers ?> offline</small></a>
+</div></section>
+<section class="section"><div class="section-header"><h2>🩺 Saúde DNS</h2><a class="section-link" href="dns-servers.php">Abrir servidores</a></div><div class="recent-grid">
+<div class="stat"><div class="label">Servidores OK</div><div class="value"><?= (int) $dnsHealthSummary['servidores_ok'] ?></div></div>
+<div class="stat"><div class="label">Servidores com falha</div><div class="value"><?= (int) $dnsHealthSummary['servidores_falha'] ?></div></div>
+<div class="stat"><div class="label">SSH OK</div><div class="value"><?= (int) $dnsHealthSummary['ssh_ok'] ?></div></div>
+<div class="stat"><div class="label">BIND OK</div><div class="value"><?= (int) $dnsHealthSummary['bind_ok'] ?></div></div>
+<div class="stat"><div class="label">AXFR OK</div><div class="value"><?= (int) $dnsHealthSummary['axfr_ok'] ?></div></div>
+<div class="stat"><div class="label">Agentes OK</div><div class="value"><?= (int) $dnsHealthSummary['agentes_ok'] ?></div></div>
 </div></section>
 <section class="section"><div class="section-header"><h2>🧭 Inventário DNS</h2><a class="section-link" href="zones.php">Abrir inventário</a></div><div class="inventory-grid">
 <div class="stat"><div class="label">Última coleta</div><div class="value <?= $lastInventoryAt ? '' : 'unavailable' ?>" style="<?= $lastInventoryAt ? 'font-size:18px' : '' ?>"><?= htmlspecialchars($lastInventoryAt ? auditDate($lastInventoryAt) : 'Indisponível') ?></div><small>NS1 e servidores ativos</small></div>

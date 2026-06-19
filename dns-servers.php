@@ -120,6 +120,18 @@ function dns_servers_auditar(
     ]);
 }
 
+function dns_servers_auditar_saude(string $componente, array $servidor, bool $ok, string $mensagem): void
+{
+    $prefixo = match ($componente) {
+        'ssh' => 'TESTE_SSH',
+        'bind' => 'TESTE_BIND',
+        'axfr' => 'TESTE_AXFR',
+        'agente' => 'AGENTE',
+        default => throw new InvalidArgumentException('Componente de saude invalido.'),
+    };
+    dns_servers_auditar($prefixo . ($ok ? '_OK' : '_FALHA'), $servidor, $ok ? 'OK' : 'ERRO', $mensagem);
+}
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     require_csrf();
     $acao = (string) ($_POST['acao'] ?? '');
@@ -241,6 +253,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 'OK',
                 substr('Agente instalado: ' . $teste['saida'], 0, 4000)
             );
+            dns_servers_auditar_saude(
+                'agente',
+                $dados,
+                $statusTeste['ok'] && $derivado['agente_status'] === 'instalado',
+                substr('Agente instalado: ' . $teste['saida'], 0, 4000)
+            );
             dns_servers_redirecionar(
                 dns_server_modo_eh_provisionamento($dados['modo_instalacao'])
                     ? ($teste['ok'] ? 'Servidor DNS provisionado e registrado.' : 'Servidor DNS provisionado, validado por status e registrado.')
@@ -339,6 +357,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 dns_server_salvar_credencial_admin((int) $servidor['id'], $_POST, $servidor);
             }
             dns_servers_auditar($acaoAuditoria, $servidor, $teste['ok'] ? 'OK' : 'ERRO', substr('Atualização do agente DNS: ' . $teste['saida'], 0, 4000));
+            dns_servers_auditar_saude('agente', $servidor, $teste['ok'] && $derivado['agente_status'] === 'instalado', substr('Atualização do agente DNS: ' . $teste['saida'], 0, 4000));
             dns_servers_redirecionar(
                 $teste['ok'] ? 'Agente atualizado e validado.' : 'Atualização do agente falhou.',
                 [
@@ -357,6 +376,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $teste = dns_server_remover_agente($bootstrap['server'], $bootstrap['admin']);
             dns_server_registrar_status((int) $servidor['id'], false, 'Remoção do agente: ' . $teste['saida'], 'ausente', null, null);
             dns_servers_auditar($acaoAuditoria, $servidor, $teste['ok'] ? 'OK' : 'ERRO', substr('Remoção do agente DNS: ' . $teste['saida'], 0, 4000));
+            dns_servers_auditar_saude('agente', $servidor, false, substr('Agente ausente após remoção: ' . $teste['saida'], 0, 4000));
             dns_servers_redirecionar(
                 $teste['ok'] ? 'Agente removido/desativado.' : 'Remoção do agente falhou.',
                 ['ok' => $teste['ok'], 'titulo' => 'Remover agente - ' . $servidor['nome'], 'saida' => $teste['saida'], 'duracao_ms' => $teste['duracao_ms']]
@@ -371,6 +391,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $derivado = dns_server_status_derivado($teste['ok'], $teste['saida']);
             dns_server_registrar_status((int) $servidor['id'], $teste['ok'], $mensagem, $derivado['agente_status'], $derivado['bind_status'], $derivado['zonas_slave']);
             dns_servers_auditar($acaoAuditoria, $servidor, $status, substr($mensagem, 0, 4000));
+            dns_servers_auditar_saude('agente', $servidor, $teste['ok'] && $derivado['agente_status'] === 'instalado', substr($mensagem, 0, 4000));
             dns_servers_redirecionar(
                 $teste['ok'] ? 'Agente NS2 instalado e validado.' : 'Instalação do agente NS2 falhou.',
                 ['ok' => $teste['ok'], 'titulo' => 'Instalar agente NS2 - ' . $servidor['nome'], 'saida' => $teste['saida'], 'duracao_ms' => $teste['duracao_ms']]
@@ -381,9 +402,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $zonaTeste = strtolower(rtrim(trim((string) ($_POST['zona_teste'] ?? 'legacy.example')), '.'));
             $rotulo = 'Transferencia de zona';
             $teste = dns_server_executar_teste($servidor, 'transfer', $zonaTeste);
-            $status = $teste['ok'] ? 'OK' : 'ERRO';
             $mensagem = $rotulo . ' ' . $zonaTeste . ': ' . $teste['saida'];
-            dns_servers_auditar('DNS_SERVER_TEST', $servidor, $status, substr($mensagem, 0, 4000));
+            dns_servers_auditar_saude('axfr', $servidor, $teste['ok'], substr($mensagem, 0, 4000));
             dns_servers_redirecionar(
                 $teste['ok'] ? "{$rotulo} concluida." : "{$rotulo} falhou.",
                 ['ok' => $teste['ok'], 'titulo' => $rotulo . ' - ' . $servidor['nome'], 'saida' => $teste['saida'], 'duracao_ms' => $teste['duracao_ms']]
@@ -406,13 +426,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $tipoTeste = $acao === 'testar_ssh' ? 'connection' : 'status';
             $rotulo = $acao === 'testar_ssh' ? 'Conexão SSH' : 'Status BIND';
             $teste = dns_server_executar_teste($servidor, $tipoTeste);
-            $status = $teste['ok'] ? 'OK' : 'ERRO';
             $mensagem = $rotulo . ': ' . $teste['saida'];
             $derivado = $acao === 'testar_bind'
                 ? dns_server_status_derivado($teste['ok'], $teste['saida'])
                 : ['agente_status' => $teste['ok'] ? null : 'ausente', 'bind_status' => null, 'zonas_slave' => null];
             dns_server_registrar_status((int) $servidor['id'], $teste['ok'], $mensagem, $derivado['agente_status'], $derivado['bind_status'], $derivado['zonas_slave']);
-            dns_servers_auditar('DNS_SERVER_TEST', $servidor, $status, substr($mensagem, 0, 4000));
+            dns_servers_auditar_saude($acao === 'testar_ssh' ? 'ssh' : 'bind', $servidor, $teste['ok'], substr($mensagem, 0, 4000));
+            if ($acao === 'testar_bind') {
+                dns_servers_auditar_saude('agente', $servidor, $teste['ok'] && $derivado['agente_status'] === 'instalado', substr('Status do agente derivado do teste BIND: ' . $mensagem, 0, 4000));
+            }
             dns_servers_redirecionar(
                 $teste['ok'] ? "{$rotulo} concluído." : "{$rotulo} falhou.",
                 ['ok' => $teste['ok'], 'titulo' => $rotulo . ' - ' . $servidor['nome'], 'saida' => $teste['saida'], 'duracao_ms' => $teste['duracao_ms']]
@@ -489,6 +511,7 @@ try {
 } catch (Throwable $e) {
     $inventarioPorServidor = [];
 }
+$saudePorServidor = dns_servers_saude_operacional($servidores);
 $ultimoInventario = 'Indisponivel';
 try {
     $valorInventario = db()->query('SELECT MAX(checked_at) FROM dns_zone_inventory_status')->fetchColumn();
@@ -621,6 +644,7 @@ dialog[id^="edit-server-"] .server-active input{width:auto}
 dialog[id^="edit-server-"] .edit-server-footer{display:flex;justify-content:flex-end;gap:8px;padding:11px 14px;border-top:1px solid #263247;background:#101827}
 dialog[id^="edit-server-"] .edit-server-footer button{min-width:128px}
 @media(max-width:720px){dialog[id^="edit-server-"] .edit-server-sections,dialog[id^="edit-server-"] .credential-fields{grid-template-columns:1fr}dialog[id^="edit-server-"] .edit-server-section.credentials-section,dialog[id^="edit-server-"] .credential-fields .field-wide{grid-column:auto}dialog[id^="edit-server-"] .edit-server-footer{position:sticky;bottom:0}dialog[id^="edit-server-"] .edit-server-footer button{min-width:0}}
+.health-card{margin-bottom:12px;background:#0f172a;border:1px solid #1f2a44;border-radius:8px;padding:12px}.health-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:10px}.health-head h3{margin:0;font-size:15px}.health-components{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}.health-component{background:#0b1120;border:1px solid #1f2a44;border-radius:7px;padding:9px}.health-component strong{display:block;font-size:12px;margin-bottom:6px}.health-status{display:inline-flex;border-radius:999px;padding:3px 7px;font-size:10px;font-weight:800}.health-status.ok{background:#123326;color:#86efac}.health-status.falha{background:#3a1418;color:#fca5a5}.health-status.nao_testado{background:#1e293b;color:#94a3b8}.health-meta{display:flex;gap:16px;flex-wrap:wrap;margin-top:10px;color:#94a3b8;font-size:11px}@media(max-width:840px){.health-components{grid-template-columns:repeat(2,minmax(0,1fr))}}
 </style>
 </head>
 <body>
@@ -671,7 +695,7 @@ $resumoTemDados = (bool) array_filter($resumoTeste, static fn($valor) => $valor 
 <section class="metric-strip" aria-label="Resumo dos servidores DNS"><div class="metric-card"><span class="metric-label">Total remotos</span><span class="metric-value"><?= (int) $totalServidoresRemotos ?></span></div><div class="metric-card"><span class="metric-label">Online</span><span class="metric-value"><?= (int) $totalOnline ?></span></div><div class="metric-card"><span class="metric-label">Slaves</span><span class="metric-value"><?= (int) $totalSlaves ?></span></div><div class="metric-card"><span class="metric-label">Ultimo inventario</span><span class="metric-value" style="font-size:16px"><?= htmlspecialchars($ultimoInventario) ?></span></div></section>
 <section class="workspace"><aside class="sidebar"><div class="sidebar-head"><h2>Servidores remotos</h2><span class="pill"><?= (int) $totalServidoresRemotos ?></span></div><input class="server-filter" type="search" placeholder="Buscar servidor..." data-server-filter><?php if (!$servidores): ?><div class="empty-state">Nenhum servidor remoto cadastrado.</div><?php else: ?><div class="server-list"><?php foreach ($servidores as $servidor): ?><?php $serverId = (int) $servidor['id']; $online = ($servidor['ultimo_status'] ?? '') === 'online'; $bindOk = ($servidor['bind_status'] ?? '') === 'ok'; $agentOk = ($servidor['agente_status'] ?? '') === 'instalado'; $ipPrincipal = trim((string) ($servidor['ip4'] ?: $servidor['hostname'])); $inventario = $inventarioPorServidor[$serverId] ?? null; $totalDominios = (int) ($inventario['total_zones'] ?? 0); ?><button type="button" class="server-list-item" data-server-target="server-panel-<?= $serverId ?>" data-server-id="<?= $serverId ?>" data-filter-text="<?= htmlspecialchars(strtolower($servidor['nome'] . ' ' . $ipPrincipal . ' ' . $servidor['hostname'])) ?>"><span class="server-list-top"><span class="server-list-name"><?= htmlspecialchars($servidor['nome']) ?></span></span><span class="server-list-meta"><?= htmlspecialchars($ipPrincipal) ?></span><span class="pill server-list-domains"><?= (int) $totalDominios ?> <?= $totalDominios === 1 ? 'domínio' : 'domínios' ?></span></button><?php endforeach; ?></div><?php endif; ?></aside>
 <div class="main-panels"><?php if (!$servidores): ?><section class="panel active"><div class="empty-state">Cadastre um servidor para exibir o painel operacional.</div></section><?php endif; ?>
-<?php foreach ($servidores as $servidor): ?><?php $serverId = (int) $servidor['id']; $online = ($servidor['ultimo_status'] ?? '') === 'online'; $bindOk = ($servidor['bind_status'] ?? '') === 'ok'; $agentOk = ($servidor['agente_status'] ?? '') === 'instalado'; $ipPrincipal = trim((string) ($servidor['ip4'] ?: $servidor['hostname'])); $inventario = $inventarioPorServidor[$serverId] ?? null; $totalDominios = (int) ($inventario['total_zones'] ?? 0); $credencialSalva = dns_server_tem_credencial_admin($servidor); $senhaSalva = dns_server_tem_senha_admin($servidor); $sudoSalva = !empty($servidor['admin_sudo_secret']); $chaveSalva = !empty($servidor['admin_key_secret']) || (($servidor['admin_auth'] ?? 'senha') === 'chave' && !empty($servidor['admin_secret']) && empty($servidor['admin_key_secret'])); $credencialData = dns_servers_formatar_timestamp_local($servidor['admin_secret_updated_at'] ?? null); ?>
+<?php foreach ($servidores as $servidor): ?><?php $serverId = (int) $servidor['id']; $online = ($servidor['ultimo_status'] ?? '') === 'online'; $bindOk = ($servidor['bind_status'] ?? '') === 'ok'; $agentOk = ($servidor['agente_status'] ?? '') === 'instalado'; $ipPrincipal = trim((string) ($servidor['ip4'] ?: $servidor['hostname'])); $inventario = $inventarioPorServidor[$serverId] ?? null; $totalDominios = (int) ($inventario['total_zones'] ?? 0); $saude = $saudePorServidor[$serverId] ?? null; $credencialSalva = dns_server_tem_credencial_admin($servidor); $senhaSalva = dns_server_tem_senha_admin($servidor); $sudoSalva = !empty($servidor['admin_sudo_secret']); $chaveSalva = !empty($servidor['admin_key_secret']) || (($servidor['admin_auth'] ?? 'senha') === 'chave' && !empty($servidor['admin_secret']) && empty($servidor['admin_key_secret'])); $credencialData = dns_servers_formatar_timestamp_local($servidor['admin_secret_updated_at'] ?? null); ?>
 <section class="panel" id="server-panel-<?= $serverId ?>" data-server-id="<?= $serverId ?>" data-default-open="<?= strcasecmp((string) $servidor['nome'], 'NS03') === 0 ? '1' : '0' ?>"><header class="panel-header"><div class="panel-main-line"><div><h2><?= htmlspecialchars($servidor['nome']) ?></h2><div class="panel-meta"><?= htmlspecialchars($ipPrincipal) ?></div><div class="panel-domain-count"><?= (int) $totalDominios ?> <?= $totalDominios === 1 ? 'domínio' : 'domínios' ?></div><div class="badge-row"><span class="pill <?= $online ? 'ok' : 'bad' ?>"><?= $online ? 'Online' : 'Falha' ?></span><span class="pill"><?= htmlspecialchars(strtoupper((string) $servidor['tipo'])) ?></span><span class="pill <?= $bindOk ? 'ok' : 'bad' ?>"><?= $bindOk ? 'BIND OK' : 'BIND pendente' ?></span><span class="pill <?= $agentOk ? 'ok' : 'bad' ?>"><?= $agentOk ? 'Agente instalado' : 'Agente ausente' ?></span></div></div><details class="quick-menu"><summary>Ações</summary><div class="quick-menu-box">
 <div class="quick-group"><span class="quick-title">Diagnósticos</span>
 <form method="POST"><?= csrf_field() ?><input type="hidden" name="acao" value="testar_ssh"><input type="hidden" name="id" value="<?= $serverId ?>"><button type="submit" class="menu-action"><span class="icon" aria-hidden="true">🔐</span><span>Testar SSH</span></button></form>
@@ -690,7 +714,7 @@ $resumoTemDados = (bool) array_filter($resumoTeste, static fn($valor) => $valor 
 <form method="POST" onsubmit="return confirm('Remover este servidor do painel?');"><?= csrf_field() ?><input type="hidden" name="acao" value="remover"><input type="hidden" name="id" value="<?= $serverId ?>"><button type="submit" class="menu-action danger-link"><span class="icon" aria-hidden="true">🗑</span><span>Remover servidor</span></button></form>
 </div>
 </div></details></div></header>
-<div class="panel-body"><div class="action-grid"><div class="action-card compact-card"><span class="action-kicker">Cadastro</span><h3>Dados do servidor</h3><p>Editar nome, IPs, porta e descricao.</p><button type="button" class="secondary action-open" data-open-dialog="edit-server-<?= $serverId ?>">Abrir cadastro</button></div><div class="action-card compact-card"><span class="action-kicker">Ferramentas</span><h3>Diagnostico, agente e manutencao</h3><p>Executar testes, gerenciar agente e acessar acoes raras.</p><button type="button" class="secondary action-open" data-open-dialog="tools-server-<?= $serverId ?>">Abrir ferramentas</button></div></div>
+<div class="panel-body"><?php if ($saude): ?><section class="health-card"><div class="health-head"><h3>Saúde Operacional</h3><span class="health-status <?= htmlspecialchars($saude['geral']) ?>"><?= $saude['geral'] === 'ok' ? 'OK' : ($saude['geral'] === 'falha' ? 'Falha' : 'Não testado') ?></span></div><div class="health-components"><?php foreach (['ssh' => 'SSH', 'bind' => 'BIND', 'axfr' => 'AXFR', 'agente' => 'Agente'] as $healthKey => $healthLabel): ?><?php $healthStatus = $saude[$healthKey]['status']; ?><div class="health-component"><strong><?= $healthLabel ?></strong><span class="health-status <?= htmlspecialchars($healthStatus) ?>"><?= $healthStatus === 'ok' ? 'OK' : ($healthStatus === 'falha' ? 'Falha' : 'Não testado') ?></span></div><?php endforeach; ?></div><div class="health-meta"><span>Último teste: <strong><?= htmlspecialchars($saude['ultimo_teste'] ? dns_servers_formatar_timestamp_local((string) $saude['ultimo_teste']) : 'Não testado') ?></strong></span><span>Último inventário: <strong><?= htmlspecialchars($saude['ultimo_inventario'] ? dns_servers_formatar_timestamp_local((string) $saude['ultimo_inventario']) : 'Não recebido') ?></strong></span></div></section><?php endif; ?><div class="action-grid"><div class="action-card compact-card"><span class="action-kicker">Cadastro</span><h3>Dados do servidor</h3><p>Editar nome, IPs, porta e descricao.</p><button type="button" class="secondary action-open" data-open-dialog="edit-server-<?= $serverId ?>">Abrir cadastro</button></div><div class="action-card compact-card"><span class="action-kicker">Ferramentas</span><h3>Diagnostico, agente e manutencao</h3><p>Executar testes, gerenciar agente e acessar acoes raras.</p><button type="button" class="secondary action-open" data-open-dialog="tools-server-<?= $serverId ?>">Abrir ferramentas</button></div></div>
 <section class="credentials-card" aria-label="Credenciais"><div class="credentials-grid"><div class="credential-state <?= $credencialSalva ? '' : 'missing' ?>"><span class="credential-check"><?= $credencialSalva ? '✓' : '!' ?></span><span><?= $credencialSalva ? 'Credenciais válidas' : 'Credenciais ausentes' ?></span></div><div><span class="info-label">Atualizado em:</span><span class="info-value"><?= htmlspecialchars($credencialSalva ? $credencialData : 'Nunca') ?></span></div><div class="credential-actions"><button type="button" class="secondary" data-view-secret="<?= $serverId ?>" data-secret-server="<?= htmlspecialchars($servidor['nome'], ENT_QUOTES, 'UTF-8') ?>" data-secret-user="<?= htmlspecialchars((string) ($servidor['admin_user'] ?? 'root'), ENT_QUOTES, 'UTF-8') ?>" <?= $senhaSalva ? '' : 'disabled' ?>>Visualizar senha salva</button></div></div></section><footer class="technical-footer"><span>Funcao: <strong><?= htmlspecialchars(strtoupper((string) $servidor['tipo'])) ?></strong></span><span>Usuario administrativo: <strong><?= htmlspecialchars((string) ($servidor['admin_user'] ?? 'root')) ?></strong></span><span>Autenticacao: <strong><?= htmlspecialchars((string) ($servidor['admin_auth'] ?? 'senha')) ?></strong></span><span>Porta SSH: <strong><?= (int) $servidor['ssh_port'] ?></strong></span></footer>
 <dialog class="modal server-modal" id="tools-server-<?= $serverId ?>">
 <div class="modal-header"><div><h2>Ferramentas • <?= htmlspecialchars($servidor['nome']) ?></h2></div><button class="close-button" type="button" data-close-dialog>Fechar</button></div>

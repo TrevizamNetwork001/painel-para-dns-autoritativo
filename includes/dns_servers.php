@@ -104,6 +104,138 @@ function dns_servers_listar(): array
         ->fetchAll(PDO::FETCH_ASSOC);
 }
 
+function dns_servers_saude_status(bool $testado, bool $ok): string
+{
+    return !$testado ? 'nao_testado' : ($ok ? 'ok' : 'falha');
+}
+
+function dns_servers_saude_operacional(?array $servidores = null): array
+{
+    dns_servers_garantir_esquema();
+    $servidores = $servidores ?? dns_servers_listar();
+    $saude = [];
+    $pdo = db();
+
+    foreach ($servidores as $servidor) {
+        $identificadores = array_values(array_unique(array_filter([
+            strtolower(trim((string) ($servidor['nome'] ?? ''))),
+            strtolower(trim((string) ($servidor['hostname'] ?? ''))),
+            strtolower(trim((string) ($servidor['ip4'] ?? ''))),
+            strtolower(trim((string) ($servidor['ip6'] ?? ''))),
+        ])));
+        $eventos = [];
+        if ($identificadores) {
+            $placeholders = implode(',', array_fill(0, count($identificadores), '?'));
+            $stmt = $pdo->prepare(
+                "SELECT acao, status, mensagem, criado_em FROM audit_logs "
+                . "WHERE tipo_registro = 'DNS_SERVER' AND LOWER(nome_registro) IN ($placeholders) "
+                . "ORDER BY id DESC"
+            );
+            $stmt->execute($identificadores);
+            $eventos = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        }
+
+        $testes = [
+            'ssh' => ['status' => 'nao_testado', 'testado_em' => null],
+            'bind' => ['status' => 'nao_testado', 'testado_em' => null],
+            'axfr' => ['status' => 'nao_testado', 'testado_em' => null],
+        ];
+        $ultimoTeste = null;
+        $ultimoEventoAgente = null;
+
+        foreach ($eventos as $evento) {
+            $acao = (string) ($evento['acao'] ?? '');
+            $mensagem = (string) ($evento['mensagem'] ?? '');
+            $categoria = match (true) {
+                in_array($acao, ['TESTE_SSH_OK', 'TESTE_SSH_FALHA'], true)
+                    || ($acao === 'DNS_SERVER_TEST' && str_starts_with($mensagem, 'Conexão SSH:')) => 'ssh',
+                in_array($acao, ['TESTE_BIND_OK', 'TESTE_BIND_FALHA'], true)
+                    || ($acao === 'DNS_SERVER_TEST' && str_starts_with($mensagem, 'Status BIND:')) => 'bind',
+                in_array($acao, ['TESTE_AXFR_OK', 'TESTE_AXFR_FALHA'], true)
+                    || ($acao === 'DNS_SERVER_TEST' && str_starts_with($mensagem, 'Transferencia de zona')) => 'axfr',
+                default => null,
+            };
+            if ($categoria !== null && $testes[$categoria]['testado_em'] === null) {
+                $ok = str_ends_with($acao, '_OK') || (($evento['status'] ?? '') === 'OK' && !str_ends_with($acao, '_FALHA'));
+                $testes[$categoria] = [
+                    'status' => dns_servers_saude_status(true, $ok),
+                    'testado_em' => $evento['criado_em'] ?? null,
+                ];
+                if ($ultimoTeste === null || strcmp((string) $evento['criado_em'], $ultimoTeste) > 0) {
+                    $ultimoTeste = (string) $evento['criado_em'];
+                }
+            }
+            if (
+                $ultimoEventoAgente === null
+                && (
+                    in_array($acao, ['AGENTE_OK', 'AGENTE_FALHA'], true)
+                    || str_starts_with($acao, 'DNS_SERVER_AGENT_')
+                )
+            ) {
+                $ultimoEventoAgente = $evento['criado_em'] ?? null;
+            }
+        }
+
+        $inventarioStmt = $pdo->prepare(
+            'SELECT checked_at FROM dns_zone_inventory_status WHERE server_id = :id ORDER BY checked_at DESC LIMIT 1'
+        );
+        $inventarioStmt->execute([':id' => (int) $servidor['id']]);
+        $ultimoInventario = $inventarioStmt->fetchColumn() ?: null;
+        $agenteConhecido = ($servidor['agente_status'] ?? 'desconhecido') !== 'desconhecido';
+        $agenteOk = ($servidor['agente_status'] ?? '') === 'instalado';
+        $componentes = [
+            $testes['ssh']['status'],
+            $testes['bind']['status'],
+            $testes['axfr']['status'],
+            dns_servers_saude_status($agenteConhecido, $agenteOk),
+        ];
+
+        $saude[(int) $servidor['id']] = [
+            'ssh' => $testes['ssh'],
+            'bind' => $testes['bind'],
+            'axfr' => $testes['axfr'],
+            'agente' => [
+                'status' => dns_servers_saude_status($agenteConhecido, $agenteOk),
+                'testado_em' => $ultimoEventoAgente ?? ($servidor['ultima_verificacao'] ?? null),
+            ],
+            'ultimo_teste' => $ultimoTeste,
+            'ultimo_inventario' => $ultimoInventario,
+            'geral' => in_array('falha', $componentes, true)
+                ? 'falha'
+                : (in_array('nao_testado', $componentes, true) ? 'nao_testado' : 'ok'),
+        ];
+    }
+
+    return $saude;
+}
+
+function dns_servers_resumo_saude(?array $servidores = null): array
+{
+    $servidores = $servidores ?? dns_servers_listar();
+    $saude = dns_servers_saude_operacional($servidores);
+    $resumo = [
+        'servidores_ok' => 0,
+        'servidores_falha' => 0,
+        'ssh_ok' => 0,
+        'bind_ok' => 0,
+        'axfr_ok' => 0,
+        'agentes_ok' => 0,
+    ];
+    foreach ($saude as $item) {
+        if ($item['geral'] === 'ok') {
+            $resumo['servidores_ok']++;
+        } elseif ($item['geral'] === 'falha') {
+            $resumo['servidores_falha']++;
+        }
+        foreach (['ssh' => 'ssh_ok', 'bind' => 'bind_ok', 'axfr' => 'axfr_ok', 'agente' => 'agentes_ok'] as $componente => $chave) {
+            if ($item[$componente]['status'] === 'ok') {
+                $resumo[$chave]++;
+            }
+        }
+    }
+    return $resumo;
+}
+
 function dns_servers_credential_key(): string
 {
     $dir = dirname(DNS_SERVER_SECRET_KEY);
