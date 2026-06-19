@@ -186,6 +186,29 @@ $extrasPorServidor = dns_zones_extras_por_servidor($comparacao);
 $extrasIgnoradasPorServidor = dns_zones_extras_por_servidor($comparacao, true);
 $falhasColeta = dns_zones_status_falha_coleta();
 $eventosAuditoriaDns = dns_zones_eventos_auditoria(25);
+$statusFiltro = trim((string) ($_GET['status'] ?? ''));
+$statusFiltro = in_array($statusFiltro, ['ok', 'divergencias', 'extras'], true) ? $statusFiltro : '';
+$statusFiltroLabels = [
+    'ok' => 'zonas sincronizadas',
+    'divergencias' => 'divergencias',
+    'extras' => 'zonas extras',
+];
+$comparacaoExibida = array_values(array_filter(
+    $comparacao,
+    static function (array $linha) use ($statusFiltro): bool {
+        if ($statusFiltro === 'ok') {
+            return $linha['estado'] === 'ok';
+        }
+        if ($statusFiltro === 'divergencias') {
+            return !in_array($linha['estado'], ['ok', 'extra_on_slave_ignored'], true);
+        }
+        if ($statusFiltro === 'extras') {
+            return $linha['estado'] === 'extra_on_slave';
+        }
+
+        return true;
+    }
+));
 try {
     $masterIpPadrao = dns_zones_master_ip_padrao();
 } catch (Throwable $e) {
@@ -403,17 +426,17 @@ function zone_estado_explicacao(string $estado): string
 <section class="card">
 <div class="toolbar">
 <h2>Comparacao NS1 x slaves</h2>
-<span class="meta"><?= count($comparacao) ?> verificacoes</span>
+<span class="meta"><?= count($comparacaoExibida) ?><?= $statusFiltro !== '' ? ' de ' . count($comparacao) : '' ?> verificacoes<?= $statusFiltro !== '' ? ' · filtro: ' . htmlspecialchars($statusFiltroLabels[$statusFiltro]) : '' ?></span>
 </div>
 <input class="search" id="filtro-comparacao" type="text" placeholder="Pesquisar zona ou servidor...">
 <div class="table-wrap">
 <table id="tabela-comparacao">
 <thead><tr><th>Zona</th><th>Slave</th><th>Serial NS1</th><th>Serial slave</th><th>Estado</th><th>Detalhe</th><th>Acoes</th></tr></thead>
 <tbody>
-<?php if (!$comparacao): ?>
-<tr><td colspan="7" class="muted">Sem dados de comparacao. Atualize o inventario.</td></tr>
+<?php if (!$comparacaoExibida): ?>
+<tr><td colspan="7" class="muted"><?= $statusFiltro !== '' ? 'Nenhuma zona encontrada para o filtro selecionado.' : 'Sem dados de comparacao. Atualize o inventario.' ?></td></tr>
 <?php endif; ?>
-<?php foreach ($comparacao as $linha): ?>
+<?php foreach ($comparacaoExibida as $linha): ?>
 <tr>
 <td><?= htmlspecialchars($linha['zone_name']) ?></td>
 <td><?= htmlspecialchars($linha['server_nome']) ?></td>
