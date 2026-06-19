@@ -3,7 +3,6 @@ require "config.php";
 require "includes/auth.php";
 require_once __DIR__ . "/includes/db.php";
 require_once __DIR__ . "/includes/dns_zones.php";
-require_once __DIR__ . "/includes/dns_servers.php";
 
 function metricError(string $name, string $message): void { error_log("Dashboard - falha em {$name}: {$message}"); }
 function cpuSample(): ?array {
@@ -147,22 +146,6 @@ try {
 } catch (Throwable $e) {
     metricError('inventario_zonas', $e->getMessage());
 }
-$dnsServers = [];
-$dnsHealthSummary = [
-    'servidores_ok' => 0,
-    'servidores_falha' => 0,
-    'ssh_ok' => 0,
-    'bind_ok' => 0,
-    'axfr_ok' => 0,
-    'agentes_ok' => 0,
-];
-try {
-    $dnsServers = dns_servers_listar();
-    $dnsHealthSummary = dns_servers_resumo_saude($dnsServers);
-} catch (Throwable $e) {
-    metricError('servidores_dns', $e->getMessage());
-}
-
 $inventoryServers = $zoneInventorySummary['servidores'] ?? [];
 $lastInventoryAt = null;
 foreach ($inventoryServers as $inventoryServer) {
@@ -173,40 +156,6 @@ foreach ($inventoryServers as $inventoryServer) {
 }
 $zonesSynchronized = (int) ($zoneClassification['OK'] ?? 0);
 $extraZones = (int) ($zoneClassification['EXTRA_NO_SLAVE'] ?? 0);
-$totalDnsServers = 1 + count($dnsServers);
-$onlineDnsServers = 0;
-$serverOperationalRows = [];
-$localInventory = null;
-foreach ($inventoryServers as $inventoryServer) {
-    if (($inventoryServer['server_role'] ?? '') === 'master') {
-        $localInventory = $inventoryServer;
-        break;
-    }
-}
-$localOnline = $localInventory ? (int) $localInventory['last_ok'] === 1 : false;
-if ($localOnline) {
-    $onlineDnsServers++;
-}
-$serverOperationalRows[] = [
-    'id' => null,
-    'nome' => $localInventory['server_nome'] ?? 'NS1',
-    'ip' => $serverIp ?? '',
-    'online' => $localOnline,
-    'atualizado_em' => $localInventory['checked_at'] ?? null,
-];
-foreach ($dnsServers as $dnsServer) {
-    $online = ($dnsServer['ultimo_status'] ?? '') === 'online';
-    if ($online) {
-        $onlineDnsServers++;
-    }
-    $serverOperationalRows[] = [
-        'id' => (int) $dnsServer['id'],
-        'nome' => $dnsServer['nome'],
-        'ip' => $dnsServer['ip4'] ?: $dnsServer['hostname'],
-        'online' => $online,
-        'atualizado_em' => $dnsServer['ultima_verificacao'] ?? null,
-    ];
-}
 
 $recentActivity = [
     'domains_created' => 0,
@@ -235,7 +184,6 @@ if ($serverIp === false && $hostname !== 'Indisponível') {
     $serverIp = filter_var($resolvedIp, FILTER_VALIDATE_IP) ? $resolvedIp : false;
 }
 $serverIp = $serverIp ?: 'Indisponível';
-$serverOperationalRows[0]['ip'] = $serverIp;
 ?>
 <!DOCTYPE html>
 <html lang="pt-BR">
@@ -307,8 +255,6 @@ $serverOperationalRows[0]['ip'] = $serverIp;
 <section class="section"><div class="section-header"><h2>📦 Resumo geral</h2></div><div class="summary-grid">
 <div class="stat"><div class="icon"><svg class="metric-icon" aria-hidden="true"><use href="#icon-globe"></use></svg></div><div class="label">Domínios</div><div class="value"><?= count($forwardZones) ?></div><small>Zonas forward</small></div>
 <div class="stat"><div class="icon"><svg class="metric-icon" aria-hidden="true"><use href="#icon-reverse"></use></svg></div><div class="label">Zonas reversas</div><div class="value"><?= count($reverseFiles) ?></div><small>IPv4 + IPv6</small></div>
-<a class="stat stat-link" href="dns-servers.php"><div class="icon"><svg class="metric-icon" aria-hidden="true"><use href="#icon-server"></use></svg></div><div class="label">Servidores DNS</div><div class="value"><?= $totalDnsServers ?></div><small>NS1 + servidores cadastrados</small></a>
-<a class="stat stat-link" href="dns-servers.php"><div class="icon"><svg class="metric-icon" aria-hidden="true"><use href="#icon-server"></use></svg></div><div class="label">Servidores online</div><div class="value"><?= $onlineDnsServers ?></div><small><?= $totalDnsServers - $onlineDnsServers ?> offline</small></a>
 </div></section>
 <section class="section"><div class="section-header"><h2>🧭 Inventário DNS</h2><a class="section-link" href="zones.php">Abrir inventário</a></div><div class="inventory-grid">
 <div class="stat"><div class="label">Última coleta</div><div class="value <?= $lastInventoryAt ? '' : 'unavailable' ?>" style="<?= $lastInventoryAt ? 'font-size:18px' : '' ?>"><?= htmlspecialchars($lastInventoryAt ? auditDate($lastInventoryAt) : 'Indisponível') ?></div><small>NS1 e servidores ativos</small></div>
@@ -316,9 +262,6 @@ $serverOperationalRows[0]['ip'] = $serverIp;
 <a class="stat stat-link" href="zones.php?status=divergencias"><div class="label">Divergências reais</div><div class="value"><?= (int) $zoneInventorySummary['divergencias'] ?></div><small>Ausência, serial ou coleta</small></a>
 <a class="stat stat-link" href="zones.php?status=extras"><div class="label">Zonas extras</div><div class="value"><?= $extraZones ?></div><small>Extras não ignoradas</small></a>
 <a class="stat stat-link" href="zones.php?status=excecoes"><div class="label">Exceções aprovadas</div><div class="value"><?= (int) ($zoneInventorySummary['excecoes_aprovadas'] ?? 0) ?></div><small>Legítimas ou ignoradas</small></a>
-</div></section>
-<section class="section"><div class="section-header"><h2>🌐 Servidores DNS</h2><a class="section-link" href="dns-servers.php">Gerenciar servidores</a></div><div class="server-list">
-<?php foreach ($serverOperationalRows as $serverRow): ?><?php $serverKey = strtolower(trim((string) $serverRow['nome'])); $serverUrl = 'dns-servers.php?' . http_build_query(['server' => $serverKey]); $historyUrl = 'historico-servidor.php?' . http_build_query(['server' => $serverKey]); ?><div class="server-row" tabindex="0" data-server-url="<?= htmlspecialchars($serverUrl) ?>" title="Abrir servidor"><a class="server-name" href="<?= htmlspecialchars($serverUrl) ?>"><?= htmlspecialchars(strtoupper((string) $serverRow['nome'])) ?></a><a class="server-ip" href="<?= htmlspecialchars($serverUrl) ?>"><?= htmlspecialchars((string) $serverRow['ip']) ?></a><a href="<?= htmlspecialchars($serverUrl) ?>"><span class="status-pill <?= $serverRow['online'] ? 'online' : 'offline' ?>"><?= $serverRow['online'] ? 'Online' : 'Offline' ?></span></a><div class="server-updated"><a href="<?= htmlspecialchars($historyUrl) ?>" title="Abrir histórico operacional"><?= htmlspecialchars($serverRow['atualizado_em'] ? auditDate((string) $serverRow['atualizado_em']) : 'Sem atualização conhecida') ?></a></div></div><?php endforeach; ?>
 </div></section>
 <section class="section"><div class="section-header"><h2>📋 Auditoria recente</h2><a class="section-link" href="auditoria.php">Ver auditoria completa</a></div>
 <?php if ($auditUnavailable): ?><p class="empty">As atividades estão temporariamente indisponíveis.</p><?php elseif (!$auditEvents): ?><p class="empty">Nenhuma atividade registrada.</p><?php else: ?>
