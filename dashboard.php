@@ -76,11 +76,34 @@ function countRecords(array $files, string $pattern): int {
     }
     return $total;
 }
+function countDnsRecordTypes(array $files): array {
+    $counts = ['A' => 0, 'AAAA' => 0, 'CNAME' => 0, 'MX' => 0, 'TXT' => 0];
+    foreach ($files as $file) {
+        $lines = @file($file, FILE_IGNORE_NEW_LINES);
+        if ($lines === false) {
+            error_log('Dashboard - falha ao ler registros DNS: ' . $file);
+            continue;
+        }
+        foreach ($lines as $line) {
+            $trim = trim($line);
+            if ($trim === '' || str_starts_with($trim, ';')) {
+                continue;
+            }
+            if (preg_match('/^\S+\s+IN\s+(A|AAAA|CNAME|MX|TXT)\s+/i', $trim, $match)) {
+                $type = strtoupper($match[1]);
+                $counts[$type] = ($counts[$type] ?? 0) + 1;
+            }
+        }
+    }
+    $counts['total'] = array_sum($counts);
+    return $counts;
+}
 function usageClass(?int $value): string { return $value === null ? 'unavailable' : ($value >= 90 ? 'critical' : ($value >= 75 ? 'warning' : 'normal')); }
 function usageBarWidth(?int $value): int { return $value === null ? 0 : max(0, min(100, $value)); }
 
 $forwardZones = glob('/var/cache/bind/master-aut/*.hosts') ?: [];
 $reverseFiles = glob('/var/cache/bind/master-rev/*') ?: [];
+$dnsRecordCounts = countDnsRecordTypes($forwardZones);
 $zoneInventorySummary = ['servidores' => [], 'divergencias' => 0, 'excecoes_aprovadas' => 0, 'zonas_unicas' => null];
 try {
     $zoneInventorySummary = dns_zones_resumo();
@@ -215,6 +238,7 @@ $uptimeValue = uptimeText();
 </div></section>
 <section class="section"><div class="section-header"><h2>📦 Resumo DNS</h2></div><div class="summary-grid">
 <div class="stat"><div class="icon"><svg class="metric-icon" aria-hidden="true"><use href="#icon-globe"></use></svg></div><div class="label">Domínios</div><div class="value"><?= count($forwardZones) ?></div><small>Zonas forward</small></div>
+<div class="stat"><div class="icon"><svg class="metric-icon" aria-hidden="true"><use href="#icon-records"></use></svg></div><div class="label">Registros DNS</div><div class="value"><?= (int) ($dnsRecordCounts['total'] ?? 0) ?></div><small>A <?= (int) ($dnsRecordCounts['A'] ?? 0) ?> • AAAA <?= (int) ($dnsRecordCounts['AAAA'] ?? 0) ?> • CNAME <?= (int) ($dnsRecordCounts['CNAME'] ?? 0) ?></small></div>
 <div class="stat"><div class="icon"><svg class="metric-icon" aria-hidden="true"><use href="#icon-reverse"></use></svg></div><div class="label">Zonas reversas</div><div class="value"><?= count($reverseFiles) ?></div><small>IPv4 + IPv6</small></div>
 <a class="stat stat-link" href="dns-servers.php"><div class="icon"><svg class="metric-icon" aria-hidden="true"><use href="#icon-server"></use></svg></div><div class="label">Servidores DNS</div><div class="value"><?= $totalDnsServers ?></div><small>NS1 + servidores cadastrados</small></a>
 <a class="stat stat-link" href="dns-servers.php"><div class="icon"><svg class="metric-icon" aria-hidden="true"><use href="#icon-server"></use></svg></div><div class="label">Servidores online</div><div class="value"><?= $onlineDnsServers ?></div><small><?= max(0, $totalDnsServers - $onlineDnsServers) ?> offline</small></a>
