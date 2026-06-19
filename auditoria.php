@@ -310,6 +310,20 @@ foreach ($nomesZonaHistoricos as $nomeZonaHistorico) {
 
 uasort($opcoesServidores, static fn(array $a, array $b): int => strcasecmp($a['label'], $b['label']));
 
+$servidorFiltroResolvido = '';
+if ($servidorFiltro !== '') {
+    foreach ($opcoesServidores as $chaveServidor => $opcaoServidor) {
+        if (
+            $servidorFiltro === $chaveServidor
+            || in_array($servidorFiltro, $opcaoServidor['identificadores'], true)
+        ) {
+            $servidorFiltroResolvido = $chaveServidor;
+            break;
+        }
+    }
+    $servidorFiltro = $servidorFiltroResolvido;
+}
+
 if ($dominio !== '') {
     $where[] = 'dominio LIKE :dominio';
     $params[':dominio'] = '%' . $dominio . '%';
