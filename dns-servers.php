@@ -595,11 +595,16 @@ dialog[id^="edit-server-"] .credential-change[open]>summary{border-bottom:1px so
 dialog[id^="edit-server-"] .credential-change[open]>summary::after{content:"Recolher"}
 dialog[id^="edit-server-"] .credential-change-field{padding:8px 9px}
 dialog[id^="edit-server-"] .credential-change-field label{color:#cbd5e1}
+dialog[id^="edit-server-"] .credential-fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+dialog[id^="edit-server-"] .credential-fields .field-wide{grid-column:1/-1}
+dialog[id^="edit-server-"] .field-label-help{display:flex;align-items:center;gap:5px}
+dialog[id^="edit-server-"] .auth-tooltip{display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;border:1px solid #475569;border-radius:50%;color:#93c5fd;font-size:10px;font-weight:800;cursor:help}
+dialog[id^="edit-server-"] .auth-help{display:block;margin-top:4px;color:#7f8da3;font-size:10px;line-height:1.35}
 dialog[id^="edit-server-"] .server-active{display:flex;align-items:center;gap:8px;min-height:30px;margin:0;padding:0 2px;color:#cbd5e1}
 dialog[id^="edit-server-"] .server-active input{width:auto}
 dialog[id^="edit-server-"] .edit-server-footer{display:flex;justify-content:flex-end;gap:8px;padding:11px 14px;border-top:1px solid #263247;background:#101827}
 dialog[id^="edit-server-"] .edit-server-footer button{min-width:128px}
-@media(max-width:720px){dialog[id^="edit-server-"] .edit-server-sections{grid-template-columns:1fr}dialog[id^="edit-server-"] .edit-server-section.credentials-section{grid-column:auto}dialog[id^="edit-server-"] .edit-server-footer{position:sticky;bottom:0}dialog[id^="edit-server-"] .edit-server-footer button{min-width:0}}
+@media(max-width:720px){dialog[id^="edit-server-"] .edit-server-sections,dialog[id^="edit-server-"] .credential-fields{grid-template-columns:1fr}dialog[id^="edit-server-"] .edit-server-section.credentials-section,dialog[id^="edit-server-"] .credential-fields .field-wide{grid-column:auto}dialog[id^="edit-server-"] .edit-server-footer{position:sticky;bottom:0}dialog[id^="edit-server-"] .edit-server-footer button{min-width:0}}
 </style>
 </head>
 <body>
@@ -721,21 +726,19 @@ $resumoTemDados = (bool) array_filter($resumoTeste, static fn($valor) => $valor 
 <legend>Credenciais administrativas</legend>
 <div class="edit-field-grid">
 <div><label>Usuário administrativo</label><input name="admin_user" value="<?= htmlspecialchars((string) ($servidor['admin_user'] ?? 'root')) ?>" maxlength="32" required></div>
-<div><label>Método de autenticação</label><select name="admin_auth"><option value="senha" <?= (($servidor['admin_auth'] ?? 'senha') === 'senha') ? 'selected' : '' ?>>Senha</option><option value="chave" <?= (($servidor['admin_auth'] ?? 'senha') === 'chave') ? 'selected' : '' ?>>Chave SSH</option></select></div>
-<?php if ($senhaSalva): ?>
-<details class="credential-change"><summary>✓ Credencial SSH salva</summary><div class="credential-change-field"><label>Nova senha SSH</label><input type="password" name="admin_password" autocomplete="new-password"></div></details>
+<div><label class="field-label-help">Método de autenticação <span class="auth-tooltip" tabindex="0" title="Senha: utiliza usuário e senha SSH. Chave SSH: utiliza a chave privada cadastrada." aria-label="Ajuda sobre método de autenticação">?</span></label><select name="admin_auth" data-auth-method><option value="senha" <?= (($servidor['admin_auth'] ?? 'senha') === 'senha') ? 'selected' : '' ?>>Senha</option><option value="chave" <?= (($servidor['admin_auth'] ?? 'senha') === 'chave') ? 'selected' : '' ?>>Chave SSH</option></select><span class="auth-help" data-auth-help><?= (($servidor['admin_auth'] ?? 'senha') === 'chave') ? 'Utiliza a chave privada SSH cadastrada.' : 'Utiliza usuário e senha SSH.' ?></span></div>
+<?php if ($credencialSalva): ?>
+<details class="credential-change"><summary>✓ Credencial SSH salva</summary><div class="credential-change-field credential-fields">
+<div><label>Nova senha SSH</label><input type="password" name="admin_password" autocomplete="new-password"></div>
+<div><label>Nova senha sudo/root alternativa</label><input type="password" name="sudo_password" autocomplete="new-password" placeholder="Vazio para manter ou usar a senha SSH"></div>
+<div class="field-wide"><label>Nova chave SSH administrativa</label><textarea name="admin_key" rows="3" placeholder="Vazio para manter a chave atual"></textarea></div>
+</div></details>
 <?php else: ?>
-<div class="field-wide"><label>Senha SSH</label><input type="password" name="admin_password" autocomplete="new-password"></div>
-<?php endif; ?>
-<?php if ($sudoSalva): ?>
-<details class="credential-change"><summary>✓ Credencial sudo salva</summary><div class="credential-change-field"><label>Nova senha sudo/root alternativa</label><input type="password" name="sudo_password" autocomplete="new-password"></div></details>
-<?php else: ?>
-<div class="field-wide"><label>Senha sudo/root alternativa</label><input type="password" name="sudo_password" autocomplete="new-password" placeholder="Vazio para usar a senha SSH"></div>
-<?php endif; ?>
-<?php if ($chaveSalva): ?>
-<details class="credential-change"><summary>✓ Chave SSH salva</summary><div class="credential-change-field"><label>Nova chave SSH administrativa</label><textarea name="admin_key" rows="3"></textarea></div></details>
-<?php else: ?>
+<div class="credential-fields field-wide">
+<div><label>Senha SSH</label><input type="password" name="admin_password" autocomplete="new-password"></div>
+<div><label>Senha sudo/root alternativa</label><input type="password" name="sudo_password" autocomplete="new-password" placeholder="Vazio para usar a senha SSH"></div>
 <div class="field-wide"><label>Chave SSH administrativa</label><textarea name="admin_key" rows="3" placeholder="Cole a chave privada quando usar autenticação por chave"></textarea></div>
+</div>
 <?php endif; ?>
 </div>
 </fieldset>
@@ -756,5 +759,6 @@ const confirmSecretModal=document.getElementById('credential-confirm-modal');con
 function showAgentConfig(id){const config=document.getElementById(id);if(!config)return;config.hidden=false;const toggle=document.querySelector(`[data-toggle-agent-config="${id}"]`);toggle?.setAttribute('aria-expanded','true');}
 document.querySelectorAll('[data-toggle-agent-config]').forEach(button=>button.addEventListener('click',()=>{const id=button.dataset.toggleAgentConfig||'';const config=document.getElementById(id);if(!config)return;const willShow=config.hidden;config.hidden=!willShow;button.setAttribute('aria-expanded',willShow?'true':'false');if(willShow)setTimeout(()=>config.scrollIntoView({block:'nearest'}),0);}));
 document.querySelectorAll('[data-open-section]').forEach(button=>button.addEventListener('click',()=>{const id=button.dataset.openSection||'';if(document.getElementById(id)?.classList.contains('agent-config-summary'))showAgentConfig(id);}));
+document.querySelectorAll('[data-auth-method]').forEach(select=>{const help=select.parentElement?.querySelector('[data-auth-help]');const update=()=>{if(help)help.textContent=select.value==='chave'?'Utiliza a chave privada SSH cadastrada.':'Utiliza usuário e senha SSH.';};select.addEventListener('change',update);update();});
 document.querySelectorAll('[data-auto-dismiss-result]').forEach(result=>{const details=result.querySelector('details');let dismissTimer;const scheduleDismiss=()=>{clearTimeout(dismissTimer);if(details?.open)return;dismissTimer=setTimeout(()=>{if(details?.open)return;result.classList.add('is-dismissing');setTimeout(()=>result.remove(),300);},6000);};details?.addEventListener('toggle',()=>{if(details.open){clearTimeout(dismissTimer);result.classList.remove('is-dismissing');}else{scheduleDismiss();}});scheduleDismiss();});
 </script><?php require_once __DIR__ . '/includes/session-timeout.php'; ?></body></html>
