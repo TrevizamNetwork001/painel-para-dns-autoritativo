@@ -286,7 +286,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             dns_servers_redirecionar(
                 ($_POST['origem_form'] ?? '') === 'agente'
                     ? 'Configurações do agente salvas.'
-                    : 'Servidor DNS atualizado.'
+                    : '✓ Cadastro do servidor atualizado.'
             );
         }
 
@@ -548,6 +548,58 @@ dialog[id^="tools-server-"] .modal-result details[open] .show-output{display:non
 dialog[id^="tools-server-"] .modal-result details[open] .hide-output{display:inline}
 dialog[id^="tools-server-"] .modal-result .result{margin-top:7px;padding:8px;border-radius:3px}
 @media(max-width:840px){dialog[id^="tools-server-"] .tools-actions,dialog[id^="tools-server-"] .agent-actions{display:flex}dialog[id^="tools-server-"] .tools-actions button,dialog[id^="tools-server-"] .agent-actions button{width:auto}}
+/* Refinos da tela principal de servidores DNS. */
+.metric-strip{gap:8px;margin-bottom:10px}
+.metric-card{padding:7px 10px}
+.metric-label{font-size:10px}
+.metric-value{font-size:18px;line-height:1.15;margin-top:2px}
+.server-list-top{display:block}
+.server-list-domains{display:inline-flex;margin-top:8px;color:#bfdbfe;background:#172554;border-color:#1e3a8a}
+.panel-header{padding:14px 18px 11px}
+.panel-domain-count{display:inline-flex;margin-top:6px;border-radius:999px;background:#172554;border:1px solid #1e3a8a;color:#bfdbfe;padding:4px 9px;font-size:12px;font-weight:800}
+.panel-body{padding-top:12px}
+.action-grid{gap:8px}
+.compact-card{min-height:92px;padding:9px 10px}
+.action-card h3{font-size:14px;margin:4px 0 2px}
+.action-card p{line-height:1.25;margin-bottom:6px}
+.action-open{padding:5px 8px}
+.credentials-card{margin-top:8px;padding:9px 11px}
+.credentials-grid{grid-template-columns:minmax(180px,1fr) minmax(150px,.75fr) auto;gap:12px}
+.credential-state.missing{color:#fde68a}
+.credential-state.missing .credential-check{background:#3b2f13;color:#fde68a}
+.credentials-card .info-label{text-transform:none;letter-spacing:0}
+.credentials-card .info-value{margin-top:3px}
+.credentials-card .credential-actions .secondary{padding:6px 9px;font-size:12px}
+@media(max-width:840px){.metric-strip{grid-template-columns:repeat(2,minmax(0,1fr))}.quick-menu{margin-top:10px}.credentials-grid{grid-template-columns:1fr}}
+/* Modal de cadastro do servidor DNS. */
+dialog[id^="edit-server-"]{width:min(880px,calc(100vw - 34px));border-color:#29364a}
+dialog[id^="edit-server-"] .modal-header{padding:13px 16px}
+dialog[id^="edit-server-"] .modal-header h2{font-size:21px;letter-spacing:-.01em}
+dialog[id^="edit-server-"] .edit-server-subtitle{margin:4px 0 0;color:#94a3b8;font-size:12px}
+dialog[id^="edit-server-"] .modal-content{padding:0}
+dialog[id^="edit-server-"] .edit-server-form{display:block}
+dialog[id^="edit-server-"] .edit-server-sections{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;padding:12px 14px}
+dialog[id^="edit-server-"] .edit-server-section{min-width:0;margin:0;border:1px solid #263247;border-radius:7px;background:#0f172a;padding:10px}
+dialog[id^="edit-server-"] .edit-server-section legend{padding:0 6px;color:#a8b5c7;font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.08em}
+dialog[id^="edit-server-"] .edit-server-section.credentials-section{grid-column:1/-1}
+dialog[id^="edit-server-"] .edit-field-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+dialog[id^="edit-server-"] .edit-field-grid .field-wide{grid-column:1/-1}
+dialog[id^="edit-server-"] label{margin-bottom:4px;font-size:11px}
+dialog[id^="edit-server-"] input,dialog[id^="edit-server-"] select,dialog[id^="edit-server-"] textarea{padding:7px 8px;border-radius:6px}
+dialog[id^="edit-server-"] .description-field{min-height:48px;height:48px;resize:vertical}
+dialog[id^="edit-server-"] .credential-change{grid-column:1/-1;border:1px solid #263247;border-radius:6px;background:#0b1120}
+dialog[id^="edit-server-"] .credential-change>summary{display:flex;align-items:center;justify-content:space-between;gap:10px;list-style:none;padding:8px 9px;cursor:pointer;color:#86efac;font-size:12px;font-weight:800}
+dialog[id^="edit-server-"] .credential-change>summary::-webkit-details-marker{display:none}
+dialog[id^="edit-server-"] .credential-change>summary::after{content:"Alterar";color:#93c5fd;font-size:11px}
+dialog[id^="edit-server-"] .credential-change[open]>summary{border-bottom:1px solid #263247}
+dialog[id^="edit-server-"] .credential-change[open]>summary::after{content:"Recolher"}
+dialog[id^="edit-server-"] .credential-change-field{padding:8px 9px}
+dialog[id^="edit-server-"] .credential-change-field label{color:#cbd5e1}
+dialog[id^="edit-server-"] .server-active{display:flex;align-items:center;gap:8px;min-height:30px;margin:0;padding:0 2px;color:#cbd5e1}
+dialog[id^="edit-server-"] .server-active input{width:auto}
+dialog[id^="edit-server-"] .edit-server-footer{display:flex;justify-content:flex-end;gap:8px;padding:11px 14px;border-top:1px solid #263247;background:#101827}
+dialog[id^="edit-server-"] .edit-server-footer button{min-width:128px}
+@media(max-width:720px){dialog[id^="edit-server-"] .edit-server-sections{grid-template-columns:1fr}dialog[id^="edit-server-"] .edit-server-section.credentials-section{grid-column:auto}dialog[id^="edit-server-"] .edit-server-footer{position:sticky;bottom:0}dialog[id^="edit-server-"] .edit-server-footer button{min-width:0}}
 </style>
 </head>
 <body>
@@ -596,10 +648,10 @@ $resumoTemDados = (bool) array_filter($resumoTeste, static fn($valor) => $valor 
 </section>
 <?php endif; ?>
 <section class="metric-strip" aria-label="Resumo dos servidores DNS"><div class="metric-card"><span class="metric-label">Total remotos</span><span class="metric-value"><?= (int) $totalServidoresRemotos ?></span></div><div class="metric-card"><span class="metric-label">Online</span><span class="metric-value"><?= (int) $totalOnline ?></span></div><div class="metric-card"><span class="metric-label">Slaves</span><span class="metric-value"><?= (int) $totalSlaves ?></span></div><div class="metric-card"><span class="metric-label">Ultimo inventario</span><span class="metric-value" style="font-size:16px"><?= htmlspecialchars($ultimoInventario) ?></span></div></section>
-<section class="workspace"><aside class="sidebar"><div class="sidebar-head"><h2>Servidores remotos</h2><span class="pill"><?= (int) $totalServidoresRemotos ?></span></div><input class="server-filter" type="search" placeholder="Buscar servidor..." data-server-filter><?php if (!$servidores): ?><div class="empty-state">Nenhum servidor remoto cadastrado.</div><?php else: ?><div class="server-list"><?php foreach ($servidores as $servidor): ?><?php $serverId = (int) $servidor['id']; $online = ($servidor['ultimo_status'] ?? '') === 'online'; $bindOk = ($servidor['bind_status'] ?? '') === 'ok'; $agentOk = ($servidor['agente_status'] ?? '') === 'instalado'; $ipPrincipal = trim((string) ($servidor['ip4'] ?: $servidor['hostname'])); $inventario = $inventarioPorServidor[$serverId] ?? null; $totalDominios = (int) ($inventario['total_zones'] ?? 0); ?><button type="button" class="server-list-item" data-server-target="server-panel-<?= $serverId ?>" data-server-id="<?= $serverId ?>" data-filter-text="<?= htmlspecialchars(strtolower($servidor['nome'] . ' ' . $ipPrincipal . ' ' . $servidor['hostname'])) ?>"><span class="server-list-top"><span class="server-list-name"><?= htmlspecialchars($servidor['nome']) ?></span><span class="pill <?= $online ? 'ok' : 'bad' ?>"><?= $online ? 'Online' : 'Falha' ?></span></span><span class="server-list-meta"><?= htmlspecialchars($ipPrincipal) ?></span><span class="badge-row"><?php if ($totalDominios > 0): ?><span class="pill ok"><?= (int) $totalDominios ?> <?= $totalDominios === 1 ? 'domínio' : 'domínios' ?></span><?php else: ?><span class="pill warn">sem domínio cadastrado</span><?php endif; ?><span class="pill"><?= htmlspecialchars(strtoupper((string) $servidor['tipo'])) ?></span><span class="pill <?= $bindOk ? 'ok' : 'bad' ?>"><?= $bindOk ? 'BIND OK' : 'BIND pendente' ?></span><span class="pill <?= $agentOk ? 'ok' : 'bad' ?>"><?= $agentOk ? 'Agente instalado' : 'Agente ausente' ?></span></span></button><?php endforeach; ?></div><?php endif; ?></aside>
+<section class="workspace"><aside class="sidebar"><div class="sidebar-head"><h2>Servidores remotos</h2><span class="pill"><?= (int) $totalServidoresRemotos ?></span></div><input class="server-filter" type="search" placeholder="Buscar servidor..." data-server-filter><?php if (!$servidores): ?><div class="empty-state">Nenhum servidor remoto cadastrado.</div><?php else: ?><div class="server-list"><?php foreach ($servidores as $servidor): ?><?php $serverId = (int) $servidor['id']; $online = ($servidor['ultimo_status'] ?? '') === 'online'; $bindOk = ($servidor['bind_status'] ?? '') === 'ok'; $agentOk = ($servidor['agente_status'] ?? '') === 'instalado'; $ipPrincipal = trim((string) ($servidor['ip4'] ?: $servidor['hostname'])); $inventario = $inventarioPorServidor[$serverId] ?? null; $totalDominios = (int) ($inventario['total_zones'] ?? 0); ?><button type="button" class="server-list-item" data-server-target="server-panel-<?= $serverId ?>" data-server-id="<?= $serverId ?>" data-filter-text="<?= htmlspecialchars(strtolower($servidor['nome'] . ' ' . $ipPrincipal . ' ' . $servidor['hostname'])) ?>"><span class="server-list-top"><span class="server-list-name"><?= htmlspecialchars($servidor['nome']) ?></span></span><span class="server-list-meta"><?= htmlspecialchars($ipPrincipal) ?></span><span class="pill server-list-domains"><?= (int) $totalDominios ?> <?= $totalDominios === 1 ? 'domínio' : 'domínios' ?></span></button><?php endforeach; ?></div><?php endif; ?></aside>
 <div class="main-panels"><?php if (!$servidores): ?><section class="panel active"><div class="empty-state">Cadastre um servidor para exibir o painel operacional.</div></section><?php endif; ?>
-<?php foreach ($servidores as $servidor): ?><?php $serverId = (int) $servidor['id']; $online = ($servidor['ultimo_status'] ?? '') === 'online'; $bindOk = ($servidor['bind_status'] ?? '') === 'ok'; $agentOk = ($servidor['agente_status'] ?? '') === 'instalado'; $ipPrincipal = trim((string) ($servidor['ip4'] ?: $servidor['hostname'])); $credencialSalva = dns_server_tem_credencial_admin($servidor); $senhaSalva = dns_server_tem_senha_admin($servidor); $sudoSalva = !empty($servidor['admin_sudo_secret']); $chaveSalva = !empty($servidor['admin_key_secret']) || (($servidor['admin_auth'] ?? 'senha') === 'chave' && !empty($servidor['admin_secret']) && empty($servidor['admin_key_secret'])); $credencialData = dns_servers_formatar_timestamp_local($servidor['admin_secret_updated_at'] ?? null); ?>
-<section class="panel" id="server-panel-<?= $serverId ?>" data-server-id="<?= $serverId ?>" data-default-open="<?= strcasecmp((string) $servidor['nome'], 'NS03') === 0 ? '1' : '0' ?>"><header class="panel-header"><div class="panel-main-line"><div><h2><?= htmlspecialchars($servidor['nome']) ?></h2><div class="panel-meta"><?= htmlspecialchars($ipPrincipal) ?> - SSH <?= htmlspecialchars((string) $servidor['ssh_user']) ?>:<?= (int) $servidor['ssh_port'] ?></div><div class="badge-row"><span class="pill <?= $online ? 'ok' : 'bad' ?>"><?= $online ? 'Online' : 'Falha' ?></span><span class="pill"><?= htmlspecialchars(strtoupper((string) $servidor['tipo'])) ?></span><span class="pill <?= $bindOk ? 'ok' : 'bad' ?>"><?= $bindOk ? 'BIND OK' : 'BIND pendente' ?></span><span class="pill <?= $agentOk ? 'ok' : 'bad' ?>"><?= $agentOk ? 'Agente instalado' : 'Agente ausente' ?></span></div></div><details class="quick-menu"><summary>Ações</summary><div class="quick-menu-box">
+<?php foreach ($servidores as $servidor): ?><?php $serverId = (int) $servidor['id']; $online = ($servidor['ultimo_status'] ?? '') === 'online'; $bindOk = ($servidor['bind_status'] ?? '') === 'ok'; $agentOk = ($servidor['agente_status'] ?? '') === 'instalado'; $ipPrincipal = trim((string) ($servidor['ip4'] ?: $servidor['hostname'])); $inventario = $inventarioPorServidor[$serverId] ?? null; $totalDominios = (int) ($inventario['total_zones'] ?? 0); $credencialSalva = dns_server_tem_credencial_admin($servidor); $senhaSalva = dns_server_tem_senha_admin($servidor); $sudoSalva = !empty($servidor['admin_sudo_secret']); $chaveSalva = !empty($servidor['admin_key_secret']) || (($servidor['admin_auth'] ?? 'senha') === 'chave' && !empty($servidor['admin_secret']) && empty($servidor['admin_key_secret'])); $credencialData = dns_servers_formatar_timestamp_local($servidor['admin_secret_updated_at'] ?? null); ?>
+<section class="panel" id="server-panel-<?= $serverId ?>" data-server-id="<?= $serverId ?>" data-default-open="<?= strcasecmp((string) $servidor['nome'], 'NS03') === 0 ? '1' : '0' ?>"><header class="panel-header"><div class="panel-main-line"><div><h2><?= htmlspecialchars($servidor['nome']) ?></h2><div class="panel-meta"><?= htmlspecialchars($ipPrincipal) ?></div><div class="panel-domain-count"><?= (int) $totalDominios ?> <?= $totalDominios === 1 ? 'domínio' : 'domínios' ?></div><div class="badge-row"><span class="pill <?= $online ? 'ok' : 'bad' ?>"><?= $online ? 'Online' : 'Falha' ?></span><span class="pill"><?= htmlspecialchars(strtoupper((string) $servidor['tipo'])) ?></span><span class="pill <?= $bindOk ? 'ok' : 'bad' ?>"><?= $bindOk ? 'BIND OK' : 'BIND pendente' ?></span><span class="pill <?= $agentOk ? 'ok' : 'bad' ?>"><?= $agentOk ? 'Agente instalado' : 'Agente ausente' ?></span></div></div><details class="quick-menu"><summary>Ações</summary><div class="quick-menu-box">
 <div class="quick-group"><span class="quick-title">Diagnósticos</span>
 <form method="POST"><?= csrf_field() ?><input type="hidden" name="acao" value="testar_ssh"><input type="hidden" name="id" value="<?= $serverId ?>"><button type="submit" class="menu-action"><span class="icon" aria-hidden="true">🔐</span><span>Testar SSH</span></button></form>
 <form method="POST"><?= csrf_field() ?><input type="hidden" name="acao" value="testar_bind"><input type="hidden" name="id" value="<?= $serverId ?>"><button type="submit" class="menu-action"><span class="icon" aria-hidden="true">🌐</span><span>Testar BIND</span></button></form>
@@ -617,7 +669,7 @@ $resumoTemDados = (bool) array_filter($resumoTeste, static fn($valor) => $valor 
 </div>
 </div></details></div></header>
 <div class="panel-body"><div class="action-grid"><div class="action-card compact-card"><span class="action-kicker">Cadastro</span><h3>Dados do servidor</h3><p>Editar nome, IPs, porta e descricao.</p><button type="button" class="secondary action-open" data-open-dialog="edit-server-<?= $serverId ?>">Abrir cadastro</button></div><div class="action-card compact-card"><span class="action-kicker">Ferramentas</span><h3>Diagnostico, agente e manutencao</h3><p>Executar testes, gerenciar agente e acessar acoes raras.</p><button type="button" class="secondary action-open" data-open-dialog="tools-server-<?= $serverId ?>">Abrir ferramentas</button></div></div>
-<section class="credentials-card"><h3>Credenciais</h3><div class="credentials-grid"><div class="credential-state"><span class="credential-check">✓</span><span><?= $credencialSalva ? 'Salvas e criptografadas' : 'Nao cadastradas' ?></span></div><div><span class="info-label">Status</span><span class="info-value"><?= $credencialSalva ? 'Credenciais validas' : 'Ausentes' ?></span></div><div><span class="info-label">Atualizado em</span><span class="info-value"><?= htmlspecialchars($credencialSalva ? $credencialData : 'Nunca') ?></span></div><div class="credential-actions"><button type="button" class="secondary" data-view-secret="<?= $serverId ?>" data-secret-server="<?= htmlspecialchars($servidor['nome'], ENT_QUOTES, 'UTF-8') ?>" data-secret-user="<?= htmlspecialchars((string) ($servidor['admin_user'] ?? 'root'), ENT_QUOTES, 'UTF-8') ?>" <?= $senhaSalva ? '' : 'disabled' ?>>Visualizar senha salva</button></div></div><p class="credentials-note">As credenciais sao criptografadas localmente e usadas apenas em operacoes autorizadas do painel.</p></section><footer class="technical-footer"><span>Funcao: <strong><?= htmlspecialchars(strtoupper((string) $servidor['tipo'])) ?></strong></span><span>Usuario administrativo: <strong><?= htmlspecialchars((string) ($servidor['admin_user'] ?? 'root')) ?></strong></span><span>Autenticacao: <strong><?= htmlspecialchars((string) ($servidor['admin_auth'] ?? 'senha')) ?></strong></span><span>Porta SSH: <strong><?= (int) $servidor['ssh_port'] ?></strong></span></footer>
+<section class="credentials-card" aria-label="Credenciais"><div class="credentials-grid"><div class="credential-state <?= $credencialSalva ? '' : 'missing' ?>"><span class="credential-check"><?= $credencialSalva ? '✓' : '!' ?></span><span><?= $credencialSalva ? 'Credenciais válidas' : 'Credenciais ausentes' ?></span></div><div><span class="info-label">Atualizado em:</span><span class="info-value"><?= htmlspecialchars($credencialSalva ? $credencialData : 'Nunca') ?></span></div><div class="credential-actions"><button type="button" class="secondary" data-view-secret="<?= $serverId ?>" data-secret-server="<?= htmlspecialchars($servidor['nome'], ENT_QUOTES, 'UTF-8') ?>" data-secret-user="<?= htmlspecialchars((string) ($servidor['admin_user'] ?? 'root'), ENT_QUOTES, 'UTF-8') ?>" <?= $senhaSalva ? '' : 'disabled' ?>>Visualizar senha salva</button></div></div></section><footer class="technical-footer"><span>Funcao: <strong><?= htmlspecialchars(strtoupper((string) $servidor['tipo'])) ?></strong></span><span>Usuario administrativo: <strong><?= htmlspecialchars((string) ($servidor['admin_user'] ?? 'root')) ?></strong></span><span>Autenticacao: <strong><?= htmlspecialchars((string) ($servidor['admin_auth'] ?? 'senha')) ?></strong></span><span>Porta SSH: <strong><?= (int) $servidor['ssh_port'] ?></strong></span></footer>
 <dialog class="modal server-modal" id="tools-server-<?= $serverId ?>">
 <div class="modal-header"><div><h2>Ferramentas • <?= htmlspecialchars($servidor['nome']) ?></h2></div><button class="close-button" type="button" data-close-dialog>Fechar</button></div>
 <div class="modal-content">
@@ -642,7 +694,56 @@ $resumoTemDados = (bool) array_filter($resumoTeste, static fn($valor) => $valor 
 </div>
 </dialog>
 <dialog class="modal server-modal agent-manager-modal" id="agent-server-<?= $serverId ?>"><div class="modal-header"><div><h2>Agente • <?= htmlspecialchars($servidor['nome']) ?></h2></div><button class="close-button" type="button" data-close-dialog>Fechar</button></div><div class="modal-content" data-agent-config-host="agent-config-<?= $serverId ?>"></div></dialog>
-<dialog class="modal server-modal" id="edit-server-<?= $serverId ?>"><div class="modal-header"><div><h2>Cadastro - <?= htmlspecialchars($servidor['nome']) ?></h2><p class="panel-meta" style="margin:4px 0 0">Dados salvos no painel</p></div><button class="close-button" type="button" data-close-dialog>Fechar</button></div><div class="modal-content"><form method="POST" class="form-grid"><?= csrf_field() ?><input type="hidden" name="acao" value="atualizar"><input type="hidden" name="id" value="<?= $serverId ?>"><div><label>Nome</label><input name="nome" value="<?= htmlspecialchars($servidor['nome']) ?>" maxlength="40" required></div><div><label>Hostname</label><input name="hostname" value="<?= htmlspecialchars($servidor['hostname']) ?>" maxlength="253" required></div><div><label>IPv4</label><input name="ip4" value="<?= htmlspecialchars((string) $servidor['ip4']) ?>" maxlength="45"></div><div><label>IPv6</label><input name="ip6" value="<?= htmlspecialchars((string) $servidor['ip6']) ?>" maxlength="45"></div><div><label>Tipo</label><select name="tipo"><option value="slave">Slave</option></select></div><div><label>Porta SSH</label><input type="number" name="ssh_port" value="<?= (int) $servidor['ssh_port'] ?>" min="1" max="65535" required></div><div><label>Usuario administrativo</label><input name="admin_user" value="<?= htmlspecialchars((string) ($servidor['admin_user'] ?? 'root')) ?>" maxlength="32" required></div><div><label>Metodo de autenticacao</label><select name="admin_auth"><option value="senha" <?= (($servidor['admin_auth'] ?? 'senha') === 'senha') ? 'selected' : '' ?>>Senha</option><option value="chave" <?= (($servidor['admin_auth'] ?? 'senha') === 'chave') ? 'selected' : '' ?>>Chave SSH</option></select></div><div><label>Usuario gerenciado</label><input name="ssh_user" value="<?= htmlspecialchars($servidor['ssh_user']) ?>" maxlength="32" required></div><label class="checkbox"><input type="checkbox" name="ativo" value="1" <?= $servidor['ativo'] ? 'checked' : '' ?>> Ativo</label><div><label>Senha SSH</label><input type="password" name="admin_password" autocomplete="new-password" placeholder="<?= $senhaSalva ? 'senha salva; deixe vazio para manter' : '' ?>"></div><div><label>Senha sudo/root alternativa</label><input type="password" name="sudo_password" autocomplete="new-password" placeholder="<?= $sudoSalva ? 'senha salva; deixe vazio para manter' : 'deixe vazio para usar a senha SSH' ?>"></div><div class="wide"><label>Chave SSH administrativa</label><textarea name="admin_key" placeholder="<?= $chaveSalva ? 'chave salva; deixe vazio para manter' : 'Cole a chave privada quando usar autenticacao por chave' ?>"></textarea></div><div class="wide"><label>Descricao</label><textarea name="descricao" maxlength="500"><?= htmlspecialchars((string) $servidor['descricao']) ?></textarea></div><button type="submit">Salvar cadastro</button></form></div></dialog>
+<dialog class="modal server-modal" id="edit-server-<?= $serverId ?>">
+<div class="modal-header"><div><h2><?= htmlspecialchars($servidor['nome']) ?></h2><p class="edit-server-subtitle"><?= htmlspecialchars(ucfirst((string) $servidor['tipo'])) ?> DNS • <?= htmlspecialchars($ipPrincipal) ?></p></div><button class="close-button" type="button" data-close-dialog>Fechar</button></div>
+<div class="modal-content">
+<form method="POST" class="edit-server-form"><?= csrf_field() ?><input type="hidden" name="acao" value="atualizar"><input type="hidden" name="id" value="<?= $serverId ?>"><input type="hidden" name="ssh_user" value="<?= htmlspecialchars((string) $servidor['ssh_user'], ENT_QUOTES, 'UTF-8') ?>">
+<div class="edit-server-sections">
+<fieldset class="edit-server-section">
+<legend>Identificação</legend>
+<div class="edit-field-grid">
+<div><label>Nome</label><input name="nome" value="<?= htmlspecialchars($servidor['nome']) ?>" maxlength="40" required></div>
+<div><label>Tipo</label><select name="tipo"><option value="slave">Slave</option></select></div>
+<div class="field-wide"><label>Descrição</label><textarea class="description-field" name="descricao" maxlength="500" rows="2"><?= htmlspecialchars((string) $servidor['descricao']) ?></textarea></div>
+<label class="server-active field-wide"><input type="checkbox" name="ativo" value="1" <?= $servidor['ativo'] ? 'checked' : '' ?>> Servidor ativo</label>
+</div>
+</fieldset>
+<fieldset class="edit-server-section">
+<legend>Rede</legend>
+<div class="edit-field-grid">
+<div class="field-wide"><label>Hostname</label><input name="hostname" value="<?= htmlspecialchars($servidor['hostname']) ?>" maxlength="253" required></div>
+<div><label>IPv4</label><input name="ip4" value="<?= htmlspecialchars((string) $servidor['ip4']) ?>" maxlength="45"></div>
+<div><label>IPv6</label><input name="ip6" value="<?= htmlspecialchars((string) $servidor['ip6']) ?>" maxlength="45"></div>
+<div><label>Porta SSH</label><input type="number" name="ssh_port" value="<?= (int) $servidor['ssh_port'] ?>" min="1" max="65535" required></div>
+</div>
+</fieldset>
+<fieldset class="edit-server-section credentials-section">
+<legend>Credenciais administrativas</legend>
+<div class="edit-field-grid">
+<div><label>Usuário administrativo</label><input name="admin_user" value="<?= htmlspecialchars((string) ($servidor['admin_user'] ?? 'root')) ?>" maxlength="32" required></div>
+<div><label>Método de autenticação</label><select name="admin_auth"><option value="senha" <?= (($servidor['admin_auth'] ?? 'senha') === 'senha') ? 'selected' : '' ?>>Senha</option><option value="chave" <?= (($servidor['admin_auth'] ?? 'senha') === 'chave') ? 'selected' : '' ?>>Chave SSH</option></select></div>
+<?php if ($senhaSalva): ?>
+<details class="credential-change"><summary>✓ Credencial SSH salva</summary><div class="credential-change-field"><label>Nova senha SSH</label><input type="password" name="admin_password" autocomplete="new-password"></div></details>
+<?php else: ?>
+<div class="field-wide"><label>Senha SSH</label><input type="password" name="admin_password" autocomplete="new-password"></div>
+<?php endif; ?>
+<?php if ($sudoSalva): ?>
+<details class="credential-change"><summary>✓ Credencial sudo salva</summary><div class="credential-change-field"><label>Nova senha sudo/root alternativa</label><input type="password" name="sudo_password" autocomplete="new-password"></div></details>
+<?php else: ?>
+<div class="field-wide"><label>Senha sudo/root alternativa</label><input type="password" name="sudo_password" autocomplete="new-password" placeholder="Vazio para usar a senha SSH"></div>
+<?php endif; ?>
+<?php if ($chaveSalva): ?>
+<details class="credential-change"><summary>✓ Chave SSH salva</summary><div class="credential-change-field"><label>Nova chave SSH administrativa</label><textarea name="admin_key" rows="3"></textarea></div></details>
+<?php else: ?>
+<div class="field-wide"><label>Chave SSH administrativa</label><textarea name="admin_key" rows="3" placeholder="Cole a chave privada quando usar autenticação por chave"></textarea></div>
+<?php endif; ?>
+</div>
+</fieldset>
+</div>
+<div class="edit-server-footer"><button type="button" class="secondary" data-close-dialog>Cancelar</button><button type="submit">Salvar alterações</button></div>
+</form>
+</div>
+</dialog>
 
 </div></section><?php endforeach; ?></div></section>
 <dialog class="modal" id="add-server-modal"><div class="modal-header"><div><h2>Adicionar servidor</h2><p class="panel-meta" style="margin:4px 0 0">Cadastrar, adotar ou provisionar novo NS</p></div><button class="close-button" type="button" data-close-add>Fechar</button></div><div class="modal-content"><form method="POST" class="form-grid"><?= csrf_field() ?><input type="hidden" name="acao" value="cadastrar"><div class="wide option-row"><label class="checkbox"><input type="radio" name="modo_instalacao" value="adotar" checked> Adotar servidor existente</label><label class="checkbox"><input type="radio" name="modo_instalacao" value="provisionar"> Provisionar servidor novo</label></div><div class="wide hint">Para provisionar Debian limpo sem sudo, use login root ou informe a senha root alternativa. Usuario comum sem sudo nao consegue provisionar servidor limpo.</div><div><label>Nome</label><input name="nome" maxlength="40" placeholder="NS2" required></div><div><label>Hostname/IP</label><input name="hostname" maxlength="253" placeholder="ns2.exemplo.com.br" required></div><div><label>IPv4</label><input name="ip4" maxlength="45" placeholder="203.0.113.2"></div><div><label>IPv6</label><input name="ip6" maxlength="45" placeholder="2001:db8::2"></div><div><label>Funcao</label><select name="tipo"><option value="slave">Slave</option></select></div><div><label>Porta SSH</label><input type="number" name="ssh_port" value="22" min="1" max="65535" required></div><div><label>Usuario administrativo</label><input name="admin_user" value="root" maxlength="32" required></div><div><label>Metodo de autenticacao</label><select name="admin_auth"><option value="senha">Senha</option><option value="chave">Chave SSH</option></select></div><div><label>Senha SSH</label><input type="password" name="admin_password" autocomplete="new-password"></div><div><label>Senha sudo/root alternativa</label><input type="password" name="sudo_password" autocomplete="new-password" placeholder="deixe vazio para usar a senha SSH"></div><label class="checkbox"><input type="checkbox" name="ativo" value="1" checked> Ativo</label><div><label>Usuario gerenciado</label><input name="ssh_user" value="dns-sync" maxlength="32" readonly></div><div class="wide"><label>Chave SSH administrativa</label><textarea name="admin_key" placeholder="Cole a chave privada quando usar autenticacao por chave"></textarea></div><div class="wide"><label>Descricao</label><textarea name="descricao" maxlength="500" placeholder="Servidor DNS secundario"></textarea></div><button type="submit">Adicionar servidor</button></form></div></dialog>
