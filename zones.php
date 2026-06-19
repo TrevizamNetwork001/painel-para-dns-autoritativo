@@ -166,6 +166,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $classificacao = (string) ($_POST['classificacao'] ?? 'revisar');
             $observacaoZona = (string) ($_POST['observacao_zona'] ?? '');
             $observacaoServidor = (string) ($_POST['observacao_servidor'] ?? '');
+            $mensagemGovernanca = match ($classificacao) {
+                'legitima' => '✓ Divergência marcada como Legítima.',
+                'ignorada' => '✓ Divergência marcada como Ignorada.',
+                'revisar' => '✓ Divergência enviada para Revisão.',
+                default => '✓ Governança da divergência atualizada.',
+            };
             $linha = dns_zones_salvar_governanca(
                 $zona,
                 $serverKey,
@@ -198,7 +204,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 header('Content-Type: application/json; charset=UTF-8');
                 echo json_encode([
                     'ok' => true,
-                    'mensagem' => 'Governanca da divergencia atualizada.',
+                    'mensagem' => $mensagemGovernanca,
                     'linha' => $linhaAtualizada,
                     'resumo' => [
                         'divergencias' => (int) $resumoAtualizado['divergencias'],
@@ -208,7 +214,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 exit;
             }
 
-            zones_redirect('Governanca da divergencia atualizada.');
+            zones_redirect($mensagemGovernanca);
         }
 
         if ($acao === 'salvar_observacao_servidor') {
@@ -706,6 +712,17 @@ document.querySelectorAll('[data-toast]').forEach(toast=>{
         setTimeout(()=>toast.remove(),250);
     },5000);
 });
+function showToast(message,type='success'){
+    const toast=document.createElement('div');
+    toast.className=`message ${type} toast-message`;
+    toast.setAttribute(type==='error'?'role':'aria-live',type==='error'?'alert':'polite');
+    toast.textContent=message;
+    document.body.append(toast);
+    setTimeout(()=>{
+        toast.classList.add('is-hiding');
+        setTimeout(()=>toast.remove(),250);
+    },5000);
+}
 
 const zoneDialog=document.getElementById('zone-dialog');
 const governanceForm=document.getElementById('governance-form');
@@ -831,9 +848,14 @@ governanceForm.addEventListener('submit',async event=>{
         }
         governanceFeedback.textContent=data.mensagem;
         governanceFeedback.className='governance-feedback ok';
+        showToast(data.mensagem,'success');
+        setTimeout(()=>{
+            if(zoneDialog.open)zoneDialog.close();
+        },400);
     }catch(error){
         governanceFeedback.textContent=error.message||'Nao foi possivel salvar a governanca.';
         governanceFeedback.className='governance-feedback error';
+        showToast('✗ Falha ao atualizar governança da divergência.','error');
     }finally{
         governanceSubmit.disabled=false;
     }
