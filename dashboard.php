@@ -110,11 +110,24 @@ function auditTarget(array $event): string {
     if ($name !== '' && !str_ends_with(strtolower($name), '.rev6') && !preg_match('/^[0-9a-f](?:\.[0-9a-f]){7,}$/i', $name)) return $name;
     return str_contains((string) ($event['acao'] ?? ''), 'PTR_IPV6') ? 'Registro reverso IPv6' : '-';
 }
+function auditDrilldownUrl(array $filters): string {
+    return 'auditoria.php?' . http_build_query($filters);
+}
+function auditTargetDrilldown(array $event): ?string {
+    $domain = trim((string) ($event['dominio'] ?? ''));
+    if ($domain !== '') return auditDrilldownUrl(['dominio' => preg_replace('/\.(?:rev6|rev)$/i', '', $domain)]);
+    $type = (string) ($event['tipo_registro'] ?? '');
+    $server = trim((string) ($event['nome_registro'] ?? ''));
+    if (in_array($type, ['DNS_SERVER', 'DNS_ZONE'], true) && $server !== '' && strcasecmp($server, 'inventario') !== 0) {
+        return auditDrilldownUrl(['servidor' => $server]);
+    }
+    return null;
+}
 function usageClass(?int $value): string { return $value === null ? 'unavailable' : ($value >= 90 ? 'critical' : ($value >= 75 ? 'warning' : 'normal')); }
 
 $auditEvents = []; $auditUnavailable = false;
 try {
-    $auditEvents = db()->query("SELECT usuario, acao, dominio, nome_registro, status, criado_em FROM audit_logs ORDER BY id DESC LIMIT 10")->fetchAll(PDO::FETCH_ASSOC);
+    $auditEvents = db()->query("SELECT usuario, acao, dominio, tipo_registro, nome_registro, status, criado_em FROM audit_logs ORDER BY id DESC LIMIT 10")->fetchAll(PDO::FETCH_ASSOC);
 } catch (Throwable $e) { $auditUnavailable = true; error_log('Dashboard - falha na auditoria: ' . $e->getMessage()); }
 $forwardZones = glob('/var/cache/bind/master-aut/*.hosts') ?: [];
 $reverseFiles = glob('/var/cache/bind/master-rev/*') ?: [];
@@ -223,7 +236,7 @@ $serverOperationalRows[0]['ip'] = $serverIp;
 .section{background:#071226;border:1px solid #1e293b;border-radius:16px;padding:25px;margin-bottom:25px;box-shadow:0 0 20px #0004}.section-header{display:flex;justify-content:space-between;align-items:center;gap:15px;margin-bottom:18px}.section-header h2{font-size:18px;margin:0}.section-link{color:#38bdf8;text-decoration:none;font-weight:bold;font-size:14px}
 .summary-grid,.inventory-grid,.recent-grid,.quick-grid{display:grid;gap:14px}.summary-grid,.inventory-grid,.recent-grid{grid-template-columns:repeat(4,minmax(0,1fr))}.quick-grid{grid-template-columns:repeat(6,minmax(0,1fr))}.stat{background:#020617;border:1px solid #1e293b;border-radius:14px;padding:16px;min-height:112px}.stat-link{display:block;color:inherit;text-decoration:none;cursor:pointer;transition:transform .15s ease}.stat-link:hover,.stat-link:focus{transform:translateY(-2px);outline:none}.stat .icon{font-size:24px;margin-bottom:8px}.stat .label{color:#94a3b8;font-size:11px;text-transform:uppercase}.stat .value{font-size:24px;font-weight:bold;color:#38bdf8;margin-top:7px;overflow-wrap:anywhere}.stat .value.unavailable{font-size:16px;color:#94a3b8}.stat small{display:block;color:#64748b;margin-top:7px}
 .metric-icon{display:block;width:27px;height:27px;color:#38bdf8}
-.activity-table{width:100%;border-collapse:collapse}.activity-table th,.activity-table td{padding:11px 10px;border-bottom:1px solid #1e293b;text-align:left;font-size:13px;vertical-align:top}.activity-table th{color:#94a3b8;font-size:12px;text-transform:uppercase}.activity-status{font-weight:bold}.activity-status.ok{color:#4ade80}.activity-status.error{color:#f87171}.empty{color:#94a3b8;margin:0}
+.activity-table{width:100%;border-collapse:collapse}.activity-table th,.activity-table td{padding:11px 10px;border-bottom:1px solid #1e293b;text-align:left;font-size:13px;vertical-align:top}.activity-table th{color:#94a3b8;font-size:12px;text-transform:uppercase}.activity-table tbody tr{cursor:pointer;transition:background-color .15s ease}.activity-table tbody tr:hover,.activity-table tbody tr:focus-within{background:#0f172a}.activity-table td a{display:block;color:inherit;text-decoration:none}.activity-table td a:hover,.activity-table td a:focus{color:#38bdf8;outline:none}.activity-status{font-weight:bold}.activity-status.ok{color:#4ade80}.activity-status.error{color:#f87171}.empty{color:#94a3b8;margin:0}
 .server-list{display:grid;gap:8px}.server-row{display:grid;grid-template-columns:minmax(120px,.7fr) minmax(140px,1fr) 90px minmax(150px,1fr);gap:12px;align-items:center;background:#020617;border:1px solid #1e293b;border-radius:10px;padding:11px 13px}.server-name{font-weight:800}.server-ip,.server-updated{color:#94a3b8;font-size:12px}.status-pill{display:inline-flex;justify-content:center;border-radius:999px;padding:4px 8px;font-size:11px;font-weight:800}.status-pill.online{background:#123326;color:#86efac}.status-pill.offline{background:#3a1418;color:#fca5a5}.quick-link{display:block;min-height:82px;background:#020617;border:1px solid #1e293b;border-radius:12px;padding:14px;color:#e2e8f0;text-decoration:none;transition:.2s}.quick-link:hover,.quick-link:focus{border-color:#38bdf8;transform:translateY(-2px);outline:none}.quick-link strong{display:block;margin-top:8px;font-size:13px}.quick-link small{display:block;color:#64748b;margin-top:5px;font-size:11px}.menu-overlay{display:none}
 @media(max-width:1250px){.summary-grid,.inventory-grid,.recent-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.quick-grid{grid-template-columns:repeat(3,minmax(0,1fr))}}
 @media(max-width:760px){.menu-toggle{display:block}.sidebar{transform:translateX(-100%);transition:transform .2s;width:min(300px,86vw)}.sidebar.open{transform:translateX(0)}.menu-overlay{position:fixed;inset:0;background:#020617b8;z-index:10}.menu-overlay.open{display:block}.main-content{margin-left:0;padding:70px 14px 20px}.topbar,.section-header{align-items:flex-start;flex-direction:column}.topbar-info{justify-content:flex-start;width:100%}.info-badge{flex:1 1 145px}.section{padding:18px}.summary-grid,.inventory-grid,.recent-grid,.quick-grid{grid-template-columns:1fr}.server-row{grid-template-columns:1fr;gap:5px}.activity-table thead{display:none}.activity-table,.activity-table tbody,.activity-table tr,.activity-table td{display:block;width:100%}.activity-table tr{background:#020617;border:1px solid #1e293b;border-radius:12px;padding:9px 12px;margin-bottom:12px}.activity-table td{display:grid;grid-template-columns:90px 1fr;gap:10px;border:0;padding:6px 0}.activity-table td:before{content:attr(data-label);color:#94a3b8;font-size:11px;text-transform:uppercase;font-weight:bold}}
@@ -289,8 +302,8 @@ $serverOperationalRows[0]['ip'] = $serverIp;
 </div></section>
 <section class="section"><div class="section-header"><h2>📋 Auditoria recente</h2><a class="section-link" href="auditoria.php">Ver auditoria completa</a></div>
 <?php if ($auditUnavailable): ?><p class="empty">As atividades estão temporariamente indisponíveis.</p><?php elseif (!$auditEvents): ?><p class="empty">Nenhuma atividade registrada.</p><?php else: ?>
-<table class="activity-table"><thead><tr><th>Data</th><th>Ação</th><th>Domínio</th><th>Status</th></tr></thead><tbody>
-<?php foreach ($auditEvents as $event): ?><tr><td data-label="Data"><?= htmlspecialchars(auditDate((string)$event['criado_em'])) ?></td><td data-label="Ação"><?= htmlspecialchars(auditAction((string)$event['acao'])) ?></td><td data-label="Domínio"><?= htmlspecialchars(auditTarget($event)) ?></td><td data-label="Status" class="activity-status <?= $event['status']==='OK'?'ok':'error' ?>"><?= htmlspecialchars((string)$event['status']) ?></td></tr><?php endforeach; ?>
+<table class="activity-table"><thead><tr><th>Data</th><th>Ação</th><th>Domínio / Servidor</th><th>Status</th></tr></thead><tbody>
+<?php foreach ($auditEvents as $event): ?><?php $actionUrl = auditDrilldownUrl(['acao' => (string) $event['acao']]); $targetUrl = auditTargetDrilldown($event); $statusUrl = auditDrilldownUrl(['status' => (string) $event['status']]); ?><tr tabindex="0" title="Abrir auditoria detalhada" data-audit-url="<?= htmlspecialchars($actionUrl) ?>"><td data-label="Data"><a href="<?= htmlspecialchars($actionUrl) ?>"><?= htmlspecialchars(auditDate((string)$event['criado_em'])) ?></a></td><td data-label="Ação"><a href="<?= htmlspecialchars($actionUrl) ?>"><?= htmlspecialchars(auditAction((string)$event['acao'])) ?></a></td><td data-label="Domínio / Servidor"><?php if ($targetUrl !== null): ?><a href="<?= htmlspecialchars($targetUrl) ?>"><?= htmlspecialchars(auditTarget($event)) ?></a><?php else: ?><?= htmlspecialchars(auditTarget($event)) ?><?php endif; ?></td><td data-label="Status" class="activity-status <?= $event['status']==='OK'?'ok':'error' ?>"><a href="<?= htmlspecialchars($statusUrl) ?>"><?= htmlspecialchars((string)$event['status']) ?></a></td></tr><?php endforeach; ?>
 </tbody></table><?php endif; ?></section>
 <section class="section"><div class="section-header"><h2>🕘 Atividade recente</h2><span class="section-link">Últimos 7 dias</span></div><div class="recent-grid">
 <div class="stat"><div class="label">Domínios criados</div><div class="value"><?= $recentActivity['domains_created'] ?></div></div>
@@ -308,6 +321,10 @@ $serverOperationalRows[0]['ip'] = $serverIp;
 <script>
 const button=document.querySelector('.menu-toggle'),menu=document.querySelector('.sidebar'),overlay=document.querySelector('.menu-overlay');
 function setMenu(open){menu.classList.toggle('open',open);overlay.classList.toggle('open',open);button.setAttribute('aria-expanded',open?'true':'false')}
+document.querySelectorAll('[data-audit-url]').forEach(row=>{
+    row.addEventListener('click',event=>{if(!event.target.closest('a'))window.location.href=row.dataset.auditUrl;});
+    row.addEventListener('keydown',event=>{if(event.target===row&&(event.key==='Enter'||event.key===' ')){event.preventDefault();window.location.href=row.dataset.auditUrl;}});
+});
 button.addEventListener('click',()=>setMenu(!menu.classList.contains('open')));overlay.addEventListener('click',()=>setMenu(false));menu.addEventListener('click',e=>{if(e.target.closest('a')&&matchMedia('(max-width:760px)').matches)setMenu(false)});
 document.querySelectorAll('.sidebar-group-toggle').forEach(toggle=>toggle.addEventListener('click',()=>{
 const group=toggle.closest('.sidebar-group'),open=!group.classList.contains('open');
