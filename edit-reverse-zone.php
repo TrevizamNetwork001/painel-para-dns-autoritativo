@@ -363,7 +363,7 @@ a{
 <?= htmlspecialchars(str_replace('.rev6', '', $zone)) ?>
 </h2>
 <p>
-<a href="auditoria.php?dominio=<?= urlencode(audit_dominio_base($zone) ?? $zone) ?>">📋 Histórico</a>
+<a href="historico-zona.php?dominio=<?= urlencode(audit_dominio_base($zone) ?? $zone) ?>">📋 Histórico</a>
 </p>
 <?php if(!empty($sucesso)): ?>
 
