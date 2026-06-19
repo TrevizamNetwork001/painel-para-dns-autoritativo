@@ -5,17 +5,37 @@ require_once __DIR__ . '/includes/dns_servers.php';
 
 exigir_administrador();
 
-$servidores = dns_servers_listar();
+$servidoresRemotos = dns_servers_listar();
+$servidores = $servidoresRemotos;
+$servidorLocal = [
+    'id' => -1,
+    'nome' => 'NS1',
+    'hostname' => gethostname() ?: 'NS1',
+    'ip4' => filter_var($_SERVER['SERVER_ADDR'] ?? '', FILTER_VALIDATE_IP, FILTER_FLAG_IPV4) ?: '',
+    'ip6' => filter_var($_SERVER['SERVER_ADDR'] ?? '', FILTER_VALIDATE_IP, FILTER_FLAG_IPV6) ?: '',
+];
+array_unshift($servidores, $servidorLocal);
 $servidorId = filter_input(INPUT_GET, 'servidor', FILTER_VALIDATE_INT) ?: 0;
+$servidorSolicitado = strtolower(trim((string) ($_GET['server'] ?? '')));
 $servidor = null;
 foreach ($servidores as $item) {
-    if ((int) $item['id'] === $servidorId) {
+    $identificadoresItem = array_filter([
+        strtolower(trim((string) $item['nome'])),
+        strtolower(trim((string) $item['hostname'])),
+        strtolower(trim((string) ($item['ip4'] ?? ''))),
+        strtolower(trim((string) ($item['ip6'] ?? ''))),
+    ]);
+    if (
+        (int) $item['id'] === $servidorId
+        || ($servidorSolicitado !== '' && in_array($servidorSolicitado, $identificadoresItem, true))
+    ) {
         $servidor = $item;
+        $servidorId = (int) $item['id'];
         break;
     }
 }
 if (!$servidor && $servidores) {
-    $servidor = $servidores[0];
+    $servidor = $servidoresRemotos[0] ?? $servidores[0];
     $servidorId = (int) $servidor['id'];
 }
 
@@ -112,6 +132,9 @@ if ($servidor) {
 
     $whereServidor = "(tipo_registro = 'DNS_SERVER' AND LOWER(nome_registro) IN (" . implode(',', $placeholders) . '))'
         . " OR (tipo_registro = 'DNS_ZONE' AND LOWER(nome_registro) = :nome_servidor)";
+    if ((int) $servidor['id'] === -1) {
+        $whereServidor .= " OR acao = 'DNS_ZONE_INVENTORY_REFRESH'";
+    }
     $params[':nome_servidor'] = strtolower((string) $servidor['nome']);
     $where = '(' . $whereServidor . ') AND (' . historico_servidor_condicao_tipo($tipo) . ')';
 
