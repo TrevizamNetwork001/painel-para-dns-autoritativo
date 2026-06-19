@@ -3,6 +3,7 @@ require "config.php";
 require "includes/auth.php";
 require_once __DIR__ . "/includes/db.php";
 require_once __DIR__ . "/includes/dns_zones.php";
+require_once __DIR__ . "/includes/dns_servers.php";
 
 function metricError(string $name, string $message): void { error_log("Dashboard - falha em {$name}: {$message}"); }
 function cpuSample(): ?array {
@@ -85,6 +86,13 @@ function auditAction(string $action): string {
         'REMOVER_USUARIO'=>'Remover usuário','REDEFINIR_SENHA_USUARIO'=>'Redefinir senha','ALTERAR_PROPRIA_SENHA'=>'Alterar própria senha',
         'CADASTRAR_DNS_SERVER'=>'Cadastrar servidor DNS','ALTERAR_DNS_SERVER'=>'Alterar servidor DNS',
         'REMOVER_DNS_SERVER'=>'Remover servidor DNS','TESTAR_DNS_SERVER'=>'Testar servidor DNS',
+        'DNS_SERVER_ADD'=>'Cadastrar servidor DNS','DNS_SERVER_UPDATE'=>'Alterar servidor DNS',
+        'DNS_SERVER_REMOVE'=>'Remover servidor DNS','DNS_SERVER_TEST'=>'Testar servidor DNS',
+        'DNS_SERVER_AGENT_INSTALL'=>'Instalar agente DNS','DNS_SERVER_AGENT_UPDATE'=>'Atualizar agente DNS',
+        'DNS_SERVER_AGENT_REMOVE'=>'Remover agente DNS','DNS_SERVER_INVENTORY'=>'Inventário do servidor',
+        'DNS_SERVER_SLAVE_LAYOUT_MIGRATE'=>'Migrar layout slave',
+        'DNS_ZONE_INVENTORY_REFRESH'=>'Atualizar inventário DNS',
+        'DNS_ZONE_SLAVE_SYNC_ONE'=>'Sincronizar zona','DNS_ZONE_SLAVE_SYNC_MISSING'=>'Sincronizar zonas ausentes',
         default=>null
     };
     if ($mapped !== null) return $mapped;
@@ -106,24 +114,100 @@ function usageClass(?int $value): string { return $value === null ? 'unavailable
 
 $auditEvents = []; $auditUnavailable = false;
 try {
-    $auditEvents = db()->query("SELECT usuario, acao, dominio, nome_registro, status, criado_em FROM audit_logs ORDER BY id DESC LIMIT 6")->fetchAll(PDO::FETCH_ASSOC);
+    $auditEvents = db()->query("SELECT usuario, acao, dominio, nome_registro, status, criado_em FROM audit_logs ORDER BY id DESC LIMIT 10")->fetchAll(PDO::FETCH_ASSOC);
 } catch (Throwable $e) { $auditUnavailable = true; error_log('Dashboard - falha na auditoria: ' . $e->getMessage()); }
 $forwardZones = glob('/var/cache/bind/master-aut/*.hosts') ?: [];
 $reverseFiles = glob('/var/cache/bind/master-rev/*') ?: [];
-$forwardRecords = countRecords($forwardZones, '/^(?:\S+\s+)?(?:\d+\s+)?IN\s+(?:A|AAAA|CNAME|MX|TXT)\s+/i');
 $zoneInventorySummary = ['servidores' => [], 'divergencias' => 0, 'zonas_unicas' => null];
+$zoneComparison = [];
+$zoneClassification = [];
 try {
     $zoneInventorySummary = dns_zones_resumo();
+    $zoneComparison = dns_zones_comparar();
+    $zoneClassification = dns_zones_resumo_classificacao($zoneComparison);
 } catch (Throwable $e) {
     metricError('inventario_zonas', $e->getMessage());
 }
-$cpu = cpuUsage(); $ram = ramUsage(); $disk = diskUsage(); $uptime = uptimeText(); $hostname = gethostname() ?: 'Indisponível';
+$dnsServers = [];
+try {
+    $dnsServers = dns_servers_listar();
+} catch (Throwable $e) {
+    metricError('servidores_dns', $e->getMessage());
+}
+
+$inventoryServers = $zoneInventorySummary['servidores'] ?? [];
+$lastInventoryAt = null;
+foreach ($inventoryServers as $inventoryServer) {
+    $checkedAt = trim((string) ($inventoryServer['checked_at'] ?? ''));
+    if ($checkedAt !== '' && ($lastInventoryAt === null || strcmp($checkedAt, $lastInventoryAt) > 0)) {
+        $lastInventoryAt = $checkedAt;
+    }
+}
+$zonesSynchronized = (int) ($zoneClassification['OK'] ?? 0);
+$extraZones = (int) ($zoneClassification['EXTRA_NO_SLAVE'] ?? 0);
+$totalDnsServers = 1 + count($dnsServers);
+$onlineDnsServers = 0;
+$serverOperationalRows = [];
+$localInventory = null;
+foreach ($inventoryServers as $inventoryServer) {
+    if (($inventoryServer['server_role'] ?? '') === 'master') {
+        $localInventory = $inventoryServer;
+        break;
+    }
+}
+$localOnline = $localInventory ? (int) $localInventory['last_ok'] === 1 : false;
+if ($localOnline) {
+    $onlineDnsServers++;
+}
+$serverOperationalRows[] = [
+    'id' => null,
+    'nome' => $localInventory['server_nome'] ?? 'NS1',
+    'ip' => $serverIp ?? '',
+    'online' => $localOnline,
+    'atualizado_em' => $localInventory['checked_at'] ?? null,
+];
+foreach ($dnsServers as $dnsServer) {
+    $online = ($dnsServer['ultimo_status'] ?? '') === 'online';
+    if ($online) {
+        $onlineDnsServers++;
+    }
+    $serverOperationalRows[] = [
+        'id' => (int) $dnsServer['id'],
+        'nome' => $dnsServer['nome'],
+        'ip' => $dnsServer['ip4'] ?: $dnsServer['hostname'],
+        'online' => $online,
+        'atualizado_em' => $dnsServer['ultima_verificacao'] ?? null,
+    ];
+}
+
+$recentActivity = [
+    'domains_created' => 0,
+    'records_created' => 0,
+    'records_updated' => 0,
+    'records_removed' => 0,
+];
+try {
+    $activityRows = db()->query(
+        "SELECT acao, COUNT(*) AS total FROM audit_logs "
+        . "WHERE criado_em >= datetime('now', '-7 days') "
+        . "AND acao IN ('CRIAR_DOMINIO','CRIAR_ZONA_FORWARD','ADICIONAR_REGISTRO','EDITAR_REGISTRO','REMOVER_REGISTRO') "
+        . "GROUP BY acao"
+    )->fetchAll(PDO::FETCH_KEY_PAIR);
+    $recentActivity['domains_created'] = (int) ($activityRows['CRIAR_DOMINIO'] ?? 0);
+    $recentActivity['records_created'] = (int) ($activityRows['ADICIONAR_REGISTRO'] ?? 0);
+    $recentActivity['records_updated'] = (int) ($activityRows['EDITAR_REGISTRO'] ?? 0);
+    $recentActivity['records_removed'] = (int) ($activityRows['REMOVER_REGISTRO'] ?? 0);
+} catch (Throwable $e) {
+    metricError('atividade_recente', $e->getMessage());
+}
+$hostname = gethostname() ?: 'Indisponível';
 $serverIp = filter_var($_SERVER['SERVER_ADDR'] ?? '', FILTER_VALIDATE_IP);
 if ($serverIp === false && $hostname !== 'Indisponível') {
     $resolvedIp = gethostbyname($hostname);
     $serverIp = filter_var($resolvedIp, FILTER_VALIDATE_IP) ? $resolvedIp : false;
 }
 $serverIp = $serverIp ?: 'Indisponível';
+$serverOperationalRows[0]['ip'] = $serverIp;
 ?>
 <!DOCTYPE html>
 <html lang="pt-BR">
@@ -137,12 +221,12 @@ $serverIp = $serverIp ?: 'Indisponível';
 .sidebar{position:fixed;left:0;top:0;width:270px;height:100vh;background:#020617;border-right:1px solid #1e293b;padding:20px;overflow-y:auto;box-shadow:none;z-index:20}.sidebar h2{color:#38bdf8;margin:0 0 30px}.sidebar a{display:block;color:#cbd5e1;text-decoration:none;padding:12px;border-radius:8px;margin-bottom:6px;transition:.2s}.sidebar a:hover,.sidebar a:focus,.sidebar a.active{background:#1e293b;color:#38bdf8;outline:none}.sidebar-group{margin-top:10px}.sidebar-group-toggle{display:flex;align-items:center;justify-content:space-between;width:100%;border:0;border-radius:8px;background:transparent;color:#94a3b8;padding:12px;cursor:pointer;text-align:left;font-size:13px;font-weight:bold;transition:.2s}.sidebar-group-toggle:hover,.sidebar-group-toggle:focus{background:#0f172a;color:#38bdf8;outline:none}.sidebar-group-arrow{font-size:14px;line-height:1}.sidebar-submenu{display:none;padding-left:8px}.sidebar-group.open .sidebar-submenu{display:block}.sidebar-submenu a{padding:10px 12px}
 .main-content{margin-left:270px;padding:25px}.topbar{display:flex;justify-content:space-between;align-items:center;gap:18px;background:#071226;border:1px solid #1e293b;border-radius:14px;padding:17px 20px;margin-bottom:25px}.topbar-title{display:flex;align-items:center;gap:9px}.topbar-info{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:10px;color:#cbd5e1;font-size:13px}.info-badge{display:flex;align-items:center;gap:9px;min-height:40px;background:#020617;border:1px solid #1e293b;border-radius:11px;padding:9px 12px}.info-badge svg{width:19px;height:19px;color:#38bdf8;flex:0 0 auto}.info-badge-text{display:flex;flex-direction:column;gap:2px}.info-badge-label{color:#64748b;font-size:10px;font-weight:bold;letter-spacing:.04em;text-transform:uppercase}.info-badge-value{color:#e2e8f0;font-weight:bold}
 .section{background:#071226;border:1px solid #1e293b;border-radius:16px;padding:25px;margin-bottom:25px;box-shadow:0 0 20px #0004}.section-header{display:flex;justify-content:space-between;align-items:center;gap:15px;margin-bottom:18px}.section-header h2{font-size:18px;margin:0}.section-link{color:#38bdf8;text-decoration:none;font-weight:bold;font-size:14px}
-.summary-grid,.health-grid,.quick-grid{display:grid;gap:16px}.summary-grid{grid-template-columns:repeat(3,minmax(0,1fr))}.health-grid,.quick-grid{grid-template-columns:repeat(4,minmax(0,1fr))}.stat{background:#020617;border:1px solid #1e293b;border-radius:14px;padding:18px;min-height:124px}.stat .icon{font-size:26px;margin-bottom:9px}.stat .label{color:#94a3b8;font-size:12px;text-transform:uppercase}.stat .value{font-size:25px;font-weight:bold;color:#38bdf8;margin-top:8px;overflow-wrap:anywhere}.stat .value.unavailable{font-size:18px;color:#94a3b8}.stat small{display:block;color:#64748b;margin-top:8px}.progress{width:100%;height:8px;background:#1e293b;border-radius:10px;overflow:hidden;margin-top:12px}.progress-bar{height:100%;border-radius:10px}.normal{background:#22c55e}.warning{background:#eab308}.critical{background:#ef4444}.progress-bar.unavailable{width:0!important}
+.summary-grid,.inventory-grid,.recent-grid,.quick-grid{display:grid;gap:14px}.summary-grid,.inventory-grid,.recent-grid{grid-template-columns:repeat(4,minmax(0,1fr))}.quick-grid{grid-template-columns:repeat(6,minmax(0,1fr))}.stat{background:#020617;border:1px solid #1e293b;border-radius:14px;padding:16px;min-height:112px}.stat .icon{font-size:24px;margin-bottom:8px}.stat .label{color:#94a3b8;font-size:11px;text-transform:uppercase}.stat .value{font-size:24px;font-weight:bold;color:#38bdf8;margin-top:7px;overflow-wrap:anywhere}.stat .value.unavailable{font-size:16px;color:#94a3b8}.stat small{display:block;color:#64748b;margin-top:7px}
 .metric-icon{display:block;width:27px;height:27px;color:#38bdf8}
 .activity-table{width:100%;border-collapse:collapse}.activity-table th,.activity-table td{padding:11px 10px;border-bottom:1px solid #1e293b;text-align:left;font-size:13px;vertical-align:top}.activity-table th{color:#94a3b8;font-size:12px;text-transform:uppercase}.activity-status{font-weight:bold}.activity-status.ok{color:#4ade80}.activity-status.error{color:#f87171}.empty{color:#94a3b8;margin:0}
-.quick-link{display:block;min-height:105px;background:#020617;border:1px solid #1e293b;border-radius:14px;padding:18px;color:#e2e8f0;text-decoration:none;transition:.2s}.quick-link:hover,.quick-link:focus{border-color:#38bdf8;transform:translateY(-2px);outline:none}.quick-link strong{display:block;margin-top:10px}.quick-link small{display:block;color:#64748b;margin-top:6px}.menu-overlay{display:none}
-@media(max-width:1100px){.summary-grid,.health-grid,.quick-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
-@media(max-width:760px){.menu-toggle{display:block}.sidebar{transform:translateX(-100%);transition:transform .2s;width:min(300px,86vw)}.sidebar.open{transform:translateX(0)}.menu-overlay{position:fixed;inset:0;background:#020617b8;z-index:10}.menu-overlay.open{display:block}.main-content{margin-left:0;padding:70px 14px 20px}.topbar,.section-header{align-items:flex-start;flex-direction:column}.topbar-info{justify-content:flex-start;width:100%}.info-badge{flex:1 1 145px}.section{padding:18px}.summary-grid,.health-grid,.quick-grid{grid-template-columns:1fr}.activity-table thead{display:none}.activity-table,.activity-table tbody,.activity-table tr,.activity-table td{display:block;width:100%}.activity-table tr{background:#020617;border:1px solid #1e293b;border-radius:12px;padding:9px 12px;margin-bottom:12px}.activity-table td{display:grid;grid-template-columns:90px 1fr;gap:10px;border:0;padding:6px 0}.activity-table td:before{content:attr(data-label);color:#94a3b8;font-size:11px;text-transform:uppercase;font-weight:bold}}
+.server-list{display:grid;gap:8px}.server-row{display:grid;grid-template-columns:minmax(120px,.7fr) minmax(140px,1fr) 90px minmax(150px,1fr);gap:12px;align-items:center;background:#020617;border:1px solid #1e293b;border-radius:10px;padding:11px 13px}.server-name{font-weight:800}.server-ip,.server-updated{color:#94a3b8;font-size:12px}.status-pill{display:inline-flex;justify-content:center;border-radius:999px;padding:4px 8px;font-size:11px;font-weight:800}.status-pill.online{background:#123326;color:#86efac}.status-pill.offline{background:#3a1418;color:#fca5a5}.quick-link{display:block;min-height:82px;background:#020617;border:1px solid #1e293b;border-radius:12px;padding:14px;color:#e2e8f0;text-decoration:none;transition:.2s}.quick-link:hover,.quick-link:focus{border-color:#38bdf8;transform:translateY(-2px);outline:none}.quick-link strong{display:block;margin-top:8px;font-size:13px}.quick-link small{display:block;color:#64748b;margin-top:5px;font-size:11px}.menu-overlay{display:none}
+@media(max-width:1250px){.summary-grid,.inventory-grid,.recent-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.quick-grid{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media(max-width:760px){.menu-toggle{display:block}.sidebar{transform:translateX(-100%);transition:transform .2s;width:min(300px,86vw)}.sidebar.open{transform:translateX(0)}.menu-overlay{position:fixed;inset:0;background:#020617b8;z-index:10}.menu-overlay.open{display:block}.main-content{margin-left:0;padding:70px 14px 20px}.topbar,.section-header{align-items:flex-start;flex-direction:column}.topbar-info{justify-content:flex-start;width:100%}.info-badge{flex:1 1 145px}.section{padding:18px}.summary-grid,.inventory-grid,.recent-grid,.quick-grid{grid-template-columns:1fr}.server-row{grid-template-columns:1fr;gap:5px}.activity-table thead{display:none}.activity-table,.activity-table tbody,.activity-table tr,.activity-table td{display:block;width:100%}.activity-table tr{background:#020617;border:1px solid #1e293b;border-radius:12px;padding:9px 12px;margin-bottom:12px}.activity-table td{display:grid;grid-template-columns:90px 1fr;gap:10px;border:0;padding:6px 0}.activity-table td:before{content:attr(data-label);color:#94a3b8;font-size:11px;text-transform:uppercase;font-weight:bold}}
 </style>
 </head>
 <body>
@@ -188,31 +272,35 @@ $serverIp = $serverIp ?: 'Indisponível';
 <span class="info-badge"><svg aria-hidden="true"><use href="#icon-globe"></use></svg><span class="info-badge-text"><span class="info-badge-label">IP principal</span><span class="info-badge-value"><?= htmlspecialchars($serverIp) ?></span></span></span>
 <span class="info-badge"><svg aria-hidden="true"><use href="#icon-user"></use></svg><span class="info-badge-text"><span class="info-badge-label">Usuário</span><span class="info-badge-value"><?= htmlspecialchars($_SESSION['usuario'] ?? 'admin') ?></span></span></span>
 </div></header>
-<section class="section"><div class="section-header"><h2>📦 Resumo DNS</h2></div><div class="summary-grid">
+<section class="section"><div class="section-header"><h2>📦 Resumo geral</h2></div><div class="summary-grid">
 <div class="stat"><div class="icon"><svg class="metric-icon" aria-hidden="true"><use href="#icon-globe"></use></svg></div><div class="label">Domínios</div><div class="value"><?= count($forwardZones) ?></div><small>Zonas forward</small></div>
-<div class="stat"><div class="icon"><svg class="metric-icon" aria-hidden="true"><use href="#icon-records"></use></svg></div><div class="label">Registros DNS</div><div class="value"><?= $forwardRecords ?></div><small>A, AAAA, CNAME, MX e TXT</small></div>
 <div class="stat"><div class="icon"><svg class="metric-icon" aria-hidden="true"><use href="#icon-reverse"></use></svg></div><div class="label">Zonas reversas</div><div class="value"><?= count($reverseFiles) ?></div><small>IPv4 + IPv6</small></div>
-<div class="stat"><div class="icon"><svg class="metric-icon" aria-hidden="true"><use href="#icon-server"></use></svg></div><div class="label">Inventario DNS</div><div class="value <?= $zoneInventorySummary['zonas_unicas'] === null ? 'unavailable' : '' ?>"><?= $zoneInventorySummary['zonas_unicas'] === null ? 'Indisponível' : (int) $zoneInventorySummary['zonas_unicas'] ?></div><small>Zonas unicas NS1/slaves</small></div>
-<div class="stat"><div class="icon"><svg class="metric-icon" aria-hidden="true"><use href="#icon-records"></use></svg></div><div class="label">Divergencias</div><div class="value"><?= (int) $zoneInventorySummary['divergencias'] ?></div><small>Presenca e serial SOA</small></div>
-<?php foreach ($zoneInventorySummary['servidores'] as $dnsInventoryServer): ?>
-<div class="stat"><div class="icon"><svg class="metric-icon" aria-hidden="true"><use href="#icon-server"></use></svg></div><div class="label"><?= htmlspecialchars($dnsInventoryServer['server_nome']) ?></div><div class="value <?= $dnsInventoryServer['last_ok'] ? '' : 'unavailable' ?>"><?= (int) $dnsInventoryServer['total_zones'] ?></div><small><?= htmlspecialchars(strtoupper($dnsInventoryServer['server_role'])) ?> · <?= $dnsInventoryServer['last_ok'] ? 'inventariado' : 'falha no inventario' ?></small></div>
-<?php endforeach; ?>
+<div class="stat"><div class="icon"><svg class="metric-icon" aria-hidden="true"><use href="#icon-server"></use></svg></div><div class="label">Servidores DNS</div><div class="value"><?= $totalDnsServers ?></div><small>NS1 + servidores cadastrados</small></div>
+<div class="stat"><div class="icon"><svg class="metric-icon" aria-hidden="true"><use href="#icon-server"></use></svg></div><div class="label">Servidores online</div><div class="value"><?= $onlineDnsServers ?></div><small><?= $totalDnsServers - $onlineDnsServers ?> offline</small></div>
 </div></section>
-<section class="section"><div class="section-header"><h2>🖥️ Saúde do servidor</h2></div><div class="health-grid">
-<?php foreach ([['cpu','CPU',$cpu,'uso aproximado'],['memory','RAM',$ram,'memória em uso'],['storage','Disco',$disk,'partição /']] as $metric): $class=usageClass($metric[2]); ?>
-<div class="stat"><div class="icon"><svg class="metric-icon" aria-hidden="true"><use href="#icon-<?= $metric[0] ?>"></use></svg></div><div class="label"><?= htmlspecialchars($metric[1]) ?></div><div class="value <?= $metric[2] === null ? 'unavailable' : '' ?>"><?= $metric[2] === null ? 'Indisponível' : $metric[2].'%' ?></div><div class="progress" aria-hidden="true"><div class="progress-bar <?= $class ?>" style="width:<?= $metric[2] ?? 0 ?>%"></div></div><small><?= htmlspecialchars($metric[3]) ?></small></div>
-<?php endforeach; ?>
-<div class="stat"><div class="icon"><svg class="metric-icon" aria-hidden="true"><use href="#icon-uptime"></use></svg></div><div class="label">Uptime</div><div class="value <?= $uptime === null ? 'unavailable' : '' ?>"><?= htmlspecialchars($uptime ?? 'Indisponível') ?></div><small>Tempo ligado</small></div>
+<section class="section"><div class="section-header"><h2>🧭 Inventário DNS</h2><a class="section-link" href="zones.php">Abrir inventário</a></div><div class="inventory-grid">
+<div class="stat"><div class="label">Última coleta</div><div class="value <?= $lastInventoryAt ? '' : 'unavailable' ?>" style="<?= $lastInventoryAt ? 'font-size:18px' : '' ?>"><?= htmlspecialchars($lastInventoryAt ? auditDate($lastInventoryAt) : 'Indisponível') ?></div><small>NS1 e servidores ativos</small></div>
+<div class="stat"><div class="label">Zonas sincronizadas</div><div class="value"><?= $zonesSynchronized ?></div><small>Serial equivalente</small></div>
+<div class="stat"><div class="label">Divergências</div><div class="value"><?= (int) $zoneInventorySummary['divergencias'] ?></div><small>Ausência, serial ou coleta</small></div>
+<div class="stat"><div class="label">Zonas extras</div><div class="value"><?= $extraZones ?></div><small>Extras não ignoradas</small></div>
 </div></section>
-<section class="section"><div class="section-header"><h2>📋 Últimas atividades</h2><a class="section-link" href="auditoria.php">Ver auditoria completa</a></div>
+<section class="section"><div class="section-header"><h2>🌐 Servidores DNS</h2><a class="section-link" href="dns-servers.php">Gerenciar servidores</a></div><div class="server-list">
+<?php foreach ($serverOperationalRows as $serverRow): ?><div class="server-row"><div class="server-name"><?= htmlspecialchars(strtoupper((string) $serverRow['nome'])) ?></div><div class="server-ip"><?= htmlspecialchars((string) $serverRow['ip']) ?></div><div><span class="status-pill <?= $serverRow['online'] ? 'online' : 'offline' ?>"><?= $serverRow['online'] ? 'Online' : 'Offline' ?></span></div><div class="server-updated"><?= htmlspecialchars($serverRow['atualizado_em'] ? auditDate((string) $serverRow['atualizado_em']) : 'Sem atualização conhecida') ?></div></div><?php endforeach; ?>
+</div></section>
+<section class="section"><div class="section-header"><h2>📋 Auditoria recente</h2><a class="section-link" href="auditoria.php">Ver auditoria completa</a></div>
 <?php if ($auditUnavailable): ?><p class="empty">As atividades estão temporariamente indisponíveis.</p><?php elseif (!$auditEvents): ?><p class="empty">Nenhuma atividade registrada.</p><?php else: ?>
-<table class="activity-table"><thead><tr><th>Data</th><th>Usuário</th><th>Ação</th><th>Domínio/Registro</th><th>Status</th></tr></thead><tbody>
-<?php foreach ($auditEvents as $event): ?><tr><td data-label="Data"><?= htmlspecialchars(auditDate((string)$event['criado_em'])) ?></td><td data-label="Usuário"><?= htmlspecialchars((string)$event['usuario']) ?></td><td data-label="Ação"><?= htmlspecialchars(auditAction((string)$event['acao'])) ?></td><td data-label="Registro"><?= htmlspecialchars(auditTarget($event)) ?></td><td data-label="Status" class="activity-status <?= $event['status']==='OK'?'ok':'error' ?>"><?= htmlspecialchars((string)$event['status']) ?></td></tr><?php endforeach; ?>
+<table class="activity-table"><thead><tr><th>Data</th><th>Ação</th><th>Domínio</th><th>Status</th></tr></thead><tbody>
+<?php foreach ($auditEvents as $event): ?><tr><td data-label="Data"><?= htmlspecialchars(auditDate((string)$event['criado_em'])) ?></td><td data-label="Ação"><?= htmlspecialchars(auditAction((string)$event['acao'])) ?></td><td data-label="Domínio"><?= htmlspecialchars(auditTarget($event)) ?></td><td data-label="Status" class="activity-status <?= $event['status']==='OK'?'ok':'error' ?>"><?= htmlspecialchars((string)$event['status']) ?></td></tr><?php endforeach; ?>
 </tbody></table><?php endif; ?></section>
+<section class="section"><div class="section-header"><h2>🕘 Atividade recente</h2><span class="section-link">Últimos 7 dias</span></div><div class="recent-grid">
+<div class="stat"><div class="label">Domínios criados</div><div class="value"><?= $recentActivity['domains_created'] ?></div></div>
+<div class="stat"><div class="label">Registros criados</div><div class="value"><?= $recentActivity['records_created'] ?></div></div>
+<div class="stat"><div class="label">Registros alterados</div><div class="value"><?= $recentActivity['records_updated'] ?></div></div>
+<div class="stat"><div class="label">Registros removidos</div><div class="value"><?= $recentActivity['records_removed'] ?></div></div>
+</div></section>
 <section class="section"><div class="section-header"><h2>⚡ Acesso rápido</h2></div><div class="quick-grid">
-<?php foreach ([['domains.php','➕','Novo Domínio','Criar e administrar domínios'],['dns-zones.php','📦','Zonas DNS','Gerenciar registros forward'],['reverse-zones.php','🔁','Zonas Reversas','Gerenciar registros PTR'],['zones.php','🧭','Inventário DNS','Comparar NS1 e slaves'],['auditoria.php','📋','Auditoria','Consultar histórico completo'],['services.php','⚙️','Serviços','Administrar serviços do servidor'],['firewall.php','🔥','Firewall','Consultar e gerenciar regras']] as $link): ?>
+<?php foreach ([['domains.php','🌐','Domínios','Administrar domínios'],['dns-zones.php','📦','Zonas DNS','Registros forward'],['reverse-zones.php','🔁','Zonas Reversas','Registros PTR'],['zones.php','🧭','Inventário DNS','Comparar servidores'],['dns-servers.php','🖥️','Servidores DNS','Saúde e ferramentas'],['auditoria.php','📋','Auditoria DNS','Investigar eventos']] as $link): ?>
 <a class="quick-link" href="<?= $link[0] ?>"><span><?= $link[1] ?></span><strong><?= $link[2] ?></strong><small><?= $link[3] ?></small></a><?php endforeach; ?>
-<?php if (usuario_eh_administrador()): ?><a class="quick-link" href="usuarios.php"><span>👥</span><strong>Usuários</strong><small>Administrar acessos ao painel</small></a><?php endif; ?>
 </div></section>
 <?php require __DIR__ . '/includes/footer.php'; ?>
 </main>
