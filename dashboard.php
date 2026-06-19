@@ -300,11 +300,22 @@ $serverOperationalRows[0]['ip'] = $serverIp;
 <span class="info-badge"><svg aria-hidden="true"><use href="#icon-globe"></use></svg><span class="info-badge-text"><span class="info-badge-label">IP principal</span><span class="info-badge-value"><?= htmlspecialchars($serverIp) ?></span></span></span>
 <span class="info-badge"><svg aria-hidden="true"><use href="#icon-user"></use></svg><span class="info-badge-text"><span class="info-badge-label">Usuário</span><span class="info-badge-value"><?= htmlspecialchars($_SESSION['usuario'] ?? 'admin') ?></span></span></span>
 </div></header>
+<section class="section"><div class="section-header"><h2>⚡ Acesso rápido</h2></div><div class="quick-grid">
+<?php foreach ([['domains.php','🌐','Domínios','Administrar domínios'],['dns-zones.php','📦','Zonas DNS','Registros forward'],['reverse-zones.php','🔁','Zonas Reversas','Registros PTR'],['zones.php','🧭','Inventário DNS','Comparar servidores'],['dns-servers.php','🖥️','Servidores DNS','Saúde e ferramentas'],['auditoria.php','📋','Auditoria DNS','Investigar eventos']] as $link): ?>
+<a class="quick-link" href="<?= $link[0] ?>"><span><?= $link[1] ?></span><strong><?= $link[2] ?></strong><small><?= $link[3] ?></small></a><?php endforeach; ?>
+</div></section>
 <section class="section"><div class="section-header"><h2>📦 Resumo geral</h2></div><div class="summary-grid">
 <div class="stat"><div class="icon"><svg class="metric-icon" aria-hidden="true"><use href="#icon-globe"></use></svg></div><div class="label">Domínios</div><div class="value"><?= count($forwardZones) ?></div><small>Zonas forward</small></div>
 <div class="stat"><div class="icon"><svg class="metric-icon" aria-hidden="true"><use href="#icon-reverse"></use></svg></div><div class="label">Zonas reversas</div><div class="value"><?= count($reverseFiles) ?></div><small>IPv4 + IPv6</small></div>
 <a class="stat stat-link" href="dns-servers.php"><div class="icon"><svg class="metric-icon" aria-hidden="true"><use href="#icon-server"></use></svg></div><div class="label">Servidores DNS</div><div class="value"><?= $totalDnsServers ?></div><small>NS1 + servidores cadastrados</small></a>
 <a class="stat stat-link" href="dns-servers.php"><div class="icon"><svg class="metric-icon" aria-hidden="true"><use href="#icon-server"></use></svg></div><div class="label">Servidores online</div><div class="value"><?= $onlineDnsServers ?></div><small><?= $totalDnsServers - $onlineDnsServers ?> offline</small></a>
+</div></section>
+<section class="section"><div class="section-header"><h2>🧭 Inventário DNS</h2><a class="section-link" href="zones.php">Abrir inventário</a></div><div class="inventory-grid">
+<div class="stat"><div class="label">Última coleta</div><div class="value <?= $lastInventoryAt ? '' : 'unavailable' ?>" style="<?= $lastInventoryAt ? 'font-size:18px' : '' ?>"><?= htmlspecialchars($lastInventoryAt ? auditDate($lastInventoryAt) : 'Indisponível') ?></div><small>NS1 e servidores ativos</small></div>
+<a class="stat stat-link" href="zones.php?status=ok"><div class="label">Zonas sincronizadas</div><div class="value"><?= $zonesSynchronized ?></div><small>Serial equivalente</small></a>
+<a class="stat stat-link" href="zones.php?status=divergencias"><div class="label">Divergências reais</div><div class="value"><?= (int) $zoneInventorySummary['divergencias'] ?></div><small>Ausência, serial ou coleta</small></a>
+<a class="stat stat-link" href="zones.php?status=extras"><div class="label">Zonas extras</div><div class="value"><?= $extraZones ?></div><small>Extras não ignoradas</small></a>
+<a class="stat stat-link" href="zones.php?status=excecoes"><div class="label">Exceções aprovadas</div><div class="value"><?= (int) ($zoneInventorySummary['excecoes_aprovadas'] ?? 0) ?></div><small>Legítimas ou ignoradas</small></a>
 </div></section>
 <section class="section"><div class="section-header"><h2>🩺 Saúde DNS</h2><a class="section-link" href="dns-servers.php">Abrir servidores</a></div><div class="recent-grid">
 <div class="stat"><div class="label">Servidores OK</div><div class="value"><?= (int) $dnsHealthSummary['servidores_ok'] ?></div></div>
@@ -313,13 +324,6 @@ $serverOperationalRows[0]['ip'] = $serverIp;
 <div class="stat"><div class="label">BIND OK</div><div class="value"><?= (int) $dnsHealthSummary['bind_ok'] ?></div></div>
 <div class="stat"><div class="label">AXFR OK</div><div class="value"><?= (int) $dnsHealthSummary['axfr_ok'] ?></div></div>
 <div class="stat"><div class="label">Agentes OK</div><div class="value"><?= (int) $dnsHealthSummary['agentes_ok'] ?></div></div>
-</div></section>
-<section class="section"><div class="section-header"><h2>🧭 Inventário DNS</h2><a class="section-link" href="zones.php">Abrir inventário</a></div><div class="inventory-grid">
-<div class="stat"><div class="label">Última coleta</div><div class="value <?= $lastInventoryAt ? '' : 'unavailable' ?>" style="<?= $lastInventoryAt ? 'font-size:18px' : '' ?>"><?= htmlspecialchars($lastInventoryAt ? auditDate($lastInventoryAt) : 'Indisponível') ?></div><small>NS1 e servidores ativos</small></div>
-<a class="stat stat-link" href="zones.php?status=ok"><div class="label">Zonas sincronizadas</div><div class="value"><?= $zonesSynchronized ?></div><small>Serial equivalente</small></a>
-<a class="stat stat-link" href="zones.php?status=divergencias"><div class="label">Divergências reais</div><div class="value"><?= (int) $zoneInventorySummary['divergencias'] ?></div><small>Ausência, serial ou coleta</small></a>
-<a class="stat stat-link" href="zones.php?status=extras"><div class="label">Zonas extras</div><div class="value"><?= $extraZones ?></div><small>Extras não ignoradas</small></a>
-<a class="stat stat-link" href="zones.php?status=excecoes"><div class="label">Exceções aprovadas</div><div class="value"><?= (int) ($zoneInventorySummary['excecoes_aprovadas'] ?? 0) ?></div><small>Legítimas ou ignoradas</small></a>
 </div></section>
 <section class="section"><div class="section-header"><h2>🌐 Servidores DNS</h2><a class="section-link" href="dns-servers.php">Gerenciar servidores</a></div><div class="server-list">
 <?php foreach ($serverOperationalRows as $serverRow): ?><?php $serverKey = strtolower(trim((string) $serverRow['nome'])); $serverUrl = 'dns-servers.php?' . http_build_query(['server' => $serverKey]); $historyUrl = 'historico-servidor.php?' . http_build_query(['server' => $serverKey]); ?><div class="server-row" tabindex="0" data-server-url="<?= htmlspecialchars($serverUrl) ?>" title="Abrir servidor"><a class="server-name" href="<?= htmlspecialchars($serverUrl) ?>"><?= htmlspecialchars(strtoupper((string) $serverRow['nome'])) ?></a><a class="server-ip" href="<?= htmlspecialchars($serverUrl) ?>"><?= htmlspecialchars((string) $serverRow['ip']) ?></a><a href="<?= htmlspecialchars($serverUrl) ?>"><span class="status-pill <?= $serverRow['online'] ? 'online' : 'offline' ?>"><?= $serverRow['online'] ? 'Online' : 'Offline' ?></span></a><div class="server-updated"><a href="<?= htmlspecialchars($historyUrl) ?>" title="Abrir histórico operacional"><?= htmlspecialchars($serverRow['atualizado_em'] ? auditDate((string) $serverRow['atualizado_em']) : 'Sem atualização conhecida') ?></a></div></div><?php endforeach; ?>
@@ -334,10 +338,6 @@ $serverOperationalRows[0]['ip'] = $serverIp;
 <div class="stat"><div class="label">Registros criados</div><div class="value"><?= $recentActivity['records_created'] ?></div></div>
 <div class="stat"><div class="label">Registros alterados</div><div class="value"><?= $recentActivity['records_updated'] ?></div></div>
 <div class="stat"><div class="label">Registros removidos</div><div class="value"><?= $recentActivity['records_removed'] ?></div></div>
-</div></section>
-<section class="section"><div class="section-header"><h2>⚡ Acesso rápido</h2></div><div class="quick-grid">
-<?php foreach ([['domains.php','🌐','Domínios','Administrar domínios'],['dns-zones.php','📦','Zonas DNS','Registros forward'],['reverse-zones.php','🔁','Zonas Reversas','Registros PTR'],['zones.php','🧭','Inventário DNS','Comparar servidores'],['dns-servers.php','🖥️','Servidores DNS','Saúde e ferramentas'],['auditoria.php','📋','Auditoria DNS','Investigar eventos']] as $link): ?>
-<a class="quick-link" href="<?= $link[0] ?>"><span><?= $link[1] ?></span><strong><?= $link[2] ?></strong><small><?= $link[3] ?></small></a><?php endforeach; ?>
 </div></section>
 <?php require __DIR__ . '/includes/footer.php'; ?>
 </main>
