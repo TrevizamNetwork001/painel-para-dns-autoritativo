@@ -317,14 +317,6 @@ $serverOperationalRows[0]['ip'] = $serverIp;
 <a class="stat stat-link" href="zones.php?status=extras"><div class="label">Zonas extras</div><div class="value"><?= $extraZones ?></div><small>Extras não ignoradas</small></a>
 <a class="stat stat-link" href="zones.php?status=excecoes"><div class="label">Exceções aprovadas</div><div class="value"><?= (int) ($zoneInventorySummary['excecoes_aprovadas'] ?? 0) ?></div><small>Legítimas ou ignoradas</small></a>
 </div></section>
-<section class="section"><div class="section-header"><h2>🩺 Saúde DNS</h2><a class="section-link" href="dns-servers.php">Abrir servidores</a></div><div class="recent-grid">
-<div class="stat"><div class="label">Servidores OK</div><div class="value"><?= (int) $dnsHealthSummary['servidores_ok'] ?></div></div>
-<div class="stat"><div class="label">Servidores com falha</div><div class="value"><?= (int) $dnsHealthSummary['servidores_falha'] ?></div></div>
-<div class="stat"><div class="label">SSH OK</div><div class="value"><?= (int) $dnsHealthSummary['ssh_ok'] ?></div></div>
-<div class="stat"><div class="label">BIND OK</div><div class="value"><?= (int) $dnsHealthSummary['bind_ok'] ?></div></div>
-<div class="stat"><div class="label">AXFR OK</div><div class="value"><?= (int) $dnsHealthSummary['axfr_ok'] ?></div></div>
-<div class="stat"><div class="label">Agentes OK</div><div class="value"><?= (int) $dnsHealthSummary['agentes_ok'] ?></div></div>
-</div></section>
 <section class="section"><div class="section-header"><h2>🌐 Servidores DNS</h2><a class="section-link" href="dns-servers.php">Gerenciar servidores</a></div><div class="server-list">
 <?php foreach ($serverOperationalRows as $serverRow): ?><?php $serverKey = strtolower(trim((string) $serverRow['nome'])); $serverUrl = 'dns-servers.php?' . http_build_query(['server' => $serverKey]); $historyUrl = 'historico-servidor.php?' . http_build_query(['server' => $serverKey]); ?><div class="server-row" tabindex="0" data-server-url="<?= htmlspecialchars($serverUrl) ?>" title="Abrir servidor"><a class="server-name" href="<?= htmlspecialchars($serverUrl) ?>"><?= htmlspecialchars(strtoupper((string) $serverRow['nome'])) ?></a><a class="server-ip" href="<?= htmlspecialchars($serverUrl) ?>"><?= htmlspecialchars((string) $serverRow['ip']) ?></a><a href="<?= htmlspecialchars($serverUrl) ?>"><span class="status-pill <?= $serverRow['online'] ? 'online' : 'offline' ?>"><?= $serverRow['online'] ? 'Online' : 'Offline' ?></span></a><div class="server-updated"><a href="<?= htmlspecialchars($historyUrl) ?>" title="Abrir histórico operacional"><?= htmlspecialchars($serverRow['atualizado_em'] ? auditDate((string) $serverRow['atualizado_em']) : 'Sem atualização conhecida') ?></a></div></div><?php endforeach; ?>
 </div></section>
