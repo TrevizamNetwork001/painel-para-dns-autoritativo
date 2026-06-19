@@ -42,6 +42,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 if (empty($resultado['ok'])) {
                     $falhas++;
                 }
+                registrar_auditoria([
+                    'acao' => 'DNS_SERVER_INVENTORY',
+                    'tipo_registro' => 'DNS_SERVER',
+                    'nome_registro' => $resultado['servidor'],
+                    'valor_novo' => (int) ($resultado['zonas'] ?? 0) . ' zonas',
+                    'status' => !empty($resultado['ok']) ? 'OK' : 'ERRO',
+                    'mensagem' => !empty($resultado['ok'])
+                        ? 'Inventário DNS concluído para o servidor.'
+                        : substr((string) ($resultado['saida'] ?? 'Falha no inventário DNS.'), 0, 1000),
+                ]);
             }
 
             registrar_auditoria([
