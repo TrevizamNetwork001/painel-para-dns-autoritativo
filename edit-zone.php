@@ -314,7 +314,7 @@ a{
 
 </h2>
 <p>
-<a href="auditoria.php?dominio=<?= urlencode($zone) ?>">📋 Histórico</a>
+<a href="historico-zona.php?dominio=<?= urlencode($zone) ?>">📋 Histórico</a>
 </p>
 <?php if(!empty($sucesso)): ?>
 
