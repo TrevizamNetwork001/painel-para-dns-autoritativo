@@ -75,87 +75,16 @@ function countRecords(array $files, string $pattern): int {
     }
     return $total;
 }
-function auditAction(string $action): string {
-    $mapped = match ($action) {
-        'CRIAR_DOMINIO'=>'Criar domínio','REMOVER_DOMINIO'=>'Remover domínio','ADICIONAR_REGISTRO'=>'Adicionar registro',
-        'EDITAR_REGISTRO'=>'Editar registro','REMOVER_REGISTRO'=>'Remover registro','ADICIONAR_PTR_IPV6'=>'Adicionar PTR IPv6',
-        'EDITAR_PTR_IPV6'=>'Editar PTR IPv6','REMOVER_PTR_IPV6'=>'Remover PTR IPv6','ADICIONAR_PTR_IPV4_GENERATE'=>'Adicionar PTR IPv4',
-        'EDITAR_PTR_IPV4'=>'Editar PTR IPv4','REMOVER_PTR_IPV4'=>'Remover PTR IPv4','LOGIN_SUCESSO'=>'Login',
-        'LOGIN_FALHA'=>'Login falhou','LOGOUT'=>'Logout','CRIAR_USUARIO'=>'Criar usuário','ALTERAR_USUARIO'=>'Alterar usuário',
-        'REMOVER_USUARIO'=>'Remover usuário','REDEFINIR_SENHA_USUARIO'=>'Redefinir senha','ALTERAR_PROPRIA_SENHA'=>'Alterar própria senha',
-        'CADASTRAR_DNS_SERVER'=>'Cadastrar servidor DNS','ALTERAR_DNS_SERVER'=>'Alterar servidor DNS',
-        'REMOVER_DNS_SERVER'=>'Remover servidor DNS','TESTAR_DNS_SERVER'=>'Testar servidor DNS',
-        'DNS_SERVER_ADD'=>'Cadastrar servidor DNS','DNS_SERVER_UPDATE'=>'Alterar servidor DNS',
-        'DNS_SERVER_REMOVE'=>'Remover servidor DNS','DNS_SERVER_TEST'=>'Testar servidor DNS',
-        'TESTE_SSH_OK'=>'SSH OK','TESTE_SSH_FALHA'=>'SSH falhou',
-        'TESTE_BIND_OK'=>'BIND OK','TESTE_BIND_FALHA'=>'BIND falhou',
-        'TESTE_AXFR_OK'=>'AXFR OK','TESTE_AXFR_FALHA'=>'AXFR falhou',
-        'AGENTE_OK'=>'Agente OK','AGENTE_FALHA'=>'Agente falhou',
-        'DNS_SERVER_AGENT_INSTALL'=>'Instalar agente DNS','DNS_SERVER_AGENT_UPDATE'=>'Atualizar agente DNS',
-        'DNS_SERVER_AGENT_REMOVE'=>'Remover agente DNS','DNS_SERVER_INVENTORY'=>'Inventário do servidor',
-        'DNS_SERVER_SLAVE_LAYOUT_MIGRATE'=>'Migrar layout slave',
-        'DNS_ZONE_INVENTORY_REFRESH'=>'Atualizar inventário DNS',
-        'DNS_ZONE_GOVERNANCE_UPDATE'=>'Atualizar governança DNS',
-        'DNS_SERVER_GOVERNANCE_NOTE'=>'Observação do servidor',
-        'DNS_ZONE_SLAVE_SYNC_ONE'=>'Sincronizar zona','DNS_ZONE_SLAVE_SYNC_MISSING'=>'Sincronizar zonas ausentes',
-        default=>null
-    };
-    if ($mapped !== null) return $mapped;
-    $text = str_replace('_', ' ', $action);
-    return function_exists('mb_convert_case') ? mb_convert_case(mb_strtolower($text, 'UTF-8'), MB_CASE_TITLE, 'UTF-8') : ucfirst(strtolower($text));
-}
-function auditDate(string $utc): string {
-    try { return (new DateTimeImmutable($utc, new DateTimeZone('UTC')))->setTimezone(new DateTimeZone('America/Sao_Paulo'))->format('d/m/Y H:i:s'); }
-    catch (Throwable $e) { error_log('Dashboard - data inválida: ' . $e->getMessage()); return 'Indisponível'; }
-}
-function auditTarget(array $event): string {
-    $domain = preg_replace('/\.(?:rev6|rev)$/i', '', trim((string) ($event['dominio'] ?? '')));
-    $name = trim((string) ($event['nome_registro'] ?? ''));
-    if ($domain !== '') return $domain;
-    if ($name !== '' && !str_ends_with(strtolower($name), '.rev6') && !preg_match('/^[0-9a-f](?:\.[0-9a-f]){7,}$/i', $name)) return $name;
-    return str_contains((string) ($event['acao'] ?? ''), 'PTR_IPV6') ? 'Registro reverso IPv6' : '-';
-}
-function auditDrilldownUrl(array $filters): string {
-    return 'auditoria.php?' . http_build_query($filters);
-}
-function auditTargetDrilldown(array $event): ?string {
-    $domain = trim((string) ($event['dominio'] ?? ''));
-    if ($domain !== '') return auditDrilldownUrl(['dominio' => preg_replace('/\.(?:rev6|rev)$/i', '', $domain)]);
-    $type = (string) ($event['tipo_registro'] ?? '');
-    $server = trim((string) ($event['nome_registro'] ?? ''));
-    if (in_array($type, ['DNS_SERVER', 'DNS_ZONE'], true) && $server !== '' && strcasecmp($server, 'inventario') !== 0) {
-        return auditDrilldownUrl(['servidor' => $server]);
-    }
-    return null;
-}
 function usageClass(?int $value): string { return $value === null ? 'unavailable' : ($value >= 90 ? 'critical' : ($value >= 75 ? 'warning' : 'normal')); }
 
-$auditEvents = []; $auditUnavailable = false;
-try {
-    $auditEvents = db()->query("SELECT usuario, acao, dominio, tipo_registro, nome_registro, status, criado_em FROM audit_logs ORDER BY id DESC LIMIT 10")->fetchAll(PDO::FETCH_ASSOC);
-} catch (Throwable $e) { $auditUnavailable = true; error_log('Dashboard - falha na auditoria: ' . $e->getMessage()); }
 $forwardZones = glob('/var/cache/bind/master-aut/*.hosts') ?: [];
 $reverseFiles = glob('/var/cache/bind/master-rev/*') ?: [];
 $zoneInventorySummary = ['servidores' => [], 'divergencias' => 0, 'excecoes_aprovadas' => 0, 'zonas_unicas' => null];
-$zoneComparison = [];
-$zoneClassification = [];
 try {
     $zoneInventorySummary = dns_zones_resumo();
-    $zoneComparison = dns_zones_comparar();
-    $zoneClassification = dns_zones_resumo_classificacao($zoneComparison);
 } catch (Throwable $e) {
     metricError('inventario_zonas', $e->getMessage());
 }
-$inventoryServers = $zoneInventorySummary['servidores'] ?? [];
-$lastInventoryAt = null;
-foreach ($inventoryServers as $inventoryServer) {
-    $checkedAt = trim((string) ($inventoryServer['checked_at'] ?? ''));
-    if ($checkedAt !== '' && ($lastInventoryAt === null || strcmp($checkedAt, $lastInventoryAt) > 0)) {
-        $lastInventoryAt = $checkedAt;
-    }
-}
-$zonesSynchronized = (int) ($zoneClassification['OK'] ?? 0);
-$extraZones = (int) ($zoneClassification['EXTRA_NO_SLAVE'] ?? 0);
 
 $recentActivity = [
     'domains_created' => 0,
@@ -197,12 +126,12 @@ $serverIp = $serverIp ?: 'Indisponível';
 .sidebar{position:fixed;left:0;top:0;width:270px;height:100vh;background:#020617;border-right:1px solid #1e293b;padding:20px;overflow-y:auto;box-shadow:none;z-index:20}.sidebar h2{color:#38bdf8;margin:0 0 30px}.sidebar a{display:block;color:#cbd5e1;text-decoration:none;padding:12px;border-radius:8px;margin-bottom:6px;transition:.2s}.sidebar a:hover,.sidebar a:focus,.sidebar a.active{background:#1e293b;color:#38bdf8;outline:none}.sidebar-group{margin-top:10px}.sidebar-group-toggle{display:flex;align-items:center;justify-content:space-between;width:100%;border:0;border-radius:8px;background:transparent;color:#94a3b8;padding:12px;cursor:pointer;text-align:left;font-size:13px;font-weight:bold;transition:.2s}.sidebar-group-toggle:hover,.sidebar-group-toggle:focus{background:#0f172a;color:#38bdf8;outline:none}.sidebar-group-arrow{font-size:14px;line-height:1}.sidebar-submenu{display:none;padding-left:8px}.sidebar-group.open .sidebar-submenu{display:block}.sidebar-submenu a{padding:10px 12px}
 .main-content{margin-left:270px;padding:25px}.topbar{display:flex;justify-content:space-between;align-items:center;gap:18px;background:#071226;border:1px solid #1e293b;border-radius:14px;padding:17px 20px;margin-bottom:25px}.topbar-title{display:flex;align-items:center;gap:9px}.topbar-info{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:10px;color:#cbd5e1;font-size:13px}.info-badge{display:flex;align-items:center;gap:9px;min-height:40px;background:#020617;border:1px solid #1e293b;border-radius:11px;padding:9px 12px}.info-badge svg{width:19px;height:19px;color:#38bdf8;flex:0 0 auto}.info-badge-text{display:flex;flex-direction:column;gap:2px}.info-badge-label{color:#64748b;font-size:10px;font-weight:bold;letter-spacing:.04em;text-transform:uppercase}.info-badge-value{color:#e2e8f0;font-weight:bold}
 .section{background:#071226;border:1px solid #1e293b;border-radius:16px;padding:25px;margin-bottom:25px;box-shadow:0 0 20px #0004}.section-header{display:flex;justify-content:space-between;align-items:center;gap:15px;margin-bottom:18px}.section-header h2{font-size:18px;margin:0}.section-link{color:#38bdf8;text-decoration:none;font-weight:bold;font-size:14px}
-.summary-grid,.inventory-grid,.recent-grid,.quick-grid{display:grid;gap:14px}.summary-grid,.recent-grid{grid-template-columns:repeat(4,minmax(0,1fr))}.inventory-grid{grid-template-columns:repeat(5,minmax(0,1fr))}.quick-grid{grid-template-columns:repeat(6,minmax(0,1fr))}.stat{background:#020617;border:1px solid #1e293b;border-radius:14px;padding:16px;min-height:112px}.stat-link{display:block;color:inherit;text-decoration:none;cursor:pointer;transition:transform .15s ease}.stat-link:hover,.stat-link:focus{transform:translateY(-2px);outline:none}.stat .icon{font-size:24px;margin-bottom:8px}.stat .label{color:#94a3b8;font-size:11px;text-transform:uppercase}.stat .value{font-size:24px;font-weight:bold;color:#38bdf8;margin-top:7px;overflow-wrap:anywhere}.stat .value.unavailable{font-size:16px;color:#94a3b8}.stat small{display:block;color:#64748b;margin-top:7px}
+.summary-grid,.recent-grid,.quick-grid{display:grid;gap:14px}.summary-grid,.recent-grid{grid-template-columns:repeat(4,minmax(0,1fr))}.quick-grid{grid-template-columns:repeat(6,minmax(0,1fr))}.stat{background:#020617;border:1px solid #1e293b;border-radius:14px;padding:16px;min-height:112px}.stat-link{display:block;color:inherit;text-decoration:none;cursor:pointer;transition:transform .15s ease}.stat-link:hover,.stat-link:focus{transform:translateY(-2px);outline:none}.stat .icon{font-size:24px;margin-bottom:8px}.stat .label{color:#94a3b8;font-size:11px;text-transform:uppercase}.stat .value{font-size:24px;font-weight:bold;color:#38bdf8;margin-top:7px;overflow-wrap:anywhere}.stat .value.unavailable{font-size:16px;color:#94a3b8}.stat small{display:block;color:#64748b;margin-top:7px}
 .metric-icon{display:block;width:27px;height:27px;color:#38bdf8}
-.activity-table{width:100%;border-collapse:collapse}.activity-table th,.activity-table td{padding:11px 10px;border-bottom:1px solid #1e293b;text-align:left;font-size:13px;vertical-align:top}.activity-table th{color:#94a3b8;font-size:12px;text-transform:uppercase}.activity-table tbody tr{cursor:pointer;transition:background-color .15s ease}.activity-table tbody tr:hover,.activity-table tbody tr:focus-within{background:#0f172a}.activity-table td a{display:block;color:inherit;text-decoration:none}.activity-table td a:hover,.activity-table td a:focus{color:#38bdf8;outline:none}.activity-status{font-weight:bold}.activity-status.ok{color:#4ade80}.activity-status.error{color:#f87171}.empty{color:#94a3b8;margin:0}
+.empty{color:#94a3b8;margin:0}
 .server-list{display:grid;gap:8px}.server-row{display:grid;grid-template-columns:minmax(120px,.7fr) minmax(140px,1fr) 90px minmax(150px,1fr);gap:12px;align-items:center;background:#020617;border:1px solid #1e293b;border-radius:10px;padding:11px 13px;cursor:pointer;transition:transform .15s ease}.server-row:hover,.server-row:focus-within{transform:translateY(-2px)}.server-row>a{color:inherit;text-decoration:none}.server-name{font-weight:800}.server-ip,.server-updated{color:#94a3b8;font-size:12px}.server-updated a{color:inherit;text-decoration:none}.server-updated a:hover,.server-updated a:focus{color:#38bdf8;outline:none}.status-pill{display:inline-flex;justify-content:center;border-radius:999px;padding:4px 8px;font-size:11px;font-weight:800}.status-pill.online{background:#123326;color:#86efac}.status-pill.offline{background:#3a1418;color:#fca5a5}.quick-link{display:block;min-height:82px;background:#020617;border:1px solid #1e293b;border-radius:12px;padding:14px;color:#e2e8f0;text-decoration:none;transition:.2s}.quick-link:hover,.quick-link:focus{border-color:#38bdf8;transform:translateY(-2px);outline:none}.quick-link strong{display:block;margin-top:8px;font-size:13px}.quick-link small{display:block;color:#64748b;margin-top:5px;font-size:11px}.menu-overlay{display:none}
-@media(max-width:1250px){.summary-grid,.inventory-grid,.recent-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.quick-grid{grid-template-columns:repeat(3,minmax(0,1fr))}}
-@media(max-width:760px){.menu-toggle{display:block}.sidebar{transform:translateX(-100%);transition:transform .2s;width:min(300px,86vw)}.sidebar.open{transform:translateX(0)}.menu-overlay{position:fixed;inset:0;background:#020617b8;z-index:10}.menu-overlay.open{display:block}.main-content{margin-left:0;padding:70px 14px 20px}.topbar,.section-header{align-items:flex-start;flex-direction:column}.topbar-info{justify-content:flex-start;width:100%}.info-badge{flex:1 1 145px}.section{padding:18px}.summary-grid,.inventory-grid,.recent-grid,.quick-grid{grid-template-columns:1fr}.server-row{grid-template-columns:1fr;gap:5px}.activity-table thead{display:none}.activity-table,.activity-table tbody,.activity-table tr,.activity-table td{display:block;width:100%}.activity-table tr{background:#020617;border:1px solid #1e293b;border-radius:12px;padding:9px 12px;margin-bottom:12px}.activity-table td{display:grid;grid-template-columns:90px 1fr;gap:10px;border:0;padding:6px 0}.activity-table td:before{content:attr(data-label);color:#94a3b8;font-size:11px;text-transform:uppercase;font-weight:bold}}
+@media(max-width:1250px){.summary-grid,.recent-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.quick-grid{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media(max-width:760px){.menu-toggle{display:block}.sidebar{transform:translateX(-100%);transition:transform .2s;width:min(300px,86vw)}.sidebar.open{transform:translateX(0)}.menu-overlay{position:fixed;inset:0;background:#020617b8;z-index:10}.menu-overlay.open{display:block}.main-content{margin-left:0;padding:70px 14px 20px}.topbar,.section-header{align-items:flex-start;flex-direction:column}.topbar-info{justify-content:flex-start;width:100%}.info-badge{flex:1 1 145px}.section{padding:18px}.summary-grid,.recent-grid,.quick-grid{grid-template-columns:1fr}}
 </style>
 </head>
 <body>
@@ -258,18 +187,6 @@ $serverIp = $serverIp ?: 'Indisponível';
 <a class="stat stat-link" href="zones.php?status=divergencias"><div class="icon"><svg class="metric-icon" aria-hidden="true"><use href="#icon-records"></use></svg></div><div class="label">Divergências reais</div><div class="value"><?= (int) ($zoneInventorySummary['divergencias'] ?? 0) ?></div><small>Problemas operacionais</small></a>
 <a class="stat stat-link" href="zones.php?status=excecoes"><div class="icon"><svg class="metric-icon" aria-hidden="true"><use href="#icon-server"></use></svg></div><div class="label">Exceções aprovadas</div><div class="value"><?= (int) ($zoneInventorySummary['excecoes_aprovadas'] ?? 0) ?></div><small>Legítimas ou ignoradas</small></a>
 </div></section>
-<section class="section"><div class="section-header"><h2>🧭 Inventário DNS</h2><a class="section-link" href="zones.php">Abrir inventário</a></div><div class="inventory-grid">
-<div class="stat"><div class="label">Última coleta</div><div class="value <?= $lastInventoryAt ? '' : 'unavailable' ?>" style="<?= $lastInventoryAt ? 'font-size:18px' : '' ?>"><?= htmlspecialchars($lastInventoryAt ? auditDate($lastInventoryAt) : 'Indisponível') ?></div><small>NS1 e servidores ativos</small></div>
-<a class="stat stat-link" href="zones.php?status=ok"><div class="label">Zonas sincronizadas</div><div class="value"><?= $zonesSynchronized ?></div><small>Serial equivalente</small></a>
-<a class="stat stat-link" href="zones.php?status=divergencias"><div class="label">Divergências reais</div><div class="value"><?= (int) $zoneInventorySummary['divergencias'] ?></div><small>Ausência, serial ou coleta</small></a>
-<a class="stat stat-link" href="zones.php?status=extras"><div class="label">Zonas extras</div><div class="value"><?= $extraZones ?></div><small>Extras não ignoradas</small></a>
-<a class="stat stat-link" href="zones.php?status=excecoes"><div class="label">Exceções aprovadas</div><div class="value"><?= (int) ($zoneInventorySummary['excecoes_aprovadas'] ?? 0) ?></div><small>Legítimas ou ignoradas</small></a>
-</div></section>
-<section class="section"><div class="section-header"><h2>📋 Auditoria recente</h2><a class="section-link" href="auditoria.php">Ver auditoria completa</a></div>
-<?php if ($auditUnavailable): ?><p class="empty">As atividades estão temporariamente indisponíveis.</p><?php elseif (!$auditEvents): ?><p class="empty">Nenhuma atividade registrada.</p><?php else: ?>
-<table class="activity-table"><thead><tr><th>Data</th><th>Ação</th><th>Domínio / Servidor</th><th>Status</th></tr></thead><tbody>
-<?php foreach ($auditEvents as $event): ?><?php $actionUrl = auditDrilldownUrl(['acao' => (string) $event['acao']]); $targetUrl = auditTargetDrilldown($event); $statusUrl = auditDrilldownUrl(['status' => (string) $event['status']]); ?><tr tabindex="0" title="Abrir auditoria detalhada" data-audit-url="<?= htmlspecialchars($actionUrl) ?>"><td data-label="Data"><a href="<?= htmlspecialchars($actionUrl) ?>"><?= htmlspecialchars(auditDate((string)$event['criado_em'])) ?></a></td><td data-label="Ação"><a href="<?= htmlspecialchars($actionUrl) ?>"><?= htmlspecialchars(auditAction((string)$event['acao'])) ?></a></td><td data-label="Domínio / Servidor"><?php if ($targetUrl !== null): ?><a href="<?= htmlspecialchars($targetUrl) ?>"><?= htmlspecialchars(auditTarget($event)) ?></a><?php else: ?><?= htmlspecialchars(auditTarget($event)) ?><?php endif; ?></td><td data-label="Status" class="activity-status <?= $event['status']==='OK'?'ok':'error' ?>"><a href="<?= htmlspecialchars($statusUrl) ?>"><?= htmlspecialchars((string)$event['status']) ?></a></td></tr><?php endforeach; ?>
-</tbody></table><?php endif; ?></section>
 <section class="section"><div class="section-header"><h2>🕘 Atividade recente</h2><span class="section-link">Últimos 7 dias</span></div><div class="recent-grid">
 <div class="stat"><div class="label">Domínios criados</div><div class="value"><?= $recentActivity['domains_created'] ?></div></div>
 <div class="stat"><div class="label">Registros criados</div><div class="value"><?= $recentActivity['records_created'] ?></div></div>
@@ -282,14 +199,6 @@ $serverIp = $serverIp ?: 'Indisponível';
 <script>
 const button=document.querySelector('.menu-toggle'),menu=document.querySelector('.sidebar'),overlay=document.querySelector('.menu-overlay');
 function setMenu(open){menu.classList.toggle('open',open);overlay.classList.toggle('open',open);button.setAttribute('aria-expanded',open?'true':'false')}
-document.querySelectorAll('[data-audit-url]').forEach(row=>{
-    row.addEventListener('click',event=>{if(!event.target.closest('a'))window.location.href=row.dataset.auditUrl;});
-    row.addEventListener('keydown',event=>{if(event.target===row&&(event.key==='Enter'||event.key===' ')){event.preventDefault();window.location.href=row.dataset.auditUrl;}});
-});
-document.querySelectorAll('[data-server-url]').forEach(row=>{
-    row.addEventListener('click',event=>{if(!event.target.closest('a'))window.location.href=row.dataset.serverUrl;});
-    row.addEventListener('keydown',event=>{if(event.target===row&&(event.key==='Enter'||event.key===' ')){event.preventDefault();window.location.href=row.dataset.serverUrl;}});
-});
 button.addEventListener('click',()=>setMenu(!menu.classList.contains('open')));overlay.addEventListener('click',()=>setMenu(false));menu.addEventListener('click',e=>{if(e.target.closest('a')&&matchMedia('(max-width:760px)').matches)setMenu(false)});
 document.querySelectorAll('.sidebar-group-toggle').forEach(toggle=>toggle.addEventListener('click',()=>{
 const group=toggle.closest('.sidebar-group'),open=!group.classList.contains('open');
