@@ -3,6 +3,7 @@ require "config.php";
 require "includes/auth.php";
 require_once __DIR__ . "/includes/db.php";
 require_once __DIR__ . "/includes/dns_zones.php";
+require_once __DIR__ . "/includes/dns_servers.php";
 
 function metricError(string $name, string $message): void { error_log("Dashboard - falha em {$name}: {$message}"); }
 function cpuSample(): ?array {
@@ -84,6 +85,32 @@ try {
     $zoneInventorySummary = dns_zones_resumo();
 } catch (Throwable $e) {
     metricError('inventario_zonas', $e->getMessage());
+}
+$dnsServers = [];
+$totalDnsServers = 1;
+$onlineDnsServers = 0;
+try {
+    $dnsServers = dns_servers_listar();
+    $totalDnsServers = 1 + count($dnsServers);
+    $onlineDnsServers = 0;
+    $inventoryServers = $zoneInventorySummary['servidores'] ?? [];
+    $localInventory = null;
+    foreach ($inventoryServers as $inventoryServer) {
+        if (($inventoryServer['server_role'] ?? '') === 'master') {
+            $localInventory = $inventoryServer;
+            break;
+        }
+    }
+    if ($localInventory && (int) ($localInventory['last_ok'] ?? 0) === 1) {
+        $onlineDnsServers++;
+    }
+    foreach ($dnsServers as $dnsServer) {
+        if (($dnsServer['ultimo_status'] ?? '') === 'online') {
+            $onlineDnsServers++;
+        }
+    }
+} catch (Throwable $e) {
+    metricError('servidores_dns', $e->getMessage());
 }
 
 $recentActivity = [
@@ -185,7 +212,7 @@ $uptimeValue = uptimeText();
 <?php foreach ([['domains.php','🌐','Domínios','Administrar domínios'],['dns-zones.php','📦','Zonas DNS','Registros forward'],['reverse-zones.php','🔁','Zonas Reversas','Registros PTR'],['zones.php','🧭','Inventário DNS','Comparar servidores'],['dns-servers.php','🖥️','Servidores DNS','Saúde e ferramentas'],['auditoria.php','📋','Auditoria DNS','Investigar eventos']] as $link): ?>
 <a class="quick-link" href="<?= $link[0] ?>"><span><?= $link[1] ?></span><strong><?= $link[2] ?></strong><small><?= $link[3] ?></small></a><?php endforeach; ?>
 </div></section>
-<section class="section"><div class="section-header"><h2>🖥 Saúde do sistema</h2><span class="section-link">Host atual</span></div><div class="summary-grid">
+<section class="section"><div class="section-header"><h2>🩺 Saúde DNS</h2><span class="section-link">Host atual</span></div><div class="summary-grid">
 <div class="stat"><div class="icon"><svg class="metric-icon" aria-hidden="true"><use href="#icon-cpu"></use></svg></div><div class="label">CPU</div><div class="value <?= usageClass($cpuValue) ?>"><?= $cpuValue === null ? 'Indisponível' : $cpuValue . '%' ?></div><small>Uso do processador</small></div>
 <div class="stat"><div class="icon"><svg class="metric-icon" aria-hidden="true"><use href="#icon-memory"></use></svg></div><div class="label">Memória</div><div class="value <?= usageClass($ramValue) ?>"><?= $ramValue === null ? 'Indisponível' : $ramValue . '%' ?></div><small>Uso de RAM</small></div>
 <div class="stat"><div class="icon"><svg class="metric-icon" aria-hidden="true"><use href="#icon-storage"></use></svg></div><div class="label">Disco</div><div class="value <?= usageClass($diskValue) ?>"><?= $diskValue === null ? 'Indisponível' : $diskValue . '%' ?></div><small>Partição raiz</small></div>
@@ -194,8 +221,8 @@ $uptimeValue = uptimeText();
 <section class="section"><div class="section-header"><h2>📦 Resumo geral</h2></div><div class="summary-grid">
 <div class="stat"><div class="icon"><svg class="metric-icon" aria-hidden="true"><use href="#icon-globe"></use></svg></div><div class="label">Domínios</div><div class="value"><?= count($forwardZones) ?></div><small>Zonas forward</small></div>
 <div class="stat"><div class="icon"><svg class="metric-icon" aria-hidden="true"><use href="#icon-reverse"></use></svg></div><div class="label">Zonas reversas</div><div class="value"><?= count($reverseFiles) ?></div><small>IPv4 + IPv6</small></div>
-<a class="stat stat-link" href="zones.php?status=divergencias"><div class="icon"><svg class="metric-icon" aria-hidden="true"><use href="#icon-records"></use></svg></div><div class="label">Divergências reais</div><div class="value"><?= (int) ($zoneInventorySummary['divergencias'] ?? 0) ?></div><small>Problemas operacionais</small></a>
-<a class="stat stat-link" href="zones.php?status=excecoes"><div class="icon"><svg class="metric-icon" aria-hidden="true"><use href="#icon-server"></use></svg></div><div class="label">Exceções aprovadas</div><div class="value"><?= (int) ($zoneInventorySummary['excecoes_aprovadas'] ?? 0) ?></div><small>Legítimas ou ignoradas</small></a>
+<a class="stat stat-link" href="dns-servers.php"><div class="icon"><svg class="metric-icon" aria-hidden="true"><use href="#icon-server"></use></svg></div><div class="label">Servidores DNS</div><div class="value"><?= $totalDnsServers ?></div><small>NS1 + servidores cadastrados</small></a>
+<a class="stat stat-link" href="dns-servers.php"><div class="icon"><svg class="metric-icon" aria-hidden="true"><use href="#icon-server"></use></svg></div><div class="label">Servidores online</div><div class="value"><?= $onlineDnsServers ?></div><small><?= max(0, $totalDnsServers - $onlineDnsServers) ?> offline</small></a>
 </div></section>
 <section class="section"><div class="section-header"><h2>🕘 Atividade recente</h2><span class="section-link">Últimos 7 dias</span></div><div class="recent-grid">
 <div class="stat"><div class="label">Domínios criados</div><div class="value"><?= $recentActivity['domains_created'] ?></div></div>
