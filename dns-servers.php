@@ -667,6 +667,7 @@ $resumoTemDados = (bool) array_filter($resumoTeste, static fn($valor) => $valor 
 <button type="button" class="menu-action" data-open-agent-dialog="agent-server-<?= $serverId ?>" data-agent-config="agent-config-<?= $serverId ?>"><span class="icon" aria-hidden="true">👤</span><span>Gerenciar agente</span></button>
 </div>
 <div class="quick-group"><span class="quick-title">Manutenção</span>
+<a class="menu-action" href="historico-servidor.php?servidor=<?= $serverId ?>"><span class="icon" aria-hidden="true">📋</span><span>Histórico operacional</span></a>
 <form method="POST" onsubmit="return confirm('Migrar blocos slave legados para named.conf.local neste servidor? Nenhum arquivo legado sera apagado.');"><?= csrf_field() ?><input type="hidden" name="acao" value="migrar_layout_slave"><input type="hidden" name="id" value="<?= $serverId ?>"><button type="submit" class="menu-action"><span class="icon" aria-hidden="true">🔄</span><span>Migrar layout</span></button></form>
 </div>
 <div class="quick-group"><span class="quick-title">Zona de perigo</span>
