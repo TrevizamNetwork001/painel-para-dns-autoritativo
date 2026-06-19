@@ -65,10 +65,10 @@ function historico_servidor_condicao_tipo(string $tipo): string
     return match ($tipo) {
         'cadastro' => "acao IN ('DNS_SERVER_ADD','DNS_SERVER_REMOVE')",
         'edicao' => "acao = 'DNS_SERVER_UPDATE'",
-        'ssh' => "acao = 'DNS_SERVER_TEST' AND mensagem LIKE 'Conexão SSH:%'",
-        'bind' => "acao = 'DNS_SERVER_TEST' AND mensagem LIKE 'Status BIND:%'",
-        'axfr' => "acao = 'DNS_SERVER_TEST' AND mensagem LIKE 'Transferencia de zona%'",
-        'agente' => "acao IN ('DNS_SERVER_AGENT_INSTALL','DNS_SERVER_AGENT_UPDATE','DNS_SERVER_AGENT_REMOVE')",
+        'ssh' => "(acao IN ('TESTE_SSH_OK','TESTE_SSH_FALHA') OR (acao = 'DNS_SERVER_TEST' AND mensagem LIKE 'Conexão SSH:%'))",
+        'bind' => "(acao IN ('TESTE_BIND_OK','TESTE_BIND_FALHA') OR (acao = 'DNS_SERVER_TEST' AND mensagem LIKE 'Status BIND:%'))",
+        'axfr' => "(acao IN ('TESTE_AXFR_OK','TESTE_AXFR_FALHA') OR (acao = 'DNS_SERVER_TEST' AND mensagem LIKE 'Transferencia de zona%'))",
+        'agente' => "acao IN ('AGENTE_OK','AGENTE_FALHA','DNS_SERVER_AGENT_INSTALL','DNS_SERVER_AGENT_UPDATE','DNS_SERVER_AGENT_REMOVE')",
         'layout' => "acao = 'DNS_SERVER_SLAVE_LAYOUT_MIGRATE'",
         'inventario' => "acao = 'DNS_SERVER_INVENTORY'",
         'sincronizacao' => "acao IN ('DNS_ZONE_SLAVE_SYNC_ONE','DNS_ZONE_SLAVE_SYNC_MISSING')",
@@ -91,6 +91,14 @@ function historico_servidor_rotulo(array $evento): string
     }
 
     return match ($acao) {
+        'TESTE_SSH_OK' => 'Teste SSH OK',
+        'TESTE_SSH_FALHA' => 'Teste SSH com falha',
+        'TESTE_BIND_OK' => 'Teste BIND OK',
+        'TESTE_BIND_FALHA' => 'Teste BIND com falha',
+        'TESTE_AXFR_OK' => 'Teste AXFR OK',
+        'TESTE_AXFR_FALHA' => 'Teste AXFR com falha',
+        'AGENTE_OK' => 'Agente OK',
+        'AGENTE_FALHA' => 'Agente com falha',
         'DNS_SERVER_ADD' => 'Servidor cadastrado',
         'DNS_SERVER_UPDATE' => 'Cadastro do servidor alterado',
         'DNS_SERVER_REMOVE' => 'Servidor removido',
