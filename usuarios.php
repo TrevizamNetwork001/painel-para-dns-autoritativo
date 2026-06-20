@@ -422,7 +422,6 @@ button:disabled{cursor:not-allowed;opacity:.65}
         <button type="button" class="tool-chip success" data-panel-toggle="diagnostic-panel" data-open-label="Abrir diagnóstico" data-close-label="Ocultar diagnóstico">
             <span class="icon">🩺</span><span class="label">Abrir diagnóstico</span>
         </button>
-        <a class="tool-chip" href="auditoria.php"><span class="icon">📋</span><span>Ver auditoria</span></a>
     </div>
 </section>
 
