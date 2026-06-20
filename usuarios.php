@@ -222,27 +222,27 @@ $diagnosticosUsuarios = [
     [
         'nivel' => 'ok',
         'icone' => '✓',
-        'texto' => 'Conta atual protegida contra remoção.',
+        'texto' => 'A conta atual continua protegida contra remoção.',
     ],
     [
         'nivel' => $contas_ativas > 0 ? 'ok' : 'bad',
         'icone' => $contas_ativas > 0 ? '✓' : '✖',
-        'texto' => 'Existem ' . $contas_ativas . ' contas ativas.',
+        'texto' => 'O painel tem ' . $contas_ativas . ' conta(s) ativa(s).',
     ],
     [
         'nivel' => $contas_inativas > 0 ? 'warn' : 'ok',
         'icone' => $contas_inativas > 0 ? '⚠' : '✓',
-        'texto' => 'Existem ' . $contas_inativas . ' contas inativas.',
+        'texto' => 'O painel tem ' . $contas_inativas . ' conta(s) inativa(s).',
     ],
     [
         'nivel' => $troca_pendente > 0 ? 'warn' : 'ok',
         'icone' => $troca_pendente > 0 ? '⚠' : '✓',
-        'texto' => 'Há ' . $troca_pendente . ' conta(s) com troca de senha pendente.',
+        'texto' => 'Há ' . $troca_pendente . ' conta(s) com troca de senha pendente no painel.',
     ],
     [
         'nivel' => 'ok',
         'icone' => '✓',
-        'texto' => 'Perfis disponíveis: Administrador e Moderador.',
+        'texto' => 'Perfis disponíveis no painel: Administrador e Moderador.',
     ],
 ];
 
@@ -419,8 +419,8 @@ button:disabled{cursor:not-allowed;opacity:.65}
         <button type="button" class="tool-chip ghost" data-panel-toggle="users-list-panel" data-open-label="Mostrar contas" data-close-label="Ocultar contas">
             <span class="icon">👥</span><span class="label">Mostrar contas</span>
         </button>
-        <button type="button" class="tool-chip success" data-panel-toggle="diagnostic-panel" data-open-label="Abrir diagnóstico" data-close-label="Ocultar diagnóstico">
-            <span class="icon">🩺</span><span class="label">Abrir diagnóstico</span>
+        <button type="button" class="tool-chip success" data-panel-toggle="diagnostic-panel" data-open-label="Abrir resumo" data-close-label="Ocultar resumo">
+            <span class="icon">🩺</span><span class="label">Abrir resumo</span>
         </button>
     </div>
 </section>
@@ -557,11 +557,11 @@ button:disabled{cursor:not-allowed;opacity:.65}
 <section class="card panel-collapsible" id="diagnostic-panel" hidden>
     <div class="card-head">
         <div>
-            <h2>Diagnóstico de usuários</h2>
-            <p class="panel-lead">Visão rápida do estado das contas do painel.</p>
+            <h2>Resumo das contas</h2>
+            <p class="panel-lead">Visão rápida do estado agregado das contas do painel.</p>
         </div>
         <div class="card-head-actions">
-            <button type="button" class="toggle-users-btn" data-panel-toggle="diagnostic-panel" data-open-label="Abrir diagnóstico" data-close-label="Ocultar diagnóstico"><span class="label">Abrir diagnóstico</span></button>
+            <button type="button" class="toggle-users-btn" data-panel-toggle="diagnostic-panel" data-open-label="Abrir resumo" data-close-label="Ocultar resumo"><span class="label">Abrir resumo</span></button>
         </div>
     </div>
     <div class="diagnostic-grid">
