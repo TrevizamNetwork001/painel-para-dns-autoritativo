@@ -222,10 +222,11 @@ button:disabled{cursor:not-allowed;opacity:.65}
 .user-card{padding:16px 10px;border-bottom:1px solid #1e293b}
 .user-card:last-child{border-bottom:0;padding-bottom:2px}
 .user-row-inner{width:100%;max-width:1120px;margin:0 auto;padding:0 12px}
-.user-summary{display:flex;justify-content:space-between;align-items:flex-start;gap:18px}
-.user-name{margin:0 0 4px;color:#fff;font-size:16px}
+.user-summary{display:block}
+.user-title-line{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.user-name{margin:0;color:#fff;font-size:16px}
 .user-created{color:#64748b;font-size:11px}
-.badges{display:flex;justify-content:flex-end;gap:6px;flex-wrap:wrap}
+.badges{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
 .badge{display:inline-flex;align-items:center;min-height:22px;padding:3px 7px;border-radius:999px;font-size:10px;font-weight:bold}
 .badge-active{background:#052e16;color:#86efac}
 .badge-inactive{background:#450a0a;color:#fca5a5}
@@ -260,8 +261,7 @@ button:disabled{cursor:not-allowed;opacity:.65}
     .page-header{flex-direction:column}
     .card{padding:15px}
     .create-grid,.user-actions{grid-template-columns:1fr}
-    .user-summary{flex-direction:column;gap:8px}
-    .badges{justify-content:flex-start}
+    .user-title-line{align-items:flex-start}
     .inline-form,.account-tools{align-items:stretch;flex-direction:column}
     .user-actions>.action-block:first-child .inline-form,.account-tools,.account-tools .inline-form{display:flex;justify-content:flex-start}
     .profile-select,.senha{width:100%;max-width:none}
@@ -322,22 +322,22 @@ button:disabled{cursor:not-allowed;opacity:.65}
             <article class="user-card">
                 <div class="user-row-inner">
                 <div class="user-summary">
-                    <div>
+                    <div class="user-title-line">
                         <h3 class="user-name"><?= htmlspecialchars($item['usuario']) ?></h3>
-                        <div class="user-created">
-                            Criado em <?= date('d/m/Y H:i', strtotime($item['criado_em'])) ?>
+                        <div class="badges" aria-label="Status da conta">
+                            <span class="badge <?= $item['ativo'] ? 'badge-active' : 'badge-inactive' ?>">
+                                <?= $item['ativo'] ? 'Ativo' : 'Inativo' ?>
+                            </span>
+                            <?php if ($item['trocar_senha']): ?>
+                                <span class="badge badge-pending">Troca de senha pendente</span>
+                            <?php endif; ?>
+                            <?php if ($contaAtual): ?>
+                                <span class="badge badge-current">Conta atual</span>
+                            <?php endif; ?>
                         </div>
                     </div>
-                    <div class="badges" aria-label="Status da conta">
-                        <span class="badge <?= $item['ativo'] ? 'badge-active' : 'badge-inactive' ?>">
-                            <?= $item['ativo'] ? 'Ativo' : 'Inativo' ?>
-                        </span>
-                        <?php if ($item['trocar_senha']): ?>
-                            <span class="badge badge-pending">Troca de senha pendente</span>
-                        <?php endif; ?>
-                        <?php if ($contaAtual): ?>
-                            <span class="badge badge-current">Conta atual</span>
-                        <?php endif; ?>
+                    <div class="user-created">
+                        Criado em <?= date('d/m/Y H:i', strtotime($item['criado_em'])) ?>
                     </div>
                 </div>
 
