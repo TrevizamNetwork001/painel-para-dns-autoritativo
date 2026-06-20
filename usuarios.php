@@ -184,6 +184,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 $usuarios = db()
     ->query('SELECT * FROM usuarios ORDER BY ativo DESC, usuario COLLATE NOCASE')
     ->fetchAll(PDO::FETCH_ASSOC);
+
+$total_contas = count($usuarios);
+$contas_ativas = 0;
+$contas_inativas = 0;
+$troca_pendente = 0;
+
+foreach ($usuarios as $usuario_item) {
+    if ((int) $usuario_item['ativo'] === 1) {
+        $contas_ativas++;
+    } else {
+        $contas_inativas++;
+    }
+
+    if (!empty($usuario_item['trocar_senha'])) {
+        $troca_pendente++;
+    }
+}
 ?>
 <!DOCTYPE html>
 <html lang="pt-br">
@@ -222,6 +239,11 @@ button:disabled{cursor:not-allowed;opacity:.65}
 .sucesso{border-color:#166534;background:#052e16;color:#bbf7d0}
 .users-list{border-top:1px solid #1e293b}
 .users-panel[hidden]{display:none}
+.users-overview{margin:2px 0 14px;color:#94a3b8}
+.users-overview p{margin:0 0 10px;font-size:12px;line-height:1.45}
+.users-summary-badges{display:flex;gap:8px;flex-wrap:wrap}
+.summary-badge{display:inline-flex;align-items:center;min-height:28px;padding:5px 9px;border:1px solid #334155;border-radius:999px;background:#0f172a;color:#dbeafe;font-size:11px;font-weight:bold}
+.summary-badge strong{margin-right:4px;color:#fff}
 .user-card{padding:16px 10px;border-bottom:1px solid #1e293b}
 .user-card:last-child{border-bottom:0;padding-bottom:2px}
 .user-row-inner{width:100%;max-width:1120px;margin:0 auto;padding:0 12px 0 20px}
@@ -325,8 +347,17 @@ button:disabled{cursor:not-allowed;opacity:.65}
     <div class="card-head">
         <h2>Contas cadastradas</h2>
         <div class="card-head-actions">
-            <span class="card-count"><?= count($usuarios) ?></span>
+            <span class="card-count"><?= $total_contas ?></span>
             <button type="button" id="toggle-users-list" class="toggle-users-btn">Mostrar contas</button>
+        </div>
+    </div>
+    <div class="users-overview">
+        <p>Gerencie perfis, status, senhas e remoção de usuários.</p>
+        <div class="users-summary-badges" aria-label="Resumo das contas">
+            <span class="summary-badge"><strong><?= $total_contas ?></strong>Total</span>
+            <span class="summary-badge"><strong><?= $contas_ativas ?></strong>Ativas</span>
+            <span class="summary-badge"><strong><?= $contas_inativas ?></strong>Inativas</span>
+            <span class="summary-badge"><strong><?= $troca_pendente ?></strong>Troca pendente</span>
         </div>
     </div>
     <div class="users-panel" id="users-list-panel" hidden>
