@@ -1238,6 +1238,7 @@ const ptrTemplate = document.getElementById('ptr4_template');
 const ptrCustom = document.getElementById('ptr4_custom');
 const ptrExample = document.getElementById('ptr4_example');
 const generateExampleButton = document.getElementById('generate-example');
+let clearGeneratedExampleTimer = null;
 const searchInput = document.querySelector('[data-domain-search]');
 const domainItems = [...document.querySelectorAll('[data-domain-item]')];
 const collapsiblePanels = [
@@ -1439,6 +1440,24 @@ generateExampleButton?.addEventListener('click', () => {
         const field = document.querySelector(`[name="${name}"]`);
         if (field) field.value = value;
     });
+
+    updateReversePanels();
+
+    if (clearGeneratedExampleTimer !== null) {
+        clearTimeout(clearGeneratedExampleTimer);
+    }
+
+    clearGeneratedExampleTimer = setTimeout(() => {
+        Object.entries(exampleValues).forEach(([name, value]) => {
+            const field = document.querySelector(`[name="${name}"]`);
+            if (field && field.value === value) {
+                field.value = '';
+            }
+        });
+
+        updateReversePanels();
+        clearGeneratedExampleTimer = null;
+    }, 4000);
 });
 
 document.querySelector('form[method="POST"]')?.addEventListener('submit', () => {
