@@ -261,6 +261,11 @@ function firewall_format_check_time(): string
     }
 }
 
+function firewall_pluralize_count(int $count, string $singular, string $plural): string
+{
+    return $count . ' ' . ($count === 1 ? $singular : $plural);
+}
+
 [$serviceRaw, $serviceExit] = firewall_exec_command('systemctl is-active nftables');
 [$rulesetRaw, $rulesetExit] = firewall_exec_command('sudo -n /usr/sbin/nft list ruleset');
 [$tablesRaw, $tablesExit] = firewall_exec_command('sudo -n /usr/sbin/nft list tables');
@@ -301,15 +306,15 @@ $diagnostics[] = [
 ];
 $diagnostics[] = [
     'level' => $tablesCount > 0 ? 'ok' : 'warn',
-    'text' => $tablesCount > 0 ? $tablesCount . ' tabela(s) encontrada(s).' : 'Nenhuma tabela encontrada.',
+    'text' => $tablesCount > 0 ? firewall_pluralize_count($tablesCount, 'tabela encontrada.', 'tabelas encontradas.') : 'Nenhuma tabela encontrada.',
 ];
 $diagnostics[] = [
     'level' => $chainsCount > 0 ? 'ok' : 'warn',
-    'text' => $chainsCount > 0 ? $chainsCount . ' chain(s) encontrada(s).' : 'Nenhuma chain encontrada.',
+    'text' => $chainsCount > 0 ? firewall_pluralize_count($chainsCount, 'chain encontrada.', 'chains encontradas.') : 'Nenhuma chain encontrada.',
 ];
 $diagnostics[] = [
     'level' => $rulesCount > 0 ? 'ok' : 'warn',
-    'text' => $rulesCount > 0 ? $rulesCount . ' regra(s) encontrada(s).' : 'Nenhuma regra encontrada.',
+    'text' => $rulesCount > 0 ? firewall_pluralize_count($rulesCount, 'regra encontrada.', 'regras encontradas.') : 'Nenhuma regra encontrada.',
 ];
 $diagnostics[] = [
     'level' => firewall_has_input_policy_accept($parsedTables) ? 'warn' : 'ok',
@@ -415,42 +420,32 @@ $showRulesMessage = !$rulesetAvailable ? 'Não foi possível consultar o nftable
         }
         .toolbar .primary { border-color: rgba(56, 189, 248, .45); }
         .toolbar .success { border-color: rgba(34, 197, 94, .45); }
-        .toolbar .muted { color: var(--muted); }
+        .toolbar-link {
+            display: inline-flex;
+            align-items: center;
+            border: 1px solid var(--border);
+            background: transparent;
+            border-radius: 10px;
+            padding: 10px 14px;
+            font-size: 13px;
+            color: var(--muted);
+        }
+        .toolbar-link:hover {
+            border-color: #3b82f6;
+            color: var(--text);
+        }
         .card {
             background: linear-gradient(180deg, rgba(15, 23, 42, .95), rgba(11, 18, 32, .96));
             border: 1px solid var(--border);
             border-radius: 18px;
-            padding: 18px;
+            padding: 16px;
             box-shadow: 0 18px 60px rgba(0, 0, 0, .24);
-        }
-        .summary {
-            display: grid;
-            grid-template-columns: repeat(6, minmax(0, 1fr));
-            gap: 12px;
-            margin-top: 16px;
-        }
-        .summary-card {
-            background: rgba(17, 28, 51, .9);
-            border: 1px solid var(--border);
-            border-radius: 14px;
-            padding: 14px;
-            min-height: 96px;
-        }
-        .summary-value {
-            font-size: 24px;
-            font-weight: 700;
-            margin: 0;
-        }
-        .summary-label {
-            margin: 8px 0 0;
-            color: var(--muted);
-            font-size: 13px;
         }
         .badges {
             display: flex;
             flex-wrap: wrap;
             gap: 8px;
-            margin-top: 14px;
+            margin-top: 12px;
         }
         .badge {
             display: inline-flex;
@@ -579,12 +574,6 @@ $showRulesMessage = !$rulesetAvailable ? 'Não foi possível consultar o nftable
             flex-wrap: wrap;
             gap: 8px;
         }
-        .meta-box {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 8px;
-            align-items: center;
-        }
         .meta-line {
             margin-top: 6px;
             color: var(--muted);
@@ -629,15 +618,9 @@ $showRulesMessage = !$rulesetAvailable ? 'Não foi possível consultar o nftable
         .toolbar .danger {
             border-color: rgba(220, 38, 38, .36);
         }
-        @media (max-width: 1080px) {
-            .summary {
-                grid-template-columns: repeat(3, minmax(0, 1fr));
-            }
-        }
         @media (max-width: 720px) {
             .page { width: min(100% - 18px, 100%); padding-top: 14px; }
             .topline { flex-direction: column; }
-            .summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
             .section-head, .table-head, .chain-head, .rule-top { flex-direction: column; }
             .searchbar { flex-direction: column; align-items: stretch; }
             .searchbar input { width: 100%; }
@@ -658,54 +641,17 @@ $showRulesMessage = !$rulesetAvailable ? 'Não foi possível consultar o nftable
             <div class="section-head" style="margin-bottom:0;">
                 <div>
                     <h2 class="section-title">Firewall nftables</h2>
-                    <p class="section-subtitle">Visualize tabelas, chains, políticas e regras carregadas no servidor.</p>
-                </div>
-                <div class="meta-box">
-                    <span class="badge badge-info">nftables</span>
-                    <span class="badge <?= $serviceActive ? 'badge-ok' : ($serviceKnown ? 'badge-bad' : 'badge-warn') ?>"><?= $serviceActive ? 'Ativo' : ($serviceKnown ? htmlspecialchars($serviceState) : 'Não identificado') ?></span>
-                    <span class="badge"><?= $tablesCount > 0 ? $tablesCount . ' tabela(s)' : '0 tabelas' ?></span>
-                    <span class="badge"><?= $chainsCount > 0 ? $chainsCount . ' chains' : '0 chains' ?></span>
-                    <span class="badge"><?= $rulesCount > 0 ? $rulesCount . ' regras' : '0 regras' ?></span>
-                    <span class="badge">Última verificação: <?= htmlspecialchars($lastCheck) ?></span>
+                    <p class="section-subtitle">Consulte tabelas, chains, políticas e regras carregadas no servidor.</p>
                 </div>
             </div>
 
             <div class="badges">
-                <?php foreach ([
-                    $serviceActive ? 'Ativo' : ($serviceKnown ? $serviceState : 'Não identificado'),
-                    $tablesCount > 0 ? $tablesCount . ' tabelas' : '0 tabelas',
-                    $chainsCount > 0 ? $chainsCount . ' chains' : '0 chains',
-                    $rulesCount > 0 ? $rulesCount . ' regras' : '0 regras',
-                ] as $label): ?>
-                    <span class="badge"><?= htmlspecialchars($label) ?></span>
-                <?php endforeach; ?>
-            </div>
-
-            <div class="summary">
-                <div class="summary-card">
-                    <p class="summary-value">nftables</p>
-                    <p class="summary-label">Stack monitorada</p>
-                </div>
-                <div class="summary-card">
-                    <p class="summary-value"><?= $serviceActive ? 'Ativo' : ($serviceKnown ? htmlspecialchars($serviceState) : 'N/D') ?></p>
-                    <p class="summary-label">Estado do serviço</p>
-                </div>
-                <div class="summary-card">
-                    <p class="summary-value"><?= $tablesCount ?></p>
-                    <p class="summary-label">Tabelas</p>
-                </div>
-                <div class="summary-card">
-                    <p class="summary-value"><?= $chainsCount ?></p>
-                    <p class="summary-label">Chains</p>
-                </div>
-                <div class="summary-card">
-                    <p class="summary-value"><?= $rulesCount ?></p>
-                    <p class="summary-label">Regras</p>
-                </div>
-                <div class="summary-card">
-                    <p class="summary-value"><?= htmlspecialchars($lastCheck) ?></p>
-                    <p class="summary-label">Última verificação</p>
-                </div>
+                <span class="badge badge-info">nftables</span>
+                <span class="badge <?= $serviceActive ? 'badge-ok' : ($serviceKnown ? 'badge-bad' : 'badge-warn') ?>"><?= $serviceActive ? 'Ativo' : ($serviceKnown ? 'Inativo' : 'Não identificado') ?></span>
+                <span class="badge"><?= $tablesCount > 0 ? $tablesCount . ' tabela' . ($tablesCount > 1 ? 's' : '') : '0 tabelas' ?></span>
+                <span class="badge"><?= $chainsCount > 0 ? $chainsCount . ' chain' . ($chainsCount > 1 ? 's' : '') : '0 chains' ?></span>
+                <span class="badge"><?= $rulesCount > 0 ? $rulesCount . ' regra' . ($rulesCount > 1 ? 's' : '') : '0 regras' ?></span>
+                <span class="badge">Verificado <?= htmlspecialchars($lastCheck) ?></span>
             </div>
 
             <div class="toolbar">
@@ -713,7 +659,7 @@ $showRulesMessage = !$rulesetAvailable ? 'Não foi possível consultar o nftable
                 <button type="button" class="success" data-toggle-target="diagnostics-panel">Abrir diagnóstico</button>
                 <button type="button" class="ghost" id="refresh-status">Atualizar status</button>
                 <?php if ($auditoriaUrl): ?>
-                    <a class="muted" href="<?= htmlspecialchars($auditoriaUrl) ?>">Ver auditoria</a>
+                    <a class="toolbar-link" href="<?= htmlspecialchars($auditoriaUrl) ?>">Ver auditoria</a>
                 <?php endif; ?>
             </div>
         </section>
