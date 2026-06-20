@@ -367,7 +367,7 @@ if (empty($dom) || empty($ip4)) {
                     . "Veja os detalhes na seção “Criar reversa IPv6” abaixo.";
 
                 $fieldErrors['reverse_ipv6'] = $associatedDomain !== null
-                    ? "Prefixo já cadastrado em {$associatedDomain}."
+                    ? "Prefixo já cadastrado para {$associatedDomain}."
                     : "O prefixo IPv6 informado já está cadastrado.";
                 $fieldErrors['reverse_ipv6'] .= "\n\nZona reversa:\n{$reverseZone}";
 
@@ -1030,7 +1030,7 @@ button:hover{opacity:.95}
                         </div>
                         <div class="ipv6-info">
                             <strong>ℹ Reversa IPv6 manual</strong>
-                            <p>O prefixo IPv6 informado será usado para criar uma zona reversa exclusiva deste domínio. Se o prefixo já estiver cadastrado, a criação será bloqueada e o painel mostrará qual domínio já está utilizando.</p>
+                            <p>Informe um prefixo IPv6 exclusivo para este domínio. Se o prefixo já estiver cadastrado, a criação será bloqueada para evitar mistura de registros entre domínios.</p>
                         </div>
                     </div>
                 </div>
