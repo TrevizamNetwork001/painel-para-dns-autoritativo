@@ -11,8 +11,12 @@ if (isset($_GET['timeout'])) {
     $erro = "Sessão expirada por inatividade";
 }
 
-if (isset($_GET['senha_alterada'])) {
+if ($_SERVER['REQUEST_METHOD'] === 'GET' && isset($_GET['senha_alterada'])) {
     $sucesso = 'Senha alterada com sucesso. Entre novamente usando sua nova senha.';
+}
+
+if ($erro !== null) {
+    $sucesso = null;
 }
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -73,6 +77,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
 
         $erro = "Usuário ou senha inválidos";
+        $sucesso = null;
     }
 }
 ?>
