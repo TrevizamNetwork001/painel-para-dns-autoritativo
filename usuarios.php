@@ -232,19 +232,19 @@ button:disabled{cursor:not-allowed;opacity:.65}
 .badge-inactive{background:#450a0a;color:#fca5a5}
 .badge-pending{background:#422006;color:#fde68a}
 .badge-current{background:#164e63;color:#a5f3fc}
-.user-actions{display:flex;align-items:center;gap:10px 12px;padding-top:13px;flex-wrap:wrap;width:100%;max-width:980px}
+.user-actions{display:flex;align-items:center;gap:10px 12px;padding-top:13px;flex-wrap:wrap;width:100%;max-width:1080px}
 .action-block{min-width:0}
 .inline-form{display:flex;align-items:center;gap:7px}
-.user-actions>.action-block:first-child .inline-form{display:grid;grid-template-columns:minmax(220px,280px) auto auto;justify-content:start}
-.profile-select{width:280px;max-width:100%;min-width:0}
+.user-actions>.action-block:first-child .inline-form{display:grid;grid-template-columns:minmax(260px,300px) auto auto;justify-content:start}
+.profile-select{width:300px;max-width:100%;min-width:0}
 .active-toggle{display:inline-flex;align-items:center;gap:7px;min-height:37px;padding:6px 3px;color:#cbd5e1;font-size:12px;white-space:nowrap}
 .active-toggle input{width:15px;height:15px;min-height:0;margin:0;accent-color:#2563eb}
 .secundario{border-color:#475569;background:#334155}
 .perigo{min-height:34px;padding:6px 9px;border-color:#7f1d1d;background:transparent;color:#fca5a5;font-size:12px}
 .perigo:hover{background:#450a0a}
-.senha{width:260px;max-width:100%;min-width:0}
+.senha{width:360px;max-width:100%;min-width:0}
 .account-tools{display:flex;align-items:center;gap:8px;min-width:0;flex-wrap:wrap}
-.account-tools .inline-form{display:grid;grid-template-columns:minmax(240px,280px) auto;justify-content:start;width:auto}
+.account-tools .inline-form{display:grid;grid-template-columns:minmax(300px,360px) auto;justify-content:start;width:auto}
 .account-tools .senha{width:100%;max-width:none}
 .current-action{display:flex;align-items:center;min-height:37px;color:#64748b;font-size:12px}
 .password-link{display:inline-flex;align-items:center;min-height:37px;padding:7px 10px;border:1px solid #334155;border-radius:8px;background:#0f172a;font-size:13px;font-weight:bold}
@@ -253,8 +253,11 @@ button:disabled{cursor:not-allowed;opacity:.65}
     .user-actions{max-width:100%}
 }
 @media(max-width:900px){
+    .user-actions{max-width:100%}
     .create-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
     .create-button{width:100%}
+    .profile-select,.senha{width:100%;max-width:100%}
+    .account-tools .inline-form{grid-template-columns:1fr auto}
 }
 @media(max-width:700px){
     body{padding:16px 12px}
