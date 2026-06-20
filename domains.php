@@ -838,80 +838,9 @@ button{
     cursor:pointer;
 }
 button:hover{opacity:.95}
-.domains-block{
-    margin-top:18px;
-}
-.search{
-    max-width:440px;
-    margin-bottom:10px;
-}
-.search input{
-    min-height:34px;
-    padding:8px 11px;
-    background:rgba(7,18,38,.72);
-}
-.domain-list{
-    display:grid;
-    gap:6px;
-}
-.domain-row{
-    display:grid;
-    grid-template-columns:minmax(0, 1fr) auto;
-    align-items:center;
-    gap:12px;
-    min-height:46px;
-    padding:6px 10px;
-    border:1px solid var(--line);
-    border-radius:12px;
-    background:rgba(7,18,38,.68);
-}
-.domain-name{
-    font-weight:700;
-    color:#fff;
-    word-break:break-word;
-}
-.domain-actions{
-    display:flex;
-    align-items:center;
-    gap:8px;
-    flex-wrap:wrap;
-    justify-content:flex-end;
-}
-.action-link,
-.danger-button{
-    display:inline-flex;
-    align-items:center;
-    justify-content:center;
-    min-height:30px;
-    padding:6px 10px;
-    border-radius:8px;
-    border:1px solid var(--line-soft);
-    font-size:13px;
-    white-space:nowrap;
-}
-.action-link{
-    background:rgba(30,41,59,.9);
-    color:#dbeafe;
-}
-.action-link:hover{text-decoration:none;border-color:rgba(56,189,248,.45)}
-.danger-button{
-    background:rgba(127,29,29,.95);
-    color:#fecaca;
-    border-color:rgba(239,68,68,.24);
-    cursor:pointer;
-}
-.empty{
-    padding:18px 16px;
-    border:1px dashed var(--line-soft);
-    border-radius:12px;
-    color:var(--muted);
-    background:rgba(2,6,23,.66);
-}
 @media (max-width: 740px){
     .page{width:min(100% - 20px, 1100px);margin:20px auto 30px}
-    .field-grid.two,
-    .domain-row{grid-template-columns:1fr}
-    .domain-actions{justify-content:flex-start}
+    .field-grid.two{grid-template-columns:1fr}
 }
 </style>
 </head>
@@ -1135,38 +1064,6 @@ button:hover{opacity:.95}
         </div>
     </section>
 
-    <section class="card domains-block">
-        <div class="card-inner">
-            <div class="card-head">
-                <h2>Domínios cadastrados</h2>
-            </div>
-
-            <div class="search">
-                <input type="search" placeholder="Pesquisar domínio..." data-domain-search>
-            </div>
-
-            <div class="domain-list">
-                <?php if (empty($domains)): ?>
-                    <div class="empty">Nenhum domínio cadastrado ainda.</div>
-                <?php else: ?>
-                    <?php foreach ($domains as $d => $path): ?>
-                        <div class="domain-row" data-domain-item data-domain-name="<?= htmlspecialchars(strtolower($d), ENT_QUOTES, 'UTF-8') ?>">
-                            <div class="domain-name"><?= htmlspecialchars($d) ?></div>
-                            <div class="domain-actions">
-                                <a class="action-link" href="edit-zone.php?zone=<?= rawurlencode($d) ?>">Editar zona</a>
-                                <a class="action-link" href="historico-zona.php?zone=<?= rawurlencode($d) ?>">Histórico</a>
-                                <form method="POST" onsubmit="return confirm('Deseja remover este domínio?');" style="display:inline;">
-                                    <?= csrf_field() ?>
-                                    <input type="hidden" name="delete_domain" value="<?= htmlspecialchars($d) ?>">
-                                    <button class="danger-button" type="submit">Excluir</button>
-                                </form>
-                            </div>
-                        </div>
-                    <?php endforeach; ?>
-                <?php endif; ?>
-            </div>
-        </div>
-    </section>
 </main>
 
 <script>
@@ -1239,8 +1136,6 @@ const ptrCustom = document.getElementById('ptr4_custom');
 const ptrExample = document.getElementById('ptr4_example');
 const generateExampleButton = document.getElementById('generate-example');
 let clearGeneratedExampleTimer = null;
-const searchInput = document.querySelector('[data-domain-search]');
-const domainItems = [...document.querySelectorAll('[data-domain-item]')];
 const collapsiblePanels = [
     { checkbox: rev4Check, panelId: 'reverse-v4-panel' },
     { checkbox: rev6Check, panelId: 'reverse-v6-panel' },
@@ -1383,14 +1278,6 @@ function updateReversePanels() {
     renderReversePreview();
     updatePtrTemplate();
 }
-
-searchInput?.addEventListener('input', event => {
-    const term = String(event.target.value || '').trim().toLowerCase();
-    domainItems.forEach(item => {
-        const name = String(item.dataset.domainName || '');
-        item.hidden = term !== '' && !name.includes(term);
-    });
-});
 
 document.querySelectorAll('[data-error-field]').forEach(input => {
     input.addEventListener('input', () => {
