@@ -5,13 +5,55 @@ require "includes/auth.php";
 require "includes/security.php";
 require "includes/audit.php";
 
-$zoneFiles = glob('/var/cache/bind/master-aut/*.hosts') ?: [];
+$confFile = '/etc/bind/named.conf.local';
+$forwardDirectory = '/var/cache/bind/master-aut';
+$reverseDirectory = '/var/cache/bind/master-rev';
+$zoneFiles = glob($forwardDirectory . '/*.hosts') ?: [];
 $domains = [];
 $domainFiles = [];
+$reverseIpv6ByDomain = [];
 $erro = $_SESSION['dns_zones_error'] ?? null;
 $sucesso = $_SESSION['dns_zones_success'] ?? null;
 
 unset($_SESSION['dns_zones_error'], $_SESSION['dns_zones_success']);
+
+$findZoneBlockByFile = static function (
+    string $config,
+    string $expectedFile,
+    ?string $requiredZoneSuffix = null
+): ?array {
+    if (!preg_match_all(
+        '/^\s*zone\s+"([^"]+)"\s*\{(?:(?!^\s*\};).)*^\s*\};\s*/msi',
+        $config,
+        $blocks,
+        PREG_SET_ORDER
+    )) {
+        return null;
+    }
+
+    foreach ($blocks as $block) {
+        if ($requiredZoneSuffix !== null &&
+            !str_ends_with(strtolower($block[1]), strtolower($requiredZoneSuffix))) {
+            continue;
+        }
+
+        if (!preg_match('/\bfile\s+(?:"([^"]+)"|([^\s;]+))\s*;/i', $block[0], $fileMatch)) {
+            continue;
+        }
+
+        $configuredFile = $fileMatch[1] !== '' ? $fileMatch[1] : $fileMatch[2];
+        if ($configuredFile === $expectedFile) {
+            return [
+                'zone' => $block[1],
+                'block' => $block[0],
+            ];
+        }
+    }
+
+    return null;
+};
+
+$namedConf = file_get_contents($confFile);
 
 foreach ($zoneFiles as $file) {
     if (!is_file($file)) {
@@ -23,6 +65,16 @@ foreach ($zoneFiles as $file) {
     if ($domain !== '') {
         $domains[] = $domain;
         $domainFiles[$domain] = $file;
+
+        $reverseFile = $reverseDirectory . '/' . $domain . '.rev6';
+        $realReverseFile = realpath($reverseFile);
+        $reverseFileExists = $realReverseFile !== false &&
+            dirname($realReverseFile) === realpath($reverseDirectory) &&
+            basename($realReverseFile) === $domain . '.rev6';
+        $reverseBlockExists = $namedConf !== false &&
+            $findZoneBlockByFile($namedConf, $reverseFile, '.ip6.arpa') !== null;
+
+        $reverseIpv6ByDomain[$domain] = $reverseFileExists || $reverseBlockExists;
     }
 }
 
@@ -33,14 +85,18 @@ if (isset($_POST['delete_forward_zone'])) {
 
     $domain = trim((string) ($_POST['delete_forward_zone'] ?? ''));
     $confirmation = (string) ($_POST['delete_confirmation'] ?? '');
+    $removeReverseIpv6 = ($_POST['remove_reverse_ipv6'] ?? '') === '1';
     $zoneFile = $domainFiles[$domain] ?? null;
-    $confFile = '/etc/bind/named.conf.local';
+    $reverseFile = $reverseDirectory . '/' . $domain . '.rev6';
     $backupConf = null;
-    $backupZone = null;
+    $backupForward = null;
+    $backupReverseIpv6 = null;
     $technicalMessage = null;
     $confChanged = false;
-    $zoneRemoved = false;
-    $zoneMode = null;
+    $forwardRemoved = false;
+    $reverseIpv6Removed = false;
+    $forwardMode = null;
+    $reverseIpv6Mode = null;
 
     try {
         if (!valid_domain($domain) ||
@@ -51,15 +107,16 @@ if (isset($_POST['delete_forward_zone'])) {
             throw new RuntimeException('Domínio ou confirmação inválida.');
         }
 
-        $baseDirectory = realpath('/var/cache/bind/master-aut');
-        $realZoneFile = realpath($zoneFile);
-        $zoneMode = fileperms($zoneFile);
+        $realForwardDirectory = realpath($forwardDirectory);
+        $realReverseDirectory = realpath($reverseDirectory);
+        $realForwardFile = realpath($zoneFile);
 
-        if ($baseDirectory === false ||
-            $realZoneFile === false ||
-            dirname($realZoneFile) !== $baseDirectory ||
-            basename($realZoneFile) !== $domain . '.hosts') {
-            throw new RuntimeException('Arquivo de zona inválido.');
+        if ($realForwardDirectory === false ||
+            $realReverseDirectory === false ||
+            $realForwardFile === false ||
+            dirname($realForwardFile) !== $realForwardDirectory ||
+            basename($realForwardFile) !== $domain . '.hosts') {
+            throw new RuntimeException('Arquivo de zona forward inválido.');
         }
 
         $originalConf = file_get_contents($confFile);
@@ -67,35 +124,72 @@ if (isset($_POST['delete_forward_zone'])) {
             throw new RuntimeException('Não foi possível ler a configuração do BIND.');
         }
 
-        $zonePattern = '/^\s*zone\s+"' . preg_quote($domain, '/') .
-            '"\s*\{(?:(?!^\s*\};).)*^\s*\};\s*/msi';
-
-        if (!preg_match($zonePattern, $originalConf, $zoneBlock)) {
-            throw new RuntimeException('A declaração da zona não foi encontrada na configuração do BIND.');
+        $forwardBlock = $findZoneBlockByFile($originalConf, $realForwardFile);
+        if ($forwardBlock === null || strcasecmp($forwardBlock['zone'], $domain) !== 0) {
+            throw new RuntimeException('A declaração da zona forward não corresponde ao arquivo esperado.');
         }
 
-        if (!preg_match('/\bfile\s+(?:"([^"]+)"|([^\s;]+))\s*;/i', $zoneBlock[0], $fileMatch)) {
-            throw new RuntimeException('O arquivo da zona não foi identificado na configuração do BIND.');
+        $realReverseIpv6File = realpath($reverseFile);
+        $reverseIpv6FileExists = false;
+
+        if ($realReverseIpv6File !== false) {
+            if (dirname($realReverseIpv6File) !== $realReverseDirectory ||
+                basename($realReverseIpv6File) !== $domain . '.rev6') {
+                throw new RuntimeException('Arquivo de reversa IPv6 inválido.');
+            }
+
+            $reverseIpv6FileExists = true;
         }
 
-        $configuredFile = $fileMatch[1] !== '' ? $fileMatch[1] : $fileMatch[2];
-        if ($configuredFile !== $realZoneFile) {
-            throw new RuntimeException('A declaração da zona não corresponde ao arquivo forward esperado.');
+        $reverseIpv6Block = $findZoneBlockByFile(
+            $originalConf,
+            $reverseFile,
+            '.ip6.arpa'
+        );
+        $hasAssociatedReverseIpv6 = $reverseIpv6FileExists ||
+            $reverseIpv6Block !== null;
+
+        if ($removeReverseIpv6 && !$hasAssociatedReverseIpv6) {
+            throw new RuntimeException('A zona reversa IPv6 associada não foi encontrada de forma segura.');
         }
 
+        $forwardMode = fileperms($realForwardFile);
         $backupConf = tempnam(sys_get_temp_dir(), 'named-conf-backup-');
-        $backupZone = tempnam(sys_get_temp_dir(), 'forward-zone-backup-');
+        $backupForward = tempnam(sys_get_temp_dir(), 'forward-zone-backup-');
 
         if ($backupConf === false ||
-            $backupZone === false ||
+            $backupForward === false ||
             !copy($confFile, $backupConf) ||
-            !copy($realZoneFile, $backupZone)) {
+            !copy($realForwardFile, $backupForward)) {
             throw new RuntimeException('Não foi possível criar o backup antes da exclusão.');
         }
 
-        $updatedConf = preg_replace($zonePattern, '', $originalConf, 1, $removedBlocks);
-        if ($updatedConf === null || $removedBlocks !== 1) {
-            throw new RuntimeException('Não foi possível preparar a remoção da declaração da zona.');
+        if ($removeReverseIpv6 && $reverseIpv6FileExists) {
+            $reverseIpv6Mode = fileperms($realReverseIpv6File);
+            $backupReverseIpv6 = tempnam(sys_get_temp_dir(), 'reverse-ipv6-backup-');
+
+            if ($backupReverseIpv6 === false ||
+                !copy($realReverseIpv6File, $backupReverseIpv6)) {
+                throw new RuntimeException('Não foi possível criar o backup da reversa IPv6.');
+            }
+        }
+
+        $updatedConf = str_replace($forwardBlock['block'], '', $originalConf, $removedForwardBlocks);
+        if ($removedForwardBlocks !== 1) {
+            throw new RuntimeException('Não foi possível preparar a remoção da zona forward.');
+        }
+
+        if ($removeReverseIpv6 && $reverseIpv6Block !== null) {
+            $updatedConf = str_replace(
+                $reverseIpv6Block['block'],
+                '',
+                $updatedConf,
+                $removedReverseIpv6Blocks
+            );
+
+            if ($removedReverseIpv6Blocks !== 1) {
+                throw new RuntimeException('Não foi possível preparar a remoção da reversa IPv6.');
+            }
         }
 
         if (!write_file_safely($confFile, $updatedConf)) {
@@ -103,19 +197,26 @@ if (isset($_POST['delete_forward_zone'])) {
         }
         $confChanged = true;
 
-        if (!unlink($realZoneFile)) {
+        if (!unlink($realForwardFile)) {
             throw new RuntimeException('Não foi possível remover o arquivo da zona forward.');
         }
-        $zoneRemoved = true;
+        $forwardRemoved = true;
+
+        if ($removeReverseIpv6 &&
+            $reverseIpv6FileExists &&
+            !unlink($realReverseIpv6File)) {
+            throw new RuntimeException('Não foi possível remover o arquivo da reversa IPv6.');
+        }
+        $reverseIpv6Removed = $removeReverseIpv6 && $reverseIpv6FileExists;
 
         exec('/usr/bin/named-checkconf -z 2>&1', $checkOutput, $checkStatus);
         if ($checkStatus !== 0) {
             $technicalMessage = implode("\n", $checkOutput);
-            throw new RuntimeException('A configuração resultante do BIND é inválida. A exclusão foi desfeita.');
+            throw new RuntimeException('A configuração resultante do BIND é inválida.');
         }
 
         if (!reload_dns()) {
-            throw new RuntimeException('Não foi possível recarregar o BIND. A exclusão foi desfeita.');
+            throw new RuntimeException('Não foi possível recarregar o BIND.');
         }
 
         registrar_auditoria([
@@ -123,34 +224,70 @@ if (isset($_POST['delete_forward_zone'])) {
             'dominio' => $domain,
             'tipo_registro' => 'ZONA',
             'nome_registro' => 'Forward',
-            'valor_antigo' => $realZoneFile,
+            'valor_antigo' => $realForwardFile,
             'valor_novo' => 'removido',
             'status' => 'SUCCESS',
-            'mensagem' => 'Zona forward removida com sucesso.',
+            'mensagem' => 'Zona forward removida. applied=true; rollback=false.',
         ]);
 
-        $_SESSION['dns_zones_success'] = 'Zona removida com sucesso.';
+        if ($removeReverseIpv6) {
+            registrar_auditoria([
+                'acao' => 'DELETE_REVERSE_IPV6',
+                'dominio' => $domain,
+                'tipo_registro' => 'ZONA',
+                'nome_registro' => 'Reversa IPv6',
+                'valor_antigo' => $reverseFile,
+                'valor_novo' => 'removido',
+                'status' => 'SUCCESS',
+                'mensagem' => 'Zona reversa IPv6 removida. applied=true; rollback=false.',
+            ]);
+
+            $_SESSION['dns_zones_success'] =
+                'Zona forward e reversa IPv6 removidas com sucesso.';
+        } elseif ($hasAssociatedReverseIpv6) {
+            $_SESSION['dns_zones_success'] =
+                'Zona forward removida com sucesso. A reversa IPv6 foi mantida e o prefixo continuará reservado.';
+        } else {
+            $_SESSION['dns_zones_success'] = 'Zona forward removida com sucesso.';
+        }
     } catch (Throwable $exception) {
+        $rollbackApplied = $confChanged || $forwardRemoved || $reverseIpv6Removed;
+
         if ($confChanged && is_string($backupConf) && is_file($backupConf)) {
             $backupConfContent = file_get_contents($backupConf);
             if ($backupConfContent !== false) {
                 write_file_safely($confFile, $backupConfContent);
             }
         }
-        if ($zoneRemoved &&
-            is_string($backupZone) &&
-            is_file($backupZone) &&
+
+        if ($forwardRemoved &&
+            is_string($backupForward) &&
+            is_file($backupForward) &&
             is_string($zoneFile)) {
-            copy($backupZone, $zoneFile);
-            if (is_int($zoneMode)) {
-                chmod($zoneFile, $zoneMode & 0777);
+            copy($backupForward, $zoneFile);
+            if (is_int($forwardMode)) {
+                chmod($zoneFile, $forwardMode & 0777);
             }
         }
-        if ($confChanged || $zoneRemoved) {
+
+        if ($reverseIpv6Removed &&
+            is_string($backupReverseIpv6) &&
+            is_file($backupReverseIpv6)) {
+            copy($backupReverseIpv6, $reverseFile);
+            if (is_int($reverseIpv6Mode)) {
+                chmod($reverseFile, $reverseIpv6Mode & 0777);
+            }
+        }
+
+        if ($rollbackApplied) {
             reload_dns();
         }
 
-        $erro = $exception->getMessage();
+        $auditMessage = $exception->getMessage()
+            . '; applied=false; rollback=' . ($rollbackApplied ? 'true' : 'false') . '.';
+        if ($technicalMessage !== null) {
+            $auditMessage .= "\n" . $technicalMessage;
+        }
 
         registrar_auditoria([
             'acao' => 'DELETE_FORWARD_ZONE',
@@ -159,18 +296,28 @@ if (isset($_POST['delete_forward_zone'])) {
             'nome_registro' => 'Forward',
             'valor_antigo' => is_string($zoneFile) ? $zoneFile : null,
             'status' => 'ERROR',
-            'mensagem' => $technicalMessage !== null
-                ? $erro . "\n" . $technicalMessage
-                : $erro,
+            'mensagem' => $auditMessage,
         ]);
 
-        $_SESSION['dns_zones_error'] = $erro;
-    } finally {
-        if (is_string($backupConf) && is_file($backupConf)) {
-            unlink($backupConf);
+        if ($removeReverseIpv6) {
+            registrar_auditoria([
+                'acao' => 'DELETE_REVERSE_IPV6',
+                'dominio' => valid_domain($domain) ? $domain : null,
+                'tipo_registro' => 'ZONA',
+                'nome_registro' => 'Reversa IPv6',
+                'valor_antigo' => $reverseFile,
+                'status' => 'ERROR',
+                'mensagem' => $auditMessage,
+            ]);
         }
-        if (is_string($backupZone) && is_file($backupZone)) {
-            unlink($backupZone);
+
+        $_SESSION['dns_zones_error'] =
+            'Não foi possível remover a zona. Nenhuma alteração foi aplicada.';
+    } finally {
+        foreach ([$backupConf, $backupForward, $backupReverseIpv6] as $backupFile) {
+            if (is_string($backupFile) && is_file($backupFile)) {
+                unlink($backupFile);
+            }
         }
     }
 
@@ -398,6 +545,38 @@ a:hover{text-decoration:underline}
     font-size:13px;
     line-height:1.45;
 }
+.reverse-ipv6-option{
+    display:none;
+    margin-top:14px;
+    padding:12px;
+    border:1px solid rgba(245,158,11,.35);
+    border-radius:10px;
+    background:rgba(120,53,15,.2);
+}
+.reverse-ipv6-option.visible{display:block}
+.reverse-ipv6-option p{
+    margin:0 0 10px;
+    color:#fde68a;
+    font-size:13px;
+    line-height:1.45;
+}
+.reverse-ipv6-option label{
+    display:flex;
+    align-items:flex-start;
+    gap:9px;
+    margin:0;
+    color:#fff;
+    cursor:pointer;
+}
+.reverse-ipv6-option input{
+    width:auto;
+    min-height:auto;
+    padding:0;
+    border:0;
+    margin:2px 0 0;
+    background:transparent;
+    accent-color:#ef4444;
+}
 .modal-actions{
     display:flex;
     justify-content:flex-end;
@@ -470,7 +649,8 @@ a:hover{text-decoration:underline}
                                 <button
                                     type="button"
                                     class="delete-button"
-                                    data-delete-domain="<?= htmlspecialchars($domain, ENT_QUOTES, 'UTF-8') ?>">
+                                    data-delete-domain="<?= htmlspecialchars($domain, ENT_QUOTES, 'UTF-8') ?>"
+                                    data-has-reverse-ipv6="<?= !empty($reverseIpv6ByDomain[$domain]) ? '1' : '0' ?>">
                                     Excluir
                                 </button>
                             </div>
@@ -485,8 +665,8 @@ a:hover{text-decoration:underline}
 
 <dialog id="delete-zone-modal" class="delete-modal">
     <div class="modal-head">
-        <h2>Excluir zona forward</h2>
-        <p>Esta ação remove somente a zona forward. As zonas reversas não serão alteradas.</p>
+        <h2>Excluir zona DNS</h2>
+        <p>Esta ação removerá a zona forward do domínio.</p>
     </div>
     <form method="POST" class="modal-body" id="delete-zone-form">
         <?= csrf_field() ?>
@@ -494,8 +674,19 @@ a:hover{text-decoration:underline}
 
         <div class="modal-domain" id="delete-domain-display"></div>
 
+        <div class="reverse-ipv6-option" id="reverse-ipv6-option">
+            <p>
+                Existe uma zona reversa IPv6 associada a este domínio. Se ela não for removida,
+                o prefixo IPv6 continuará bloqueado para novos cadastros.
+            </p>
+            <label>
+                <input type="checkbox" name="remove_reverse_ipv6" value="1" id="remove-reverse-ipv6">
+                <span>Remover também a zona reversa IPv6 associada</span>
+            </label>
+        </div>
+
         <label for="delete-confirmation">
-            Digite exatamente o domínio acima para confirmar:
+            Para confirmar, digite exatamente o domínio:
         </label>
         <input
             type="text"
@@ -505,13 +696,13 @@ a:hover{text-decoration:underline}
             required>
 
         <p class="modal-warning">
-            O arquivo da zona e sua declaração no BIND serão removidos após validação da configuração.
+            A configuração será validada antes da aplicação definitiva.
         </p>
 
         <div class="modal-actions">
             <button type="button" class="cancel-button" id="cancel-delete">Cancelar</button>
             <button type="submit" class="confirm-delete-button" id="confirm-delete" disabled>
-                Excluir zona
+                Excluir definitivamente
             </button>
         </div>
     </form>
@@ -528,6 +719,8 @@ const deleteConfirmation = document.getElementById('delete-confirmation');
 const confirmDelete = document.getElementById('confirm-delete');
 const cancelDelete = document.getElementById('cancel-delete');
 const successToast = document.getElementById('success-toast');
+const reverseIpv6Option = document.getElementById('reverse-ipv6-option');
+const removeReverseIpv6 = document.getElementById('remove-reverse-ipv6');
 
 if (successToast) {
     setTimeout(function() {
@@ -568,6 +761,11 @@ document.querySelectorAll('[data-delete-domain]').forEach(function(button) {
         deleteDomainDisplay.textContent = domain;
         deleteConfirmation.value = '';
         confirmDelete.disabled = true;
+        removeReverseIpv6.checked = false;
+        reverseIpv6Option.classList.toggle(
+            'visible',
+            this.dataset.hasReverseIpv6 === '1'
+        );
         deleteModal.showModal();
         deleteConfirmation.focus();
     });
