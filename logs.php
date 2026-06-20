@@ -2,7 +2,7 @@
 require_once __DIR__ . "/includes/auth.php";
 
 $logs = shell_exec(
-    "tail -n 50 /var/log/auth.log"
+    "tail -n 50 /var/log/syslog"
 );
 ?>
 
