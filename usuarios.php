@@ -221,16 +221,17 @@ button:disabled{cursor:not-allowed;opacity:.65}
 .users-list{border-top:1px solid #1e293b}
 .user-card{padding:16px 2px;border-bottom:1px solid #1e293b}
 .user-card:last-child{border-bottom:0;padding-bottom:2px}
-.user-summary{display:flex;justify-content:space-between;align-items:flex-start;gap:15px}
-.user-name{margin:0 0 4px;color:#fff;font-size:16px}
+.user-summary{display:block}
+.user-title-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:4px}
+.user-name{margin:0;color:#fff;font-size:16px}
 .user-created{color:#64748b;font-size:11px}
-.badges{display:flex;justify-content:flex-end;gap:6px;flex-wrap:wrap}
+.badges{display:flex;gap:6px;flex-wrap:wrap}
 .badge{display:inline-flex;align-items:center;min-height:22px;padding:3px 7px;border-radius:999px;font-size:10px;font-weight:bold}
 .badge-active{background:#052e16;color:#86efac}
 .badge-inactive{background:#450a0a;color:#fca5a5}
 .badge-pending{background:#422006;color:#fde68a}
 .badge-current{background:#164e63;color:#a5f3fc}
-.user-actions{display:grid;grid-template-columns:minmax(310px,1fr) minmax(330px,1fr);gap:20px;padding-top:13px;align-items:center}
+.user-actions{display:grid;grid-template-columns:max-content max-content;gap:16px;padding-top:13px;align-items:center;justify-content:start}
 .action-block{min-width:0}
 .inline-form{display:flex;align-items:center;gap:7px}
 .user-actions>.action-block:first-child .inline-form{display:grid;grid-template-columns:minmax(220px,280px) auto auto;justify-content:start}
@@ -241,8 +242,8 @@ button:disabled{cursor:not-allowed;opacity:.65}
 .perigo{min-height:34px;padding:6px 9px;border-color:#7f1d1d;background:transparent;color:#fca5a5;font-size:12px}
 .perigo:hover{background:#450a0a}
 .senha{width:260px;max-width:100%;min-width:0}
-.account-tools{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;justify-content:end;gap:8px;min-width:0}
-.account-tools .inline-form{display:grid;grid-template-columns:minmax(220px,260px) auto;justify-content:end}
+.account-tools{display:grid;grid-template-columns:max-content max-content;align-items:center;justify-content:start;gap:8px;min-width:0}
+.account-tools .inline-form{display:grid;grid-template-columns:260px auto;justify-content:start}
 .current-action{display:flex;align-items:center;min-height:37px;color:#64748b;font-size:12px}
 .password-link{display:inline-flex;align-items:center;min-height:37px;padding:7px 10px;border:1px solid #334155;border-radius:8px;background:#0f172a;font-size:13px;font-weight:bold}
 .remove-form{display:flex}
@@ -257,8 +258,6 @@ button:disabled{cursor:not-allowed;opacity:.65}
     .page-header{flex-direction:column}
     .card{padding:15px}
     .create-grid,.user-actions{grid-template-columns:1fr}
-    .user-summary{flex-direction:column}
-    .badges{justify-content:flex-start}
     .inline-form,.account-tools{align-items:stretch;flex-direction:column}
     .user-actions>.action-block:first-child .inline-form,.account-tools,.account-tools .inline-form{display:flex;justify-content:flex-start}
     .profile-select,.senha{width:100%;max-width:none}
@@ -318,22 +317,22 @@ button:disabled{cursor:not-allowed;opacity:.65}
             <?php $contaAtual = (int) $item['id'] === (int) $_SESSION['usuario_id']; ?>
             <article class="user-card">
                 <div class="user-summary">
-                    <div>
+                    <div class="user-title-row">
                         <h3 class="user-name"><?= htmlspecialchars($item['usuario']) ?></h3>
-                        <div class="user-created">
-                            Criado em <?= date('d/m/Y H:i', strtotime($item['criado_em'])) ?>
+                        <div class="badges" aria-label="Status da conta">
+                            <span class="badge <?= $item['ativo'] ? 'badge-active' : 'badge-inactive' ?>">
+                                <?= $item['ativo'] ? 'Ativo' : 'Inativo' ?>
+                            </span>
+                            <?php if ($item['trocar_senha']): ?>
+                                <span class="badge badge-pending">Troca de senha pendente</span>
+                            <?php endif; ?>
+                            <?php if ($contaAtual): ?>
+                                <span class="badge badge-current">Conta atual</span>
+                            <?php endif; ?>
                         </div>
                     </div>
-                    <div class="badges" aria-label="Status da conta">
-                        <span class="badge <?= $item['ativo'] ? 'badge-active' : 'badge-inactive' ?>">
-                            <?= $item['ativo'] ? 'Ativo' : 'Inativo' ?>
-                        </span>
-                        <?php if ($item['trocar_senha']): ?>
-                            <span class="badge badge-pending">Troca de senha pendente</span>
-                        <?php endif; ?>
-                        <?php if ($contaAtual): ?>
-                            <span class="badge badge-current">Conta atual</span>
-                        <?php endif; ?>
+                    <div class="user-created">
+                        Criado em <?= date('d/m/Y H:i', strtotime($item['criado_em'])) ?>
                     </div>
                 </div>
 

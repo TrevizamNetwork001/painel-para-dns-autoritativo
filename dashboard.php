@@ -137,6 +137,28 @@ try {
     metricError('servidores_dns', $e->getMessage());
 }
 
+$activityPeriodOptions = [
+    'hoje' => 'Hoje',
+    '7d' => 'Últimos 7 dias',
+    '15d' => 'Últimos 15 dias',
+    '30d' => 'Últimos 30 dias',
+    'mes_atual' => 'Este mês',
+    'mes_anterior' => 'Mês anterior',
+];
+$selectedActivityPeriod = $_GET['periodo'] ?? '7d';
+if (!is_string($selectedActivityPeriod) || !isset($activityPeriodOptions[$selectedActivityPeriod])) {
+    $selectedActivityPeriod = '7d';
+}
+$activityPeriodWhere = [
+    'hoje' => "criado_em >= datetime('now', 'localtime', 'start of day', 'utc')",
+    '7d' => "criado_em >= datetime('now', '-7 days')",
+    '15d' => "criado_em >= datetime('now', '-15 days')",
+    '30d' => "criado_em >= datetime('now', '-30 days')",
+    'mes_atual' => "criado_em >= datetime('now', 'localtime', 'start of month', 'utc')",
+    'mes_anterior' => "criado_em >= datetime('now', 'localtime', 'start of month', '-1 month', 'utc') "
+        . "AND criado_em < datetime('now', 'localtime', 'start of month', 'utc')",
+];
+
 $recentActivity = [
     'domains_created' => 0,
     'domains_removed' => 0,
@@ -152,7 +174,7 @@ $recentActivity = [
 try {
     $activityRows = db()->query(
         "SELECT acao, status, mensagem, nome_registro FROM audit_logs "
-        . "WHERE criado_em >= datetime('now', '-7 days') "
+        . "WHERE " . $activityPeriodWhere[$selectedActivityPeriod]
     )->fetchAll(PDO::FETCH_ASSOC);
 
     $activityActions = [
@@ -277,7 +299,7 @@ $uptimeValue = uptimeText();
 .menu-toggle{display:none;position:fixed;top:14px;left:14px;z-index:30;border:1px solid #334155;border-radius:10px;background:#071226;color:#e2e8f0;padding:9px 12px;cursor:pointer}
 .sidebar{position:fixed;left:0;top:0;width:270px;height:100vh;background:#020617;border-right:1px solid #1e293b;padding:20px;overflow-y:auto;box-shadow:none;z-index:20}.sidebar h2{color:#38bdf8;margin:0 0 30px}.sidebar a{display:block;color:#cbd5e1;text-decoration:none;padding:12px;border-radius:8px;margin-bottom:6px;transition:.2s}.sidebar a:hover,.sidebar a:focus,.sidebar a.active{background:#1e293b;color:#38bdf8;outline:none}.sidebar-group{margin-top:10px}.sidebar-group-toggle{display:flex;align-items:center;justify-content:space-between;width:100%;border:0;border-radius:8px;background:transparent;color:#94a3b8;padding:12px;cursor:pointer;text-align:left;font-size:13px;font-weight:bold;transition:.2s}.sidebar-group-toggle:hover,.sidebar-group-toggle:focus{background:#0f172a;color:#38bdf8;outline:none}.sidebar-group-arrow{font-size:14px;line-height:1}.sidebar-submenu{display:none;padding-left:8px}.sidebar-group.open .sidebar-submenu{display:block}.sidebar-submenu a{padding:10px 12px}
 .main-content{margin-left:270px;padding:25px}.topbar{display:flex;justify-content:space-between;align-items:center;gap:18px;background:#071226;border:1px solid #1e293b;border-radius:14px;padding:17px 20px;margin-bottom:25px}.topbar-title{display:flex;align-items:center;gap:9px}.topbar-info{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:10px;color:#cbd5e1;font-size:13px}.info-badge{display:flex;align-items:center;gap:9px;min-height:40px;background:#020617;border:1px solid #1e293b;border-radius:11px;padding:9px 12px}.info-badge svg{width:19px;height:19px;color:#38bdf8;flex:0 0 auto}.info-badge-text{display:flex;flex-direction:column;gap:2px}.info-badge-label{color:#64748b;font-size:10px;font-weight:bold;letter-spacing:.04em;text-transform:uppercase}.info-badge-value{color:#e2e8f0;font-weight:bold}
-.section{background:#071226;border:1px solid #1e293b;border-radius:16px;padding:25px;margin-bottom:25px;box-shadow:0 0 20px #0004}.section-header{display:flex;justify-content:space-between;align-items:center;gap:15px;margin-bottom:18px}.section-header h2{font-size:18px;margin:0}.section-link{color:#38bdf8;text-decoration:none;font-weight:bold;font-size:14px}
+.section{background:#071226;border:1px solid #1e293b;border-radius:16px;padding:25px;margin-bottom:25px;box-shadow:0 0 20px #0004}.section-header{display:flex;justify-content:space-between;align-items:center;gap:15px;margin-bottom:18px}.section-header h2{font-size:18px;margin:0}.section-link{color:#38bdf8;text-decoration:none;font-weight:bold;font-size:14px}#atividade-recente{scroll-margin-top:24px}.period-filter{display:flex;align-items:center;gap:9px;color:#94a3b8;font-size:13px;font-weight:bold}.period-filter select{min-height:38px;border:1px solid #334155;border-radius:10px;background:#020617;color:#e2e8f0;padding:8px 32px 8px 11px;font:inherit;cursor:pointer}.period-filter select:hover,.period-filter select:focus{border-color:#38bdf8;outline:none}
 .summary-grid,.recent-grid,.quick-grid{display:grid;gap:14px}.summary-grid,.recent-grid{grid-template-columns:repeat(4,minmax(0,1fr))}.quick-grid{grid-template-columns:repeat(6,minmax(0,1fr))}.stat{background:#020617;border:1px solid #1e293b;border-radius:14px;padding:16px;min-height:112px}.stat-link{display:block;color:inherit;text-decoration:none;cursor:pointer;transition:transform .15s ease}.stat-link:hover,.stat-link:focus{transform:translateY(-2px);outline:none}.stat .icon{font-size:24px;margin-bottom:8px}.stat .label{color:#94a3b8;font-size:11px;text-transform:uppercase}.stat .value{font-size:24px;font-weight:bold;color:#38bdf8;margin-top:7px;overflow-wrap:anywhere}.stat .value.normal{color:#4ade80}.stat .value.warning{color:#f59e0b}.stat .value.critical{color:#f87171}.stat .value.unavailable{font-size:16px;color:#94a3b8}.stat small{display:block;color:#64748b;margin-top:7px}.usage-bar{height:6px;border-radius:999px;background:#1e293b;margin-top:10px;overflow:hidden}.usage-bar-fill{height:100%;border-radius:999px;transition:width .2s ease,background-color .2s ease}.usage-bar-fill.normal{background:#4ade80}.usage-bar-fill.warning{background:#f59e0b}.usage-bar-fill.critical{background:#f87171}.usage-bar-fill.unavailable{background:#475569}
 .metric-icon{display:block;width:27px;height:27px;color:#38bdf8}
 .empty{color:#94a3b8;margin:0}
@@ -344,7 +366,7 @@ $uptimeValue = uptimeText();
 <div class="stat"><div class="icon"><svg class="metric-icon" aria-hidden="true"><use href="#icon-storage"></use></svg></div><div class="label">Disco</div><div class="value <?= usageClass($diskValue) ?>"><?= $diskValue === null ? 'Indisponível' : $diskValue . '%' ?></div><div class="usage-bar" aria-hidden="true"><div class="usage-bar-fill <?= usageClass($diskValue) ?>" style="width:<?= usageBarWidth($diskValue) ?>%"></div></div><small>Partição raiz</small></div>
 <div class="stat"><div class="icon"><svg class="metric-icon" aria-hidden="true"><use href="#icon-uptime"></use></svg></div><div class="label">Uptime</div><div class="value"><?= htmlspecialchars($uptimeValue ?? 'Indisponível') ?></div><small>Tempo de atividade</small></div>
 </div></section>
-<section class="section"><div class="section-header"><h2>🕘 Atividade recente</h2><span class="section-link">Últimos 7 dias</span></div><div class="recent-grid">
+<section id="atividade-recente" class="section"><div class="section-header"><h2>🕘 Atividade recente</h2><form class="period-filter" method="GET" action="dashboard.php#atividade-recente"><label for="activity-period">Período:</label><select name="periodo" id="activity-period" onchange="window.location.href='dashboard.php?periodo='+encodeURIComponent(this.value)+'#atividade-recente'"><?php foreach ($activityPeriodOptions as $periodValue => $periodLabel): ?><option value="<?= htmlspecialchars($periodValue, ENT_QUOTES, 'UTF-8') ?>"<?= $selectedActivityPeriod === $periodValue ? ' selected' : '' ?>><?= htmlspecialchars($periodLabel, ENT_QUOTES, 'UTF-8') ?></option><?php endforeach; ?></select><noscript><button type="submit">Aplicar</button></noscript></form></div><div class="recent-grid">
 <div class="stat"><div class="label">Domínios criados</div><div class="value"><?= $recentActivity['domains_created'] ?></div></div>
 <div class="stat"><div class="label">Domínios removidos</div><div class="value"><?= $recentActivity['domains_removed'] ?></div></div>
 <div class="stat"><div class="label">Registros criados</div><div class="value"><?= $recentActivity['records_created'] ?></div></div>
