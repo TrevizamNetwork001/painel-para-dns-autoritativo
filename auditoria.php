@@ -1,7 +1,6 @@
 <?php
 require_once __DIR__ . '/includes/auth.php';
 require_once __DIR__ . '/includes/db.php';
-require_once __DIR__ . '/includes/dns_servers.php';
 
 function dominio_legivel_auditoria(?string $dominio): string
 {
@@ -58,86 +57,8 @@ function acao_legivel(string $acao): string
         'ALTERAR_DNS_SERVER'       => '✏️ Servidor DNS',
         'REMOVER_DNS_SERVER'       => '🗑️ Servidor DNS',
         'TESTAR_DNS_SERVER'        => '🔍 Testar servidor DNS',
-        'DNS_SERVER_ADD'           => '➕ Servidor DNS',
-        'DNS_SERVER_UPDATE'        => '✏️ Servidor DNS',
-        'DNS_SERVER_REMOVE'        => '🗑️ Servidor DNS',
-        'DNS_SERVER_TEST'          => '🔍 Teste de servidor',
-        'DNS_SERVER_AGENT_INSTALL' => '🤖 Instalar agente',
-        'DNS_SERVER_AGENT_UPDATE'  => '🤖 Atualizar agente',
-        'DNS_SERVER_AGENT_REMOVE'  => '🤖 Remover agente',
-        'DNS_SERVER_SLAVE_LAYOUT_MIGRATE' => '🔄 Migrar layout',
-        'DNS_SERVER_INVENTORY'     => '🧭 Inventário do servidor',
-        'TESTE_SSH_OK'             => '✅ SSH OK',
-        'TESTE_SSH_FALHA'          => '❌ SSH falhou',
-        'TESTE_BIND_OK'            => '✅ BIND OK',
-        'TESTE_BIND_FALHA'         => '❌ BIND falhou',
-        'TESTE_AXFR_OK'            => '✅ AXFR OK',
-        'TESTE_AXFR_FALHA'         => '❌ AXFR falhou',
-        'AGENTE_OK'                => '✅ Agente OK',
-        'AGENTE_FALHA'             => '❌ Agente falhou',
-        'DNS_ZONE_INVENTORY_REFRESH' => '🧭 Inventário DNS',
-        'DNS_ZONE_GOVERNANCE_UPDATE' => '🛡️ Governança DNS',
-        'DNS_SERVER_GOVERNANCE_NOTE' => '📝 Observação do servidor',
-        'DNS_ZONE_SLAVE_SYNC_ONE', 'DNS_ZONE_SLAVE_SYNC_MISSING' => '🔄 Sincronizar zona',
         default            => $acao,
     };
-}
-
-function auditoria_data_local_para_utc(string $data, bool $fimDoDia = false): ?string
-{
-    if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $data)) {
-        return null;
-    }
-
-    try {
-        $local = new DateTimeZone('America/Sao_Paulo');
-        $utc = new DateTimeZone('UTC');
-        $horario = $fimDoDia ? '23:59:59' : '00:00:00';
-        $dt = DateTimeImmutable::createFromFormat('!Y-m-d H:i:s', $data . ' ' . $horario, $local);
-        $erros = DateTimeImmutable::getLastErrors();
-        if (!$dt || ($erros !== false && ($erros['warning_count'] > 0 || $erros['error_count'] > 0))) {
-            return null;
-        }
-
-        return $dt->setTimezone($utc)->format('Y-m-d H:i:s');
-    } catch (Throwable) {
-        return null;
-    }
-}
-
-function data_legivel_auditoria(string $data): string
-{
-    try {
-        return (new DateTimeImmutable($data, new DateTimeZone('UTC')))
-            ->setTimezone(new DateTimeZone('America/Sao_Paulo'))
-            ->format('d/m/Y H:i:s');
-    } catch (Throwable) {
-        return $data;
-    }
-}
-
-function servidor_legivel_auditoria(array $log, array $mapaServidores): string
-{
-    $tipo = (string) ($log['tipo_registro'] ?? '');
-    if (!in_array($tipo, ['DNS_SERVER', 'DNS_ZONE'], true)) {
-        return '-';
-    }
-
-    $nome = trim((string) ($log['nome_registro'] ?? ''));
-    if ($nome === '' || strcasecmp($nome, 'inventario') === 0) {
-        return '-';
-    }
-
-    return $mapaServidores[strtolower($nome)] ?? $nome;
-}
-
-function detalhes_auditoria(array $log): string
-{
-    return trim(implode(' | ', array_filter([
-        trim((string) ($log['mensagem'] ?? '')),
-        'Anterior: ' . valor_legivel_auditoria($log, 'valor_antigo'),
-        'Novo: ' . valor_legivel_auditoria($log, 'valor_novo'),
-    ], static fn(string $valor): bool => !in_array($valor, ['', 'Anterior: -', 'Novo: -'], true))));
 }
 
 function registro_legivel_auditoria(array $log): string
@@ -225,9 +146,6 @@ $pdo = db();
 $dominio = trim((string) ($_GET['dominio'] ?? ''));
 $acao = trim((string) ($_GET['acao'] ?? ''));
 $usuario = trim((string) ($_GET['usuario'] ?? ''));
-$servidorFiltro = strtolower(trim((string) ($_GET['servidor'] ?? '')));
-$dataInicial = trim((string) ($_GET['data_inicial'] ?? ''));
-$dataFinal = trim((string) ($_GET['data_final'] ?? ''));
 $status = strtoupper(trim((string) ($_GET['status'] ?? '')));
 $pagina = max(1, filter_input(INPUT_GET, 'pagina', FILTER_VALIDATE_INT) ?: 1);
 $porPagina = 50;
@@ -238,101 +156,6 @@ if (!in_array($status, ['', 'OK', 'ERRO'], true)) {
 
 $where = [];
 $params = [];
-$servidoresAtuais = dns_servers_listar();
-$opcoesServidores = [];
-$mapaServidores = [];
-
-foreach ($servidoresAtuais as $servidorAtual) {
-    $nomeServidor = trim((string) $servidorAtual['nome']);
-    $chaveServidor = strtolower($nomeServidor);
-    $identificadores = array_values(array_unique(array_filter([
-        $chaveServidor,
-        strtolower(trim((string) $servidorAtual['hostname'])),
-        strtolower(trim((string) ($servidorAtual['ip4'] ?? ''))),
-        strtolower(trim((string) ($servidorAtual['ip6'] ?? ''))),
-    ])));
-    $opcoesServidores[$chaveServidor] = [
-        'label' => $nomeServidor . ' • ' . ($servidorAtual['ip4'] ?: $servidorAtual['hostname']),
-        'identificadores' => $identificadores,
-    ];
-    foreach ($identificadores as $identificador) {
-        $mapaServidores[$identificador] = $nomeServidor;
-    }
-}
-
-$servidoresHistoricos = $pdo->query(
-    "SELECT nome_registro, valor_novo, valor_antigo FROM audit_logs "
-    . "WHERE tipo_registro = 'DNS_SERVER' AND TRIM(nome_registro) <> '' ORDER BY id DESC"
-)->fetchAll(PDO::FETCH_ASSOC);
-
-foreach ($servidoresHistoricos as $servidorHistorico) {
-    $identificadorHistorico = strtolower(trim((string) $servidorHistorico['nome_registro']));
-    $resumoHistorico = trim((string) ($servidorHistorico['valor_novo'] ?: $servidorHistorico['valor_antigo']));
-    $nomeHistorico = '';
-    if (preg_match('/^\s*([^\/]+?)\s*\//', $resumoHistorico, $matchNome)) {
-        $nomeHistorico = trim($matchNome[1]);
-    }
-    $chaveHistorica = strtolower($nomeHistorico !== '' ? $nomeHistorico : $identificadorHistorico);
-    if ($identificadorHistorico === '') {
-        continue;
-    }
-
-    if (!isset($opcoesServidores[$chaveHistorica])) {
-        $opcoesServidores[$chaveHistorica] = [
-            'label' => $nomeHistorico !== '' ? $nomeHistorico . ' • histórico' : $identificadorHistorico,
-            'identificadores' => [],
-        ];
-    }
-    $opcoesServidores[$chaveHistorica]['identificadores'] = array_values(array_unique(array_merge(
-        $opcoesServidores[$chaveHistorica]['identificadores'],
-        [$chaveHistorica, $identificadorHistorico]
-    )));
-    $mapaServidores[$identificadorHistorico] = $nomeHistorico !== '' ? $nomeHistorico : $identificadorHistorico;
-    $mapaServidores[$chaveHistorica] = $nomeHistorico !== '' ? $nomeHistorico : $identificadorHistorico;
-}
-
-$nomesZonaHistoricos = $pdo->query(
-    "SELECT DISTINCT LOWER(nome_registro) FROM audit_logs "
-    . "WHERE tipo_registro = 'DNS_ZONE' AND TRIM(nome_registro) <> '' "
-    . "AND LOWER(nome_registro) <> 'inventario'"
-)->fetchAll(PDO::FETCH_COLUMN);
-
-foreach ($nomesZonaHistoricos as $nomeZonaHistorico) {
-    $nomeZonaHistorico = strtolower(trim((string) $nomeZonaHistorico));
-    if ($nomeZonaHistorico === '') {
-        continue;
-    }
-    if (isset($opcoesServidores[$nomeZonaHistorico])) {
-        $opcoesServidores[$nomeZonaHistorico]['identificadores'][] = $nomeZonaHistorico;
-        $opcoesServidores[$nomeZonaHistorico]['identificadores'] = array_values(array_unique(
-            $opcoesServidores[$nomeZonaHistorico]['identificadores']
-        ));
-        continue;
-    }
-    if (!isset($mapaServidores[$nomeZonaHistorico])) {
-        $opcoesServidores[$nomeZonaHistorico] = [
-            'label' => $nomeZonaHistorico . ' • histórico',
-            'identificadores' => [$nomeZonaHistorico],
-        ];
-        $mapaServidores[$nomeZonaHistorico] = $nomeZonaHistorico;
-    }
-}
-
-uasort($opcoesServidores, static fn(array $a, array $b): int => strcasecmp($a['label'], $b['label']));
-
-$servidorFiltroResolvido = '';
-if ($servidorFiltro !== '') {
-    foreach ($opcoesServidores as $chaveServidor => $opcaoServidor) {
-        if (
-            $servidorFiltro === $chaveServidor
-            || in_array($servidorFiltro, $opcaoServidor['identificadores'], true)
-        ) {
-            $servidorFiltroResolvido = $chaveServidor;
-            break;
-        }
-    }
-    $servidorFiltro = $servidorFiltroResolvido;
-}
 
 if ($dominio !== '') {
     $where[] = 'dominio LIKE :dominio';
@@ -352,35 +175,6 @@ if ($usuario !== '') {
 if ($status !== '') {
     $where[] = 'status = :status';
     $params[':status'] = $status;
-}
-
-if ($servidorFiltro !== '' && isset($opcoesServidores[$servidorFiltro])) {
-    $placeholdersServidor = [];
-    foreach ($opcoesServidores[$servidorFiltro]['identificadores'] as $indice => $identificador) {
-        $chave = ':servidor_' . $indice;
-        $placeholdersServidor[] = $chave;
-        $params[$chave] = strtolower($identificador);
-    }
-    $where[] = "tipo_registro IN ('DNS_SERVER','DNS_ZONE') "
-        . 'AND LOWER(nome_registro) IN (' . implode(',', $placeholdersServidor) . ')';
-} else {
-    $servidorFiltro = '';
-}
-
-$dataInicialUtc = auditoria_data_local_para_utc($dataInicial);
-if ($dataInicialUtc !== null) {
-    $where[] = 'criado_em >= :data_inicial';
-    $params[':data_inicial'] = $dataInicialUtc;
-} else {
-    $dataInicial = '';
-}
-
-$dataFinalUtc = auditoria_data_local_para_utc($dataFinal, true);
-if ($dataFinalUtc !== null) {
-    $where[] = 'criado_em <= :data_final';
-    $params[':data_final'] = $dataFinalUtc;
-} else {
-    $dataFinal = '';
 }
 
 $whereSql = $where ? ' WHERE ' . implode(' AND ', $where) : '';
@@ -406,7 +200,7 @@ if (isset($_GET['exportar']) && $_GET['exportar'] === 'csv') {
     $saida = fopen('php://output', 'w');
     fputcsv(
         $saida,
-        ['Data/hora', 'Usuário', 'Ação', 'Domínio', 'Servidor', 'Registro', 'Detalhes', 'Status'],
+        ['Data', 'Usuário', 'Ação', 'Domínio', 'Registro', 'Valor antigo', 'Valor novo', 'Status'],
         ';',
         '"',
         ''
@@ -414,13 +208,13 @@ if (isset($_GET['exportar']) && $_GET['exportar'] === 'csv') {
 
     while ($log = $stmt->fetch(PDO::FETCH_ASSOC)) {
         fputcsv($saida, [
-            data_legivel_auditoria((string) $log['criado_em']),
+            date('d/m/Y H:i:s', strtotime($log['criado_em'])),
             $log['usuario'],
             acao_legivel($log['acao']),
             dominio_legivel_auditoria($log['dominio'] ?? null),
-            servidor_legivel_auditoria($log, $mapaServidores),
             registro_legivel_auditoria($log),
-            detalhes_auditoria($log),
+            valor_legivel_auditoria($log, 'valor_antigo'),
+            valor_legivel_auditoria($log, 'valor_novo'),
             $log['status'],
         ], ';', '"', '');
     }
@@ -456,19 +250,17 @@ h1{color:#fff;margin-top:0;}
 a{color:#38bdf8;text-decoration:none;}
 .card{background:#020617;padding:20px;border-radius:12px;margin-bottom:20px;}
 .filtros{display:flex;gap:10px;align-items:center;flex-wrap:wrap;}
-.campo-periodo{display:flex;align-items:center;gap:6px;color:#94a3b8;font-size:11px;}
 input,select,button,.botao{padding:10px;border-radius:6px;border:1px solid #334155;background:#020617;color:white;}
 button,.botao{background:#2563eb;cursor:pointer;display:inline-block;}
 .botao-secundario{background:#166534;}
 .table-wrap{background:#020617;border-radius:12px;overflow-x:auto;}
-table{width:100%;border-collapse:collapse;background:#020617;table-layout:fixed;min-width:1160px;}
+table{width:100%;border-collapse:collapse;background:#020617;table-layout:fixed;min-width:1050px;}
 th,td{border:1px solid #334155;padding:8px;font-size:13px;vertical-align:top;overflow-wrap:anywhere;word-break:break-word;}
 th{background:#111827;}
 .col-data{width:140px;white-space:nowrap;}
 .col-user{width:80px;}
 .col-acao{width:135px;}
 .col-dominio{width:125px;}
-.col-servidor{width:105px;}
 .col-registro{width:115px;font-family:Consolas,monospace;font-size:12px;}
 .col-valor{font-family:Consolas,monospace;font-size:12px;line-height:1.35;}
 .col-status{width:65px;text-align:center;}
@@ -505,18 +297,6 @@ th{background:#111827;}
         <?php endforeach; ?>
     </select>
 
-    <select name="servidor">
-        <option value="">Todos os servidores</option>
-        <?php foreach ($opcoesServidores as $valorServidor => $opcaoServidor): ?>
-        <option value="<?= htmlspecialchars($valorServidor) ?>" <?= $servidorFiltro === $valorServidor ? 'selected' : '' ?>>
-            <?= htmlspecialchars($opcaoServidor['label']) ?>
-        </option>
-        <?php endforeach; ?>
-    </select>
-
-    <label class="campo-periodo">De <input type="date" name="data_inicial" aria-label="Período inicial" value="<?= htmlspecialchars($dataInicial) ?>"></label>
-    <label class="campo-periodo">Até <input type="date" name="data_final" aria-label="Período final" value="<?= htmlspecialchars($dataFinal) ?>"></label>
-
     <select name="status">
         <option value="">Todos os status</option>
         <option value="OK" <?= $status === 'OK' ? 'selected' : '' ?>>OK</option>
@@ -537,7 +317,6 @@ th{background:#111827;}
     <th class="col-user">Usuário</th>
     <th class="col-acao">Ação</th>
     <th class="col-dominio">Domínio</th>
-    <th class="col-servidor">Servidor</th>
     <th class="col-registro">Registro</th>
     <th class="col-valor">Valor antigo</th>
     <th class="col-valor">Valor novo</th>
@@ -546,15 +325,14 @@ th{background:#111827;}
 </thead>
 <tbody>
 <?php if (!$logs): ?>
-<tr><td colspan="9" class="vazio">Nenhum registro encontrado.</td></tr>
+<tr><td colspan="8" class="vazio">Nenhum registro encontrado.</td></tr>
 <?php endif; ?>
 <?php foreach ($logs as $log): ?>
 <tr>
-    <td class="col-data"><?= htmlspecialchars(data_legivel_auditoria((string) $log['criado_em'])) ?></td>
+    <td class="col-data"><?= date('d/m/Y H:i:s', strtotime($log['criado_em'])) ?></td>
     <td class="col-user"><?= htmlspecialchars($log['usuario']) ?></td>
     <td class="col-acao"><?= htmlspecialchars(acao_legivel($log['acao'])) ?></td>
     <td class="col-dominio"><?= htmlspecialchars(dominio_legivel_auditoria($log['dominio'] ?? null)) ?></td>
-    <td class="col-servidor"><?= htmlspecialchars(servidor_legivel_auditoria($log, $mapaServidores)) ?></td>
     <td class="col-registro"><?= htmlspecialchars(registro_legivel_auditoria($log)) ?></td>
     <td class="col-valor"><?= nl2br(htmlspecialchars(valor_legivel_auditoria($log, 'valor_antigo'))) ?></td>
     <td class="col-valor"><?= nl2br(htmlspecialchars(valor_legivel_auditoria($log, 'valor_novo'))) ?></td>
