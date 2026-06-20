@@ -2,215 +2,97 @@
 
 require_once __DIR__ . '/includes/auth.php';
 
-function firewall_exec_command(string $command): array
+function fw_exec(string $command): array
 {
     $lines = [];
-    $exitCode = 0;
-    exec($command . ' 2>&1', $lines, $exitCode);
-    return [trim(implode("\n", $lines)), $exitCode];
+    $exit = 0;
+    exec($command . ' 2>&1', $lines, $exit);
+    return [trim(implode("
+", $lines)), $exit];
 }
 
-function firewall_clean_line(string $value): string
+function fw_clean(string $text): string
 {
-    return trim(preg_replace('/\s+/u', ' ', $value) ?? $value);
+    return trim(preg_replace('/\s+/u', ' ', $text) ?? $text);
 }
 
-function firewall_count_words(string $text, string $pattern): int
+function fw_format_time(): string
 {
-    if ($text === '') {
-        return 0;
+    try {
+        return (new DateTimeImmutable('now', new DateTimeZone('America/Sao_Paulo')))->format('d/m/Y H:i');
+    } catch (Throwable $e) {
+        return date('d/m/Y H:i');
     }
-
-    return preg_match_all($pattern, $text) ?: 0;
 }
 
-function firewall_parse_tables_list(string $raw): array
+function fw_parse_ruleset(string $raw): array
 {
     $tables = [];
-    foreach (preg_split('/\R/u', $raw) ?: [] as $line) {
-        $line = firewall_clean_line($line);
-        if ($line === '' || !preg_match('/^table\s+(\S+)\s+(\S+)$/u', $line, $match)) {
+    $tableIndex = -1;
+    $chainIndex = -1;
+
+    foreach (preg_split('/\R/u', $raw) ?: [] as $lineRaw) {
+        $line = fw_clean($lineRaw);
+        if ($line === '') {
             continue;
         }
 
-        $tables[] = [
-            'family' => $match[1],
-            'name' => $match[2],
-        ];
+        if (preg_match('/^table\s+(\S+)\s+(\S+)$/i', $line, $m)) {
+            $tables[] = [
+                'family' => $m[1],
+                'name' => $m[2],
+                'chains' => [],
+            ];
+            $tableIndex = array_key_last($tables);
+            $chainIndex = -1;
+            continue;
+        }
+
+        if ($tableIndex < 0) {
+            continue;
+        }
+
+        if (preg_match('/^chain\s+([^\s{]+)\s*\{/i', $line, $m)) {
+            $tables[$tableIndex]['chains'][] = [
+                'name' => $m[1],
+                'meta' => $line,
+                'rules' => [],
+            ];
+            $chainIndex = array_key_last($tables[$tableIndex]['chains']);
+            continue;
+        }
+
+        if ($chainIndex < 0) {
+            continue;
+        }
+
+        if (str_starts_with($line, 'type ') || str_contains($line, ' hook ') || str_contains($line, ' policy ')) {
+            $tables[$tableIndex]['chains'][$chainIndex]['meta'] = fw_clean(
+                $tables[$tableIndex]['chains'][$chainIndex]['meta'] . ' ' . $line
+            );
+            continue;
+        }
+
+        if ($line === '{' || $line === '}') {
+            continue;
+        }
+
+        $tables[$tableIndex]['chains'][$chainIndex]['rules'][] = $line;
     }
 
     return $tables;
 }
 
-function firewall_parse_rule_line(string $line): array
-{
-    $raw = firewall_clean_line($line);
-    $lower = strtolower($raw);
-    $action = 'não identificado';
-    foreach (['accept', 'drop', 'reject', 'counter'] as $candidate) {
-        if (str_contains($lower, $candidate)) {
-            $action = $candidate;
-            break;
-        }
-    }
-
-    $protocol = 'não identificado';
-    foreach (['tcp', 'udp', 'icmpv6', 'icmp', 'ip6', 'ip'] as $candidate) {
-        if (preg_match('/(^|[^a-z0-9])' . preg_quote($candidate, '/') . '([^a-z0-9]|$)/i', $raw)) {
-            $protocol = $candidate;
-            break;
-        }
-    }
-
-    $port = '';
-    if (preg_match('/\b(?:th\s+)?(?:dport|sport)\s+(\d{1,5})\b/i', $raw, $match)) {
-        $port = $match[1];
-    }
-
-    $source = '';
-    foreach ([
-        '/\bip6?\s+saddr\s+([^;]+)/i',
-        '/\bip6?\s+daddr\s+([^;]+)/i',
-        '/\bsaddr\s+([^;]+)/i',
-    ] as $pattern) {
-        if (preg_match($pattern, $raw, $match)) {
-            $source = firewall_clean_line($match[1]);
-            break;
-        }
-    }
-
-    return [
-        'raw' => $raw,
-        'search' => strtolower(implode(' ', array_filter([
-            $raw,
-            $action,
-            $protocol,
-            $port,
-            $source,
-        ]))),
-        'action' => $action,
-        'protocol' => $protocol,
-        'port' => $port,
-        'source' => $source,
-    ];
-}
-
-function firewall_parse_ruleset(string $raw): array
-{
-    $tables = [];
-    $currentTableKey = null;
-    $currentChainKey = null;
-
-    foreach (preg_split('/\R/u', $raw) ?: [] as $lineRaw) {
-        $line = firewall_clean_line($lineRaw);
-        if ($line === '') {
-            continue;
-        }
-
-        if ($currentChainKey !== null && $line === '}') {
-            $currentChainKey = null;
-            continue;
-        }
-
-        if ($currentTableKey !== null && $currentChainKey === null && $line === '}') {
-            $currentTableKey = null;
-            continue;
-        }
-
-        if (preg_match('/^table\s+(\S+)\s+(\S+)/u', $line, $match)) {
-            $currentTableKey = $match[1] . ' ' . $match[2];
-            $tables[$currentTableKey] = [
-                'family' => $match[1],
-                'name' => $match[2],
-                'chains' => [],
-            ];
-            continue;
-        }
-
-        if ($currentTableKey === null) {
-            continue;
-        }
-
-        if (preg_match('/^chain\s+([^\s{]+)\s*\{/u', $line, $match)) {
-            $currentChainKey = $match[1];
-            $tables[$currentTableKey]['chains'][$currentChainKey] = [
-                'name' => $match[1],
-                'meta' => '',
-                'rules' => [],
-            ];
-            if (str_contains($line, 'policy') || str_contains($line, 'hook')) {
-                $tables[$currentTableKey]['chains'][$currentChainKey]['meta'] = $line;
-            }
-            continue;
-        }
-
-        if ($currentChainKey !== null) {
-            if (str_starts_with($line, 'type ') || str_contains($line, ' hook ') || str_contains($line, ' policy ')) {
-                $tables[$currentTableKey]['chains'][$currentChainKey]['meta'] = trim(
-                    trim($tables[$currentTableKey]['chains'][$currentChainKey]['meta'] . ' ' . $line)
-                );
-                continue;
-            }
-
-            if ($line === '{') {
-                continue;
-            }
-
-            if ($line !== '}') {
-                $tables[$currentTableKey]['chains'][$currentChainKey]['rules'][] = firewall_parse_rule_line($line);
-            }
-        }
-    }
-
-    return array_values($tables);
-}
-
-function firewall_chain_policy(string $meta): ?string
-{
-    if (preg_match('/\bpolicy\s+([a-z]+)\b/i', $meta, $match)) {
-        return strtolower($match[1]);
-    }
-
-    return null;
-}
-
-function firewall_chain_hook(string $meta): ?string
-{
-    if (preg_match('/\bhook\s+([a-z]+)\b/i', $meta, $match)) {
-        return strtolower($match[1]);
-    }
-
-    return null;
-}
-
-function firewall_badge_class(string $label): string
-{
-    return match ($label) {
-        'accept', 'ativo', 'ok' => 'badge badge-ok',
-        'drop', 'reject', 'inativo', 'erro' => 'badge badge-bad',
-        'warn', 'atenção' => 'badge badge-warn',
-        'info', 'nftables', 'chain', 'table', 'tcp', 'udp', 'ip', 'ip6' => 'badge badge-info',
-        default => 'badge',
-    };
-}
-
-function firewall_value_badge(string $label, string $value): string
-{
-    $escaped = htmlspecialchars($value);
-    return '<span class="' . firewall_badge_class($label) . '">' . $escaped . '</span>';
-}
-
-function firewall_count_chains(array $tables): int
+function fw_count_chains(array $tables): int
 {
     $total = 0;
     foreach ($tables as $table) {
         $total += count($table['chains']);
     }
-
     return $total;
 }
 
-function firewall_count_rules(array $tables): int
+function fw_count_rules(array $tables): int
 {
     $total = 0;
     foreach ($tables as $table) {
@@ -218,128 +100,76 @@ function firewall_count_rules(array $tables): int
             $total += count($chain['rules']);
         }
     }
-
     return $total;
 }
 
-function firewall_find_rule(array $tables, callable $filter): bool
+function fw_chain_policy(string $meta): ?string
 {
-    foreach ($tables as $table) {
-        foreach ($table['chains'] as $chain) {
-            foreach ($chain['rules'] as $rule) {
-                if ($filter($table, $chain, $rule)) {
-                    return true;
-                }
-            }
-        }
-    }
-
-    return false;
+    return preg_match('/\bpolicy\s+([a-z]+)\b/i', $meta, $m) ? strtolower($m[1]) : null;
 }
 
-function firewall_has_input_policy_accept(array $tables): bool
+function fw_chain_hook(string $meta): ?string
+{
+    return preg_match('/\bhook\s+([a-z]+)\b/i', $meta, $m) ? strtolower($m[1]) : null;
+}
+
+function fw_rule_summary(string $line): string
+{
+    $text = fw_clean($line);
+    $protocol = preg_match('/\b(tcp|udp|icmpv6|icmp|ip6|ip)\b/i', $text, $m) ? strtolower($m[1]) : '';
+    $port = preg_match('/\b(?:dport|sport)\s+(\d{1,5})\b/i', $text, $m) ? $m[1] : '';
+    $action = preg_match('/\b(accept|drop|reject)\b/i', $text, $m) ? strtolower($m[1]) : '';
+
+    $parts = [];
+    if ($protocol !== '') {
+        $parts[] = '[' . $protocol . ']';
+    }
+    if ($port !== '') {
+        $parts[] = '[porta ' . $port . ']';
+    }
+    if ($action !== '') {
+        $parts[] = '[' . $action . ']';
+    }
+
+    $prefix = $parts ? implode(' ', $parts) . ' — ' : '';
+    return $prefix . $text;
+}
+
+function fw_find_input_policy_accept(array $tables): bool
 {
     foreach ($tables as $table) {
         foreach ($table['chains'] as $chain) {
             $meta = $chain['meta'] ?? '';
-            if (firewall_chain_hook($meta) === 'input' && firewall_chain_policy($meta) === 'accept') {
+            if (fw_chain_hook($meta) === 'input' && fw_chain_policy($meta) === 'accept') {
                 return true;
             }
         }
     }
-
     return false;
 }
 
-function firewall_format_check_time(): string
-{
-    try {
-        $local = new DateTimeZone('America/Sao_Paulo');
-        return (new DateTimeImmutable('now', $local))->format('d/m/Y H:i');
-    } catch (Throwable $e) {
-        return date('d/m/Y H:i');
-    }
-}
+[$serviceRaw, $serviceExit] = fw_exec('systemctl is-active nftables');
+[$rulesetRaw, $rulesetExit] = fw_exec('sudo -n /usr/sbin/nft list ruleset');
 
-function firewall_pluralize_count(int $count, string $singular, string $plural): string
-{
-    return $count . ' ' . ($count === 1 ? $singular : $plural);
-}
-
-[$serviceRaw, $serviceExit] = firewall_exec_command('systemctl is-active nftables');
-[$rulesetRaw, $rulesetExit] = firewall_exec_command('sudo -n /usr/sbin/nft list ruleset');
-[$tablesRaw, $tablesExit] = firewall_exec_command('sudo -n /usr/sbin/nft list tables');
-
-$serviceState = trim($serviceRaw);
-$serviceKnown = $serviceState !== '';
-$serviceActive = $serviceState === 'active';
-$rulesetAvailable = trim($rulesetRaw) !== '' && $rulesetExit === 0;
-$tablesFromList = firewall_parse_tables_list($tablesRaw);
-$parsedTables = $rulesetAvailable ? firewall_parse_ruleset($rulesetRaw) : [];
-
-if (!$parsedTables && $tablesFromList) {
-    foreach ($tablesFromList as $table) {
-        $parsedTables[] = [
-            'family' => $table['family'],
-            'name' => $table['name'],
-            'chains' => [],
-        ];
-    }
-}
-
-$tablesCount = count($parsedTables);
-$chainsCount = firewall_count_chains($parsedTables);
-$rulesCount = firewall_count_rules($parsedTables);
-$lastCheck = firewall_format_check_time();
+$service = trim($serviceRaw);
+$serviceActive = $service === 'active';
+$serviceKnown = $service !== '';
+$rulesetOk = trim($rulesetRaw) !== '' && $rulesetExit === 0;
+$tables = $rulesetOk ? fw_parse_ruleset($rulesetRaw) : [];
+$tablesCount = count($tables);
+$chainsCount = fw_count_chains($tables);
+$rulesCount = fw_count_rules($tables);
+$checkTime = fw_format_time();
 $auditoriaUrl = is_file(__DIR__ . '/auditoria.php') ? 'auditoria.php' : null;
-$selfUrl = basename((string) ($_SERVER['SCRIPT_NAME'] ?? 'firewall.php'));
-$showRulesDefault = false;
 
-$diagnostics = [];
-$diagnostics[] = [
-    'level' => $serviceActive ? 'ok' : ($serviceKnown ? 'bad' : 'warn'),
-    'text' => $serviceActive ? 'Serviço nftables ativo.' : ($serviceKnown ? 'Serviço nftables inativo.' : 'Serviço nftables não identificado.'),
-];
-$diagnostics[] = [
-    'level' => $rulesetAvailable ? 'ok' : 'warn',
-    'text' => $rulesetAvailable ? 'Ruleset carregado com sucesso.' : 'Não foi possível carregar o ruleset completo.',
-];
-$diagnostics[] = [
-    'level' => $tablesCount > 0 ? 'ok' : 'warn',
-    'text' => $tablesCount > 0 ? firewall_pluralize_count($tablesCount, 'tabela encontrada.', 'tabelas encontradas.') : 'Nenhuma tabela encontrada.',
-];
-$diagnostics[] = [
-    'level' => $chainsCount > 0 ? 'ok' : 'warn',
-    'text' => $chainsCount > 0 ? firewall_pluralize_count($chainsCount, 'chain encontrada.', 'chains encontradas.') : 'Nenhuma chain encontrada.',
-];
-$diagnostics[] = [
-    'level' => $rulesCount > 0 ? 'ok' : 'warn',
-    'text' => $rulesCount > 0 ? firewall_pluralize_count($rulesCount, 'regra encontrada.', 'regras encontradas.') : 'Nenhuma regra encontrada.',
-];
-$diagnostics[] = [
-    'level' => firewall_has_input_policy_accept($parsedTables) ? 'warn' : 'ok',
-    'text' => firewall_has_input_policy_accept($parsedTables) ? 'Chain input com policy accept.' : 'Policy padrão do input não identificada como accept.',
-];
-$sshFound = firewall_find_rule($parsedTables, function (array $table, array $chain, array $rule): bool {
-    return preg_match('/\b(?:dport|sport)\s+22\b/', $rule['raw']) === 1
-        || preg_match('/\bservice\s+ssh\b/i', $rule['raw']) === 1;
-});
-$webOpen = firewall_find_rule($parsedTables, function (array $table, array $chain, array $rule): bool {
-    $openPort = preg_match('/\b(?:dport|sport)\s+(80|443)\b/', $rule['raw']) === 1;
-    $allowAny = preg_match('/\baccept\b/i', $rule['raw']) === 1
-        && preg_match('/\b(?:0\.0\.0\.0\/0|::\/0|any)\b/i', $rule['raw']) === 1;
-    return $openPort && $allowAny;
-});
-$diagnostics[] = [
-    'level' => $sshFound ? 'ok' : 'warn',
-    'text' => $sshFound ? 'Porta SSH identificada nas regras.' : 'Porta SSH não identificada nas regras.',
-];
-$diagnostics[] = [
-    'level' => $webOpen ? 'warn' : 'ok',
-    'text' => $webOpen ? 'Porta do painel web parece exposta publicamente.' : 'Porta do painel web não foi identificada como exposta publicamente.',
-];
+$diagnostic = [];
+$diagnostic[] = $serviceActive ? ['ok', 'Serviço nftables ativo'] : ($serviceKnown ? ['warn', 'Serviço nftables inativo'] : ['warn', 'Serviço nftables não identificado']);
+$diagnostic[] = $rulesetOk ? ['ok', 'Ruleset carregado'] : ['warn', 'Não foi possível consultar nftables'];
+$diagnostic[] = $tablesCount > 0 ? ['ok', $tablesCount . ' ' . ($tablesCount === 1 ? 'tabela encontrada' : 'tabelas encontradas')] : ['warn', 'Nenhuma tabela encontrada'];
+$diagnostic[] = $chainsCount > 0 ? ['ok', $chainsCount . ' ' . ($chainsCount === 1 ? 'chain encontrada' : 'chains encontradas')] : ['warn', 'Nenhuma chain encontrada'];
+$diagnostic[] = $rulesCount > 0 ? ['ok', $rulesCount . ' ' . ($rulesCount === 1 ? 'regra encontrada' : 'regras encontradas')] : ['warn', 'Nenhuma regra encontrada'];
+$diagnostic[] = fw_find_input_policy_accept($tables) ? ['warn', 'Política input permissiva'] : ['ok', 'Política input não identificada como accept'];
 
-$showRulesMessage = !$rulesetAvailable ? 'Não foi possível consultar o nftables no momento.' : '';
 ?>
 <!DOCTYPE html>
 <html lang="pt-BR">
@@ -352,7 +182,6 @@ $showRulesMessage = !$rulesetAvailable ? 'Não foi possível consultar o nftable
             color-scheme: dark;
             --bg: #0b1220;
             --panel: #0f172a;
-            --panel-2: #111c33;
             --border: #24324a;
             --text: #e2e8f0;
             --muted: #94a3b8;
@@ -370,519 +199,291 @@ $showRulesMessage = !$rulesetAvailable ? 'Não foi possível consultar o nftable
         }
         a { color: inherit; text-decoration: none; }
         .page {
-            width: min(1220px, calc(100% - 32px));
+            width: min(900px, calc(100% - 24px));
             margin: 0 auto;
-            padding: 24px 0 36px;
+            padding: 22px 0 34px;
         }
-        .topline {
-            display: flex;
-            justify-content: space-between;
-            align-items: flex-start;
-            gap: 16px;
-            margin-bottom: 18px;
-        }
-        .back-link {
+        .back {
             color: var(--accent);
             font-size: 14px;
         }
-        .title {
+        h1 {
             margin: 8px 0 6px;
-            font-size: 30px;
-            font-weight: 700;
+            font-size: 28px;
         }
         .subtitle {
             margin: 0;
             color: var(--muted);
             line-height: 1.5;
         }
-        .toolbar {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 10px;
-            margin-top: 18px;
-        }
-        .toolbar a,
-        .toolbar button {
-            appearance: none;
-            border: 1px solid var(--border);
-            background: linear-gradient(180deg, #13213b, #0f1a31);
-            color: var(--text);
-            border-radius: 10px;
-            padding: 10px 14px;
-            font-size: 13px;
-            cursor: pointer;
-            transition: border-color .15s ease, transform .15s ease, background .15s ease;
-        }
-        .toolbar a:hover,
-        .toolbar button:hover {
-            border-color: #3b82f6;
-            transform: translateY(-1px);
-        }
-        .toolbar .primary { border-color: rgba(56, 189, 248, .45); }
-        .toolbar .success { border-color: rgba(34, 197, 94, .45); }
-        .toolbar-link {
-            display: inline-flex;
-            align-items: center;
-            border: 1px solid var(--border);
-            background: transparent;
-            border-radius: 10px;
-            padding: 10px 14px;
-            font-size: 13px;
-            color: var(--muted);
-        }
-        .toolbar-link:hover {
-            border-color: #3b82f6;
-            color: var(--text);
-        }
         .card {
-            background: linear-gradient(180deg, rgba(15, 23, 42, .95), rgba(11, 18, 32, .96));
-            border: 1px solid var(--border);
-            border-radius: 18px;
+            margin-top: 18px;
             padding: 16px;
-            box-shadow: 0 18px 60px rgba(0, 0, 0, .24);
+            border: 1px solid var(--border);
+            border-radius: 14px;
+            background: linear-gradient(180deg, rgba(15, 23, 42, .96), rgba(11, 18, 32, .96));
+            box-shadow: 0 16px 44px rgba(0, 0, 0, .18);
         }
-        .badges {
+        h2 {
+            margin: 0 0 6px;
+            font-size: 18px;
+        }
+        .card p {
+            margin: 0;
+            color: var(--muted);
+            line-height: 1.5;
+        }
+        .badges, .actions, .diag-list {
             display: flex;
             flex-wrap: wrap;
             gap: 8px;
-            margin-top: 12px;
         }
+        .badges { margin-top: 12px; }
         .badge {
             display: inline-flex;
             align-items: center;
-            gap: 6px;
-            border-radius: 999px;
             padding: 5px 10px;
+            border-radius: 999px;
             border: 1px solid rgba(148, 163, 184, .18);
-            background: rgba(148, 163, 184, .1);
+            background: rgba(148, 163, 184, .10);
             color: #dbe7f5;
             font-size: 12px;
-            line-height: 1;
             white-space: nowrap;
         }
         .badge-ok { background: rgba(22, 163, 74, .14); border-color: rgba(22, 163, 74, .3); color: #bbf7d0; }
         .badge-warn { background: rgba(217, 119, 6, .14); border-color: rgba(217, 119, 6, .32); color: #fde68a; }
         .badge-bad { background: rgba(220, 38, 38, .14); border-color: rgba(220, 38, 38, .32); color: #fecaca; }
-        .badge-info { background: rgba(56, 189, 248, .14); border-color: rgba(56, 189, 248, .3); color: #bae6fd; }
-        .section {
-            margin-top: 16px;
-        }
-        .section-head {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            gap: 12px;
-            margin-bottom: 10px;
-        }
-        .section-title {
-            margin: 0;
-            font-size: 18px;
-        }
-        .section-subtitle {
-            margin: 4px 0 0;
-            color: var(--muted);
-            font-size: 13px;
-        }
-        .searchbar {
-            display: flex;
-            gap: 10px;
-            align-items: center;
-            margin: 14px 0 12px;
-        }
-        .searchbar input {
-            width: min(100%, 460px);
+        .actions { margin-top: 12px; }
+        .actions button, .actions a {
             border: 1px solid var(--border);
-            background: #091123;
+            background: #111a2f;
             color: var(--text);
             border-radius: 10px;
-            padding: 11px 12px;
-            outline: none;
-        }
-        .searchbar input:focus {
-            border-color: #3b82f6;
-            box-shadow: 0 0 0 3px rgba(59, 130, 246, .12);
-        }
-        .rules-list {
-            display: grid;
-            gap: 12px;
-        }
-        .table-card, .chain-card, .rule-item, .diag-item, .raw-box {
-            background: rgba(17, 28, 51, .86);
-            border: 1px solid var(--border);
-            border-radius: 14px;
-        }
-        .table-card {
-            padding: 14px;
-        }
-        .table-head, .chain-head, .rule-top, .diag-item {
-            display: flex;
-            justify-content: space-between;
-            align-items: flex-start;
-            gap: 12px;
-        }
-        .table-head {
-            margin-bottom: 12px;
-        }
-        .chain-card {
-            padding: 12px;
-            margin-top: 12px;
-        }
-        .chain-body {
-            margin-top: 10px;
-            display: grid;
-            gap: 10px;
-        }
-        .rule-item {
-            padding: 12px;
-        }
-        .rule-text {
-            margin: 10px 0 0;
-            color: #cbd5e1;
-            line-height: 1.55;
+            padding: 9px 12px;
             font-size: 13px;
-            white-space: pre-wrap;
-            word-break: break-word;
+            cursor: pointer;
+            text-decoration: none;
         }
-        .muted {
+        .actions a {
+            background: transparent;
             color: var(--muted);
         }
-        .diag-list {
-            display: grid;
-            gap: 10px;
+        .panel {
             margin-top: 12px;
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            background: rgba(17, 28, 51, .72);
+            padding: 14px;
+        }
+        .panel h3 {
+            margin: 0 0 10px;
+            font-size: 15px;
         }
         .diag-item {
-            padding: 12px 14px;
-        }
-        .diag-icon {
-            width: 24px;
-            flex: 0 0 24px;
-            text-align: center;
-            font-size: 14px;
-        }
-        .diag-text {
-            flex: 1;
+            width: 100%;
+            display: flex;
+            gap: 10px;
+            align-items: flex-start;
             font-size: 13px;
             line-height: 1.5;
             color: #dbe7f5;
         }
-        .diag-item.ok .diag-icon { color: #86efac; }
-        .diag-item.warn .diag-icon { color: #fde68a; }
-        .diag-item.bad .diag-icon { color: #fca5a5; }
-        .pill-row {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 8px;
+        .diag-ico {
+            width: 18px;
+            flex: 0 0 18px;
+            text-align: center;
         }
-        .meta-line {
-            margin-top: 6px;
+        .diag-item.ok .diag-ico { color: #86efac; }
+        .diag-item.warn .diag-ico { color: #fde68a; }
+        .table {
+            margin-top: 12px;
+            padding-top: 12px;
+            border-top: 1px solid rgba(148, 163, 184, .12);
+        }
+        .table:first-child {
+            margin-top: 0;
+            padding-top: 0;
+            border-top: 0;
+        }
+        .table-head {
+            display: flex;
+            justify-content: space-between;
+            gap: 12px;
+            align-items: flex-start;
+            margin-bottom: 8px;
+        }
+        .table-title {
+            margin: 0 0 3px;
+            font-size: 14px;
+            color: #dbe7f5;
+        }
+        .meta {
             color: var(--muted);
+            font-size: 12px;
+        }
+        .chain {
+            margin-top: 10px;
+            padding: 10px 12px;
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            background: #091123;
+        }
+        .chain-title {
+            margin: 0 0 8px;
+            color: #dbe7f5;
             font-size: 13px;
         }
-        details {
-            border: 0;
+        .rule {
+            margin-top: 8px;
+            padding: 10px 12px;
+            border: 1px solid rgba(148, 163, 184, .16);
+            border-radius: 10px;
+            background: rgba(17, 28, 51, .55);
+        }
+        .rule-line {
+            margin-top: 6px;
+            color: #cbd5e1;
+            font-size: 12px;
+            line-height: 1.5;
+            white-space: pre-wrap;
+            word-break: break-word;
+        }
+        pre {
+            margin: 0;
+            padding: 14px;
+            background: #091123;
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            color: #cbd5e1;
+            font-size: 12px;
+            line-height: 1.55;
+            white-space: pre;
+            overflow: auto;
         }
         summary {
-            list-style: none;
             cursor: pointer;
+            color: var(--accent);
+            font-size: 13px;
+            list-style: none;
         }
         summary::-webkit-details-marker {
             display: none;
         }
-        .toggle-label {
-            color: var(--accent);
-            font-size: 13px;
-        }
-        .raw-box {
+        .empty {
             margin-top: 12px;
             padding: 14px;
-        }
-        pre {
-            margin: 0;
-            white-space: pre-wrap;
-            word-break: break-word;
-            color: #cbd5e1;
-            font-size: 12px;
-            line-height: 1.55;
-        }
-        .empty-state {
-            padding: 18px;
-            border-radius: 14px;
+            border-radius: 12px;
             border: 1px dashed var(--border);
             color: var(--muted);
-            background: rgba(17, 28, 51, .5);
-        }
-        .toolbar .ghost {
-            background: transparent;
-        }
-        .toolbar .danger {
-            border-color: rgba(220, 38, 38, .36);
+            background: rgba(17, 28, 51, .45);
         }
         @media (max-width: 720px) {
-            .page { width: min(100% - 18px, 100%); padding-top: 14px; }
-            .topline { flex-direction: column; }
-            .section-head, .table-head, .chain-head, .rule-top { flex-direction: column; }
-            .searchbar { flex-direction: column; align-items: stretch; }
-            .searchbar input { width: 100%; }
+            .page { width: calc(100% - 18px); padding-top: 14px; }
+            h1 { font-size: 24px; }
+            .table-head { flex-direction: column; }
         }
     </style>
 </head>
 <body>
     <div class="page">
-        <div class="topline">
-            <div>
-                <a class="back-link" href="dashboard.php">← Voltar ao painel</a>
-                <h1 class="title">Firewall</h1>
-                <p class="subtitle">Consulte o estado atual do nftables e visualize as regras de acesso do servidor.</p>
-            </div>
-        </div>
+        <a class="back" href="dashboard.php">← Voltar ao painel</a>
+        <h1>Firewall</h1>
+        <p class="subtitle">Consulta somente leitura do nftables.</p>
 
         <section class="card">
-            <div class="section-head" style="margin-bottom:0;">
-                <div>
-                    <h2 class="section-title">Firewall nftables</h2>
-                    <p class="section-subtitle">Consulte tabelas, chains, políticas e regras carregadas no servidor.</p>
-                </div>
-            </div>
+            <h2>nftables</h2>
+            <p>Estado atual do firewall e regras carregadas no servidor.</p>
 
             <div class="badges">
-                <span class="badge badge-info">nftables</span>
                 <span class="badge <?= $serviceActive ? 'badge-ok' : ($serviceKnown ? 'badge-bad' : 'badge-warn') ?>"><?= $serviceActive ? 'Ativo' : ($serviceKnown ? 'Inativo' : 'Não identificado') ?></span>
-                <span class="badge"><?= $tablesCount > 0 ? $tablesCount . ' tabela' . ($tablesCount > 1 ? 's' : '') : '0 tabelas' ?></span>
-                <span class="badge"><?= $chainsCount > 0 ? $chainsCount . ' chain' . ($chainsCount > 1 ? 's' : '') : '0 chains' ?></span>
-                <span class="badge"><?= $rulesCount > 0 ? $rulesCount . ' regra' . ($rulesCount > 1 ? 's' : '') : '0 regras' ?></span>
-                <span class="badge">Verificado <?= htmlspecialchars($lastCheck) ?></span>
+                <span class="badge"><?= $tablesCount ?> <?= $tablesCount === 1 ? 'tabela' : 'tabelas' ?></span>
+                <span class="badge"><?= $chainsCount ?> <?= $chainsCount === 1 ? 'chain' : 'chains' ?></span>
+                <span class="badge"><?= $rulesCount ?> <?= $rulesCount === 1 ? 'regra' : 'regras' ?></span>
+                <span class="badge">Verificado em <?= htmlspecialchars($checkTime) ?></span>
             </div>
 
-            <div class="toolbar">
-                <button type="button" class="primary" data-toggle-target="rules-panel">Mostrar regras</button>
-                <button type="button" class="success" data-toggle-target="diagnostics-panel">Abrir diagnóstico</button>
-                <button type="button" class="ghost" id="refresh-status">Atualizar status</button>
-                <?php if ($auditoriaUrl): ?>
-                    <a class="toolbar-link" href="<?= htmlspecialchars($auditoriaUrl) ?>">Ver auditoria</a>
-                <?php endif; ?>
+            <div class="actions">
+                <button type="button" data-toggle="diagnostic">Mostrar diagnóstico</button>
+                <button type="button" data-toggle="rules">Mostrar regras</button>
+                <?php if ($auditoriaUrl): ?><a href="<?= htmlspecialchars($auditoriaUrl) ?>">Ver auditoria</a><?php endif; ?>
             </div>
-        </section>
 
-        <section class="section">
-            <div class="card" id="diagnostics-panel" hidden>
-                <div class="section-head">
-                    <div>
-                        <h2 class="section-title">Diagnóstico do nftables</h2>
-                        <p class="section-subtitle">Alertas informativos baseados apenas no estado atual carregado.</p>
-                    </div>
-                    <button type="button" class="ghost" data-toggle-target="diagnostics-panel">Ocultar diagnóstico</button>
-                </div>
+            <div class="panel" id="diagnostic-panel" hidden>
+                <h3>Diagnóstico</h3>
                 <div class="diag-list">
-                    <?php foreach ($diagnostics as $item): ?>
-                        <?php
-                            $icon = match ($item['level']) {
-                                'ok' => '✓',
-                                'bad' => '✕',
-                                default => '⚠',
-                            };
-                        ?>
-                        <div class="diag-item <?= htmlspecialchars($item['level']) ?>">
-                            <div class="diag-icon" aria-hidden="true"><?= $icon ?></div>
-                            <div class="diag-text"><?= htmlspecialchars($item['text']) ?></div>
+                    <?php foreach ($diagnostic as [$level, $message]): ?>
+                        <div class="diag-item <?= htmlspecialchars($level) ?>">
+                            <span class="diag-ico" aria-hidden="true"><?= $level === 'ok' ? '✓' : '⚠' ?></span>
+                            <span><?= htmlspecialchars($message) ?></span>
                         </div>
                     <?php endforeach; ?>
                 </div>
             </div>
-        </section>
 
-        <section class="section">
-            <div class="card" id="rules-panel" <?= $showRulesDefault ? '' : 'hidden' ?>>
-                <div class="section-head">
-                    <div>
-                        <h2 class="section-title">Regras nftables</h2>
-                        <p class="section-subtitle">Lista somente leitura das tabelas, chains, políticas e regras.</p>
-                    </div>
-                    <button type="button" class="ghost" data-toggle-target="rules-panel"><?= $showRulesDefault ? 'Ocultar regras' : 'Mostrar regras' ?></button>
-                </div>
-
-                <div class="searchbar">
-                    <input type="search" id="rule-search" placeholder="Pesquisar regra, porta, chain ou ação...">
-                    <span class="muted" id="search-count"><?= $rulesCount ?> regra(s)</span>
-                </div>
-
-                <?php if ($showRulesMessage): ?>
-                    <div class="empty-state"><?= htmlspecialchars($showRulesMessage) ?> Verifique se o serviço nftables está instalado e ativo.</div>
-                <?php endif; ?>
-
-                <div class="rules-list" id="rules-list">
-                    <?php if ($parsedTables): ?>
-                        <?php foreach ($parsedTables as $table): ?>
-                            <?php
-                                $tableSearch = strtolower($table['family'] . ' ' . $table['name']);
-                                $chainCount = count($table['chains']);
-                                $tableRuleCount = 0;
-                                foreach ($table['chains'] as $chain) {
-                                    $tableRuleCount += count($chain['rules']);
-                                }
-                            ?>
-                            <div class="table-card" data-table-block data-search="<?= htmlspecialchars($tableSearch) ?>">
-                                <div class="table-head">
-                                    <div>
-                                        <div class="pill-row">
-                                            <?= firewall_value_badge('table', 'table ' . $table['family'] . ' ' . $table['name']) ?>
-                                            <span class="badge"><?= $chainCount ?> chain(s)</span>
-                                            <span class="badge"><?= $tableRuleCount ?> regra(s)</span>
-                                        </div>
-                                        <div class="meta-line">table <?= htmlspecialchars($table['family']) ?> <?= htmlspecialchars($table['name']) ?></div>
-                                    </div>
+            <div class="panel" id="rules-panel" hidden>
+                <h3>Regras</h3>
+                <?php if ($rulesetOk && $tables): ?>
+                    <?php foreach ($tables as $table): ?>
+                        <div class="table">
+                            <div class="table-head">
+                                <div>
+                                    <div class="table-title">table <?= htmlspecialchars($table['family']) ?> <?= htmlspecialchars($table['name']) ?></div>
+                                    <div class="meta"><?= count($table['chains']) ?> chain(s)</div>
                                 </div>
-
-                                <?php if ($table['chains']): ?>
-                                    <?php foreach ($table['chains'] as $chain): ?>
-                                        <?php
-                                            $meta = $chain['meta'] ?? '';
-                                            $hook = firewall_chain_hook($meta);
-                                            $policy = firewall_chain_policy($meta);
-                                            $chainSearch = strtolower($table['family'] . ' ' . $table['name'] . ' ' . $chain['name'] . ' ' . $meta);
-                                        ?>
-                                        <div class="chain-card" data-chain-block data-search="<?= htmlspecialchars($chainSearch) ?>">
-                                            <div class="chain-head">
-                                                <div>
-                                                    <div class="pill-row">
-                                                        <?= firewall_value_badge('chain', 'chain ' . $chain['name']) ?>
-                                                        <?php if ($hook): ?>
-                                                            <?= firewall_value_badge('info', 'hook ' . $hook) ?>
-                                                        <?php endif; ?>
-                                                        <?php if ($policy): ?>
-                                                            <span class="badge <?= firewall_badge_class($policy) ?>"><?= htmlspecialchars('policy ' . $policy) ?></span>
-                                                        <?php endif; ?>
-                                                    </div>
-                                                    <?php if ($meta !== ''): ?>
-                                                        <div class="meta-line"><?= htmlspecialchars($meta) ?></div>
-                                                    <?php endif; ?>
-                                                </div>
-                                                <div class="muted"><?= count($chain['rules']) ?> regra(s)</div>
-                                            </div>
-
-                                            <div class="chain-body">
-                                                <?php if ($chain['rules']): ?>
-                                                    <?php foreach ($chain['rules'] as $rule): ?>
-                                                        <?php
-                                                            $source = $rule['source'] !== '' ? $rule['source'] : 'any';
-                                                            $port = $rule['port'] !== '' ? 'porta ' . $rule['port'] : 'porta não identificada';
-                                                        ?>
-                                                        <article class="rule-item" data-rule-item data-search="<?= htmlspecialchars($rule['search']) ?>">
-                                                            <div class="rule-top">
-                                                                <div class="pill-row">
-                                                                    <?= firewall_value_badge($rule['protocol'], $rule['protocol']) ?>
-                                                                    <span class="badge <?= firewall_badge_class($rule['action']) ?>"><?= htmlspecialchars($rule['action']) ?></span>
-                                                                    <span class="badge"><?= htmlspecialchars($port) ?></span>
-                                                                    <span class="badge"><?= htmlspecialchars($source) ?></span>
-                                                                </div>
-                                                                <div class="muted">regra</div>
-                                                            </div>
-                                                            <div class="rule-text"><?= htmlspecialchars($rule['raw']) ?></div>
-                                                        </article>
-                                                    <?php endforeach; ?>
-                                                <?php else: ?>
-                                                    <div class="empty-state">Nenhuma regra direta encontrada nesta chain.</div>
-                                                <?php endif; ?>
-                                            </div>
-                                        </div>
-                                    <?php endforeach; ?>
-                                <?php else: ?>
-                                    <div class="empty-state">Nenhuma chain disponível nesta tabela.</div>
-                                <?php endif; ?>
                             </div>
-                        <?php endforeach; ?>
-                    <?php else: ?>
-                        <div class="empty-state">Nenhuma tabela foi identificada no ruleset atual.</div>
-                    <?php endif; ?>
-                </div>
-
-                <details style="margin-top:12px;">
-                    <summary><span class="toggle-label">Ver ruleset bruto</span></summary>
-                    <div class="raw-box">
-                        <pre><?= htmlspecialchars($rulesetAvailable ? $rulesetRaw : 'Sem saída disponível.') ?></pre>
-                    </div>
-                </details>
+                            <?php foreach ($table['chains'] as $chain): ?>
+                                <?php $meta = $chain['meta'] ?? ''; ?>
+                                <div class="chain">
+                                    <div class="chain-title">
+                                        chain <?= htmlspecialchars($chain['name']) ?>
+                                        <?php
+                                            $details = [];
+                                            if (($hook = fw_chain_hook($meta))) {
+                                                $details[] = 'hook ' . $hook;
+                                            }
+                                            if (($policy = fw_chain_policy($meta))) {
+                                                $details[] = 'policy ' . $policy;
+                                            }
+                                        ?>
+                                        <?= $details ? '— ' . htmlspecialchars(implode(', ', $details)) : '' ?>
+                                    </div>
+                                    <?php if ($chain['rules']): ?>
+                                        <?php foreach ($chain['rules'] as $rule): ?>
+                                            <div class="rule"><?= htmlspecialchars(fw_rule_summary($rule)) ?></div>
+                                        <?php endforeach; ?>
+                                    <?php else: ?>
+                                        <div class="empty">Nenhuma regra direta encontrada nesta chain.</div>
+                                    <?php endif; ?>
+                                </div>
+                            <?php endforeach; ?>
+                        </div>
+                    <?php endforeach; ?>
+                <?php else: ?>
+                    <div class="empty">Não foi possível consultar o nftables no momento.</div>
+                    <details style="margin-top:12px;">
+                        <summary>Ver ruleset bruto</summary>
+                        <pre><?= htmlspecialchars($rulesetRaw !== '' ? $rulesetRaw : 'Sem saída disponível.') ?></pre>
+                    </details>
+                <?php endif; ?>
             </div>
         </section>
     </div>
 
     <script>
         (function () {
-            const toggleButtons = document.querySelectorAll('[data-toggle-target]');
-            toggleButtons.forEach((button) => {
+            const buttons = document.querySelectorAll('[data-toggle]');
+            buttons.forEach((button) => {
                 button.addEventListener('click', () => {
-                    const targetId = button.getAttribute('data-toggle-target');
-                    const panel = document.getElementById(targetId);
-                    if (!panel) {
-                        return;
-                    }
-
+                    const key = button.getAttribute('data-toggle');
+                    const panel = document.getElementById(key + '-panel');
+                    if (!panel) return;
                     const hidden = panel.hasAttribute('hidden');
-                    if (hidden) {
-                        panel.removeAttribute('hidden');
-                        if (targetId === 'rules-panel') {
-                            button.textContent = 'Ocultar regras';
-                        }
-                        if (targetId === 'diagnostics-panel') {
-                            button.textContent = 'Ocultar diagnóstico';
-                        }
-                    } else {
-                        panel.setAttribute('hidden', '');
-                        if (targetId === 'rules-panel') {
-                            button.textContent = 'Mostrar regras';
-                        }
-                        if (targetId === 'diagnostics-panel') {
-                            button.textContent = 'Abrir diagnóstico';
-                        }
-                    }
+                    panel.toggleAttribute('hidden');
+                    button.textContent = hidden
+                        ? (key === 'diagnostic' ? 'Ocultar diagnóstico' : 'Ocultar regras')
+                        : (key === 'diagnostic' ? 'Mostrar diagnóstico' : 'Mostrar regras');
                 });
             });
-
-            const refresh = document.getElementById('refresh-status');
-            if (refresh) {
-                refresh.addEventListener('click', () => {
-                    window.location.reload();
-                });
-            }
-
-            const search = document.getElementById('rule-search');
-            const searchCount = document.getElementById('search-count');
-            const ruleItems = Array.from(document.querySelectorAll('[data-rule-item]'));
-            const chainBlocks = Array.from(document.querySelectorAll('[data-chain-block]'));
-            const tableBlocks = Array.from(document.querySelectorAll('[data-table-block]'));
-
-            function applyFilter() {
-                const term = (search ? search.value : '').trim().toLowerCase();
-                let visibleRules = 0;
-
-                ruleItems.forEach((item) => {
-                    const match = term === '' || (item.getAttribute('data-search') || '').includes(term);
-                    item.hidden = !match;
-                    if (match) {
-                        visibleRules += 1;
-                    }
-                });
-
-                chainBlocks.forEach((chain) => {
-                    const visible = chain.querySelector('[data-rule-item]:not([hidden])') !== null;
-                    chain.hidden = term !== '' && !visible;
-                });
-
-                tableBlocks.forEach((table) => {
-                    const visible = table.querySelector('[data-chain-block]:not([hidden])') !== null;
-                    table.hidden = term !== '' && !visible;
-                });
-
-                if (searchCount) {
-                    searchCount.textContent = visibleRules + ' regra(s)';
-                }
-            }
-
-            if (search) {
-                search.addEventListener('input', applyFilter);
-            }
-
-            applyFilter();
         })();
     </script>
 
