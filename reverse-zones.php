@@ -711,7 +711,7 @@ a:hover{text-decoration:underline}
 <dialog id="delete-orphan-modal" class="delete-modal">
     <div class="modal-head">
         <h2>Remover arquivo reverso órfão</h2>
-        <p>A remoção é permitida somente se o arquivo continuar sem referência no named.conf.local.</p>
+        <p>A remoção só será permitida se o arquivo ainda não estiver referenciado no BIND.</p>
     </div>
     <form method="POST" class="modal-body">
         <?= csrf_field() ?>
@@ -719,7 +719,7 @@ a:hover{text-decoration:underline}
         <div class="modal-file" id="delete-orphan-display"></div>
 
         <label for="delete-orphan-confirmation">
-            Para confirmar, digite exatamente o nome do arquivo:
+            Para confirmar, digite exatamente:
         </label>
         <input
             type="text"
