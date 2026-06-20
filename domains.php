@@ -1125,7 +1125,7 @@ if (globalErrorAlert) {
                 block: "center"
             });
         });
-    }, 8000);
+    }, 5000);
 }
 </script>
 
