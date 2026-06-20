@@ -193,73 +193,75 @@ $usuarios = db()
 <title>Usuários</title>
 <style>
 *{box-sizing:border-box}
-body{margin:0;padding:28px;font-family:Arial,sans-serif;background:#0f172a;color:#e2e8f0}
+body{margin:0;padding:24px;font-family:Arial,sans-serif;background:#0f172a;color:#e2e8f0;font-size:14px}
 .page{width:min(1280px,100%);margin:0 auto}
-.page-header{display:flex;justify-content:space-between;align-items:flex-start;gap:20px;margin-bottom:24px}
-.page-header h1{margin:0 0 7px;color:#fff;font-size:28px}
-.page-header p{margin:0;color:#94a3b8;font-size:14px}
+.page-header{display:flex;justify-content:space-between;align-items:flex-start;gap:18px;margin-bottom:20px}
+.page-header h1{margin:0 0 6px;color:#fff;font-size:26px}
+.page-header p{margin:0;color:#94a3b8;font-size:13px}
 a{color:#38bdf8;text-decoration:none}
 a:hover{text-decoration:underline}
-.back-link{display:inline-flex;align-items:center;min-height:40px;padding:9px 13px;border:1px solid #334155;border-radius:10px;background:#071226;font-weight:bold;white-space:nowrap}
-.card{background:#071226;border:1px solid #1e293b;padding:22px;border-radius:16px;margin-bottom:22px}
-.card-head{display:flex;justify-content:space-between;align-items:center;gap:14px;margin-bottom:18px}
-.card-head h2{margin:0;color:#fff;font-size:20px}
-.card-count{display:inline-flex;align-items:center;justify-content:center;min-width:34px;height:28px;padding:0 10px;border-radius:999px;background:#0c4a6e;color:#bae6fd;font-size:12px;font-weight:bold}
-.create-grid{display:grid;grid-template-columns:minmax(180px,1fr) minmax(210px,1.15fr) minmax(170px,.75fr) auto;gap:16px;align-items:end}
-.field label{display:block;margin:0 0 7px;color:#94a3b8;font-size:12px;font-weight:bold}
-input,select,button{min-height:42px;padding:10px 12px;border:1px solid #334155;border-radius:9px;background:#0f172a;color:#fff;font:inherit}
+.back-link{display:inline-flex;align-items:center;min-height:36px;padding:7px 11px;border:1px solid #334155;border-radius:9px;background:#071226;font-size:13px;font-weight:bold;white-space:nowrap}
+.card{background:#071226;border:1px solid #1e293b;padding:18px;border-radius:14px;margin-bottom:18px}
+.card-head{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:14px}
+.card-head h2{margin:0;color:#fff;font-size:18px}
+.card-count{display:inline-flex;align-items:center;justify-content:center;min-width:30px;height:24px;padding:0 8px;border-radius:999px;background:#0c4a6e;color:#bae6fd;font-size:11px;font-weight:bold}
+.create-grid{display:grid;grid-template-columns:minmax(180px,1fr) minmax(210px,1.15fr) minmax(170px,.75fr) auto;gap:13px;align-items:end}
+.field label{display:block;margin:0 0 6px;color:#94a3b8;font-size:11px;font-weight:bold}
+input,select,button{min-height:37px;padding:8px 10px;border:1px solid #334155;border-radius:8px;background:#0f172a;color:#fff;font:inherit;font-size:13px}
 input,select{width:100%}
 input:focus,select:focus{border-color:#38bdf8;outline:none;box-shadow:0 0 0 3px #38bdf81f}
-button{border-color:#2563eb;background:#2563eb;font-weight:bold;cursor:pointer}
+button{min-height:34px;padding:6px 9px;border-color:#2563eb;background:#2563eb;font-size:12px;font-weight:bold;cursor:pointer}
 button:hover{filter:brightness(1.08)}
 button:disabled{cursor:not-allowed;opacity:.65}
-.create-button{min-width:110px}
-.helper{margin:14px 0 0;color:#94a3b8;font-size:13px}
-.erro,.sucesso{padding:13px 15px;border:1px solid;border-radius:10px;margin-bottom:18px}
+.create-button{min-width:84px}
+.helper{margin:11px 0 0;color:#94a3b8;font-size:12px}
+.erro,.sucesso{padding:11px 13px;border:1px solid;border-radius:9px;margin-bottom:15px}
 .erro{border-color:#991b1b;background:#450a0a;color:#fecaca}
 .sucesso{border-color:#166534;background:#052e16;color:#bbf7d0}
 .users-list{border-top:1px solid #1e293b}
-.user-card{padding:21px 2px;border-bottom:1px solid #1e293b}
+.user-card{padding:16px 2px;border-bottom:1px solid #1e293b}
 .user-card:last-child{border-bottom:0;padding-bottom:2px}
-.user-summary{display:flex;justify-content:space-between;align-items:flex-start;gap:18px}
-.user-name{margin:0 0 6px;color:#fff;font-size:18px}
-.user-created{color:#64748b;font-size:12px}
-.badges{display:flex;justify-content:flex-end;gap:7px;flex-wrap:wrap}
-.badge{display:inline-flex;align-items:center;min-height:26px;padding:4px 9px;border-radius:999px;font-size:11px;font-weight:bold}
+.user-summary{display:flex;justify-content:space-between;align-items:flex-start;gap:15px}
+.user-name{margin:0 0 4px;color:#fff;font-size:16px}
+.user-created{color:#64748b;font-size:11px}
+.badges{display:flex;justify-content:flex-end;gap:6px;flex-wrap:wrap}
+.badge{display:inline-flex;align-items:center;min-height:22px;padding:3px 7px;border-radius:999px;font-size:10px;font-weight:bold}
 .badge-active{background:#052e16;color:#86efac}
 .badge-inactive{background:#450a0a;color:#fca5a5}
 .badge-pending{background:#422006;color:#fde68a}
 .badge-current{background:#164e63;color:#a5f3fc}
-.user-actions{display:grid;grid-template-columns:minmax(310px,1fr) minmax(330px,1fr);gap:24px;padding-top:18px;align-items:center}
+.user-actions{display:grid;grid-template-columns:minmax(310px,1fr) minmax(330px,1fr);gap:20px;padding-top:13px;align-items:center}
 .action-block{min-width:0}
-.inline-form{display:flex;align-items:center;gap:9px}
-.profile-select{min-width:150px}
-.active-toggle{display:inline-flex;align-items:center;gap:8px;min-height:42px;padding:8px 4px;color:#cbd5e1;font-size:13px;white-space:nowrap}
-.active-toggle input{width:16px;height:16px;min-height:0;margin:0;accent-color:#2563eb}
+.inline-form{display:flex;align-items:center;gap:7px}
+.user-actions>.action-block:first-child .inline-form{display:grid;grid-template-columns:minmax(220px,280px) auto auto;justify-content:start}
+.profile-select{width:280px;max-width:100%;min-width:0}
+.active-toggle{display:inline-flex;align-items:center;gap:7px;min-height:37px;padding:6px 3px;color:#cbd5e1;font-size:12px;white-space:nowrap}
+.active-toggle input{width:15px;height:15px;min-height:0;margin:0;accent-color:#2563eb}
 .secundario{border-color:#475569;background:#334155}
-.perigo{min-height:38px;padding:8px 11px;border-color:#7f1d1d;background:transparent;color:#fca5a5;font-size:13px}
+.perigo{min-height:34px;padding:6px 9px;border-color:#7f1d1d;background:transparent;color:#fca5a5;font-size:12px}
 .perigo:hover{background:#450a0a}
-.senha{min-width:0;max-width:260px}
-.account-tools{display:flex;align-items:center;justify-content:flex-end;gap:10px;min-width:0}
-.account-tools .inline-form{flex:1;justify-content:flex-end}
-.current-action{display:flex;align-items:center;min-height:42px;color:#64748b;font-size:13px}
-.password-link{display:inline-flex;align-items:center;min-height:42px;padding:9px 12px;border:1px solid #334155;border-radius:9px;background:#0f172a;font-weight:bold}
+.senha{width:260px;max-width:100%;min-width:0}
+.account-tools{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;justify-content:end;gap:8px;min-width:0}
+.account-tools .inline-form{display:grid;grid-template-columns:minmax(220px,260px) auto;justify-content:end}
+.current-action{display:flex;align-items:center;min-height:37px;color:#64748b;font-size:12px}
+.password-link{display:inline-flex;align-items:center;min-height:37px;padding:7px 10px;border:1px solid #334155;border-radius:8px;background:#0f172a;font-size:13px;font-weight:bold}
 .remove-form{display:flex}
 @media(max-width:1050px){
     .create-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
     .create-button{width:100%}
     .user-actions{grid-template-columns:1fr}
-    .account-tools,.account-tools .inline-form{justify-content:flex-start}
+    .account-tools,.account-tools .inline-form{justify-content:start}
 }
 @media(max-width:700px){
-    body{padding:18px 13px}
+    body{padding:16px 12px}
     .page-header{flex-direction:column}
-    .card{padding:17px}
+    .card{padding:15px}
     .create-grid,.user-actions{grid-template-columns:1fr}
     .user-summary{flex-direction:column}
     .badges{justify-content:flex-start}
     .inline-form,.account-tools{align-items:stretch;flex-direction:column}
-    .profile-select,.senha{max-width:none}
+    .user-actions>.action-block:first-child .inline-form,.account-tools,.account-tools .inline-form{display:flex;justify-content:flex-start}
+    .profile-select,.senha{width:100%;max-width:none}
     .active-toggle{width:100%}
     .account-tools .inline-form,.remove-form{width:100%}
     .remove-form button{width:auto;align-self:flex-start}
