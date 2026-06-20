@@ -7,6 +7,8 @@ require "includes/audit.php";
 
 $erro = null;
 $sucesso = null;
+$aviso = null;
+$technicalError = null;
 $fieldErrors = [];
 $formData = [
     'new_domain' => '',
@@ -194,6 +196,8 @@ if (isset($_POST['create_reverse_v4']) && !empty($rev_cidr)) {
 }
 
 $rev = implode(';', $rev_list);
+$existingRev4 = [];
+$missingRev4 = $rev_list;
 
 
 if (empty($dom) || empty($ip4)) {
@@ -278,14 +282,36 @@ if (empty($dom) || empty($ip4)) {
     $fieldErrors['reverse_ipv6'] = $erro;
 
 } else {
-if (file_exists("/var/cache/bind/master-aut/$dom.hosts")) {
+    if ($rev_list !== []) {
+        $existingRev4 = [];
+        $missingRev4 = [];
 
-    $erro = "Domínio já existe.";
-    $fieldErrors['domain'] = $erro;
+        foreach ($rev_list as $reverseBlock) {
+            $reverseFile = "/var/cache/bind/master-rev/{$reverseBlock}.rev";
 
-}
-else {
+            if (is_file($reverseFile)) {
+                $existingRev4[] = $reverseBlock;
+            } else {
+                $missingRev4[] = $reverseBlock;
+            }
+        }
 
+        $rev = implode(';', $missingRev4);
+
+        if ($missingRev4 === []) {
+            $erro = "Todas as zonas reversas desta rede já existem.";
+            $fieldErrors['reverse_ipv4'] = $erro;
+        } elseif ($existingRev4 !== []) {
+            $aviso = "Algumas zonas reversas já existem. Serão criadas apenas as ausentes.";
+        }
+    }
+
+    if ($erro === null && file_exists("/var/cache/bind/master-aut/$dom.hosts")) {
+        $erro = "Domínio já existe.";
+        $fieldErrors['domain'] = $erro;
+    }
+
+    if ($erro === null) {
         exec(
             "sudo /usr/local/bin/add-domain-full.sh "
             . escapeshellarg($dom) . " "
@@ -303,16 +329,67 @@ else {
 
         if ($ret !== 0) {
 
-            $erro = implode("<br>", $out);
             $scriptError = implode("\n", $out);
+            $technicalError = $scriptError;
+            $erro = $scriptError;
 
-            if (stripos($scriptError, 'zona reversa') !== false) {
+            if (preg_match(
+                '/^\[ERRO\]\s+A zona reversa\s+([0-9a-f](?:\.[0-9a-f])+\.ip6\.arpa)\s+já existe\.\s*$/mi',
+                $scriptError,
+                $zoneMatch
+            )) {
+                $reverseZone = $zoneMatch[1];
+                $reverseFile = null;
+                $associatedDomain = null;
+                $namedConf = file_get_contents('/etc/bind/named.conf.local');
+
+                if ($namedConf !== false) {
+                    $zonePattern = '/^\s*zone\s+"' . preg_quote($reverseZone, '/') .
+                        '"\s*\{(?:(?!^\s*\};).)*^\s*\};/msi';
+
+                    if (preg_match($zonePattern, $namedConf, $zoneBlock) &&
+                        preg_match('/\bfile\s+(?:"([^"]+)"|([^\s;]+))\s*;/i', $zoneBlock[0], $fileMatch)) {
+                        $reverseFile = $fileMatch[1] !== '' ? $fileMatch[1] : $fileMatch[2];
+                        $basename = basename($reverseFile);
+
+                        if (preg_match('/^(.+)\.rev6$/i', $basename, $domainMatch) &&
+                            valid_domain($domainMatch[1])) {
+                            $associatedDomain = $domainMatch[1];
+                        }
+                    }
+                }
+
+                $erro = "Não foi possível criar o domínio.\n\n"
+                    . "O prefixo IPv6 informado já está cadastrado.\n\n"
+                    . "Zona reversa:\n{$reverseZone}";
+
+                if ($reverseFile !== null) {
+                    $erro .= "\n\nArquivo usado:\n{$reverseFile}";
+                }
+
+                if ($associatedDomain !== null) {
+                    $erro .= "\n\nDomínio associado:\n{$associatedDomain}";
+                }
+
+                $erro .= "\n\nNenhuma alteração foi aplicada.";
+                $fieldErrors['reverse_ipv6'] = $associatedDomain !== null
+                    ? "O prefixo IPv6 informado já está cadastrado para {$associatedDomain}. Veja os detalhes no aviso acima."
+                    : "O prefixo IPv6 informado já está cadastrado. Veja os detalhes no aviso acima.";
+            } elseif (stripos($scriptError, 'zona reversa') !== false) {
                 if (stripos($scriptError, 'in-addr.arpa') !== false) {
-                    $erro = "Zona reversa já existe.";
+                    $existingRev4AfterFailure = array_filter(
+                        $rev_list,
+                        static fn (string $reverseBlock): bool =>
+                            is_file("/var/cache/bind/master-rev/{$reverseBlock}.rev")
+                    );
+
+                    if ($rev_list !== [] && count($existingRev4AfterFailure) === count($rev_list)) {
+                        $erro = "Todas as zonas reversas desta rede já existem.";
+                    } elseif ($existingRev4AfterFailure !== []) {
+                        $erro = "Algumas zonas reversas já existem. Tente novamente para criar apenas as ausentes.";
+                    }
+
                     $fieldErrors['reverse_ipv4'] = $erro;
-                } elseif (stripos($scriptError, 'ip6.arpa') !== false) {
-                    $erro = "Zona reversa já existe.";
-                    $fieldErrors['reverse_ipv6'] = $erro;
                 }
             } elseif (stripos($scriptError, 'zona já existe') !== false) {
                 $erro = "Domínio já existe.";
@@ -370,6 +447,9 @@ else {
             ]);
 
             $_SESSION['flash_ok'] = "Domínio criado com sucesso!";
+            if ($aviso !== null) {
+                $_SESSION['flash_warning'] = "Algumas zonas reversas já existiam. Foram criadas apenas as ausentes.";
+            }
             header("Location: domains.php");
             exit;
         }
@@ -383,7 +463,9 @@ else {
             'tipo_registro' => 'DOMINIO',
             'nome_registro' => 'domínio',
             'status' => 'ERRO',
-            'mensagem' => strip_tags(str_replace('<br>', "\n", $erro)),
+            'mensagem' => $technicalError !== null
+                ? $technicalError
+                : strip_tags(str_replace('<br>', "\n", $erro)),
         ]);
     }
 }
@@ -468,6 +550,11 @@ a:hover{text-decoration:underline}
     background:rgba(20,83,45,.92);
     border-color:rgba(34,197,94,.22);
     color:#bbf7d0;
+}
+.alert.warning{
+    background:rgba(120,53,15,.92);
+    border-color:rgba(245,158,11,.25);
+    color:#fde68a;
 }
 .card{
     background:rgba(2,6,23,.96);
@@ -606,6 +693,24 @@ select:focus{
     line-height:1.45;
     margin-top:7px;
 }
+.ipv6-info{
+    margin-top:10px;
+    padding:11px 12px;
+    border:1px solid rgba(56,189,248,.28);
+    border-radius:12px;
+    background:rgba(14,116,144,.1);
+    color:#cbd5e1;
+    font-size:13px;
+    line-height:1.5;
+}
+.ipv6-info strong{
+    display:block;
+    margin-bottom:4px;
+    color:#bae6fd;
+}
+.ipv6-info p{
+    margin:0;
+}
 .ptr-box{
     margin-top:9px;
     padding:11px 12px;
@@ -623,6 +728,10 @@ select:focus{
 .preview{
     color:#86efac;
     font-weight:600;
+}
+.preview.blocked{
+    color:#fcd34d;
+    white-space:pre-line;
 }
 .actions{
     display:flex;
@@ -739,6 +848,11 @@ button:hover{opacity:.95}
             <div id="alertaSucesso" class="alert ok"><?= htmlspecialchars($_SESSION['flash_ok']) ?></div>
             <?php unset($_SESSION['flash_ok']); ?>
         <?php endif; ?>
+
+        <?php if (isset($_SESSION['flash_warning'])): ?>
+            <div id="alertaAviso" class="alert warning"><?= htmlspecialchars($_SESSION['flash_warning']) ?></div>
+            <?php unset($_SESSION['flash_warning']); ?>
+        <?php endif; ?>
     </div>
 
     <section class="card">
@@ -827,7 +941,7 @@ button:hover{opacity:.95}
                     </div>
                 </div>
 
-                <div class="section <?= ($fieldErrors['reverse_ipv4'] ?? null) === 'Zona reversa já existe.' ? 'section-error' : '' ?>">
+                <div class="section <?= isset($fieldErrors['reverse_ipv4']) ? 'section-error' : '' ?>">
                     <div class="section-head">
                         <label class="toggle-line">
                             <input type="checkbox" name="create_reverse_v4" <?= $formData['create_reverse_v4'] ? 'checked' : '' ?> data-toggle-collapse="reverse-v4-panel">
@@ -879,7 +993,7 @@ button:hover{opacity:.95}
                     </div>
                 </div>
 
-                <div class="section <?= ($fieldErrors['reverse_ipv6'] ?? null) === 'Zona reversa já existe.' ? 'section-error' : '' ?>">
+                <div class="section <?= isset($fieldErrors['reverse_ipv6']) ? 'section-error' : '' ?>">
                     <div class="section-head">
                         <label class="toggle-line">
                             <input type="checkbox" name="create_reverse_v6" <?= $formData['create_reverse_v6'] ? 'checked' : '' ?> data-toggle-collapse="reverse-v6-panel">
@@ -900,7 +1014,10 @@ button:hover{opacity:.95}
                                 <div id="reverse-ipv6-error" class="field-error"><?= htmlspecialchars($fieldErrors['reverse_ipv6']) ?></div>
                             <?php endif; ?>
                         </div>
-                        <div class="help">Configuração manual</div>
+                        <div class="ipv6-info">
+                            <strong>ℹ Reversa IPv6 manual</strong>
+                            <p>O prefixo IPv6 informado será usado para criar uma zona reversa exclusiva deste domínio. Se o prefixo já estiver cadastrado, a criação será bloqueada e o painel mostrará qual domínio já está utilizando.</p>
+                        </div>
                     </div>
                 </div>
 
@@ -949,8 +1066,9 @@ button:hover{opacity:.95}
 setTimeout(function() {
     let erro = document.getElementById("alertaErro");
     let sucesso = document.getElementById("alertaSucesso");
+    let aviso = document.getElementById("alertaAviso");
 
-    [erro, sucesso].forEach(function(el) {
+    [erro, sucesso, aviso].forEach(function(el) {
         if (el) {
             el.style.transition = "opacity 0.5s";
             el.style.opacity = "0";
@@ -999,6 +1117,11 @@ function renderReversePreview() {
         return;
     }
 
+    if (document.getElementById('reverse-ipv4-error')) {
+        preview.style.display = 'none';
+        return;
+    }
+
     const cidr = (revInput?.value || '').trim();
     preview.style.display = 'none';
 
@@ -1016,11 +1139,21 @@ function renderReversePreview() {
     }
 
     const total = Math.pow(2, 24 - mask);
-    const texto = total === 1
-        ? '✓ Será criada 1 zona reversa'
-        : '✓ Serão criadas ' + total + ' zonas reversas';
+    const formHasBlockingError = document.querySelector('.field-error') !== null;
+    let texto;
+
+    if (formHasBlockingError) {
+        texto = total === 1
+            ? '✓ IPv4 validado: 1 zona reversa seria criada.\n⚠ Nenhuma alteração será aplicada enquanto houver erro na reversa IPv6.'
+            : '✓ IPv4 validado: ' + total + ' zonas reversas seriam criadas.\n⚠ Nenhuma alteração será aplicada enquanto houver erro na reversa IPv6.';
+    } else {
+        texto = total === 1
+            ? '✓ Será criada 1 zona reversa'
+            : '✓ Serão criadas ' + total + ' zonas reversas';
+    }
 
     preview.textContent = texto;
+    preview.classList.toggle('blocked', formHasBlockingError);
     preview.style.display = 'block';
 }
 
