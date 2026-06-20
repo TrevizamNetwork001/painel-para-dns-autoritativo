@@ -659,6 +659,9 @@ select:focus{
     border-color:var(--danger);
     box-shadow:0 0 0 3px rgba(239,68,68,.1);
 }
+[data-error-section]{
+    scroll-margin-top:80px;
+}
 .section-head{
     display:flex;
     align-items:center;
@@ -846,7 +849,7 @@ button:hover{opacity:.95}
 
     <div class="alerts">
         <?php if ($erro): ?>
-            <div id="alertaErro" class="alert error"><?= nl2br(htmlspecialchars($erro)) ?></div>
+            <div id="alertaErro" class="alert error global-alert-error"><?= nl2br(htmlspecialchars($erro)) ?></div>
         <?php endif; ?>
 
         <?php if (isset($_SESSION['flash_ok'])): ?>
@@ -869,7 +872,7 @@ button:hover{opacity:.95}
             <form method="POST" class="form-grid">
                 <?= csrf_field() ?>
 
-                <div class="group">
+                <div class="group" data-error-section="domain">
                     <div class="field primary-field">
                         <label>Domínio DNS</label>
                         <input
@@ -946,7 +949,7 @@ button:hover{opacity:.95}
                     </div>
                 </div>
 
-                <div class="section <?= isset($fieldErrors['reverse_ipv4']) ? 'section-error' : '' ?>">
+                <div class="section <?= isset($fieldErrors['reverse_ipv4']) ? 'section-error' : '' ?>" data-error-section="reverse_ipv4">
                     <div class="section-head">
                         <label class="toggle-line">
                             <input type="checkbox" name="create_reverse_v4" <?= $formData['create_reverse_v4'] ? 'checked' : '' ?> data-toggle-collapse="reverse-v4-panel">
@@ -1004,7 +1007,7 @@ button:hover{opacity:.95}
                     </div>
                 </div>
 
-                <div class="section <?= isset($fieldErrors['reverse_ipv6']) ? 'section-error' : '' ?>">
+                <div class="section <?= isset($fieldErrors['reverse_ipv6']) ? 'section-error' : '' ?>" data-error-section="reverse_ipv6">
                     <div class="section-head">
                         <label class="toggle-line">
                             <input type="checkbox" name="create_reverse_v6" <?= $formData['create_reverse_v6'] ? 'checked' : '' ?> data-toggle-collapse="reverse-v6-panel">
@@ -1074,22 +1077,56 @@ button:hover{opacity:.95}
 </main>
 
 <script>
+function closeAlert(element, onClosed) {
+    if (!element || !element.isConnected) return;
+
+    element.style.transition = "opacity 0.5s";
+    element.style.opacity = "0";
+
+    setTimeout(function() {
+        element.remove();
+        if (typeof onClosed === "function") onClosed();
+    }, 500);
+}
+
 setTimeout(function() {
-    let erro = document.getElementById("alertaErro");
-    let sucesso = document.getElementById("alertaSucesso");
-    let aviso = document.getElementById("alertaAviso");
-
-    [erro, sucesso, aviso].forEach(function(el) {
-        if (el) {
-            el.style.transition = "opacity 0.5s";
-            el.style.opacity = "0";
-
-            setTimeout(function() {
-                el.remove();
-            }, 500);
-        }
-    });
+    closeAlert(document.getElementById("alertaSucesso"));
+    closeAlert(document.getElementById("alertaAviso"));
 }, 3000);
+
+const globalErrorAlert = document.querySelector(".global-alert-error");
+
+if (globalErrorAlert) {
+    let userIsInteracting = false;
+    const form = document.querySelector("form.form-grid");
+
+    ["input", "change", "focusin", "pointerdown", "keydown"].forEach(function(eventName) {
+        form?.addEventListener(eventName, function() {
+            userIsInteracting = true;
+        }, { once: true });
+    });
+
+    setTimeout(function() {
+        closeAlert(globalErrorAlert, function() {
+            if (userIsInteracting) return;
+
+            let target = null;
+
+            if (document.getElementById("reverse-ipv6-error")) {
+                target = document.querySelector('[data-error-section="reverse_ipv6"]');
+            } else if (document.getElementById("reverse-ipv4-error")) {
+                target = document.querySelector('[data-error-section="reverse_ipv4"]');
+            } else if (document.getElementById("domain-error")) {
+                target = document.querySelector('[data-error-section="domain"]');
+            }
+
+            target?.scrollIntoView({
+                behavior: "smooth",
+                block: "center"
+            });
+        });
+    }, 8000);
+}
 </script>
 
 <script>
