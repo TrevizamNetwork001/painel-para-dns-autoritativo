@@ -221,7 +221,7 @@ button:disabled{cursor:not-allowed;opacity:.65}
 .users-list{border-top:1px solid #1e293b}
 .user-card{padding:16px 10px;border-bottom:1px solid #1e293b}
 .user-card:last-child{border-bottom:0;padding-bottom:2px}
-.user-row-inner{width:100%;max-width:1120px;margin:0 auto;padding:0 12px}
+.user-row-inner{width:100%;max-width:1120px;margin:0 auto;padding:0 12px 0 20px}
 .user-summary{display:block}
 .user-title-line{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 .user-name{margin:0;color:#fff;font-size:16px}
@@ -242,9 +242,9 @@ button:disabled{cursor:not-allowed;opacity:.65}
 .secundario{border-color:#475569;background:#334155}
 .perigo{min-height:34px;padding:6px 9px;border-color:#7f1d1d;background:transparent;color:#fca5a5;font-size:12px}
 .perigo:hover{background:#450a0a}
-.senha{width:320px;max-width:100%;min-width:0}
+.senha{width:290px;max-width:100%;min-width:0}
 .account-tools{display:flex;align-items:center;gap:8px;min-width:0;flex-wrap:wrap}
-.account-tools .inline-form{display:grid;grid-template-columns:minmax(300px,320px) auto;justify-content:start;width:auto}
+.account-tools .inline-form{display:grid;grid-template-columns:minmax(280px,290px) auto;justify-content:start;width:auto}
 .account-tools .senha{width:100%;max-width:none}
 .current-action{display:flex;align-items:center;min-height:37px;color:#64748b;font-size:12px}
 .password-link{display:inline-flex;align-items:center;min-height:37px;padding:7px 10px;border:1px solid #334155;border-radius:8px;background:#0f172a;font-size:13px;font-weight:bold}
