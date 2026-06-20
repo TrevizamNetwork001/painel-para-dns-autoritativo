@@ -693,6 +693,7 @@ select:focus{
     line-height:1.45;
     margin-top:7px;
 }
+.ipv4-info,
 .ipv6-info{
     margin-top:10px;
     padding:11px 12px;
@@ -703,13 +704,18 @@ select:focus{
     font-size:13px;
     line-height:1.5;
 }
+.ipv4-info strong,
 .ipv6-info strong{
     display:block;
     margin-bottom:4px;
     color:#bae6fd;
 }
+.ipv4-info p,
 .ipv6-info p{
     margin:0;
+}
+.ipv4-info p + p{
+    margin-top:5px;
 }
 .ptr-box{
     margin-top:9px;
@@ -961,6 +967,12 @@ button:hover{opacity:.95}
                             <?php if (isset($fieldErrors['reverse_ipv4'])): ?>
                                 <div id="reverse-ipv4-error" class="field-error"><?= nl2br(htmlspecialchars($fieldErrors['reverse_ipv4'])) ?></div>
                             <?php endif; ?>
+                        </div>
+
+                        <div class="ipv4-info">
+                            <strong>ℹ Reversa IPv4 automática</strong>
+                            <p>Informe uma rede IPv4 entre /16 e /24. O painel divide a rede em zonas /24 e cria as reversas automaticamente.</p>
+                            <p>Exemplo: 192.168.28.0/22 gera 4 zonas reversas, de 192.168.28.rev até 192.168.31.rev.</p>
                         </div>
 
                         <div id="ptr4_format_box" class="ptr-box" style="display:none;">
