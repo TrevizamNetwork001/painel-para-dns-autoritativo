@@ -1456,6 +1456,10 @@ generateExampleButton?.addEventListener('click', () => {
         });
 
         updateReversePanels();
+        window.scrollTo({
+            top: 0,
+            behavior: 'smooth'
+        });
         clearGeneratedExampleTimer = null;
     }, 4000);
 });
