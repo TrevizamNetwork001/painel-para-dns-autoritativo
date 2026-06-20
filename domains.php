@@ -148,141 +148,107 @@ if (isset($_POST['create_domain'])) {
     $ptr4_template = trim($_POST['ptr4_template'] ?? 'host-$');
 
     if ($ptr4_template === '') {
-    $ptr4_template = 'host-$';
-}
+        $ptr4_template = 'host-$';
+    }
 
-$rev6 = '';
+    $createReverseIpv4 = isset($_POST['create_reverse_v4']);
+    $createReverseIpv6 = isset($_POST['create_reverse_v6']);
+    $rev6 = $createReverseIpv6 && $ipv6_prefix !== '' ? $ipv6_prefix : '';
+    $rev_list = [];
+    $existingRev4 = [];
+    $missingRev4 = [];
+    $globalIssues = [];
+    $singleIssueGlobalMessage = null;
 
+    if ($createReverseIpv4 && $rev_cidr !== '') {
+        $cidr = explode('/', $rev_cidr);
+        $network = $cidr[0] ?? '';
+        $mask = intval($cidr[1] ?? 0);
 
-if (
-    isset($_POST['create_reverse_v6']) &&
-    !empty($ipv6_prefix)
-) {
+        if (
+            filter_var($network, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4)
+            && $mask <= 24
+            && $mask >= 16
+        ) {
+            $base = ip2long($network);
+            $numBlocks = pow(2, 24 - $mask);
 
-    $rev6 = $ipv6_prefix;
-}
+            for ($i = 0; $i < $numBlocks; $i++) {
+                $ip = long2ip($base + ($i * 256));
+                $parts = explode('.', $ip);
 
-$rev_list = [];
-
-if (isset($_POST['create_reverse_v4']) && !empty($rev_cidr)) {
-
-    $cidr = explode('/', $rev_cidr);
-
-    $network = $cidr[0] ?? '';
-    $mask = intval($cidr[1] ?? 0);
-
-    if (
-        filter_var($network, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4)
-        && $mask <= 24
-        && $mask >= 16
-    ) {
-
-        $base = ip2long($network);
-
-        $numBlocks = pow(2, 24 - $mask);
-
-        for ($i = 0; $i < $numBlocks; $i++) {
-
-            $ip = long2ip($base + ($i * 256));
-
-            $parts = explode('.', $ip);
-
-            $rev_list[] =
-                $parts[0] . "." .
-                $parts[1] . "." .
-                $parts[2];
+                $rev_list[] =
+                    $parts[0] . "." .
+                    $parts[1] . "." .
+                    $parts[2];
+            }
         }
     }
-}
 
-$rev = implode(';', $rev_list);
-$existingRev4 = [];
-$missingRev4 = $rev_list;
+    $rev = implode(';', $rev_list);
+    $missingRev4 = $rev_list;
 
-
-if (empty($dom) || empty($ip4)) {
-
-    if (empty($dom)) {
-        $erro = "Informe o domínio DNS.";
-        $fieldErrors['domain'] = $erro;
-    } else {
-        $erro = "Informe o IPv4 do NS1.";
-        $fieldErrors['ns1_ipv4'] = $erro;
+    if ($dom === '') {
+        $fieldErrors['domain'] = "Informe o domínio DNS.";
+    } elseif (!valid_domain($dom)) {
+        $fieldErrors['domain'] = "Domínio inválido.";
     }
 
-} elseif (!valid_domain($dom)) {
+    if ($ip4 === '') {
+        $fieldErrors['ns1_ipv4'] = "Informe o IPv4 do NS1.";
+    } elseif (!filter_var($ip4, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4)) {
+        $fieldErrors['ns1_ipv4'] = "IPv4 inválido.";
+    }
 
-    $erro = "Domínio inválido.";
-    $fieldErrors['domain'] = $erro;
+    if ($ip6 !== '' && !filter_var($ip6, FILTER_VALIDATE_IP, FILTER_FLAG_IPV6)) {
+        $fieldErrors['ns1_ipv6'] = "IPv6 inválido.";
+    }
 
-} elseif (!filter_var($ip4, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4)) {
+    if ($ip4_ns2 !== '' && !filter_var($ip4_ns2, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4)) {
+        $fieldErrors['ns2_ipv4'] = "IPv4 inválido.";
+    }
 
-    $erro = "IPv4 inválido.";
-    $fieldErrors['ns1_ipv4'] = $erro;
+    if ($ip6_ns2 !== '' && !filter_var($ip6_ns2, FILTER_VALIDATE_IP, FILTER_FLAG_IPV6)) {
+        $fieldErrors['ns2_ipv6'] = "IPv6 inválido.";
+    }
 
-} elseif (!empty($ip6) &&
-    !filter_var($ip6, FILTER_VALIDATE_IP, FILTER_FLAG_IPV6)) {
+    if ($createReverseIpv4 && $rev_cidr !== '') {
+        if (!str_contains($rev_cidr, '/') ||
+            !valid_cidr($rev_cidr, FILTER_FLAG_IPV4)) {
+            $fieldErrors['reverse_ipv4'] = "Informe uma rede IPv4 válida, entre /16 e /24.";
+        } else {
+            [$address, $prefix] = explode('/', $rev_cidr, 2);
+            $prefix = (int) $prefix;
 
-    $erro = "IPv6 inválido.";
-    $fieldErrors['ns1_ipv6'] = $erro;
+            if ($prefix < 16 || $prefix > 24) {
+                $fieldErrors['reverse_ipv4'] = "Máscara IPv4 permitida: /16 até /24.";
+            } else {
+                $octets = array_map('intval', explode('.', $address));
+                $blocks = 2 ** (24 - $prefix);
 
-} elseif (!empty($ip4_ns2) &&
-    !filter_var($ip4_ns2, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4)) {
+                if ($octets[3] !== 0 || $octets[2] % $blocks !== 0) {
+                    $octets[2] = intdiv($octets[2], $blocks) * $blocks;
+                    $octets[3] = 0;
+                    $correctNetwork = implode('.', $octets) . '/' . $prefix;
 
-    $erro = "IPv4 inválido.";
-    $fieldErrors['ns2_ipv4'] = $erro;
+                    $fieldErrors['reverse_ipv4'] = "Rede IPv4 inválida.\n\n"
+                        . "Você informou:\n"
+                        . $rev_cidr . "\n\n"
+                        . "Para uma rede /" . $prefix . ", utilize o início do bloco:\n\n"
+                        . $correctNetwork;
+                }
+            }
+        }
+    }
 
-} elseif (!empty($ip6_ns2) &&
-    !filter_var($ip6_ns2, FILTER_VALIDATE_IP, FILTER_FLAG_IPV6)) {
+    if ($rev6 !== '' &&
+        (!str_contains($rev6, '/') ||
+        !valid_cidr($rev6, FILTER_FLAG_IPV6) ||
+        (int) explode('/', $rev6, 2)[1] % 4 !== 0)) {
+        $fieldErrors['reverse_ipv6'] = "Prefixo reverso IPv6 inválido; use máscara múltipla de 4.";
+    }
 
-    $erro = "IPv6 inválido.";
-    $fieldErrors['ns2_ipv6'] = $erro;
-
-} elseif (!empty($rev_cidr) &&
-    (!str_contains($rev_cidr, '/') ||
-    !valid_cidr($rev_cidr, FILTER_FLAG_IPV4))) {
-
-    $erro = "Informe uma rede IPv4 válida, entre /16 e /24.";
-    $fieldErrors['reverse_ipv4'] = $erro;
-
-} elseif (!empty($rev_cidr) &&
-    ((int) explode('/', $rev_cidr, 2)[1] < 16 ||
-    (int) explode('/', $rev_cidr, 2)[1] > 24)) {
-
-    $erro = "Máscara IPv4 permitida: /16 até /24.";
-    $fieldErrors['reverse_ipv4'] = $erro;
-
-} elseif (!empty($rev_cidr) && (function (string $cidr): bool {
-    [$address, $prefix] = explode('/', $cidr, 2);
-    $octets = array_map('intval', explode('.', $address));
-    $blocks = 2 ** (24 - (int) $prefix);
-    return $octets[3] !== 0 || $octets[2] % $blocks !== 0;
-})($rev_cidr)) {
-
-    [$address, $prefix] = explode('/', $rev_cidr, 2);
-    $octets = array_map('intval', explode('.', $address));
-    $blocks = 2 ** (24 - (int) $prefix);
-    $octets[2] = intdiv($octets[2], $blocks) * $blocks;
-    $octets[3] = 0;
-    $correctNetwork = implode('.', $octets) . '/' . $prefix;
-
-    $erro = "Rede IPv4 inválida.\n\n"
-        . "Você informou:\n"
-        . $rev_cidr . "\n\n"
-        . "Para uma rede /" . $prefix . ", utilize o início do bloco:\n\n"
-        . $correctNetwork;
-    $fieldErrors['reverse_ipv4'] = $erro;
-
-} elseif (!empty($rev6) &&
-    (!str_contains($rev6, '/') ||
-    !valid_cidr($rev6, FILTER_FLAG_IPV6) ||
-    (int) explode('/', $rev6, 2)[1] % 4 !== 0)) {
-
-    $erro = "Prefixo reverso IPv6 inválido; use máscara múltipla de 4.";
-    $fieldErrors['reverse_ipv6'] = $erro;
-
-} else {
-    if ($rev_list !== []) {
+    if (!isset($fieldErrors['reverse_ipv4']) && $rev_list !== []) {
         $existingRev4 = [];
         $missingRev4 = [];
 
@@ -299,19 +265,96 @@ if (empty($dom) || empty($ip4)) {
         $rev = implode(';', $missingRev4);
 
         if ($missingRev4 === []) {
-            $erro = "Todas as zonas reversas desta rede já existem.";
-            $fieldErrors['reverse_ipv4'] = $erro;
+            $fieldErrors['reverse_ipv4'] = "Todas as zonas reversas desta rede já existem.";
         } elseif ($existingRev4 !== []) {
             $aviso = "Algumas zonas reversas já existem. Serão criadas apenas as ausentes.";
         }
     }
 
-    if ($erro === null && file_exists("/var/cache/bind/master-aut/$dom.hosts")) {
-        $erro = "Domínio já existe.";
-        $fieldErrors['domain'] = $erro;
+    if (!isset($fieldErrors['domain']) && file_exists("/var/cache/bind/master-aut/$dom.hosts")) {
+        $fieldErrors['domain'] = "Domínio já existe.";
     }
 
-    if ($erro === null) {
+    if (!isset($fieldErrors['reverse_ipv6']) && $rev6 !== '') {
+        [$ipv6Address, $ipv6PrefixLength] = explode('/', $rev6, 2);
+        $packedIpv6 = inet_pton($ipv6Address);
+        $reverseZone = '';
+
+        if ($packedIpv6 !== false) {
+            $nibbles = substr(bin2hex($packedIpv6), 0, (int) $ipv6PrefixLength / 4);
+            $reverseZone = implode('.', array_reverse(str_split($nibbles))) . '.ip6.arpa';
+        }
+
+        $associatedDomain = null;
+        $reverseZoneExists = false;
+        $namedConf = file_get_contents('/etc/bind/named.conf.local');
+
+        if ($namedConf !== false && $reverseZone !== '') {
+            $zonePattern = '/^\s*zone\s+"' . preg_quote($reverseZone, '/') .
+                '"\s*\{(?:(?!^\s*\};).)*^\s*\};/msi';
+
+            if (preg_match($zonePattern, $namedConf, $zoneBlock)) {
+                $reverseZoneExists = true;
+
+                if (preg_match('/\bfile\s+(?:"([^"]+)"|([^\s;]+))\s*;/i', $zoneBlock[0], $fileMatch)) {
+                    $reverseFile = $fileMatch[1] !== '' ? $fileMatch[1] : $fileMatch[2];
+                    $basename = basename($reverseFile);
+
+                    if (preg_match('/^(.+)\.rev6$/i', $basename, $domainMatch) &&
+                        valid_domain($domainMatch[1])) {
+                        $associatedDomain = $domainMatch[1];
+                    }
+                }
+            }
+        }
+
+        if (valid_domain($dom) && is_file("/var/cache/bind/master-rev/{$dom}.rev6")) {
+            $reverseZoneExists = true;
+            $associatedDomain ??= $dom;
+        }
+
+        if ($reverseZoneExists) {
+            $fieldErrors['reverse_ipv6'] = "Prefixo IPv6 já em uso.\n\n"
+                . ($associatedDomain !== null
+                    ? "Este prefixo já está cadastrado para {$associatedDomain}."
+                    : "Este prefixo já está cadastrado.")
+                . "\nA zona reversa IPv6 correspondente já existe no servidor.\n\n"
+                . "Use outro prefixo IPv6 ou revise o cadastro existente.";
+
+            $singleIssueGlobalMessage = "Não foi possível criar o domínio.\n\n"
+                . ($associatedDomain !== null
+                    ? "O prefixo IPv6 informado já está em uso por {$associatedDomain}."
+                    : "O prefixo IPv6 informado já está em uso.")
+                . "\n\nNenhuma alteração foi aplicada.\n\n"
+                . "Veja os detalhes na seção “Criar zona reversa IPv6” abaixo.";
+        }
+    }
+
+    $domainErrorFields = ['domain', 'ns1_ipv4', 'ns1_ipv6', 'ns2_ipv4', 'ns2_ipv6'];
+    if (array_intersect($domainErrorFields, array_keys($fieldErrors)) !== []) {
+        $globalIssues[] = 'no domínio DNS';
+    }
+    if (isset($fieldErrors['reverse_ipv4'])) {
+        $globalIssues[] = 'na reversa IPv4';
+    }
+    if (isset($fieldErrors['reverse_ipv6'])) {
+        $globalIssues[] = 'na reversa IPv6';
+    }
+
+    if ($fieldErrors !== []) {
+        if (count($globalIssues) > 1) {
+            $lastIssue = array_pop($globalIssues);
+            $issueList = implode(', ', $globalIssues) . ' e ' . $lastIssue;
+            $erro = "Não foi possível criar o domínio.\n\n"
+                . "Encontramos pendências {$issueList}.\n"
+                . "Nenhuma alteração foi aplicada.\n\n"
+                . "Veja os detalhes nas seções destacadas abaixo.";
+        } else {
+            $erro = $singleIssueGlobalMessage ?? reset($fieldErrors);
+        }
+    }
+
+    if ($fieldErrors === []) {
         exec(
             "sudo /usr/local/bin/add-domain-full.sh "
             . escapeshellarg($dom) . " "
@@ -444,6 +487,7 @@ if (empty($dom) || empty($ip4)) {
             ]);
 
             $_SESSION['flash_ok'] = "Domínio criado com sucesso!";
+            $_SESSION['domain_created_success'] = true;
             if ($aviso !== null) {
                 $_SESSION['flash_warning'] = "Algumas zonas reversas já existiam. Foram criadas apenas as ausentes.";
             }
@@ -451,7 +495,6 @@ if (empty($dom) || empty($ip4)) {
             exit;
         }
     }
-}
 
     if ($erro !== null) {
         registrar_auditoria([
@@ -465,6 +508,12 @@ if (empty($dom) || empty($ip4)) {
                 : strip_tags(str_replace('<br>', "\n", $erro)),
         ]);
     }
+}
+
+$showDomainCreatedSuccess = !empty($_SESSION['domain_created_success']);
+
+if ($showDomainCreatedSuccess) {
+    unset($_SESSION['domain_created_success'], $_SESSION['flash_ok']);
 }
 
 ?>
@@ -552,6 +601,35 @@ a:hover{text-decoration:underline}
     background:rgba(120,53,15,.92);
     border-color:rgba(245,158,11,.25);
     color:#fde68a;
+}
+.success-redirect-overlay{
+    position:fixed;
+    inset:0;
+    z-index:1000;
+    display:grid;
+    place-items:center;
+    padding:20px;
+    background:rgba(2,6,23,.88);
+    backdrop-filter:blur(5px);
+}
+.success-redirect-card{
+    width:min(520px, 100%);
+    padding:30px 26px;
+    border:1px solid rgba(34,197,94,.3);
+    border-radius:16px;
+    background:rgba(2,6,23,.98);
+    box-shadow:0 24px 60px rgba(0,0,0,.35);
+    text-align:center;
+}
+.success-redirect-card h2{
+    margin:0 0 10px;
+    color:#bbf7d0;
+    font-size:24px;
+}
+.success-redirect-card p{
+    margin:0;
+    color:#cbd5e1;
+    line-height:1.55;
 }
 .card{
     background:rgba(2,6,23,.96);
@@ -838,6 +916,15 @@ button:hover{opacity:.95}
 </style>
 </head>
 <body>
+<?php if ($showDomainCreatedSuccess): ?>
+    <div class="success-redirect-overlay" role="status" aria-live="polite">
+        <div class="success-redirect-card">
+            <h2>Domínio criado com sucesso.</h2>
+            <p>Tudo certo por aqui. Você será redirecionado para o painel principal.</p>
+        </div>
+    </div>
+<?php endif; ?>
+
 <main class="page">
     <header class="header">
         <a class="back-link" href="dashboard.php">← Voltar ao painel</a>
@@ -875,7 +962,7 @@ button:hover{opacity:.95}
                         <label>Domínio DNS</label>
                         <input
                             name="new_domain"
-                            placeholder="empresa.com.br"
+                            placeholder="exemplo.com.br"
                             value="<?= htmlspecialchars((string) $formData['new_domain'], ENT_QUOTES, 'UTF-8') ?>"
                             class="<?= isset($fieldErrors['domain']) ? 'input-error' : '' ?>"
                             <?= isset($fieldErrors['domain']) ? 'aria-invalid="true" aria-describedby="domain-error"' : '' ?>
@@ -893,7 +980,7 @@ button:hover{opacity:.95}
                             <label>IPv4 NS1</label>
                             <input
                                 name="ipv4"
-                                placeholder="198.50.0.242"
+                                placeholder="192.0.2.253"
                                 value="<?= htmlspecialchars((string) $formData['ipv4'], ENT_QUOTES, 'UTF-8') ?>"
                                 class="<?= isset($fieldErrors['ns1_ipv4']) ? 'input-error' : '' ?>"
                                 <?= isset($fieldErrors['ns1_ipv4']) ? 'aria-invalid="true" aria-describedby="ns1-ipv4-error"' : '' ?>
@@ -906,7 +993,7 @@ button:hover{opacity:.95}
                             <label>IPv6 NS1</label>
                             <input
                                 name="ipv6"
-                                placeholder="2001:abcd:5000::242"
+                                placeholder="2001:db8:2000::242"
                                 value="<?= htmlspecialchars((string) $formData['ipv6'], ENT_QUOTES, 'UTF-8') ?>"
                                 class="<?= isset($fieldErrors['ns1_ipv6']) ? 'input-error' : '' ?>"
                                 <?= isset($fieldErrors['ns1_ipv6']) ? 'aria-invalid="true" aria-describedby="ns1-ipv6-error"' : '' ?>>
@@ -924,7 +1011,7 @@ button:hover{opacity:.95}
                             <label>IPv4 NS2</label>
                             <input
                                 name="ipv4_ns2"
-                                placeholder="198.50.0.243"
+                                placeholder="192.0.2.254"
                                 value="<?= htmlspecialchars((string) $formData['ipv4_ns2'], ENT_QUOTES, 'UTF-8') ?>"
                                 class="<?= isset($fieldErrors['ns2_ipv4']) ? 'input-error' : '' ?>"
                                 <?= isset($fieldErrors['ns2_ipv4']) ? 'aria-invalid="true" aria-describedby="ns2-ipv4-error"' : '' ?>>
@@ -936,7 +1023,7 @@ button:hover{opacity:.95}
                             <label>IPv6 NS2</label>
                             <input
                                 name="ipv6_ns2"
-                                placeholder="2001:abcd:5000::243"
+                                placeholder="2001:db8:2000::243"
                                 value="<?= htmlspecialchars((string) $formData['ipv6_ns2'], ENT_QUOTES, 'UTF-8') ?>"
                                 class="<?= isset($fieldErrors['ns2_ipv6']) ? 'input-error' : '' ?>"
                                 <?= isset($fieldErrors['ns2_ipv6']) ? 'aria-invalid="true" aria-describedby="ns2-ipv6-error"' : '' ?>>
@@ -960,19 +1047,20 @@ button:hover{opacity:.95}
                             <label>Rede IPv4</label>
                             <input
                                 name="rev_cidr"
-                                placeholder="192.168.0.0/22"
+                                data-error-field="reverse_ipv4"
+                                placeholder="192.0.2.0/24"
                                 value="<?= htmlspecialchars((string) $formData['rev_cidr'], ENT_QUOTES, 'UTF-8') ?>"
                                 class="<?= isset($fieldErrors['reverse_ipv4']) ? 'input-error' : '' ?>"
                                 <?= isset($fieldErrors['reverse_ipv4']) ? 'aria-invalid="true" aria-describedby="reverse-ipv4-error"' : '' ?>>
                             <?php if (isset($fieldErrors['reverse_ipv4'])): ?>
-                                <div id="reverse-ipv4-error" class="field-error"><?= nl2br(htmlspecialchars($fieldErrors['reverse_ipv4'])) ?></div>
+                                <div id="reverse-ipv4-error" class="field-error" data-error-message="reverse_ipv4"><?= nl2br(htmlspecialchars($fieldErrors['reverse_ipv4'])) ?></div>
                             <?php endif; ?>
                         </div>
 
                         <div class="ipv4-info">
                             <strong>ℹ Zona reversa IPv4 automática</strong>
-                            <p>Informe uma rede IPv4 entre /16 e /24. O painel divide a rede em blocos /24 e cria as zonas reversas automaticamente.</p>
-                            <p>Exemplo: 192.168.28.0/22 gera 4 zonas reversas: 192.168.28.0/24, 192.168.29.0/24, 192.168.30.0/24 e 192.168.31.0/24.</p>
+                            <p>Informe uma rede IPv4 com prefixo entre /16 e /24. O painel divide a rede em blocos /24 e cria as zonas reversas automaticamente.</p>
+                            <p>Exemplo: uma rede /22 é dividida em 4 blocos /24 antes da criação das zonas reversas.</p>
                         </div>
 
                         <div id="ptr4_format_box" class="ptr-box" style="display:none;">
@@ -996,7 +1084,7 @@ button:hover{opacity:.95}
                             <input
                                 id="ptr4_custom"
                                 aria-label="Template PTR personalizado"
-                                placeholder="cliente-$"
+                                placeholder="ns1.exemplo.com.br"
                                 value="<?= $formData['ptr4_mode'] === 'custom' ? htmlspecialchars((string) $formData['ptr4_template'], ENT_QUOTES, 'UTF-8') : '' ?>"
                                 style="display:none;margin-top:9px;">
                         </div>
@@ -1018,12 +1106,13 @@ button:hover{opacity:.95}
                             <label>Prefixo IPv6</label>
                             <input
                                 name="ipv6_prefix"
+                                data-error-field="reverse_ipv6"
                                 placeholder="2001:db8::/32"
                                 value="<?= htmlspecialchars((string) $formData['ipv6_prefix'], ENT_QUOTES, 'UTF-8') ?>"
                                 class="<?= isset($fieldErrors['reverse_ipv6']) ? 'input-error' : '' ?>"
                                 <?= isset($fieldErrors['reverse_ipv6']) ? 'aria-invalid="true" aria-describedby="reverse-ipv6-error"' : '' ?>>
                             <?php if (isset($fieldErrors['reverse_ipv6'])): ?>
-                                <div id="reverse-ipv6-error" class="field-error"><?= nl2br(htmlspecialchars($fieldErrors['reverse_ipv6'])) ?></div>
+                                <div id="reverse-ipv6-error" class="field-error" data-error-message="reverse_ipv6"><?= nl2br(htmlspecialchars($fieldErrors['reverse_ipv6'])) ?></div>
                             <?php endif; ?>
                         </div>
                         <div class="ipv6-info">
@@ -1033,7 +1122,13 @@ button:hover{opacity:.95}
                     </div>
                 </div>
 
+                <p class="help">
+                    “Gerar exemplo” apenas preenche o formulário com dados fictícios de documentação.
+                    Nenhum domínio ou PTR é criado até você clicar em “Criar domínio”.
+                </p>
+
                 <div class="actions">
+                    <button type="button" id="generate-example">Gerar exemplo</button>
                     <button type="submit" name="create_domain">Criar domínio</button>
                 </div>
             </form>
@@ -1109,13 +1204,17 @@ if (globalErrorAlert) {
             if (userIsInteracting) return;
 
             let target = null;
+            const domainError = document.querySelector(
+                "#domain-error, #ns1-ipv4-error, #ns1-ipv6-error, #ns2-ipv4-error, #ns2-ipv6-error"
+            );
 
-            if (document.getElementById("reverse-ipv6-error")) {
-                target = document.querySelector('[data-error-section="reverse_ipv6"]');
+            if (domainError) {
+                target = domainError.closest(".group")
+                    || document.querySelector('[data-error-section="domain"]');
             } else if (document.getElementById("reverse-ipv4-error")) {
                 target = document.querySelector('[data-error-section="reverse_ipv4"]');
-            } else if (document.getElementById("domain-error")) {
-                target = document.querySelector('[data-error-section="domain"]');
+            } else if (document.getElementById("reverse-ipv6-error")) {
+                target = document.querySelector('[data-error-section="reverse_ipv6"]');
             }
 
             target?.scrollIntoView({
@@ -1138,6 +1237,7 @@ const ptrMode = document.getElementById('ptr4_mode');
 const ptrTemplate = document.getElementById('ptr4_template');
 const ptrCustom = document.getElementById('ptr4_custom');
 const ptrExample = document.getElementById('ptr4_example');
+const generateExampleButton = document.getElementById('generate-example');
 const searchInput = document.querySelector('[data-domain-search]');
 const domainItems = [...document.querySelectorAll('[data-domain-item]')];
 const collapsiblePanels = [
@@ -1283,17 +1383,6 @@ function updateReversePanels() {
     updatePtrTemplate();
 }
 
-function clearReverseIpv4Error() {
-    const fieldError = document.getElementById('reverse-ipv4-error');
-    if (!fieldError || !revInput) return;
-
-    fieldError.remove();
-    revInput.classList.remove('input-error');
-    revInput.removeAttribute('aria-invalid');
-    revInput.removeAttribute('aria-describedby');
-    document.getElementById('alertaErro')?.remove();
-}
-
 searchInput?.addEventListener('input', event => {
     const term = String(event.target.value || '').trim().toLowerCase();
     domainItems.forEach(item => {
@@ -1302,8 +1391,22 @@ searchInput?.addEventListener('input', event => {
     });
 });
 
+document.querySelectorAll('[data-error-field]').forEach(input => {
+    input.addEventListener('input', () => {
+        const key = input.dataset.errorField;
+        if (!key) return;
+
+        input.classList.remove('input-error');
+        input.removeAttribute('aria-invalid');
+        input.removeAttribute('aria-describedby');
+
+        document.querySelector(`[data-error-section="${key}"]`)
+            ?.classList.remove('section-error');
+        document.querySelector(`[data-error-message="${key}"]`)?.remove();
+    });
+});
+
 revInput?.addEventListener('input', () => {
-    clearReverseIpv4Error();
     renderReversePreview();
     updatePtrTemplate();
 });
@@ -1321,12 +1424,36 @@ if (ptrCustom) {
     ptrCustom.addEventListener('input', updatePtrTemplate);
 }
 
+generateExampleButton?.addEventListener('click', () => {
+    const exampleValues = {
+        new_domain: 'exemplo.com.br',
+        ipv4: '192.0.2.253',
+        ipv4_ns2: '192.0.2.254',
+        ipv6: '2001:db8:2000::242',
+        ipv6_ns2: '2001:db8:2000::243',
+        rev_cidr: '192.0.2.0/24',
+        ipv6_prefix: '2001:db8::/32',
+    };
+
+    Object.entries(exampleValues).forEach(([name, value]) => {
+        const field = document.querySelector(`[name="${name}"]`);
+        if (field) field.value = value;
+    });
+});
+
 document.querySelector('form[method="POST"]')?.addEventListener('submit', () => {
     updatePtrTemplate();
 });
 
 updateReversePanels();
 </script>
+<?php if ($showDomainCreatedSuccess): ?>
+<script>
+setTimeout(function() {
+    window.location.href = 'dashboard.php';
+}, 3000);
+</script>
+<?php endif; ?>
 <?php require_once __DIR__ . '/includes/session-timeout.php'; ?>
 <?php require __DIR__ . '/includes/footer.php'; ?>
 </body>
