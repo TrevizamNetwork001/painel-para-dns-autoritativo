@@ -99,7 +99,7 @@ a:hover{text-decoration:underline}
 .header h1{margin:0 0 6px;color:#fff;font-size:26px}
 .header p{margin:0;color:#94a3b8;font-size:13px;line-height:1.45}
 .back-link{display:inline-flex;align-items:center;min-height:36px;padding:7px 11px;border:1px solid #334155;border-radius:9px;background:#071226;font-size:13px;font-weight:bold;white-space:nowrap}
-.card{background:#071226;border:1px solid #1e293b;border-radius:14px;padding:22px}
+.card{background:#071226;border:1px solid #1e293b;border-radius:14px;padding:22px;width:min(820px,100%);margin:0 auto}
 .card-head{margin-bottom:16px}
 .card-head h2{margin:0 0 6px;color:#fff;font-size:20px}
 .card-head p{margin:0;color:#94a3b8;font-size:13px;line-height:1.45;max-width:620px}
