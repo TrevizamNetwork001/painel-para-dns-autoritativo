@@ -364,7 +364,7 @@ if (empty($dom) || empty($ip4)) {
                         ? "O prefixo IPv6 informado já está em uso por {$associatedDomain}."
                         : "O prefixo IPv6 informado já está em uso.")
                     . "\n\nNenhuma alteração foi aplicada.\n\n"
-                    . "Veja os detalhes na seção “Criar reversa IPv6” abaixo.";
+                    . "Veja os detalhes na seção “Criar zona reversa IPv6” abaixo.";
 
                 $fieldErrors['reverse_ipv6'] = "Prefixo IPv6 já em uso.\n\n"
                     . ($associatedDomain !== null
@@ -951,7 +951,7 @@ button:hover{opacity:.95}
                     <div class="section-head">
                         <label class="toggle-line">
                             <input type="checkbox" name="create_reverse_v4" <?= $formData['create_reverse_v4'] ? 'checked' : '' ?> data-toggle-collapse="reverse-v4-panel">
-                            <span>Criar reversa IPv4</span>
+                            <span>Criar zona reversa IPv4</span>
                         </label>
                     </div>
 
@@ -970,7 +970,7 @@ button:hover{opacity:.95}
                         </div>
 
                         <div class="ipv4-info">
-                            <strong>ℹ Reversa IPv4 automática</strong>
+                            <strong>ℹ Zona reversa IPv4 automática</strong>
                             <p>Informe uma rede IPv4 entre /16 e /24. O painel divide a rede em blocos /24 e cria as zonas reversas automaticamente.</p>
                             <p>Exemplo: 192.168.28.0/22 gera 4 zonas reversas: 192.168.28.0/24, 192.168.29.0/24, 192.168.30.0/24 e 192.168.31.0/24.</p>
                         </div>
@@ -1009,7 +1009,7 @@ button:hover{opacity:.95}
                     <div class="section-head">
                         <label class="toggle-line">
                             <input type="checkbox" name="create_reverse_v6" <?= $formData['create_reverse_v6'] ? 'checked' : '' ?> data-toggle-collapse="reverse-v6-panel">
-                            <span>Criar reversa IPv6</span>
+                            <span>Criar zona reversa IPv6</span>
                         </label>
                     </div>
 
@@ -1027,7 +1027,7 @@ button:hover{opacity:.95}
                             <?php endif; ?>
                         </div>
                         <div class="ipv6-info">
-                            <strong>ℹ Reversa IPv6 manual</strong>
+                            <strong>ℹ Zona reversa IPv6 manual</strong>
                             <p>Informe um prefixo IPv6 exclusivo para este domínio. Se o prefixo já estiver cadastrado, a criação será bloqueada para evitar mistura de registros entre domínios.</p>
                         </div>
                     </div>
