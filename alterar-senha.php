@@ -6,8 +6,6 @@ require_once __DIR__ . '/includes/audit.php';
 require_once __DIR__ . '/includes/users.php';
 
 $erro = '';
-$sucesso = '';
-$urlRedirecionamento = 'dashboard.php';
 $usuarioAtual = usuario_por_id((int) $_SESSION['usuario_id']);
 
 if (!$usuarioAtual) {
@@ -50,23 +48,39 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         $_SESSION['auth_version'] = $novaVersao;
         $_SESSION['trocar_senha'] = 0;
-        $usuarioAtual = usuario_por_id((int) $usuarioAtual['id']);
-        $sucesso = 'Senha alterada com sucesso. Você será redirecionado para a página inicial em 3 segundos.';
 
-        registrar_auditoria([
-            'acao' => 'ALTERAR_PROPRIA_SENHA',
-            'tipo_registro' => 'USUARIO',
-            'nome_registro' => $usuarioAtual['usuario'],
-            'valor_antigo' => 'senha protegida',
-            'valor_novo' => 'senha atualizada',
-            'status' => 'OK',
-            'mensagem' => 'Usuário alterou a própria senha',
-        ]);
+        try {
+            registrar_auditoria([
+                'acao' => 'ALTERAR_PROPRIA_SENHA',
+                'tipo_registro' => 'USUARIO',
+                'nome_registro' => $usuarioAtual['usuario'],
+                'valor_antigo' => 'senha protegida',
+                'valor_novo' => 'senha atualizada',
+                'status' => 'OK',
+                'mensagem' => 'Usuário alterou a própria senha',
+            ]);
+        } catch (Throwable $e) {
+            error_log('Falha ao registrar ALTERAR_PROPRIA_SENHA: ' . $e->getMessage());
+        }
+
+        session_regenerate_id(true);
+        $_SESSION = [];
+        if (ini_get('session.use_cookies')) {
+            $params = session_get_cookie_params();
+            setcookie(
+                session_name(),
+                '',
+                time() - 42000,
+                $params['path'],
+                $params['domain'],
+                (bool) $params['secure'],
+                (bool) $params['httponly']
+            );
+        }
+        session_destroy();
+        header('Location: login.php?senha_alterada=1');
+        exit;
     }
-}
-
-if ($sucesso) {
-    header('Refresh: 3; url=' . $urlRedirecionamento);
 }
 ?>
 <!DOCTYPE html>
@@ -75,9 +89,6 @@ if ($sucesso) {
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Alterar senha</title>
-<?php if ($sucesso): ?>
-<meta http-equiv="refresh" content="3;url=<?= htmlspecialchars($urlRedirecionamento, ENT_QUOTES, 'UTF-8') ?>">
-<?php endif; ?>
 <style>
 *{box-sizing:border-box}
 body{margin:0;font-family:Arial,sans-serif;background:#0f172a;color:#e2e8f0;font-size:14px}
@@ -92,7 +103,7 @@ a:hover{text-decoration:underline}
 .card-head{margin-bottom:16px}
 .card-head h2{margin:0 0 6px;color:#fff;font-size:20px}
 .card-head p{margin:0;color:#94a3b8;font-size:13px;line-height:1.45;max-width:620px}
-.card-inner{max-width:560px}
+.card-inner{max-width:620px;margin:0 auto;width:100%}
 .message,.error,.success,.alert{padding:12px 14px;border-radius:10px;margin:0 0 14px;border:1px solid}
 .error{background:#450a0a;color:#fecaca;border-color:#991b1b}
 .success{background:#052e16;color:#bbf7d0;border-color:#166534}
@@ -141,8 +152,6 @@ button:hover{filter:brightness(1.08)}
             <div class="alert">Defina uma nova senha para continuar usando o painel.</div>
             <?php endif; ?>
             <?php if ($erro): ?><div class="error"><?= htmlspecialchars($erro) ?></div><?php endif; ?>
-            <?php if ($sucesso): ?><div class="success"><?= htmlspecialchars($sucesso) ?></div><?php endif; ?>
-
             <div class="info-box">
                 <span class="info-icon" aria-hidden="true">ℹ</span>
                 <div>
@@ -172,16 +181,11 @@ button:hover{filter:brightness(1.08)}
                     <button type="submit">Salvar nova senha</button>
                     <a class="secondary-button" href="dashboard.php">← Voltar ao painel</a>
                 </div>
-                <p class="helper">A alteração atualiza sua sessão e exige a nova senha no próximo login.</p>
+                <p class="helper">A alteração encerra sua sessão atual e exige a nova senha no próximo login.</p>
             </form>
         </div>
     </section>
 </main>
 <?php require __DIR__ . '/includes/footer.php'; ?>
-<?php if ($sucesso): ?>
-<script>
-setTimeout(function(){ window.location.replace('<?= htmlspecialchars($urlRedirecionamento, ENT_QUOTES, 'UTF-8') ?>'); }, 3000);
-</script>
-<?php endif; ?>
 </body>
 </html>
