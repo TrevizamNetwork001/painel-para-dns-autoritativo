@@ -1104,6 +1104,17 @@ function updateReversePanels() {
     updatePtrTemplate();
 }
 
+function clearReverseIpv4Error() {
+    const fieldError = document.getElementById('reverse-ipv4-error');
+    if (!fieldError || !revInput) return;
+
+    fieldError.remove();
+    revInput.classList.remove('input-error');
+    revInput.removeAttribute('aria-invalid');
+    revInput.removeAttribute('aria-describedby');
+    document.getElementById('alertaErro')?.remove();
+}
+
 searchInput?.addEventListener('input', event => {
     const term = String(event.target.value || '').trim().toLowerCase();
     domainItems.forEach(item => {
@@ -1113,6 +1124,7 @@ searchInput?.addEventListener('input', event => {
 });
 
 revInput?.addEventListener('input', () => {
+    clearReverseIpv4Error();
     renderReversePreview();
     updatePtrTemplate();
 });
