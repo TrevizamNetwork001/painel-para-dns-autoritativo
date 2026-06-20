@@ -1,9 +1,40 @@
 <?php
 require_once __DIR__ . "/includes/auth.php";
 
-$logs = shell_exec(
-    "tail -n 50 /var/log/syslog"
-);
+function coletar_logs_sistema(): array
+{
+    $fontes = [
+        [
+            'rotulo' => '/var/log/syslog',
+            'comando' => 'tail -n 50 /var/log/syslog',
+        ],
+        [
+            'rotulo' => 'journalctl',
+            'comando' => 'journalctl --no-pager -n 50 -o short',
+        ],
+    ];
+
+    foreach ($fontes as $fonte) {
+        $saida = shell_exec($fonte['comando'] . ' 2>&1');
+        $saida = is_string($saida) ? trim($saida) : '';
+
+        if ($saida !== '' && stripos($saida, 'permission denied') === false && stripos($saida, 'no such file') === false) {
+            return [
+                'fonte' => $fonte['rotulo'],
+                'logs' => $saida,
+                'fallback' => $fonte['rotulo'] !== '/var/log/syslog',
+            ];
+        }
+    }
+
+    return [
+        'fonte' => 'indisponível',
+        'logs' => 'Não foi possível consultar os logs do sistema neste momento.',
+        'fallback' => false,
+    ];
+}
+
+$resultado = coletar_logs_sistema();
 ?>
 
 <!DOCTYPE html>
@@ -73,7 +104,17 @@ a{
 
 <div class="card">
 
-<pre><?= htmlspecialchars($logs) ?></pre>
+<p style="margin:0 0 12px;color:#94a3b8;font-size:12px;">
+Fonte: <?= htmlspecialchars($resultado['fonte']) ?>
+</p>
+
+<?php if (!empty($resultado['fallback'])): ?>
+<p style="margin:0 0 12px;color:#fbbf24;font-size:12px;">
+O arquivo syslog não estava disponível; exibindo saída do journal.
+</p>
+<?php endif; ?>
+
+<pre><?= htmlspecialchars($resultado['logs']) ?></pre>
 
 </div>
 
