@@ -7,6 +7,7 @@ require_once __DIR__ . '/includes/users.php';
 
 $erro = '';
 $sucesso = '';
+$urlRedirecionamento = 'dashboard.php';
 $usuarioAtual = usuario_por_id((int) $_SESSION['usuario_id']);
 
 if (!$usuarioAtual) {
@@ -50,7 +51,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $_SESSION['auth_version'] = $novaVersao;
         $_SESSION['trocar_senha'] = 0;
         $usuarioAtual = usuario_por_id((int) $usuarioAtual['id']);
-        $sucesso = 'Senha alterada com sucesso. Você será redirecionado para a página inicial em 4 segundos.';
+        $sucesso = 'Senha alterada com sucesso. Você será redirecionado para a página inicial em 3 segundos.';
 
         registrar_auditoria([
             'acao' => 'ALTERAR_PROPRIA_SENHA',
@@ -63,6 +64,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         ]);
     }
 }
+
+if ($sucesso) {
+    header('Refresh: 3; url=' . $urlRedirecionamento);
+}
 ?>
 <!DOCTYPE html>
 <html lang="pt-br">
@@ -70,7 +75,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 <meta charset="UTF-8">
 <title>Alterar senha</title>
 <?php if ($sucesso): ?>
-<meta http-equiv="refresh" content="4;url=dashboard.php">
+<meta http-equiv="refresh" content="3;url=<?= htmlspecialchars($urlRedirecionamento, ENT_QUOTES, 'UTF-8') ?>">
 <?php endif; ?>
 <style>
 body{margin:0;font-family:Arial;background:#0f172a;color:#e2e8f0;}
@@ -120,7 +125,7 @@ a{color:#38bdf8;text-decoration:none;}
 <?php require __DIR__ . '/includes/footer.php'; ?>
 <?php if ($sucesso): ?>
 <script>
-setTimeout(function(){ window.location.href = 'dashboard.php'; }, 4000);
+setTimeout(function(){ window.location.replace('<?= htmlspecialchars($urlRedirecionamento, ENT_QUOTES, 'UTF-8') ?>'); }, 3000);
 </script>
 <?php endif; ?>
 </body>
