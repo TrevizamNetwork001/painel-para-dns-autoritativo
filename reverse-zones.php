@@ -352,6 +352,7 @@ a:hover{text-decoration:underline}
 .zones-grid{
     display:grid;
     grid-template-columns:repeat(2, minmax(0, 1fr));
+    align-items:start;
     gap:18px;
     margin-top:18px;
 }
