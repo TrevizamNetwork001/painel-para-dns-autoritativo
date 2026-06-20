@@ -360,21 +360,20 @@ if (empty($dom) || empty($ip4)) {
                 }
 
                 $erro = "Não foi possível criar o domínio.\n\n"
-                    . "O prefixo IPv6 informado já está cadastrado.\n\n"
-                    . "Zona reversa:\n{$reverseZone}";
+                    . ($associatedDomain !== null
+                        ? "O prefixo IPv6 informado já está em uso por {$associatedDomain}."
+                        : "O prefixo IPv6 informado já está em uso.")
+                    . "\n\nNenhuma alteração foi aplicada.\n\n"
+                    . "Veja os detalhes na seção “Criar reversa IPv6” abaixo.";
+
+                $fieldErrors['reverse_ipv6'] = $associatedDomain !== null
+                    ? "Prefixo já cadastrado em {$associatedDomain}."
+                    : "O prefixo IPv6 informado já está cadastrado.";
+                $fieldErrors['reverse_ipv6'] .= "\n\nZona reversa:\n{$reverseZone}";
 
                 if ($reverseFile !== null) {
-                    $erro .= "\n\nArquivo usado:\n{$reverseFile}";
+                    $fieldErrors['reverse_ipv6'] .= "\n\nArquivo usado:\n{$reverseFile}";
                 }
-
-                if ($associatedDomain !== null) {
-                    $erro .= "\n\nDomínio associado:\n{$associatedDomain}";
-                }
-
-                $erro .= "\n\nNenhuma alteração foi aplicada.";
-                $fieldErrors['reverse_ipv6'] = $associatedDomain !== null
-                    ? "O prefixo IPv6 informado já está cadastrado para {$associatedDomain}. Veja os detalhes no aviso acima."
-                    : "O prefixo IPv6 informado já está cadastrado. Veja os detalhes no aviso acima.";
             } elseif (stripos($scriptError, 'zona reversa') !== false) {
                 if (stripos($scriptError, 'in-addr.arpa') !== false) {
                     $existingRev4AfterFailure = array_filter(
@@ -1023,7 +1022,7 @@ button:hover{opacity:.95}
                                 class="<?= isset($fieldErrors['reverse_ipv6']) ? 'input-error' : '' ?>"
                                 <?= isset($fieldErrors['reverse_ipv6']) ? 'aria-invalid="true" aria-describedby="reverse-ipv6-error"' : '' ?>>
                             <?php if (isset($fieldErrors['reverse_ipv6'])): ?>
-                                <div id="reverse-ipv6-error" class="field-error"><?= htmlspecialchars($fieldErrors['reverse_ipv6']) ?></div>
+                                <div id="reverse-ipv6-error" class="field-error"><?= nl2br(htmlspecialchars($fieldErrors['reverse_ipv6'])) ?></div>
                             <?php endif; ?>
                         </div>
                         <div class="ipv6-info">
