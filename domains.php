@@ -366,14 +366,12 @@ if (empty($dom) || empty($ip4)) {
                     . "\n\nNenhuma alteração foi aplicada.\n\n"
                     . "Veja os detalhes na seção “Criar reversa IPv6” abaixo.";
 
-                $fieldErrors['reverse_ipv6'] = $associatedDomain !== null
-                    ? "Prefixo já cadastrado para {$associatedDomain}."
-                    : "O prefixo IPv6 informado já está cadastrado.";
-                $fieldErrors['reverse_ipv6'] .= "\n\nZona reversa:\n{$reverseZone}";
-
-                if ($reverseFile !== null) {
-                    $fieldErrors['reverse_ipv6'] .= "\n\nArquivo usado:\n{$reverseFile}";
-                }
+                $fieldErrors['reverse_ipv6'] = "Prefixo IPv6 já em uso.\n\n"
+                    . ($associatedDomain !== null
+                        ? "Este prefixo já está cadastrado para {$associatedDomain}."
+                        : "Este prefixo já está cadastrado.")
+                    . "\nA zona reversa IPv6 correspondente já existe no servidor.\n\n"
+                    . "Use outro prefixo IPv6 ou revise o cadastro existente.";
             } elseif (stripos($scriptError, 'zona reversa') !== false) {
                 if (stripos($scriptError, 'in-addr.arpa') !== false) {
                     $existingRev4AfterFailure = array_filter(
