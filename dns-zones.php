@@ -440,7 +440,7 @@ a:hover{text-decoration:underline}
     </header>
 
     <?php if ($sucesso): ?>
-        <div class="alert success"><?= htmlspecialchars($sucesso, ENT_QUOTES, 'UTF-8') ?></div>
+        <div class="alert success" id="success-toast"><?= htmlspecialchars($sucesso, ENT_QUOTES, 'UTF-8') ?></div>
     <?php endif; ?>
 
     <?php if ($erro): ?>
@@ -527,6 +527,19 @@ const deleteDomainDisplay = document.getElementById('delete-domain-display');
 const deleteConfirmation = document.getElementById('delete-confirmation');
 const confirmDelete = document.getElementById('confirm-delete');
 const cancelDelete = document.getElementById('cancel-delete');
+const successToast = document.getElementById('success-toast');
+
+if (successToast) {
+    setTimeout(function() {
+        successToast.style.transition = 'opacity .4s, transform .4s';
+        successToast.style.opacity = '0';
+        successToast.style.transform = 'translateY(-8px)';
+
+        setTimeout(function() {
+            successToast.remove();
+        }, 400);
+    }, 3000);
+}
 
 if (filtro) {
     filtro.addEventListener('input', function() {
