@@ -67,48 +67,17 @@ function atualizarSerial($file)
 
 
 if (!isset($_GET['zone'])) {
+
     die("Zona inválida");
 }
 
-$requestedZone = basename(trim((string) $_GET['zone']));
-$reverseDirectory = "/var/cache/bind/master-rev";
-$zone = null;
+$zone = basename($_GET['zone']);
 
-if (preg_match('/^[a-zA-Z0-9.-]+\.(?:rev6|rev)$/', $requestedZone)) {
-    $zone = $requestedZone;
-} elseif (preg_match('/^[a-zA-Z0-9.-]+\.(?:in-addr|ip6)\.arpa$/i', $requestedZone)) {
-    $config = @file_get_contents('/etc/bind/named.conf.local');
-
-    if ($config !== false &&
-        preg_match_all(
-            '/\bzone\s+"([^"]+)"\s*\{(?:(?!\};).)*?\bfile\s+(?:"([^"]+)"|([^\s;]+))\s*;(?:(?!\};).)*?\};/si',
-            $config,
-            $blocks,
-            PREG_SET_ORDER
-        )) {
-        foreach ($blocks as $block) {
-            if (strcasecmp($block[1], $requestedZone) !== 0) {
-                continue;
-            }
-
-            $configuredFile = $block[2] !== '' ? $block[2] : $block[3];
-            $candidate = basename($configuredFile);
-            $expectedPath = $reverseDirectory . '/' . $candidate;
-
-            if (preg_match('/^[a-zA-Z0-9.-]+\.(?:rev6|rev)$/', $candidate) &&
-                $configuredFile === $expectedPath) {
-                $zone = $candidate;
-                break;
-            }
-        }
-    }
-}
-
-if ($zone === null) {
+if (!preg_match('/^[a-zA-Z0-9.-]+\.(?:rev6|rev)$/', $zone)) {
     die("Zona inválida");
 }
 
-$file = $reverseDirectory . "/$zone";
+$file = "/var/cache/bind/master-rev/$zone";
 $erro = "";
 $sucesso = "";
 
@@ -124,9 +93,7 @@ if (!file_exists($file)) {
 $bindZone = bind_zone_name_for_file($file);
 $isIpv6Zone = str_ends_with($zone, '.rev6');
 
-if ($bindZone === null ||
-    (str_ends_with(strtolower($requestedZone), '.arpa') &&
-        strcasecmp($bindZone, $requestedZone) !== 0)) {
+if ($bindZone === null) {
     die("Zona não encontrada no named.conf.local");
 }
 
@@ -206,7 +173,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     header(
 
                     "Location: edit-reverse-zone.php?zone=" .
-                    urlencode($bindZone) .
+                    urlencode($zone) .
                     "&success=" .
                     urlencode("Registro adicionado com sucesso")
                 );
@@ -396,7 +363,7 @@ a{
 <?= htmlspecialchars(str_replace('.rev6', '', $zone)) ?>
 </h2>
 <p>
-<a href="historico-zona.php?dominio=<?= urlencode(audit_dominio_base($zone) ?? $zone) ?>">📋 Histórico</a>
+<a href="auditoria.php?dominio=<?= urlencode(audit_dominio_base($zone) ?? $zone) ?>">📋 Histórico</a>
 </p>
 <?php if(!empty($sucesso)): ?>
 

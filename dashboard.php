@@ -3,7 +3,6 @@ require "config.php";
 require "includes/auth.php";
 require_once __DIR__ . "/includes/db.php";
 require_once __DIR__ . "/includes/dns_zones.php";
-require_once __DIR__ . "/includes/dns_servers.php";
 
 function metricError(string $name, string $message): void { error_log("Dashboard - falha em {$name}: {$message}"); }
 function cpuSample(): ?array {
@@ -76,217 +75,55 @@ function countRecords(array $files, string $pattern): int {
     }
     return $total;
 }
-function countDnsRecordTypes(array $files): array {
-    $counts = ['A' => 0, 'AAAA' => 0, 'CNAME' => 0, 'MX' => 0, 'TXT' => 0];
-    foreach ($files as $file) {
-        $lines = @file($file, FILE_IGNORE_NEW_LINES);
-        if ($lines === false) {
-            error_log('Dashboard - falha ao ler registros DNS: ' . $file);
-            continue;
-        }
-        foreach ($lines as $line) {
-            $trim = trim($line);
-            if ($trim === '' || str_starts_with($trim, ';')) {
-                continue;
-            }
-            if (preg_match('/^\S+\s+IN\s+(A|AAAA|CNAME|MX|TXT)\s+/i', $trim, $match)) {
-                $type = strtoupper($match[1]);
-                $counts[$type] = ($counts[$type] ?? 0) + 1;
-            }
-        }
-    }
-    $counts['total'] = array_sum($counts);
-    return $counts;
+function auditAction(string $action): string {
+    $mapped = match ($action) {
+        'CRIAR_DOMINIO'=>'Criar domínio','REMOVER_DOMINIO'=>'Remover domínio','ADICIONAR_REGISTRO'=>'Adicionar registro',
+        'EDITAR_REGISTRO'=>'Editar registro','REMOVER_REGISTRO'=>'Remover registro','ADICIONAR_PTR_IPV6'=>'Adicionar PTR IPv6',
+        'EDITAR_PTR_IPV6'=>'Editar PTR IPv6','REMOVER_PTR_IPV6'=>'Remover PTR IPv6','ADICIONAR_PTR_IPV4_GENERATE'=>'Adicionar PTR IPv4',
+        'EDITAR_PTR_IPV4'=>'Editar PTR IPv4','REMOVER_PTR_IPV4'=>'Remover PTR IPv4','LOGIN_SUCESSO'=>'Login',
+        'LOGIN_FALHA'=>'Login falhou','LOGOUT'=>'Logout','CRIAR_USUARIO'=>'Criar usuário','ALTERAR_USUARIO'=>'Alterar usuário',
+        'REMOVER_USUARIO'=>'Remover usuário','REDEFINIR_SENHA_USUARIO'=>'Redefinir senha','ALTERAR_PROPRIA_SENHA'=>'Alterar própria senha',
+        'CADASTRAR_DNS_SERVER'=>'Cadastrar servidor DNS','ALTERAR_DNS_SERVER'=>'Alterar servidor DNS',
+        'REMOVER_DNS_SERVER'=>'Remover servidor DNS','TESTAR_DNS_SERVER'=>'Testar servidor DNS',
+        default=>null
+    };
+    if ($mapped !== null) return $mapped;
+    $text = str_replace('_', ' ', $action);
+    return function_exists('mb_convert_case') ? mb_convert_case(mb_strtolower($text, 'UTF-8'), MB_CASE_TITLE, 'UTF-8') : ucfirst(strtolower($text));
+}
+function auditDate(string $utc): string {
+    try { return (new DateTimeImmutable($utc, new DateTimeZone('UTC')))->setTimezone(new DateTimeZone('America/Sao_Paulo'))->format('d/m/Y H:i:s'); }
+    catch (Throwable $e) { error_log('Dashboard - data inválida: ' . $e->getMessage()); return 'Indisponível'; }
+}
+function auditTarget(array $event): string {
+    $domain = preg_replace('/\.(?:rev6|rev)$/i', '', trim((string) ($event['dominio'] ?? '')));
+    $name = trim((string) ($event['nome_registro'] ?? ''));
+    if ($domain !== '') return $domain;
+    if ($name !== '' && !str_ends_with(strtolower($name), '.rev6') && !preg_match('/^[0-9a-f](?:\.[0-9a-f]){7,}$/i', $name)) return $name;
+    return str_contains((string) ($event['acao'] ?? ''), 'PTR_IPV6') ? 'Registro reverso IPv6' : '-';
 }
 function usageClass(?int $value): string { return $value === null ? 'unavailable' : ($value >= 90 ? 'critical' : ($value >= 75 ? 'warning' : 'normal')); }
-function usageBarWidth(?int $value): int { return $value === null ? 0 : max(0, min(100, $value)); }
 
+$auditEvents = []; $auditUnavailable = false;
+try {
+    $auditEvents = db()->query("SELECT usuario, acao, dominio, nome_registro, status, criado_em FROM audit_logs ORDER BY id DESC LIMIT 6")->fetchAll(PDO::FETCH_ASSOC);
+} catch (Throwable $e) { $auditUnavailable = true; error_log('Dashboard - falha na auditoria: ' . $e->getMessage()); }
 $forwardZones = glob('/var/cache/bind/master-aut/*.hosts') ?: [];
 $reverseFiles = glob('/var/cache/bind/master-rev/*') ?: [];
-$dnsRecordCounts = countDnsRecordTypes($forwardZones);
-$zoneInventorySummary = ['servidores' => [], 'divergencias' => 0, 'excecoes_aprovadas' => 0, 'zonas_unicas' => null];
+$forwardRecords = countRecords($forwardZones, '/^(?:\S+\s+)?(?:\d+\s+)?IN\s+(?:A|AAAA|CNAME|MX|TXT)\s+/i');
+$zoneInventorySummary = ['servidores' => [], 'divergencias' => 0, 'zonas_unicas' => null];
 try {
     $zoneInventorySummary = dns_zones_resumo();
 } catch (Throwable $e) {
     metricError('inventario_zonas', $e->getMessage());
 }
-$dnsServers = [];
-$totalDnsServers = 1;
-$onlineDnsServers = 0;
-try {
-    $dnsServers = dns_servers_listar();
-    $totalDnsServers = 1 + count($dnsServers);
-    $onlineDnsServers = 0;
-    $inventoryServers = $zoneInventorySummary['servidores'] ?? [];
-    $localInventory = null;
-    foreach ($inventoryServers as $inventoryServer) {
-        if (($inventoryServer['server_role'] ?? '') === 'master') {
-            $localInventory = $inventoryServer;
-            break;
-        }
-    }
-    if ($localInventory && (int) ($localInventory['last_ok'] ?? 0) === 1) {
-        $onlineDnsServers++;
-    }
-    foreach ($dnsServers as $dnsServer) {
-        if (($dnsServer['ultimo_status'] ?? '') === 'online') {
-            $onlineDnsServers++;
-        }
-    }
-} catch (Throwable $e) {
-    metricError('servidores_dns', $e->getMessage());
-}
-
-$activityPeriodOptions = [
-    'hoje' => 'Hoje',
-    '7d' => 'Últimos 7 dias',
-    '15d' => 'Últimos 15 dias',
-    '30d' => 'Últimos 30 dias',
-    'mes_atual' => 'Este mês',
-    'mes_anterior' => 'Mês anterior',
-];
-$selectedActivityPeriod = $_GET['periodo'] ?? '7d';
-if (!is_string($selectedActivityPeriod) || !isset($activityPeriodOptions[$selectedActivityPeriod])) {
-    $selectedActivityPeriod = '7d';
-}
-$activityPeriodWhere = [
-    'hoje' => "criado_em >= datetime('now', 'localtime', 'start of day', 'utc')",
-    '7d' => "criado_em >= datetime('now', '-7 days')",
-    '15d' => "criado_em >= datetime('now', '-15 days')",
-    '30d' => "criado_em >= datetime('now', '-30 days')",
-    'mes_atual' => "criado_em >= datetime('now', 'localtime', 'start of month', 'utc')",
-    'mes_anterior' => "criado_em >= datetime('now', 'localtime', 'start of month', '-1 month', 'utc') "
-        . "AND criado_em < datetime('now', 'localtime', 'start of month', 'utc')",
-];
-
-$recentActivity = [
-    'domains_created' => 0,
-    'domains_removed' => 0,
-    'records_created' => 0,
-    'records_updated' => 0,
-    'records_removed' => 0,
-    'reverse_zones_created' => 0,
-    'reverse_zones_removed' => 0,
-    'orphans_removed' => 0,
-    'blocked_actions' => 0,
-    'failures_rollbacks' => 0,
-];
-try {
-    $activityRows = db()->query(
-        "SELECT acao, status, mensagem, nome_registro FROM audit_logs "
-        . "WHERE " . $activityPeriodWhere[$selectedActivityPeriod]
-    )->fetchAll(PDO::FETCH_ASSOC);
-
-    $activityActions = [
-        'domains_created' => ['CREATE_DOMAIN', 'ADICIONAR_DOMINIO', 'CRIAR_DOMINIO'],
-        'domains_removed' => ['DELETE_FORWARD_ZONE', 'REMOVER_DOMINIO', 'REMOVER_ZONA_FORWARD'],
-        'records_created' => [
-            'CREATE_RECORD',
-            'ADICIONAR_REGISTRO',
-            'ADICIONAR_PTR_IPV4',
-            'ADICIONAR_PTR_IPV6',
-        ],
-        'records_updated' => [
-            'UPDATE_RECORD',
-            'EDIT_RECORD',
-            'EDITAR_REGISTRO',
-            'EDITAR_PTR_IPV4',
-            'EDITAR_PTR_IPV6',
-        ],
-        'records_removed' => [
-            'DELETE_RECORD',
-            'REMOVER_REGISTRO',
-            'REMOVER_PTR_IPV4',
-            'REMOVER_PTR_IPV6',
-        ],
-        'reverse_zones_created' => [
-            'CREATE_REVERSE_IPV4',
-            'CREATE_REVERSE_IPV6',
-            'CRIAR_REVERSA_IPV4',
-            'CRIAR_REVERSA_IPV6',
-            'CRIAR_ZONA_REVERSA_IPV4',
-            'CRIAR_ZONA_REVERSA_IPV6',
-        ],
-        'reverse_zones_removed' => [
-            'DELETE_REVERSE_IPV4',
-            'DELETE_REVERSE_IPV6',
-            'REMOVER_REVERSA_IPV4',
-            'REMOVER_REVERSA_IPV6',
-            'REMOVER_ZONA_REVERSA_IPV4',
-            'REMOVER_ZONA_REVERSA_IPV6',
-        ],
-        'orphans_removed' => [
-            'REMOVER_ARQUIVO_REVERSO_ORFAO',
-            'DELETE_ORPHAN_REVERSE_IPV6',
-            'DELETE_ORPHAN_REVERSE_IPV4',
-        ],
-    ];
-    $successStatuses = ['OK', 'SUCCESS', 'SUCESSO'];
-    $failureStatuses = ['ERROR', 'ERRO', 'ROLLBACK'];
-
-    foreach ($activityRows as $activityRow) {
-        $action = strtoupper(trim((string) ($activityRow['acao'] ?? '')));
-        $status = strtoupper(trim((string) ($activityRow['status'] ?? '')));
-        $message = strtolower((string) ($activityRow['mensagem'] ?? ''));
-        $recordName = strtolower((string) ($activityRow['nome_registro'] ?? ''));
-        $isSuccess = in_array($status, $successStatuses, true);
-        $isOrphan = str_contains($recordName, 'órf')
-            || str_contains($recordName, 'orf')
-            || in_array($action, $activityActions['orphans_removed'], true);
-
-        if ($isSuccess) {
-            foreach ($activityActions as $metric => $actions) {
-                if (!in_array($action, $actions, true)) {
-                    continue;
-                }
-                if ($metric === 'reverse_zones_removed' && $isOrphan) {
-                    continue;
-                }
-                $recentActivity[$metric]++;
-            }
-
-            if (
-                $isOrphan
-                && in_array($action, ['DELETE_REVERSE_IPV4', 'DELETE_REVERSE_IPV6'], true)
-            ) {
-                $recentActivity['orphans_removed']++;
-            }
-        }
-
-        $isBlocked = in_array($status, ['BLOCKED', 'BLOQUEADO'], true)
-            || str_starts_with($action, 'BLOCK_')
-            || str_starts_with($action, 'BLOQUEAR_')
-            || str_contains($message, 'bloquead')
-            || str_contains($message, 'não pode ser')
-            || str_contains($message, 'já existe')
-            || str_contains($message, 'já está em uso')
-            || str_contains($message, 'inválid')
-            || str_contains($message, 'pendência');
-        if ($isBlocked) {
-            $recentActivity['blocked_actions']++;
-        }
-
-        if (
-            in_array($status, $failureStatuses, true)
-            || str_contains($message, 'rollback=true')
-        ) {
-            $recentActivity['failures_rollbacks']++;
-        }
-    }
-} catch (Throwable $e) {
-    metricError('atividade_recente', $e->getMessage());
-}
-$hostname = gethostname() ?: 'Indisponível';
+$cpu = cpuUsage(); $ram = ramUsage(); $disk = diskUsage(); $uptime = uptimeText(); $hostname = gethostname() ?: 'Indisponível';
 $serverIp = filter_var($_SERVER['SERVER_ADDR'] ?? '', FILTER_VALIDATE_IP);
 if ($serverIp === false && $hostname !== 'Indisponível') {
     $resolvedIp = gethostbyname($hostname);
     $serverIp = filter_var($resolvedIp, FILTER_VALIDATE_IP) ? $resolvedIp : false;
 }
 $serverIp = $serverIp ?: 'Indisponível';
-$cpuValue = cpuUsage();
-$ramValue = ramUsage();
-$diskValue = diskUsage();
-$uptimeValue = uptimeText();
 ?>
 <!DOCTYPE html>
 <html lang="pt-BR">
@@ -299,13 +136,13 @@ $uptimeValue = uptimeText();
 .menu-toggle{display:none;position:fixed;top:14px;left:14px;z-index:30;border:1px solid #334155;border-radius:10px;background:#071226;color:#e2e8f0;padding:9px 12px;cursor:pointer}
 .sidebar{position:fixed;left:0;top:0;width:270px;height:100vh;background:#020617;border-right:1px solid #1e293b;padding:20px;overflow-y:auto;box-shadow:none;z-index:20}.sidebar h2{color:#38bdf8;margin:0 0 30px}.sidebar a{display:block;color:#cbd5e1;text-decoration:none;padding:12px;border-radius:8px;margin-bottom:6px;transition:.2s}.sidebar a:hover,.sidebar a:focus,.sidebar a.active{background:#1e293b;color:#38bdf8;outline:none}.sidebar-group{margin-top:10px}.sidebar-group-toggle{display:flex;align-items:center;justify-content:space-between;width:100%;border:0;border-radius:8px;background:transparent;color:#94a3b8;padding:12px;cursor:pointer;text-align:left;font-size:13px;font-weight:bold;transition:.2s}.sidebar-group-toggle:hover,.sidebar-group-toggle:focus{background:#0f172a;color:#38bdf8;outline:none}.sidebar-group-arrow{font-size:14px;line-height:1}.sidebar-submenu{display:none;padding-left:8px}.sidebar-group.open .sidebar-submenu{display:block}.sidebar-submenu a{padding:10px 12px}
 .main-content{margin-left:270px;padding:25px}.topbar{display:flex;justify-content:space-between;align-items:center;gap:18px;background:#071226;border:1px solid #1e293b;border-radius:14px;padding:17px 20px;margin-bottom:25px}.topbar-title{display:flex;align-items:center;gap:9px}.topbar-info{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:10px;color:#cbd5e1;font-size:13px}.info-badge{display:flex;align-items:center;gap:9px;min-height:40px;background:#020617;border:1px solid #1e293b;border-radius:11px;padding:9px 12px}.info-badge svg{width:19px;height:19px;color:#38bdf8;flex:0 0 auto}.info-badge-text{display:flex;flex-direction:column;gap:2px}.info-badge-label{color:#64748b;font-size:10px;font-weight:bold;letter-spacing:.04em;text-transform:uppercase}.info-badge-value{color:#e2e8f0;font-weight:bold}
-.section{background:#071226;border:1px solid #1e293b;border-radius:16px;padding:25px;margin-bottom:25px;box-shadow:0 0 20px #0004}.section-header{display:flex;justify-content:space-between;align-items:center;gap:15px;margin-bottom:18px}.section-header h2{font-size:18px;margin:0}.section-link{color:#38bdf8;text-decoration:none;font-weight:bold;font-size:14px}#atividade-recente{scroll-margin-top:24px}.period-filter{display:flex;align-items:center;gap:9px;color:#94a3b8;font-size:13px;font-weight:bold}.period-filter select{min-height:38px;border:1px solid #334155;border-radius:10px;background:#020617;color:#e2e8f0;padding:8px 32px 8px 11px;font:inherit;cursor:pointer}.period-filter select:hover,.period-filter select:focus{border-color:#38bdf8;outline:none}
-.summary-grid,.recent-grid,.quick-grid{display:grid;gap:14px}.summary-grid,.recent-grid{grid-template-columns:repeat(4,minmax(0,1fr))}.quick-grid{grid-template-columns:repeat(6,minmax(0,1fr))}.stat{background:#020617;border:1px solid #1e293b;border-radius:14px;padding:16px;min-height:112px}.stat-link{display:block;color:inherit;text-decoration:none;cursor:pointer;transition:transform .15s ease}.stat-link:hover,.stat-link:focus{transform:translateY(-2px);outline:none}.stat .icon{font-size:24px;margin-bottom:8px}.stat .label{color:#94a3b8;font-size:11px;text-transform:uppercase}.stat .value{font-size:24px;font-weight:bold;color:#38bdf8;margin-top:7px;overflow-wrap:anywhere}.stat .value.normal{color:#4ade80}.stat .value.warning{color:#f59e0b}.stat .value.critical{color:#f87171}.stat .value.unavailable{font-size:16px;color:#94a3b8}.stat small{display:block;color:#64748b;margin-top:7px}.usage-bar{height:6px;border-radius:999px;background:#1e293b;margin-top:10px;overflow:hidden}.usage-bar-fill{height:100%;border-radius:999px;transition:width .2s ease,background-color .2s ease}.usage-bar-fill.normal{background:#4ade80}.usage-bar-fill.warning{background:#f59e0b}.usage-bar-fill.critical{background:#f87171}.usage-bar-fill.unavailable{background:#475569}
+.section{background:#071226;border:1px solid #1e293b;border-radius:16px;padding:25px;margin-bottom:25px;box-shadow:0 0 20px #0004}.section-header{display:flex;justify-content:space-between;align-items:center;gap:15px;margin-bottom:18px}.section-header h2{font-size:18px;margin:0}.section-link{color:#38bdf8;text-decoration:none;font-weight:bold;font-size:14px}
+.summary-grid,.health-grid,.quick-grid{display:grid;gap:16px}.summary-grid{grid-template-columns:repeat(3,minmax(0,1fr))}.health-grid,.quick-grid{grid-template-columns:repeat(4,minmax(0,1fr))}.stat{background:#020617;border:1px solid #1e293b;border-radius:14px;padding:18px;min-height:124px}.stat .icon{font-size:26px;margin-bottom:9px}.stat .label{color:#94a3b8;font-size:12px;text-transform:uppercase}.stat .value{font-size:25px;font-weight:bold;color:#38bdf8;margin-top:8px;overflow-wrap:anywhere}.stat .value.unavailable{font-size:18px;color:#94a3b8}.stat small{display:block;color:#64748b;margin-top:8px}.progress{width:100%;height:8px;background:#1e293b;border-radius:10px;overflow:hidden;margin-top:12px}.progress-bar{height:100%;border-radius:10px}.normal{background:#22c55e}.warning{background:#eab308}.critical{background:#ef4444}.progress-bar.unavailable{width:0!important}
 .metric-icon{display:block;width:27px;height:27px;color:#38bdf8}
-.empty{color:#94a3b8;margin:0}
-.server-list{display:grid;gap:8px}.server-row{display:grid;grid-template-columns:minmax(120px,.7fr) minmax(140px,1fr) 90px minmax(150px,1fr);gap:12px;align-items:center;background:#020617;border:1px solid #1e293b;border-radius:10px;padding:11px 13px;cursor:pointer;transition:transform .15s ease}.server-row:hover,.server-row:focus-within{transform:translateY(-2px)}.server-row>a{color:inherit;text-decoration:none}.server-name{font-weight:800}.server-ip,.server-updated{color:#94a3b8;font-size:12px}.server-updated a{color:inherit;text-decoration:none}.server-updated a:hover,.server-updated a:focus{color:#38bdf8;outline:none}.status-pill{display:inline-flex;justify-content:center;border-radius:999px;padding:4px 8px;font-size:11px;font-weight:800}.status-pill.online{background:#123326;color:#86efac}.status-pill.offline{background:#3a1418;color:#fca5a5}.quick-link{display:block;min-height:82px;background:#020617;border:1px solid #1e293b;border-radius:12px;padding:14px;color:#e2e8f0;text-decoration:none;transition:.2s}.quick-link:hover,.quick-link:focus{border-color:#38bdf8;transform:translateY(-2px);outline:none}.quick-link strong{display:block;margin-top:8px;font-size:13px}.quick-link small{display:block;color:#64748b;margin-top:5px;font-size:11px}.menu-overlay{display:none}
-@media(max-width:1250px){.summary-grid,.recent-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.quick-grid{grid-template-columns:repeat(3,minmax(0,1fr))}}
-@media(max-width:760px){.menu-toggle{display:block}.sidebar{transform:translateX(-100%);transition:transform .2s;width:min(300px,86vw)}.sidebar.open{transform:translateX(0)}.menu-overlay{position:fixed;inset:0;background:#020617b8;z-index:10}.menu-overlay.open{display:block}.main-content{margin-left:0;padding:70px 14px 20px}.topbar,.section-header{align-items:flex-start;flex-direction:column}.topbar-info{justify-content:flex-start;width:100%}.info-badge{flex:1 1 145px}.section{padding:18px}.summary-grid,.recent-grid,.quick-grid{grid-template-columns:1fr}}
+.activity-table{width:100%;border-collapse:collapse}.activity-table th,.activity-table td{padding:11px 10px;border-bottom:1px solid #1e293b;text-align:left;font-size:13px;vertical-align:top}.activity-table th{color:#94a3b8;font-size:12px;text-transform:uppercase}.activity-status{font-weight:bold}.activity-status.ok{color:#4ade80}.activity-status.error{color:#f87171}.empty{color:#94a3b8;margin:0}
+.quick-link{display:block;min-height:105px;background:#020617;border:1px solid #1e293b;border-radius:14px;padding:18px;color:#e2e8f0;text-decoration:none;transition:.2s}.quick-link:hover,.quick-link:focus{border-color:#38bdf8;transform:translateY(-2px);outline:none}.quick-link strong{display:block;margin-top:10px}.quick-link small{display:block;color:#64748b;margin-top:6px}.menu-overlay{display:none}
+@media(max-width:1100px){.summary-grid,.health-grid,.quick-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:760px){.menu-toggle{display:block}.sidebar{transform:translateX(-100%);transition:transform .2s;width:min(300px,86vw)}.sidebar.open{transform:translateX(0)}.menu-overlay{position:fixed;inset:0;background:#020617b8;z-index:10}.menu-overlay.open{display:block}.main-content{margin-left:0;padding:70px 14px 20px}.topbar,.section-header{align-items:flex-start;flex-direction:column}.topbar-info{justify-content:flex-start;width:100%}.info-badge{flex:1 1 145px}.section{padding:18px}.summary-grid,.health-grid,.quick-grid{grid-template-columns:1fr}.activity-table thead{display:none}.activity-table,.activity-table tbody,.activity-table tr,.activity-table td{display:block;width:100%}.activity-table tr{background:#020617;border:1px solid #1e293b;border-radius:12px;padding:9px 12px;margin-bottom:12px}.activity-table td{display:grid;grid-template-columns:90px 1fr;gap:10px;border:0;padding:6px 0}.activity-table td:before{content:attr(data-label);color:#94a3b8;font-size:11px;text-transform:uppercase;font-weight:bold}}
 </style>
 </head>
 <body>
@@ -351,32 +188,31 @@ $uptimeValue = uptimeText();
 <span class="info-badge"><svg aria-hidden="true"><use href="#icon-globe"></use></svg><span class="info-badge-text"><span class="info-badge-label">IP principal</span><span class="info-badge-value"><?= htmlspecialchars($serverIp) ?></span></span></span>
 <span class="info-badge"><svg aria-hidden="true"><use href="#icon-user"></use></svg><span class="info-badge-text"><span class="info-badge-label">Usuário</span><span class="info-badge-value"><?= htmlspecialchars($_SESSION['usuario'] ?? 'admin') ?></span></span></span>
 </div></header>
-<section class="section"><div class="section-header"><h2>⚡ Acesso rápido</h2></div><div class="quick-grid">
-<?php foreach ([['domains.php','🌐','Domínios','Administrar domínios'],['dns-zones.php','📦','Zonas DNS','Registros forward'],['reverse-zones.php','🔁','Zonas Reversas','Registros PTR'],['zones.php','🧭','Inventário DNS','Comparar servidores'],['dns-servers.php','🖥️','Servidores DNS','Saúde e ferramentas'],['auditoria.php','📋','Auditoria DNS','Investigar eventos']] as $link): ?>
-<a class="quick-link" href="<?= $link[0] ?>"><span><?= $link[1] ?></span><strong><?= $link[2] ?></strong><small><?= $link[3] ?></small></a><?php endforeach; ?>
-</div></section>
 <section class="section"><div class="section-header"><h2>📦 Resumo DNS</h2></div><div class="summary-grid">
 <div class="stat"><div class="icon"><svg class="metric-icon" aria-hidden="true"><use href="#icon-globe"></use></svg></div><div class="label">Domínios</div><div class="value"><?= count($forwardZones) ?></div><small>Zonas forward</small></div>
-<div class="stat"><div class="icon"><svg class="metric-icon" aria-hidden="true"><use href="#icon-records"></use></svg></div><div class="label">Registros DNS</div><div class="value"><?= (int) ($dnsRecordCounts['total'] ?? 0) ?></div><small>A, AAAA, CNAME, MX e TXT</small></div>
+<div class="stat"><div class="icon"><svg class="metric-icon" aria-hidden="true"><use href="#icon-records"></use></svg></div><div class="label">Registros DNS</div><div class="value"><?= $forwardRecords ?></div><small>A, AAAA, CNAME, MX e TXT</small></div>
 <div class="stat"><div class="icon"><svg class="metric-icon" aria-hidden="true"><use href="#icon-reverse"></use></svg></div><div class="label">Zonas reversas</div><div class="value"><?= count($reverseFiles) ?></div><small>IPv4 + IPv6</small></div>
+<div class="stat"><div class="icon"><svg class="metric-icon" aria-hidden="true"><use href="#icon-server"></use></svg></div><div class="label">Inventario DNS</div><div class="value <?= $zoneInventorySummary['zonas_unicas'] === null ? 'unavailable' : '' ?>"><?= $zoneInventorySummary['zonas_unicas'] === null ? 'Indisponível' : (int) $zoneInventorySummary['zonas_unicas'] ?></div><small>Zonas unicas NS1/slaves</small></div>
+<div class="stat"><div class="icon"><svg class="metric-icon" aria-hidden="true"><use href="#icon-records"></use></svg></div><div class="label">Divergencias</div><div class="value"><?= (int) $zoneInventorySummary['divergencias'] ?></div><small>Presenca e serial SOA</small></div>
+<?php foreach ($zoneInventorySummary['servidores'] as $dnsInventoryServer): ?>
+<div class="stat"><div class="icon"><svg class="metric-icon" aria-hidden="true"><use href="#icon-server"></use></svg></div><div class="label"><?= htmlspecialchars($dnsInventoryServer['server_nome']) ?></div><div class="value <?= $dnsInventoryServer['last_ok'] ? '' : 'unavailable' ?>"><?= (int) $dnsInventoryServer['total_zones'] ?></div><small><?= htmlspecialchars(strtoupper($dnsInventoryServer['server_role'])) ?> · <?= $dnsInventoryServer['last_ok'] ? 'inventariado' : 'falha no inventario' ?></small></div>
+<?php endforeach; ?>
 </div></section>
-<section class="section"><div class="section-header"><h2>🩺 Saúde do servidor</h2></div><div class="summary-grid">
-<div class="stat"><div class="icon"><svg class="metric-icon" aria-hidden="true"><use href="#icon-cpu"></use></svg></div><div class="label">CPU</div><div class="value <?= usageClass($cpuValue) ?>"><?= $cpuValue === null ? 'Indisponível' : $cpuValue . '%' ?></div><div class="usage-bar" aria-hidden="true"><div class="usage-bar-fill <?= usageClass($cpuValue) ?>" style="width:<?= usageBarWidth($cpuValue) ?>%"></div></div><small>Uso do processador</small></div>
-<div class="stat"><div class="icon"><svg class="metric-icon" aria-hidden="true"><use href="#icon-memory"></use></svg></div><div class="label">Memória</div><div class="value <?= usageClass($ramValue) ?>"><?= $ramValue === null ? 'Indisponível' : $ramValue . '%' ?></div><div class="usage-bar" aria-hidden="true"><div class="usage-bar-fill <?= usageClass($ramValue) ?>" style="width:<?= usageBarWidth($ramValue) ?>%"></div></div><small>Uso de RAM</small></div>
-<div class="stat"><div class="icon"><svg class="metric-icon" aria-hidden="true"><use href="#icon-storage"></use></svg></div><div class="label">Disco</div><div class="value <?= usageClass($diskValue) ?>"><?= $diskValue === null ? 'Indisponível' : $diskValue . '%' ?></div><div class="usage-bar" aria-hidden="true"><div class="usage-bar-fill <?= usageClass($diskValue) ?>" style="width:<?= usageBarWidth($diskValue) ?>%"></div></div><small>Partição raiz</small></div>
-<div class="stat"><div class="icon"><svg class="metric-icon" aria-hidden="true"><use href="#icon-uptime"></use></svg></div><div class="label">Uptime</div><div class="value"><?= htmlspecialchars($uptimeValue ?? 'Indisponível') ?></div><small>Tempo de atividade</small></div>
+<section class="section"><div class="section-header"><h2>🖥️ Saúde do servidor</h2></div><div class="health-grid">
+<?php foreach ([['cpu','CPU',$cpu,'uso aproximado'],['memory','RAM',$ram,'memória em uso'],['storage','Disco',$disk,'partição /']] as $metric): $class=usageClass($metric[2]); ?>
+<div class="stat"><div class="icon"><svg class="metric-icon" aria-hidden="true"><use href="#icon-<?= $metric[0] ?>"></use></svg></div><div class="label"><?= htmlspecialchars($metric[1]) ?></div><div class="value <?= $metric[2] === null ? 'unavailable' : '' ?>"><?= $metric[2] === null ? 'Indisponível' : $metric[2].'%' ?></div><div class="progress" aria-hidden="true"><div class="progress-bar <?= $class ?>" style="width:<?= $metric[2] ?? 0 ?>%"></div></div><small><?= htmlspecialchars($metric[3]) ?></small></div>
+<?php endforeach; ?>
+<div class="stat"><div class="icon"><svg class="metric-icon" aria-hidden="true"><use href="#icon-uptime"></use></svg></div><div class="label">Uptime</div><div class="value <?= $uptime === null ? 'unavailable' : '' ?>"><?= htmlspecialchars($uptime ?? 'Indisponível') ?></div><small>Tempo ligado</small></div>
 </div></section>
-<section id="atividade-recente" class="section"><div class="section-header"><h2>🕘 Atividade recente</h2><form class="period-filter" method="GET" action="dashboard.php#atividade-recente"><label for="activity-period">Período:</label><select name="periodo" id="activity-period" onchange="window.location.href='dashboard.php?periodo='+encodeURIComponent(this.value)+'#atividade-recente'"><?php foreach ($activityPeriodOptions as $periodValue => $periodLabel): ?><option value="<?= htmlspecialchars($periodValue, ENT_QUOTES, 'UTF-8') ?>"<?= $selectedActivityPeriod === $periodValue ? ' selected' : '' ?>><?= htmlspecialchars($periodLabel, ENT_QUOTES, 'UTF-8') ?></option><?php endforeach; ?></select><noscript><button type="submit">Aplicar</button></noscript></form></div><div class="recent-grid">
-<div class="stat"><div class="label">Domínios criados</div><div class="value"><?= $recentActivity['domains_created'] ?></div></div>
-<div class="stat"><div class="label">Domínios removidos</div><div class="value"><?= $recentActivity['domains_removed'] ?></div></div>
-<div class="stat"><div class="label">Registros criados</div><div class="value"><?= $recentActivity['records_created'] ?></div></div>
-<div class="stat"><div class="label">Registros alterados</div><div class="value"><?= $recentActivity['records_updated'] ?></div></div>
-<div class="stat"><div class="label">Registros removidos</div><div class="value"><?= $recentActivity['records_removed'] ?></div></div>
-<div class="stat"><div class="label">Zonas reversas criadas</div><div class="value"><?= $recentActivity['reverse_zones_created'] ?></div></div>
-<div class="stat"><div class="label">Zonas reversas removidas</div><div class="value"><?= $recentActivity['reverse_zones_removed'] ?></div></div>
-<div class="stat"><div class="label">Órfãos removidos</div><div class="value"><?= $recentActivity['orphans_removed'] ?></div></div>
-<div class="stat"><div class="label">Ações bloqueadas</div><div class="value"><?= $recentActivity['blocked_actions'] ?></div></div>
-<div class="stat"><div class="label">Falhas / rollback</div><div class="value"><?= $recentActivity['failures_rollbacks'] ?></div></div>
+<section class="section"><div class="section-header"><h2>📋 Últimas atividades</h2><a class="section-link" href="auditoria.php">Ver auditoria completa</a></div>
+<?php if ($auditUnavailable): ?><p class="empty">As atividades estão temporariamente indisponíveis.</p><?php elseif (!$auditEvents): ?><p class="empty">Nenhuma atividade registrada.</p><?php else: ?>
+<table class="activity-table"><thead><tr><th>Data</th><th>Usuário</th><th>Ação</th><th>Domínio/Registro</th><th>Status</th></tr></thead><tbody>
+<?php foreach ($auditEvents as $event): ?><tr><td data-label="Data"><?= htmlspecialchars(auditDate((string)$event['criado_em'])) ?></td><td data-label="Usuário"><?= htmlspecialchars((string)$event['usuario']) ?></td><td data-label="Ação"><?= htmlspecialchars(auditAction((string)$event['acao'])) ?></td><td data-label="Registro"><?= htmlspecialchars(auditTarget($event)) ?></td><td data-label="Status" class="activity-status <?= $event['status']==='OK'?'ok':'error' ?>"><?= htmlspecialchars((string)$event['status']) ?></td></tr><?php endforeach; ?>
+</tbody></table><?php endif; ?></section>
+<section class="section"><div class="section-header"><h2>⚡ Acesso rápido</h2></div><div class="quick-grid">
+<?php foreach ([['domains.php','➕','Novo Domínio','Criar e administrar domínios'],['dns-zones.php','📦','Zonas DNS','Gerenciar registros forward'],['reverse-zones.php','🔁','Zonas Reversas','Gerenciar registros PTR'],['zones.php','🧭','Inventário DNS','Comparar NS1 e slaves'],['auditoria.php','📋','Auditoria','Consultar histórico completo'],['services.php','⚙️','Serviços','Administrar serviços do servidor'],['firewall.php','🔥','Firewall','Consultar e gerenciar regras']] as $link): ?>
+<a class="quick-link" href="<?= $link[0] ?>"><span><?= $link[1] ?></span><strong><?= $link[2] ?></strong><small><?= $link[3] ?></small></a><?php endforeach; ?>
+<?php if (usuario_eh_administrador()): ?><a class="quick-link" href="usuarios.php"><span>👥</span><strong>Usuários</strong><small>Administrar acessos ao painel</small></a><?php endif; ?>
 </div></section>
 <?php require __DIR__ . '/includes/footer.php'; ?>
 </main>

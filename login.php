@@ -5,18 +5,9 @@ require_once __DIR__ . "/includes/security.php";
 require_once __DIR__ . "/includes/audit.php";
 
 $erro = null;
-$sucesso = null;
 
 if (isset($_GET['timeout'])) {
     $erro = "Sessão expirada por inatividade";
-}
-
-if ($_SERVER['REQUEST_METHOD'] === 'GET' && isset($_GET['senha_alterada'])) {
-    $sucesso = 'Senha alterada com sucesso. Entre novamente usando sua nova senha.';
-}
-
-if ($erro !== null) {
-    $sucesso = null;
 }
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -77,7 +68,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
 
         $erro = "Usuário ou senha inválidos";
-        $sucesso = null;
     }
 }
 ?>
@@ -155,11 +145,6 @@ button {
     margin-bottom:10px;
     text-align:center;
 }
-
-.success-alert {
-    background:#14532d;
-    color:#bbf7d0;
-}
 </style>
 </head>
 
@@ -174,9 +159,6 @@ button {
 
 <?php if ($erro): ?>
 <div id="alerta" class="alert"><?= htmlspecialchars($erro) ?></div>
-<?php endif; ?>
-<?php if ($sucesso): ?>
-<div id="alerta-sucesso" class="alert success-alert"><?= htmlspecialchars($sucesso) ?></div>
 <?php endif; ?>
 
 <form method="POST" id="loginForm">
@@ -197,12 +179,6 @@ setTimeout(function() {
         el.style.opacity = "0";
         setTimeout(() => el.remove(), 500);
     }
-    var ok = document.getElementById('alerta-sucesso');
-    if (ok) {
-        ok.style.transition = "opacity 0.5s";
-        ok.style.opacity = "0";
-        setTimeout(() => ok.remove(), 500);
-    }
 }, 3000);
 
 // some ao digitar
@@ -210,8 +186,6 @@ document.querySelectorAll("input").forEach(input => {
     input.addEventListener("input", () => {
         let el = document.getElementById("alerta");
         if (el) el.remove();
-        let ok = document.getElementById("alerta-sucesso");
-        if (ok) ok.remove();
     });
 });
 </script>
