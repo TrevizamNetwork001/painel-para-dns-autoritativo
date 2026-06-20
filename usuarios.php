@@ -205,7 +205,8 @@ a:hover{text-decoration:underline}
 .card-head{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:14px}
 .card-head h2{margin:0;color:#fff;font-size:18px}
 .card-count{display:inline-flex;align-items:center;justify-content:center;min-width:30px;height:24px;padding:0 8px;border-radius:999px;background:#0c4a6e;color:#bae6fd;font-size:11px;font-weight:bold}
-.create-grid{display:grid;grid-template-columns:minmax(180px,1fr) minmax(210px,1.15fr) minmax(170px,.75fr) auto;gap:13px;align-items:end}
+.create-user-form-inner{width:100%;max-width:1080px;margin:0 auto}
+.create-grid{display:grid;grid-template-columns:minmax(220px,300px) minmax(260px,340px) minmax(180px,260px) auto;gap:12px;align-items:end;width:100%}
 .field label{display:block;margin:0 0 6px;color:#94a3b8;font-size:11px;font-weight:bold}
 input,select,button{min-height:37px;padding:8px 10px;border:1px solid #334155;border-radius:8px;background:#0f172a;color:#fff;font:inherit;font-size:13px}
 input,select{width:100%}
@@ -291,27 +292,29 @@ button:disabled{cursor:not-allowed;opacity:.65}
     <div class="card-head">
         <h2>Criar usuário</h2>
     </div>
-    <form method="POST" class="create-grid">
-        <?= csrf_field() ?>
-        <input type="hidden" name="acao" value="criar">
-        <div class="field">
-            <label for="novo-usuario">Usuário</label>
-            <input id="novo-usuario" name="usuario" minlength="3" maxlength="32" pattern="[A-Za-z0-9._-]+" required>
-        </div>
-        <div class="field">
-            <label for="senha-inicial">Senha inicial</label>
-            <input id="senha-inicial" type="password" name="senha" minlength="8" maxlength="128" required>
-        </div>
-        <div class="field">
-            <label for="novo-perfil">Perfil</label>
-            <select id="novo-perfil" name="perfil">
-                <option value="moderador">Moderador</option>
-                <option value="administrador">Administrador</option>
-            </select>
-        </div>
-        <button type="submit" class="create-button">Criar</button>
-    </form>
-    <p class="helper">O novo usuário deverá trocar a senha no primeiro acesso.</p>
+    <div class="create-user-form-inner">
+        <form method="POST" class="create-grid">
+            <?= csrf_field() ?>
+            <input type="hidden" name="acao" value="criar">
+            <div class="field">
+                <label for="novo-usuario">Usuário</label>
+                <input id="novo-usuario" name="usuario" minlength="3" maxlength="32" pattern="[A-Za-z0-9._-]+" required>
+            </div>
+            <div class="field">
+                <label for="senha-inicial">Senha inicial</label>
+                <input id="senha-inicial" type="password" name="senha" minlength="8" maxlength="128" required>
+            </div>
+            <div class="field">
+                <label for="novo-perfil">Perfil</label>
+                <select id="novo-perfil" name="perfil">
+                    <option value="moderador">Moderador</option>
+                    <option value="administrador">Administrador</option>
+                </select>
+            </div>
+            <button type="submit" class="create-button">Criar</button>
+        </form>
+        <p class="helper">O novo usuário deverá trocar a senha no primeiro acesso.</p>
+    </div>
 </section>
 
 <section class="card">
