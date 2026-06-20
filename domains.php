@@ -971,8 +971,8 @@ button:hover{opacity:.95}
 
                         <div class="ipv4-info">
                             <strong>ℹ Reversa IPv4 automática</strong>
-                            <p>Informe uma rede IPv4 entre /16 e /24. O painel divide a rede em zonas /24 e cria as reversas automaticamente.</p>
-                            <p>Exemplo: 192.168.28.0/22 gera 4 zonas reversas, de 192.168.28.rev até 192.168.31.rev.</p>
+                            <p>Informe uma rede IPv4 entre /16 e /24. O painel divide a rede em blocos /24 e cria as zonas reversas automaticamente.</p>
+                            <p>Exemplo: 192.168.28.0/22 gera 4 zonas reversas: 192.168.28.0/24, 192.168.29.0/24, 192.168.30.0/24 e 192.168.31.0/24.</p>
                         </div>
 
                         <div id="ptr4_format_box" class="ptr-box" style="display:none;">
