@@ -219,9 +219,9 @@ button:disabled{cursor:not-allowed;opacity:.65}
 .erro{border-color:#991b1b;background:#450a0a;color:#fecaca}
 .sucesso{border-color:#166534;background:#052e16;color:#bbf7d0}
 .users-list{border-top:1px solid #1e293b}
-.user-card{padding:16px 2px;border-bottom:1px solid #1e293b}
+.user-card{padding:16px 10px;border-bottom:1px solid #1e293b}
 .user-card:last-child{border-bottom:0;padding-bottom:2px}
-.user-row-inner{width:100%;max-width:1100px;margin:0 auto}
+.user-row-inner{width:100%;max-width:1120px;margin:0 auto;padding:0 12px}
 .user-summary{display:flex;justify-content:space-between;align-items:flex-start;gap:18px}
 .user-name{margin:0 0 4px;color:#fff;font-size:16px}
 .user-created{color:#64748b;font-size:11px}
