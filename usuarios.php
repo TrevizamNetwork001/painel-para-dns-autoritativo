@@ -204,6 +204,7 @@ a:hover{text-decoration:underline}
 .card{background:#071226;border:1px solid #1e293b;padding:18px;border-radius:14px;margin-bottom:18px}
 .card-head{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:14px}
 .card-head h2{margin:0;color:#fff;font-size:18px}
+.card-head-actions{display:flex;align-items:center;gap:10px;flex-wrap:wrap;justify-content:flex-end}
 .card-count{display:inline-flex;align-items:center;justify-content:center;min-width:30px;height:24px;padding:0 8px;border-radius:999px;background:#0c4a6e;color:#bae6fd;font-size:11px;font-weight:bold}
 .create-user-form-inner{width:100%;max-width:1080px;margin:0 auto}
 .create-grid{display:grid;grid-template-columns:minmax(220px,300px) minmax(260px,340px) minmax(180px,260px) auto;gap:12px;align-items:end;width:100%}
@@ -220,6 +221,7 @@ button:disabled{cursor:not-allowed;opacity:.65}
 .erro{border-color:#991b1b;background:#450a0a;color:#fecaca}
 .sucesso{border-color:#166534;background:#052e16;color:#bbf7d0}
 .users-list{border-top:1px solid #1e293b}
+.users-panel[hidden]{display:none}
 .user-card{padding:16px 10px;border-bottom:1px solid #1e293b}
 .user-card:last-child{border-bottom:0;padding-bottom:2px}
 .user-row-inner{width:100%;max-width:1120px;margin:0 auto;padding:0 12px 0 20px}
@@ -250,6 +252,8 @@ button:disabled{cursor:not-allowed;opacity:.65}
 .current-action{display:flex;align-items:center;min-height:37px;color:#64748b;font-size:12px}
 .password-link{display:inline-flex;align-items:center;min-height:37px;padding:7px 10px;border:1px solid #334155;border-radius:8px;background:#0f172a;font-size:13px;font-weight:bold}
 .remove-form{display:flex}
+.toggle-users-btn{display:inline-flex;align-items:center;justify-content:center;min-height:30px;padding:6px 10px;border:1px solid #334155;border-radius:8px;background:#0f172a;color:#e2e8f0;font-size:12px;font-weight:bold;cursor:pointer;white-space:nowrap}
+.toggle-users-btn:hover{background:#111c33}
 @media(max-width:1180px){
     .user-actions{max-width:100%}
 }
@@ -320,8 +324,12 @@ button:disabled{cursor:not-allowed;opacity:.65}
 <section class="card">
     <div class="card-head">
         <h2>Contas cadastradas</h2>
-        <span class="card-count"><?= count($usuarios) ?></span>
+        <div class="card-head-actions">
+            <span class="card-count"><?= count($usuarios) ?></span>
+            <button type="button" id="toggle-users-list" class="toggle-users-btn">Mostrar contas</button>
+        </div>
     </div>
+    <div class="users-panel" id="users-list-panel" hidden>
     <div class="users-list">
         <?php foreach ($usuarios as $item): ?>
             <?php $contaAtual = (int) $item['id'] === (int) $_SESSION['usuario_id']; ?>
@@ -400,6 +408,7 @@ button:disabled{cursor:not-allowed;opacity:.65}
             </article>
         <?php endforeach; ?>
     </div>
+    </div>
 </section>
 </main>
 <?php require __DIR__ . '/includes/footer.php'; ?>
@@ -413,5 +422,42 @@ setTimeout(function(){
 }, 4000);
 </script>
 <?php endif; ?>
+<script>
+(function () {
+    const panel = document.getElementById('users-list-panel');
+    const button = document.getElementById('toggle-users-list');
+    if (!panel || !button) return;
+
+    const hasFeedback = <?= json_encode((bool) ($sucesso || $erro)) ?>;
+    const storageKey = 'usuarios_contas_abertas';
+
+    function setOpen(open) {
+        if (open) {
+            panel.removeAttribute('hidden');
+            button.textContent = 'Ocultar contas';
+            try { localStorage.setItem(storageKey, '1'); } catch (e) {}
+        } else {
+            panel.setAttribute('hidden', '');
+            button.textContent = 'Mostrar contas';
+            try { localStorage.setItem(storageKey, '0'); } catch (e) {}
+        }
+    }
+
+    let shouldOpen = hasFeedback;
+    if (!shouldOpen) {
+        try {
+            shouldOpen = localStorage.getItem(storageKey) === '1';
+        } catch (e) {
+            shouldOpen = false;
+        }
+    }
+
+    setOpen(shouldOpen);
+
+    button.addEventListener('click', () => {
+        setOpen(panel.hasAttribute('hidden'));
+    });
+})();
+</script>
 </body>
 </html>
