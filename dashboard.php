@@ -139,21 +139,118 @@ try {
 
 $recentActivity = [
     'domains_created' => 0,
+    'domains_removed' => 0,
     'records_created' => 0,
     'records_updated' => 0,
     'records_removed' => 0,
+    'reverse_zones_created' => 0,
+    'reverse_zones_removed' => 0,
+    'orphans_removed' => 0,
+    'blocked_actions' => 0,
+    'failures_rollbacks' => 0,
 ];
 try {
     $activityRows = db()->query(
-        "SELECT acao, COUNT(*) AS total FROM audit_logs "
+        "SELECT acao, status, mensagem, nome_registro FROM audit_logs "
         . "WHERE criado_em >= datetime('now', '-7 days') "
-        . "AND acao IN ('CRIAR_DOMINIO','CRIAR_ZONA_FORWARD','ADICIONAR_REGISTRO','EDITAR_REGISTRO','REMOVER_REGISTRO') "
-        . "GROUP BY acao"
-    )->fetchAll(PDO::FETCH_KEY_PAIR);
-    $recentActivity['domains_created'] = (int) ($activityRows['CRIAR_DOMINIO'] ?? 0);
-    $recentActivity['records_created'] = (int) ($activityRows['ADICIONAR_REGISTRO'] ?? 0);
-    $recentActivity['records_updated'] = (int) ($activityRows['EDITAR_REGISTRO'] ?? 0);
-    $recentActivity['records_removed'] = (int) ($activityRows['REMOVER_REGISTRO'] ?? 0);
+    )->fetchAll(PDO::FETCH_ASSOC);
+
+    $activityActions = [
+        'domains_created' => ['CREATE_DOMAIN', 'ADICIONAR_DOMINIO', 'CRIAR_DOMINIO'],
+        'domains_removed' => ['DELETE_FORWARD_ZONE', 'REMOVER_DOMINIO', 'REMOVER_ZONA_FORWARD'],
+        'records_created' => [
+            'CREATE_RECORD',
+            'ADICIONAR_REGISTRO',
+            'ADICIONAR_PTR_IPV4',
+            'ADICIONAR_PTR_IPV6',
+        ],
+        'records_updated' => [
+            'UPDATE_RECORD',
+            'EDIT_RECORD',
+            'EDITAR_REGISTRO',
+            'EDITAR_PTR_IPV4',
+            'EDITAR_PTR_IPV6',
+        ],
+        'records_removed' => [
+            'DELETE_RECORD',
+            'REMOVER_REGISTRO',
+            'REMOVER_PTR_IPV4',
+            'REMOVER_PTR_IPV6',
+        ],
+        'reverse_zones_created' => [
+            'CREATE_REVERSE_IPV4',
+            'CREATE_REVERSE_IPV6',
+            'CRIAR_REVERSA_IPV4',
+            'CRIAR_REVERSA_IPV6',
+            'CRIAR_ZONA_REVERSA_IPV4',
+            'CRIAR_ZONA_REVERSA_IPV6',
+        ],
+        'reverse_zones_removed' => [
+            'DELETE_REVERSE_IPV4',
+            'DELETE_REVERSE_IPV6',
+            'REMOVER_REVERSA_IPV4',
+            'REMOVER_REVERSA_IPV6',
+            'REMOVER_ZONA_REVERSA_IPV4',
+            'REMOVER_ZONA_REVERSA_IPV6',
+        ],
+        'orphans_removed' => [
+            'REMOVER_ARQUIVO_REVERSO_ORFAO',
+            'DELETE_ORPHAN_REVERSE_IPV6',
+            'DELETE_ORPHAN_REVERSE_IPV4',
+        ],
+    ];
+    $successStatuses = ['OK', 'SUCCESS', 'SUCESSO'];
+    $failureStatuses = ['ERROR', 'ERRO', 'ROLLBACK'];
+
+    foreach ($activityRows as $activityRow) {
+        $action = strtoupper(trim((string) ($activityRow['acao'] ?? '')));
+        $status = strtoupper(trim((string) ($activityRow['status'] ?? '')));
+        $message = strtolower((string) ($activityRow['mensagem'] ?? ''));
+        $recordName = strtolower((string) ($activityRow['nome_registro'] ?? ''));
+        $isSuccess = in_array($status, $successStatuses, true);
+        $isOrphan = str_contains($recordName, 'órf')
+            || str_contains($recordName, 'orf')
+            || in_array($action, $activityActions['orphans_removed'], true);
+
+        if ($isSuccess) {
+            foreach ($activityActions as $metric => $actions) {
+                if (!in_array($action, $actions, true)) {
+                    continue;
+                }
+                if ($metric === 'reverse_zones_removed' && $isOrphan) {
+                    continue;
+                }
+                $recentActivity[$metric]++;
+            }
+
+            if (
+                $isOrphan
+                && in_array($action, ['DELETE_REVERSE_IPV4', 'DELETE_REVERSE_IPV6'], true)
+            ) {
+                $recentActivity['orphans_removed']++;
+            }
+        }
+
+        $isBlocked = in_array($status, ['BLOCKED', 'BLOQUEADO'], true)
+            || str_starts_with($action, 'BLOCK_')
+            || str_starts_with($action, 'BLOQUEAR_')
+            || str_contains($message, 'bloquead')
+            || str_contains($message, 'não pode ser')
+            || str_contains($message, 'já existe')
+            || str_contains($message, 'já está em uso')
+            || str_contains($message, 'inválid')
+            || str_contains($message, 'pendência');
+        if ($isBlocked) {
+            $recentActivity['blocked_actions']++;
+        }
+
+        if (
+            in_array($status, $failureStatuses, true)
+            || str_contains($message, 'rollback=true')
+        ) {
+            $recentActivity['failures_rollbacks']++;
+        }
+    }
 } catch (Throwable $e) {
     metricError('atividade_recente', $e->getMessage());
 }
@@ -249,9 +346,15 @@ $uptimeValue = uptimeText();
 </div></section>
 <section class="section"><div class="section-header"><h2>🕘 Atividade recente</h2><span class="section-link">Últimos 7 dias</span></div><div class="recent-grid">
 <div class="stat"><div class="label">Domínios criados</div><div class="value"><?= $recentActivity['domains_created'] ?></div></div>
+<div class="stat"><div class="label">Domínios removidos</div><div class="value"><?= $recentActivity['domains_removed'] ?></div></div>
 <div class="stat"><div class="label">Registros criados</div><div class="value"><?= $recentActivity['records_created'] ?></div></div>
 <div class="stat"><div class="label">Registros alterados</div><div class="value"><?= $recentActivity['records_updated'] ?></div></div>
 <div class="stat"><div class="label">Registros removidos</div><div class="value"><?= $recentActivity['records_removed'] ?></div></div>
+<div class="stat"><div class="label">Zonas reversas criadas</div><div class="value"><?= $recentActivity['reverse_zones_created'] ?></div></div>
+<div class="stat"><div class="label">Zonas reversas removidas</div><div class="value"><?= $recentActivity['reverse_zones_removed'] ?></div></div>
+<div class="stat"><div class="label">Órfãos removidos</div><div class="value"><?= $recentActivity['orphans_removed'] ?></div></div>
+<div class="stat"><div class="label">Ações bloqueadas</div><div class="value"><?= $recentActivity['blocked_actions'] ?></div></div>
+<div class="stat"><div class="label">Falhas / rollback</div><div class="value"><?= $recentActivity['failures_rollbacks'] ?></div></div>
 </div></section>
 <?php require __DIR__ . '/includes/footer.php'; ?>
 </main>
