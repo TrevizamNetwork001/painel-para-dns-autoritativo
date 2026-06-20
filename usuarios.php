@@ -232,7 +232,7 @@ button:disabled{cursor:not-allowed;opacity:.65}
 .badge-inactive{background:#450a0a;color:#fca5a5}
 .badge-pending{background:#422006;color:#fde68a}
 .badge-current{background:#164e63;color:#a5f3fc}
-.user-actions{display:grid;grid-template-columns:max-content max-content;gap:16px;padding-top:13px;align-items:center;justify-content:start}
+.user-actions{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);gap:24px;padding-top:13px;align-items:center;width:100%}
 .action-block{min-width:0}
 .inline-form{display:flex;align-items:center;gap:7px}
 .user-actions>.action-block:first-child .inline-form{display:grid;grid-template-columns:minmax(220px,280px) auto auto;justify-content:start}
@@ -243,13 +243,15 @@ button:disabled{cursor:not-allowed;opacity:.65}
 .perigo{min-height:34px;padding:6px 9px;border-color:#7f1d1d;background:transparent;color:#fca5a5;font-size:12px}
 .perigo:hover{background:#450a0a}
 .senha{width:260px;max-width:100%;min-width:0}
-.account-tools{display:grid;grid-template-columns:max-content max-content;align-items:center;justify-content:start;gap:8px;min-width:0}
-.account-tools .inline-form{display:grid;grid-template-columns:260px auto;justify-content:start}
-.current-action{display:flex;align-items:center;min-height:37px;color:#64748b;font-size:12px}
+.account-tools{display:grid;grid-template-columns:minmax(0,1fr) max-content;align-items:center;gap:12px;min-width:0;width:100%}
+.account-tools .inline-form{display:grid;grid-template-columns:minmax(240px,1fr) auto;justify-content:start;width:100%}
+.account-tools .senha{width:100%;max-width:none}
+.current-action{display:flex;align-items:center;justify-self:end;min-height:37px;color:#64748b;font-size:12px;text-align:right}
 .password-link{display:inline-flex;align-items:center;min-height:37px;padding:7px 10px;border:1px solid #334155;border-radius:8px;background:#0f172a;font-size:13px;font-weight:bold}
-.remove-form{display:flex}
+.remove-form{display:flex;justify-content:flex-end}
 @media(max-width:1180px){
     .user-actions{grid-template-columns:1fr}
+    .account-tools{grid-template-columns:1fr auto}
     .account-tools,.account-tools .inline-form{justify-content:start}
 }
 @media(max-width:900px){
