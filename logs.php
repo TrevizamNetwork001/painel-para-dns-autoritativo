@@ -10,7 +10,7 @@ $logs = shell_exec(
 <html>
 <head>
 <meta charset="UTF-8">
-<title>Logs Sistema</title>
+<title>Logs do Sistema</title>
 
 <style>
 
