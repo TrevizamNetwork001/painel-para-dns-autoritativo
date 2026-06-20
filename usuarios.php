@@ -221,11 +221,11 @@ button:disabled{cursor:not-allowed;opacity:.65}
 .users-list{border-top:1px solid #1e293b}
 .user-card{padding:16px 2px;border-bottom:1px solid #1e293b}
 .user-card:last-child{border-bottom:0;padding-bottom:2px}
-.user-summary{display:block}
-.user-title-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:4px}
-.user-name{margin:0;color:#fff;font-size:16px}
+.user-row-inner{width:100%;max-width:1100px;margin:0 auto}
+.user-summary{display:flex;justify-content:space-between;align-items:flex-start;gap:18px}
+.user-name{margin:0 0 4px;color:#fff;font-size:16px}
 .user-created{color:#64748b;font-size:11px}
-.badges{display:flex;gap:6px;flex-wrap:wrap}
+.badges{display:flex;justify-content:flex-end;gap:6px;flex-wrap:wrap}
 .badge{display:inline-flex;align-items:center;min-height:22px;padding:3px 7px;border-radius:999px;font-size:10px;font-weight:bold}
 .badge-active{background:#052e16;color:#86efac}
 .badge-inactive{background:#450a0a;color:#fca5a5}
@@ -247,17 +247,21 @@ button:disabled{cursor:not-allowed;opacity:.65}
 .current-action{display:flex;align-items:center;min-height:37px;color:#64748b;font-size:12px}
 .password-link{display:inline-flex;align-items:center;min-height:37px;padding:7px 10px;border:1px solid #334155;border-radius:8px;background:#0f172a;font-size:13px;font-weight:bold}
 .remove-form{display:flex}
-@media(max-width:1050px){
-    .create-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
-    .create-button{width:100%}
+@media(max-width:1180px){
     .user-actions{grid-template-columns:1fr}
     .account-tools,.account-tools .inline-form{justify-content:start}
+}
+@media(max-width:900px){
+    .create-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+    .create-button{width:100%}
 }
 @media(max-width:700px){
     body{padding:16px 12px}
     .page-header{flex-direction:column}
     .card{padding:15px}
     .create-grid,.user-actions{grid-template-columns:1fr}
+    .user-summary{flex-direction:column;gap:8px}
+    .badges{justify-content:flex-start}
     .inline-form,.account-tools{align-items:stretch;flex-direction:column}
     .user-actions>.action-block:first-child .inline-form,.account-tools,.account-tools .inline-form{display:flex;justify-content:flex-start}
     .profile-select,.senha{width:100%;max-width:none}
@@ -316,23 +320,24 @@ button:disabled{cursor:not-allowed;opacity:.65}
         <?php foreach ($usuarios as $item): ?>
             <?php $contaAtual = (int) $item['id'] === (int) $_SESSION['usuario_id']; ?>
             <article class="user-card">
+                <div class="user-row-inner">
                 <div class="user-summary">
-                    <div class="user-title-row">
+                    <div>
                         <h3 class="user-name"><?= htmlspecialchars($item['usuario']) ?></h3>
-                        <div class="badges" aria-label="Status da conta">
-                            <span class="badge <?= $item['ativo'] ? 'badge-active' : 'badge-inactive' ?>">
-                                <?= $item['ativo'] ? 'Ativo' : 'Inativo' ?>
-                            </span>
-                            <?php if ($item['trocar_senha']): ?>
-                                <span class="badge badge-pending">Troca de senha pendente</span>
-                            <?php endif; ?>
-                            <?php if ($contaAtual): ?>
-                                <span class="badge badge-current">Conta atual</span>
-                            <?php endif; ?>
+                        <div class="user-created">
+                            Criado em <?= date('d/m/Y H:i', strtotime($item['criado_em'])) ?>
                         </div>
                     </div>
-                    <div class="user-created">
-                        Criado em <?= date('d/m/Y H:i', strtotime($item['criado_em'])) ?>
+                    <div class="badges" aria-label="Status da conta">
+                        <span class="badge <?= $item['ativo'] ? 'badge-active' : 'badge-inactive' ?>">
+                            <?= $item['ativo'] ? 'Ativo' : 'Inativo' ?>
+                        </span>
+                        <?php if ($item['trocar_senha']): ?>
+                            <span class="badge badge-pending">Troca de senha pendente</span>
+                        <?php endif; ?>
+                        <?php if ($contaAtual): ?>
+                            <span class="badge badge-current">Conta atual</span>
+                        <?php endif; ?>
                     </div>
                 </div>
 
@@ -384,6 +389,7 @@ button:disabled{cursor:not-allowed;opacity:.65}
                             <span class="current-action">Esta conta não pode ser removida</span>
                         <?php endif; ?>
                     </div>
+                </div>
                 </div>
             </article>
         <?php endforeach; ?>
