@@ -2,196 +2,377 @@
 
 require_once __DIR__ . "/includes/auth.php";
 
-$rules = shell_exec(
-    "sudo /usr/sbin/nft list ruleset"
-);
+function fw_exec(string $command): array
+{
+    $lines = [];
+    $exit = 0;
+    exec($command . ' 2>&1', $lines, $exit);
+    return [trim(implode("
+", $lines)), $exit];
+}
 
-$status = shell_exec(
-    "systemctl is-active nftables"
-);
+function fw_clean(string $text): string
+{
+    return trim(preg_replace('/\s+/u', ' ', $text) ?? $text);
+}
 
-preg_match('/counter packets (\d+) bytes .* drop/', $rules, $drop4);
+function fw_parse_ruleset(string $raw): array
+{
+    $tables = [];
+    $tableIndex = -1;
+    $chainIndex = -1;
 
-preg_match_all('/counter packets (\d+) bytes .* drop/', $rules, $drops);
+    foreach (preg_split('/\R/u', $raw) ?: [] as $lineRaw) {
+        $line = fw_clean($lineRaw);
+        if ($line === '') {
+            continue;
+        }
 
-$ipv4_drop = $drops[1][0] ?? 0;
+        if (preg_match('/^table\s+(\S+)\s+(\S+)$/i', $line, $m)) {
+            $tables[] = [
+                'family' => $m[1],
+                'name' => $m[2],
+                'chains' => [],
+            ];
+            $tableIndex = array_key_last($tables);
+            $chainIndex = -1;
+            continue;
+        }
 
-$ipv6_drop = $drops[1][1] ?? 0;
+        if ($tableIndex < 0) {
+            continue;
+        }
 
+        if (preg_match('/^chain\s+([^\s{]+)\s*\{/i', $line, $m)) {
+            $tables[$tableIndex]['chains'][] = [
+                'name' => $m[1],
+                'meta' => $line,
+                'rules' => [],
+            ];
+            $chainIndex = array_key_last($tables[$tableIndex]['chains']);
+            continue;
+        }
+
+        if ($chainIndex < 0) {
+            continue;
+        }
+
+        if (str_starts_with($line, 'type ') || str_contains($line, ' hook ') || str_contains($line, ' policy ')) {
+            $tables[$tableIndex]['chains'][$chainIndex]['meta'] = fw_clean(
+                $tables[$tableIndex]['chains'][$chainIndex]['meta'] . ' ' . $line
+            );
+            continue;
+        }
+
+        if ($line === '{' || $line === '}') {
+            continue;
+        }
+
+        $tables[$tableIndex]['chains'][$chainIndex]['rules'][] = $line;
+    }
+
+    return $tables;
+}
+
+function fw_count_chains(array $tables): int
+{
+    $total = 0;
+    foreach ($tables as $table) {
+        $total += count($table['chains']);
+    }
+    return $total;
+}
+
+function fw_count_rules(array $tables): int
+{
+    $total = 0;
+    foreach ($tables as $table) {
+        foreach ($table['chains'] as $chain) {
+            $total += count($chain['rules']);
+        }
+    }
+    return $total;
+}
+
+function fw_chain_policy(string $meta): ?string
+{
+    return preg_match('/\bpolicy\s+([a-z]+)\b/i', $meta, $m) ? strtolower($m[1]) : null;
+}
+
+function fw_chain_hook(string $meta): ?string
+{
+    return preg_match('/\bhook\s+([a-z]+)\b/i', $meta, $m) ? strtolower($m[1]) : null;
+}
+
+function fw_format_time(): string
+{
+    try {
+        return (new DateTimeImmutable('now', new DateTimeZone('America/Sao_Paulo')))->format('d/m/Y H:i');
+    } catch (Throwable $e) {
+        return date('d/m/Y H:i');
+    }
+}
+
+[$serviceRaw, $serviceExit] = fw_exec('systemctl is-active nftables');
+[$rulesetRaw, $rulesetExit] = fw_exec('sudo -n /usr/sbin/nft list ruleset');
+
+$service = trim($serviceRaw);
+$serviceActive = $service === 'active';
+$serviceKnown = $service !== '';
+$rulesetOk = trim($rulesetRaw) !== '' && $rulesetExit === 0;
+$tables = $rulesetOk ? fw_parse_ruleset($rulesetRaw) : [];
+$tablesCount = count($tables);
+$chainsCount = fw_count_chains($tables);
+$rulesCount = fw_count_rules($tables);
+$checkTime = fw_format_time();
+
+$diagnostic = [];
+$diagnostic[] = $serviceActive ? ['ok', 'Serviço nftables ativo'] : ($serviceKnown ? ['warn', 'Serviço nftables inativo'] : ['warn', 'Serviço nftables não identificado']);
+$diagnostic[] = $rulesetOk ? ['ok', 'Ruleset carregado'] : ['warn', 'Não foi possível consultar nftables'];
+$diagnostic[] = $tablesCount > 0 ? ['ok', $tablesCount . ' ' . ($tablesCount === 1 ? 'tabela encontrada' : 'tabelas encontradas')] : ['warn', 'Nenhuma tabela encontrada'];
+$diagnostic[] = $chainsCount > 0 ? ['ok', $chainsCount . ' ' . ($chainsCount === 1 ? 'chain encontrada' : 'chains encontradas')] : ['warn', 'Nenhuma chain encontrada'];
+$diagnostic[] = $rulesCount > 0 ? ['ok', $rulesCount . ' ' . ($rulesCount === 1 ? 'regra encontrada' : 'regras encontradas')] : ['warn', 'Nenhuma regra encontrada'];
+$diagnostic[] = $rulesetOk && array_filter($tables, fn($t) => true) ? ['ok', 'Ruleset disponível para leitura'] : ['warn', 'Ruleset indisponível'];
 ?>
-
 <!DOCTYPE html>
-<html>
+<html lang="pt-BR">
 <head>
-
 <meta charset="UTF-8">
-
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Firewall</title>
-
 <style>
-
+:root{
+    color-scheme: dark;
+    --bg:#0b1220;
+    --panel:#0f172a;
+    --panel-2:#111c33;
+    --border:#24324a;
+    --text:#e2e8f0;
+    --muted:#94a3b8;
+    --accent:#38bdf8;
+}
+*{box-sizing:border-box}
 body{
-
     margin:0;
-
-    font-family:Arial;
-
-    background:#0f172a;
-
-    color:#e2e8f0;
+    font-family:Arial,sans-serif;
+    background:radial-gradient(circle at top,#101b33 0,var(--bg) 44%,#070b14 100%);
+    color:var(--text);
 }
-
-.container{
-
-    padding:30px;
+a{color:inherit;text-decoration:none}
+.page{
+    width:min(980px, calc(100% - 28px));
+    margin:0 auto;
+    padding:22px 0 34px;
 }
-
-.card{
-
-    background:#071226;
-
-    border:1px solid #1e293b;
-
-    border-radius:14px;
-
-    padding:25px;
-
-    margin-bottom:20px;
+.back{
+    color:var(--accent);
+    font-size:14px;
 }
-
-pre{
-
-    white-space:pre-wrap;
-
-    font-size:13px;
-
-    line-height:1.6;
-
-    color:#cbd5e1;
-}
-
-a{
-
-    color:#38bdf8;
-
-    text-decoration:none;
-}
-
-.stats{
-
-    display:flex;
-
-    gap:20px;
-
-    margin-bottom:20px;
-}
-
-.stat{
-
-    flex:1;
-
-    padding:20px;
-
-    border-radius:14px;
-
-    text-align:center;
-
-    border:1px solid #1e293b;
-}
-
-.stat h3{
-
-    margin:0;
-
+h1{
+    margin:8px 0 6px;
     font-size:28px;
 }
-
-.stat p{
-
-    margin-top:10px;
-
+.subtitle{
+    margin:0;
+    color:var(--muted);
+    line-height:1.5;
+}
+.card{
+    margin-top:18px;
+    padding:16px;
+    border:1px solid var(--border);
+    border-radius:14px;
+    background:linear-gradient(180deg, rgba(15,23,42,.96), rgba(11,18,32,.96));
+    box-shadow:0 16px 44px rgba(0,0,0,.18);
+}
+.card h2{
+    margin:0 0 6px;
+    font-size:18px;
+}
+.card p{
+    margin:0;
+    color:var(--muted);
+}
+.badge{
+    display:inline-flex;
+    align-items:center;
+    padding:5px 10px;
+    border-radius:999px;
+    border:1px solid rgba(148,163,184,.18);
+    background:rgba(148,163,184,.10);
+    color:#dbe7f5;
+    font-size:12px;
+    white-space:nowrap;
+}
+.badges{
+    display:flex;
+    flex-wrap:wrap;
+    gap:8px;
+    margin-top:12px;
+}
+.badge-ok{background:rgba(22,163,74,.14);border-color:rgba(22,163,74,.3);color:#bbf7d0}
+.badge-warn{background:rgba(217,119,6,.14);border-color:rgba(217,119,6,.32);color:#fde68a}
+.badge-info{background:rgba(59,130,246,.14);border-color:rgba(59,130,246,.32);color:#bfdbfe}
+.actions{
+    display:flex;
+    flex-wrap:wrap;
+    gap:8px;
+    margin-top:12px;
+}
+.actions a{
+    border:1px solid var(--border);
+    background:transparent;
+    color:var(--muted);
+    border-radius:10px;
+    padding:9px 12px;
+    font-size:13px;
+}
+.panel{
+    margin-top:12px;
+    border:1px solid var(--border);
+    border-radius:12px;
+    background:rgba(17,28,51,.72);
+    padding:14px;
+}
+.panel h3{
+    margin:0 0 10px;
+    font-size:15px;
+}
+pre{
+    margin:0;
+    padding:14px;
+    background:#091123;
+    border:1px solid var(--border);
+    border-radius:12px;
     color:#cbd5e1;
+    font-size:12px;
+    line-height:1.55;
+    white-space:pre-wrap;
+    word-break:break-word;
+    overflow:auto;
 }
-
-.green{
-
-    background:#052e16;
+.table{
+    margin-top:12px;
+    padding-top:12px;
+    border-top:1px solid rgba(148,163,184,.12);
 }
-
-.blue{
-
-    background:#0c2d48;
+.table:first-child{
+    margin-top:0;
+    padding-top:0;
+    border-top:0;
 }
-
-.red{
-
-    background:#3f0d12;
+.table h4{
+    margin:0 0 6px;
+    font-size:14px;
 }
-
+.chain{
+    margin-top:10px;
+    padding:10px 12px;
+    border:1px solid var(--border);
+    border-radius:12px;
+    background:#091123;
+}
+.chain-title{
+    margin:0 0 8px;
+    color:#dbe7f5;
+    font-size:13px;
+}
+.rule{
+    margin-top:8px;
+    padding:9px 12px;
+    border:1px solid rgba(148,163,184,.16);
+    border-radius:10px;
+    background:rgba(17,28,51,.55);
+    color:#cbd5e1;
+    font-size:12px;
+    line-height:1.5;
+    white-space:pre-wrap;
+    word-break:break-word;
+}
+@media (max-width: 720px){
+    .page{width:calc(100% - 18px);padding-top:14px}
+    h1{font-size:24px}
+}
 </style>
 </head>
-
 <body>
+<div class="page">
+    <a class="back" href="dashboard.php">← Voltar</a>
+    <h1>Firewall</h1>
+    <p class="subtitle">Consulta somente leitura do nftables.</p>
 
-<div class="container">
+    <section class="card">
+        <h2>nftables</h2>
+        <p>Estado atual do firewall e regras carregadas no servidor.</p>
 
-<h2>🔥 Firewall NFTables</h2>
+        <div class="badges">
+            <span class="badge <?= $serviceActive ? 'badge-ok' : ($serviceKnown ? 'badge-warn' : 'badge-warn') ?>"><?= $serviceActive ? 'Ativo' : ($serviceKnown ? 'Inativo' : 'Não identificado') ?></span>
+            <span class="badge badge-info"><?= $tablesCount ?> <?= $tablesCount === 1 ? 'tabela' : 'tabelas' ?></span>
+            <span class="badge badge-info"><?= $chainsCount ?> <?= $chainsCount === 1 ? 'chain' : 'chains' ?></span>
+            <span class="badge badge-info"><?= $rulesCount ?> <?= $rulesCount === 1 ? 'regra' : 'regras' ?></span>
+            <span class="badge">Verificado em <?= htmlspecialchars($checkTime) ?></span>
+        </div>
 
-<p>
-<a href="dashboard.php">
-← Voltar
-</a>
-</p>
+        <div class="actions">
+            <a href="#diagnostico">Mostrar diagnóstico</a>
+            <a href="#dados">Mostrar regras</a>
+        </div>
 
-<div class="stats">
+        <div class="panel" id="diagnostico">
+            <h3>Diagnóstico</h3>
+            <div class="badges">
+                <?php foreach ($diagnostic as [$level, $message]): ?>
+                    <span class="badge <?= $level === 'ok' ? 'badge-ok' : 'badge-warn' ?>"><?= htmlspecialchars($message) ?></span>
+                <?php endforeach; ?>
+            </div>
+        </div>
 
-<div class="stat green">
-
-<h3>
-🟢 <?= trim($status) ?>
-</h3>
-
-<p>NFTables</p>
-
-</div>
-
-<div class="stat blue">
-
-<h3>
-🌐 <?= $ipv6_drop ?>
-</h3>
-
-<p>IPv6 Drops</p>
-</div>
-
-<div class="stat red">
-
-<h3>
-📦 <?= $ipv4_drop ?>
-</h3>
-
-<p>IPv4 Drops</p>
-
-</div>
-
-</div>
-
-<div class="card">
-
-<pre><?= htmlspecialchars($rules ?: 'Sem regras') ?></pre>
-
-</div>
-
+        <div class="panel" id="dados">
+            <h3>Regras</h3>
+            <?php if ($rulesetOk && $tables): ?>
+                <?php foreach ($tables as $table): ?>
+                    <div class="table">
+                        <h4>table <?= htmlspecialchars($table['family']) ?> <?= htmlspecialchars($table['name']) ?></h4>
+                        <p><?= count($table['chains']) ?> chain(s)</p>
+                        <?php foreach ($table['chains'] as $chain): ?>
+                            <?php $meta = $chain['meta'] ?? ''; ?>
+                            <div class="chain">
+                                <div class="chain-title">
+                                    chain <?= htmlspecialchars($chain['name']) ?>
+                                    <?php
+                                        $parts = [];
+                                        if (($hook = fw_chain_hook($meta))) {
+                                            $parts[] = 'hook ' . $hook;
+                                        }
+                                        if (($policy = fw_chain_policy($meta))) {
+                                            $parts[] = 'policy ' . $policy;
+                                        }
+                                    ?>
+                                    <?= $parts ? '— ' . htmlspecialchars(implode(', ', $parts)) : '' ?>
+                                </div>
+                                <?php if ($chain['rules']): ?>
+                                    <?php foreach ($chain['rules'] as $rule): ?>
+                                        <div class="rule"><?= htmlspecialchars($rule) ?></div>
+                                    <?php endforeach; ?>
+                                <?php else: ?>
+                                    <div class="rule">Nenhuma regra direta encontrada nesta chain.</div>
+                                <?php endif; ?>
+                            </div>
+                        <?php endforeach; ?>
+                    </div>
+                <?php endforeach; ?>
+            <?php else: ?>
+                <p>Não foi possível consultar o nftables no momento.</p>
+                <pre><?= htmlspecialchars($rulesetRaw !== '' ? $rulesetRaw : 'Sem saída disponível.') ?></pre>
+            <?php endif; ?>
+        </div>
+    </section>
 </div>
 
 <script>
-
 setTimeout(() => {
-
-    location.reload();
-
-}, 5000);
-
+    window.location.reload();
+}, 8000);
 </script>
 
 <?php require __DIR__ . '/includes/footer.php'; ?>
