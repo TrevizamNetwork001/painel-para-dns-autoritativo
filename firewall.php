@@ -1473,9 +1473,64 @@ tr:last-child td{border-bottom:0}tbody tr{background:#02061766}tbody tr:hover{ba
 @media(max-width:1180px){.content-grid{grid-template-columns:1fr}.summary-grid{grid-template-columns:repeat(5,minmax(130px,1fr));overflow-x:auto;padding-bottom:4px}}
 @media(max-width:760px){.page{width:min(100% - 18px,1180px);margin:16px auto 24px}.page-header{align-items:flex-start;flex-direction:column}.page-header h1{font-size:24px}.summary-grid{grid-template-columns:repeat(2,minmax(0,1fr));overflow:visible}.panel{padding:12px}.panel-header{display:block}.panel-header .header-actions{justify-content:flex-start;margin-top:9px}.search{width:100%}.status-grid{grid-template-columns:1fr}.status-grid>.panel:last-child{grid-column:auto}.audit-item{grid-template-columns:72px 1fr}.audit-time{grid-column:2}.form-row{grid-template-columns:1fr}.application-summary{grid-template-columns:repeat(2,minmax(0,1fr))}.modal-actions{display:grid}.modal-actions .button{width:100%}table{min-width:560px;table-layout:auto}}
 @media(max-width:460px){.summary-grid{grid-template-columns:1fr}.quick-action{flex:1 1 calc(50% - 7px);justify-content:center}.summary-card{min-height:62px}}
+
+/* Alinhamento visual com o mockup operacional */
+body{background:#080d18}
+.menu-toggle{display:none;position:fixed;top:12px;left:12px;z-index:40;min-height:36px;padding:8px 11px;border:1px solid var(--line2);border-radius:8px;background:#0b1424;color:#e5edf7;cursor:pointer}
+.menu-overlay{display:none}
+.sidebar{position:fixed;inset:0 auto 0 0;z-index:30;width:220px;padding:18px 14px;background:#050a13;border-right:1px solid #1e293b;overflow-y:auto}
+.sidebar-brand{display:flex;align-items:center;gap:10px;padding:4px 8px 20px;color:#f8fafc;font-size:16px;font-weight:800}.sidebar-brand-mark{display:grid;place-items:center;width:34px;height:34px;border:1px solid #0e7490;border-radius:10px;background:#0c4a6e55;color:#7dd3fc}
+.sidebar-label{display:block;padding:12px 9px 6px;color:#53647b;font-size:9px;font-weight:800;letter-spacing:.1em;text-transform:uppercase}
+.sidebar a{display:flex;align-items:center;gap:10px;min-height:38px;margin:2px 0;padding:8px 10px;border-radius:8px;color:#94a3b8;font-size:12px;font-weight:700;transition:.15s}
+.sidebar a:hover,.sidebar a:focus{background:#111c2e;color:#e2e8f0;outline:none}.sidebar a.active{background:#0c4a6e4d;color:#7dd3fc;border:1px solid #0e749066}
+.sidebar-spacer{height:12px;border-bottom:1px solid #172236;margin:4px 8px 8px}
+.page{width:auto;max-width:none;margin:0 0 0 220px;padding:20px 24px 30px}
+.page-header{align-items:center;margin-bottom:14px;padding-bottom:14px;border-bottom:1px solid #172236}.page-header h1{font-size:25px}.page-header p{font-size:12px}
+.summary-grid{gap:9px;margin-bottom:13px}.summary-card{background:#0b1424;border-color:#1a2940}.summary-icon{background:#071b2e}
+.quick-panel{display:flex;align-items:center;gap:14px;padding:10px 12px}.quick-panel .panel-header{flex:0 0 auto;margin:0}.quick-panel .panel-header h2{font-size:12px;color:#a8b7ca}.quick-grid{flex:1}.quick-grid>:nth-child(4){display:none}
+.quick-action{background:#09111e}.quick-action strong{font-size:10px}
+.security-banner{margin-bottom:13px;background:#2b211026}
+.content-grid{grid-template-columns:minmax(0,1.35fr) minmax(390px,.9fr);gap:13px}
+.access-stack{display:block;padding:0;border:1px solid var(--line);border-radius:11px;background:linear-gradient(160deg,#0d182a,var(--panel));overflow:hidden}
+.access-stack>.panel{padding:14px;border:0;border-radius:0;background:transparent}
+.access-stack>.panel+.panel{border-top:1px solid var(--line)}
+.access-stack>.panel:first-child .panel-header h2{font-size:17px}.access-stack>.panel:first-child .panel-header h2::after{content:" / IPv4";color:#7dd3fc;font-size:10px;font-weight:700}
+.access-stack>.panel:nth-child(2) .panel-header h2{font-size:13px}.access-stack>.panel:nth-child(2) .panel-header h2::before{content:"Acesso Administrativo / ";color:#64748b;font-size:10px}
+.ports-stack{display:grid;gap:13px}
+.record-count{display:flex;justify-content:flex-end;padding:7px 2px 0;color:#64748b;font-size:9px}
+.preview-panel{margin-top:13px}
+.status-grid{grid-template-columns:minmax(0,1fr) minmax(0,1fr) minmax(280px,.8fr);align-items:start}.status-grid>.panel:last-child{grid-column:auto}
+.status-grid .panel-header{margin-bottom:9px}.status-grid .panel-header h2{font-size:14px}.status-grid .panel-header p{display:none}
+.status-grid .validation{background:#07110d}.status-grid .validation.pending{background:#0a1220}.status-grid .validation.error{background:#190c10}
+.status-grid .application-summary{display:flex;flex-wrap:wrap}.status-grid .application-summary span{flex:1 1 42%}
+.audit-item{grid-template-columns:72px minmax(0,1fr) auto;gap:7px}.audit-kind{font-size:8px}.audit-action{font-size:10px;line-height:1.35}.audit-time{font-size:9px}
+@media(max-width:1260px){.content-grid{grid-template-columns:1fr}.access-stack{grid-row:auto}.ports-stack{grid-template-columns:repeat(2,minmax(0,1fr))}.status-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.status-grid>.panel:last-child{grid-column:1/-1}}
+@media(max-width:860px){.menu-toggle{display:block}.sidebar{transform:translateX(-100%);transition:transform .2s;width:min(260px,86vw)}.sidebar.open{transform:translateX(0)}.menu-overlay.open{display:block;position:fixed;inset:0;z-index:20;background:#020617b8}.page{margin-left:0;padding:64px 14px 24px}.ports-stack{grid-template-columns:1fr}.status-grid{grid-template-columns:1fr}.status-grid>.panel:last-child{grid-column:auto}.quick-panel{display:block}.quick-panel .panel-header{margin-bottom:8px}}
 </style>
 </head>
 <body>
+<button class="menu-toggle" type="button" aria-controls="firewall-sidebar" aria-expanded="false">☰ Menu</button>
+<div class="menu-overlay" aria-hidden="true"></div>
+<nav class="sidebar" id="firewall-sidebar" aria-label="Navegação principal">
+    <div class="sidebar-brand"><span class="sidebar-brand-mark" aria-hidden="true">◆</span><span>DNS Panel</span></div>
+    <span class="sidebar-label">Principal</span>
+    <a href="dashboard.php">⌂ Dashboard</a>
+    <span class="sidebar-label">DNS</span>
+    <a href="domains.php">◎ Domínios</a>
+    <a href="dns-zones.php">▣ Zonas DNS</a>
+    <a href="reverse-zones.php">↔ Zonas Reversas</a>
+    <a href="zones.php">⌖ Inventário</a>
+    <span class="sidebar-label">Segurança</span>
+    <a href="security.php">◇ Segurança DNS</a>
+    <a href="fail2ban.php">⊘ Fail2Ban</a>
+    <span class="sidebar-label">Infraestrutura</span>
+    <a href="services.php">⚙ Serviços</a>
+    <a class="active" href="firewall.php" aria-current="page">🔥 Firewall</a>
+    <a href="auditoria.php">≡ Auditoria</a>
+    <div class="sidebar-spacer"></div>
+    <a href="alterar-senha.php">⌁ Minha senha</a>
+    <a href="logout.php">→ Sair</a>
+</nav>
 <main class="page">
     <header class="page-header">
         <div>
@@ -1542,10 +1597,10 @@ tr:last-child td{border-bottom:0}tbody tr{background:#02061766}tbody tr:hover{ba
     </div>
 
     <div class="content-grid">
-        <div class="stack">
+        <div class="stack access-stack">
             <section class="panel">
                 <header class="panel-header">
-                    <div><h2>ACL IPv4</h2><p>IPs autorizados para acesso administrativo em IPv4.</p></div>
+                    <div><h2>Acesso Administrativo</h2><p>Endereços e redes autorizados para administração.</p></div>
                     <div class="header-actions">
                         <input class="search" id="acl-ipv4-search" data-search-target="acl-ipv4-rows" type="search" placeholder="Pesquisar IPv4..." aria-label="Pesquisar IPv4">
                         <button class="button small" type="button" data-open-dialog="add-ip-modal" data-default-family="IPv4">Adicionar IPv4</button>
@@ -1571,11 +1626,12 @@ tr:last-child td{border-bottom:0}tbody tr{background:#02061766}tbody tr:hover{ba
                         <?php if ($aclIpv4): ?><tr class="empty-row" id="acl-ipv4-empty" hidden><td colspan="5">Nenhum IPv4 encontrado.</td></tr><?php endif; ?>
                     </tbody>
                 </table></div>
+                <div class="record-count"><?= $ipv4Count ?> <?= $ipv4Count === 1 ? 'registro IPv4' : 'registros IPv4' ?></div>
             </section>
 
             <section class="panel">
                 <header class="panel-header">
-                    <div><h2>ACL IPv6</h2><p>IPs autorizados para acesso administrativo em IPv6.</p></div>
+                    <div><h2>IPv6</h2><p>Endereços e redes administrativas IPv6.</p></div>
                     <div class="header-actions">
                         <input class="search" id="acl-ipv6-search" data-search-target="acl-ipv6-rows" type="search" placeholder="Pesquisar IPv6..." aria-label="Pesquisar IPv6">
                         <button class="button small" type="button" data-open-dialog="add-ip-modal" data-default-family="IPv6">Adicionar IPv6</button>
@@ -1601,10 +1657,11 @@ tr:last-child td{border-bottom:0}tbody tr{background:#02061766}tbody tr:hover{ba
                         <?php if ($aclIpv6): ?><tr class="empty-row" id="acl-ipv6-empty" hidden><td colspan="5">Nenhum IPv6 encontrado.</td></tr><?php endif; ?>
                     </tbody>
                 </table></div>
+                <div class="record-count"><?= $ipv6Count ?> <?= $ipv6Count === 1 ? 'registro IPv6' : 'registros IPv6' ?></div>
             </section>
         </div>
 
-        <div class="stack">
+        <div class="stack ports-stack">
             <section class="panel">
                 <header class="panel-header">
                     <div><h2>Portas Administrativas</h2><p>Portas restritas aos IPs autorizados.</p></div>
@@ -1631,6 +1688,7 @@ tr:last-child td{border-bottom:0}tbody tr{background:#02061766}tbody tr:hover{ba
                         <?php if (!$adminPorts): ?><tr><td class="empty-state" colspan="5">Nenhuma porta administrativa cadastrada.</td></tr><?php endif; ?>
                     </tbody>
                 </table></div>
+                <div class="record-count"><?= count($adminPorts) ?> <?= count($adminPorts) === 1 ? 'porta administrativa' : 'portas administrativas' ?></div>
             </section>
 
             <section class="panel">
@@ -1659,6 +1717,7 @@ tr:last-child td{border-bottom:0}tbody tr{background:#02061766}tbody tr:hover{ba
                         <?php if (!$publicPorts): ?><tr><td class="empty-state" colspan="5">Nenhuma porta pública cadastrada.</td></tr><?php endif; ?>
                     </tbody>
                 </table></div>
+                <div class="record-count"><?= count($publicPorts) ?> <?= count($publicPorts) === 1 ? 'porta pública' : 'portas públicas' ?></div>
             </section>
         </div>
     </div>
@@ -2014,6 +2073,22 @@ document.querySelectorAll('[data-close-dialog]').forEach(button=>button.addEvent
 document.querySelectorAll('dialog').forEach(dialog=>dialog.addEventListener('click',event=>{
     if(event.target===dialog)dialog.close();
 }));
+const menuToggle=document.querySelector('.menu-toggle');
+const sidebar=document.querySelector('.sidebar');
+const menuOverlay=document.querySelector('.menu-overlay');
+const closeMenu=()=>{
+    sidebar?.classList.remove('open');
+    menuOverlay?.classList.remove('open');
+    menuToggle?.setAttribute('aria-expanded','false');
+};
+menuToggle?.addEventListener('click',()=>{
+    const open=!sidebar?.classList.contains('open');
+    sidebar?.classList.toggle('open',open);
+    menuOverlay?.classList.toggle('open',open);
+    menuToggle.setAttribute('aria-expanded',open?'true':'false');
+});
+menuOverlay?.addEventListener('click',closeMenu);
+sidebar?.querySelectorAll('a').forEach(link=>link.addEventListener('click',closeMenu));
 const toast=document.getElementById('ui-toast');let toastTimer;
 if(toast&&!toast.hidden){
     toastTimer=setTimeout(()=>{toast.hidden=true},3200);

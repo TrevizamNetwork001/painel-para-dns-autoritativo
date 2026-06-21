@@ -2,6 +2,24 @@
 
 Historico de alteracoes do Painel DNS Trevizam Network.
 
+## [2.3.3] - 2026-06-21
+
+### Alinhamento visual do Firewall ao mockup
+
+- Adicionada sidebar fixa integrada ao padrão administrativo do painel.
+- Reorganizado o conteúdo para priorizar Acesso Administrativo e portas.
+- ACLs IPv4 e IPv6 agrupadas visualmente em um único bloco.
+- Portas administrativas e públicas organizadas na coluna operacional.
+- Última Aplicação, Última Validação e Auditoria Recente alinhadas em cards
+  compactos.
+- Rollback mantido como ação contextual da última aplicação.
+- Adicionadas contagens discretas aos blocos de ACLs e portas.
+- Preservados cards compactos, ações rápidas em linha e prévia recolhida.
+- Adicionado menu lateral responsivo para dispositivos móveis.
+- Backend confirmado idêntico por hash; nenhuma lógica da V1.6 foi alterada.
+- Nenhuma regra real de firewall foi aplicada.
+- Documentação disponível em `HANDOFF_ALINHAMENTO_MOCKUP_FIREWALL.md`.
+
 ## [2.3.2] - 2026-06-21
 
 ### Ajuste visual Firewall pós-V1.6
