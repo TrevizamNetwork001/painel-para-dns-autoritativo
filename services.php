@@ -8,57 +8,57 @@ require_once "includes/db.php";
 
 $acoes = [
     'CHECK_BIND' => [
-        'rotulo' => '🔍 Verificar BIND',
+        'rotulo' => 'Verificar BIND',
         'comando' => '/usr/bin/systemctl is-active bind9 2>&1',
         'servico' => 'BIND9',
     ],
     'RELOAD_BIND' => [
-        'rotulo' => '🔄 Recarregar BIND',
+        'rotulo' => 'Recarregar BIND',
         'comando' => 'sudo /usr/sbin/rndc reload 2>&1',
         'servico' => 'BIND9',
     ],
     'RESTART_BIND' => [
-        'rotulo' => '♻️ Reiniciar BIND',
+        'rotulo' => 'Reiniciar BIND',
         'comando' => 'sudo /usr/bin/systemctl restart bind9 2>&1',
         'servico' => 'BIND9',
     ],
     'START_BIND' => [
-        'rotulo' => '▶️ Iniciar BIND',
+        'rotulo' => 'Iniciar BIND',
         'comando' => 'sudo /usr/bin/systemctl start bind9 2>&1',
         'servico' => 'BIND9',
     ],
     'STOP_BIND' => [
-        'rotulo' => '⏹️ Parar BIND',
+        'rotulo' => 'Parar BIND',
         'comando' => 'sudo /usr/bin/systemctl stop bind9 2>&1',
         'servico' => 'BIND9',
     ],
     'CHECK_FAIL2BAN' => [
-        'rotulo' => '🔍 Verificar Fail2Ban',
+        'rotulo' => 'Verificar Fail2Ban',
         'comando' => 'sudo /usr/bin/fail2ban-client ping 2>&1',
         'servico' => 'Fail2Ban',
     ],
     'RESTART_FAIL2BAN' => [
-        'rotulo' => '♻️ Reiniciar Fail2Ban',
+        'rotulo' => 'Reiniciar Fail2Ban',
         'comando' => 'sudo /usr/bin/systemctl restart fail2ban 2>&1',
         'servico' => 'Fail2Ban',
     ],
     'CHECK_SSH' => [
-        'rotulo' => '🔍 Verificar SSH',
+        'rotulo' => 'Verificar SSH',
         'comando' => '/usr/bin/systemctl is-active ssh 2>&1',
         'servico' => 'SSH',
     ],
     'RESTART_SSH' => [
-        'rotulo' => '♻️ Reiniciar SSH',
+        'rotulo' => 'Reiniciar SSH',
         'comando' => 'sudo /usr/bin/systemctl restart ssh 2>&1',
         'servico' => 'SSH',
     ],
     'CHECK_FIREWALL' => [
-        'rotulo' => '🔍 Verificar firewall',
+        'rotulo' => 'Verificar firewall',
         'comando' => '/usr/bin/systemctl is-active nftables 2>&1',
         'servico' => 'Firewall',
     ],
     'RELOAD_FIREWALL' => [
-        'rotulo' => '🔄 Recarregar firewall',
+        'rotulo' => 'Recarregar firewall',
         'comando' => 'sudo /usr/sbin/nft -f /etc/nftables.conf 2>&1',
         'servico' => 'Firewall',
     ],
@@ -179,7 +179,7 @@ function botoes_servico(array $acoes, array $nomes): void
                 class="action-chip <?= $danger ? 'danger' : '' ?>"
                 onclick="return confirmarAcao('<?= htmlspecialchars($nome) ?>')"
             >
-                <span class="chip-icon" aria-hidden="true"><?= $danger ? '⚠' : '⚙' ?></span>
+                <span class="chip-icon" aria-hidden="true"><?= service_action_icon($nome) ?></span>
                 <?= htmlspecialchars($acao['rotulo']) ?>
             </button>
         </form>
@@ -190,10 +190,10 @@ function botoes_servico(array $acoes, array $nomes): void
 function badge_status(array $status): string
 {
     if ($status['ok']) {
-        return '<span class="status-badge status-online">Ativo</span>';
+        return '<span class="status-pill status-active">Ativo</span>';
     }
 
-    return '<span class="status-badge status-offline">Inativo</span>';
+    return '<span class="status-pill status-inactive">Inativo</span>';
 }
 
 function acao_curta(string $acao): string
@@ -216,13 +216,61 @@ function acao_curta(string $acao): string
 
 function service_metric_icon(string $key): string
 {
-    return match ($key) {
-        'monitorados' => '≡',
-        'ativos' => '✓',
-        'inativos' => '!',
-        'ultima' => '⟳',
-        default => '•',
+    return ui_icon_svg(match ($key) {
+        'monitorados' => 'list',
+        'ativos' => 'check',
+        'inativos' => 'circle-x',
+        'ultima' => 'history',
+        default => 'dot',
+    }, 16);
+}
+
+function service_action_icon(string $acao): string
+{
+    return ui_icon_svg(match ($acao) {
+        'CHECK_BIND', 'CHECK_FAIL2BAN', 'CHECK_SSH', 'CHECK_FIREWALL' => 'search',
+        'RELOAD_BIND', 'RELOAD_FIREWALL' => 'refresh-cw',
+        'RESTART_BIND', 'RESTART_FAIL2BAN', 'RESTART_SSH' => 'rotate-cw',
+        'START_BIND' => 'play',
+        'STOP_BIND' => 'square',
+        default => 'dot',
+    }, 14);
+}
+
+function service_service_icon(string $service): string
+{
+    return ui_icon_svg(match ($service) {
+        'bind' => 'globe',
+        'fail2ban' => 'shield',
+        'ssh' => 'terminal',
+        'firewall' => 'shield-check',
+        default => 'dot',
+    }, 18);
+}
+
+function ui_icon_svg(string $name, int $size = 16): string
+{
+    $svg = match ($name) {
+        'list' => '<path d="M8 6h13M8 12h13M8 18h13"/><path d="M3 6h.01M3 12h.01M3 18h.01"/>',
+        'check' => '<path d="M20 6 9 17l-5-5"/>',
+        'circle-x' => '<circle cx="12" cy="12" r="9"/><path d="m15 9-6 6"/><path d="m9 9 6 6"/>',
+        'history' => '<path d="M3 3v5h5"/><path d="M3.2 8A9 9 0 1 1 6 18"/><path d="M12 8v4l3 2"/>',
+        'alert-triangle' => '<path d="M10.3 3.3 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.3a2 2 0 0 0-3.4 0Z"/><path d="M12 9v4"/><path d="M12 17h.01"/>',
+        'search' => '<circle cx="11" cy="11" r="6"/><path d="m20 20-3.5-3.5"/>',
+        'refresh-cw' => '<path d="M21 12a9 9 0 1 1-3-6.7"/><path d="M21 3v6h-6"/>',
+        'rotate-cw' => '<path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 3v6h6"/>',
+        'play' => '<path d="M8 5v14l11-7z"/>',
+        'square' => '<rect x="5" y="5" width="14" height="14" rx="2"/>',
+        'globe' => '<circle cx="12" cy="12" r="9"/><path d="M3 12h18"/><path d="M12 3a15 15 0 0 1 0 18"/><path d="M12 3a15 15 0 0 0 0 18"/>',
+        'shield' => '<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"/>',
+        'shield-check' => '<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"/><path d="m9 12 2 2 4-5"/>',
+        'terminal' => '<path d="m4 17 6-6-6-6"/><path d="M12 19h8"/>',
+        'arrow-left' => '<path d="M19 12H5"/><path d="m12 19-7-7 7-7"/>',
+        'dot' => '<circle cx="12" cy="12" r="1.5"/>',
+        default => '<circle cx="12" cy="12" r="1.5"/>',
     };
+
+    return '<svg class="ui-icon ui-icon-' . htmlspecialchars($name, ENT_QUOTES, 'UTF-8') . '" xmlns="http://www.w3.org/2000/svg" width="' . (int) $size . '" height="' . (int) $size . '" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' . $svg . '</svg>';
 }
 ?>
 <!DOCTYPE html>
@@ -244,7 +292,7 @@ function service_metric_icon(string $key): string
 }
 body{
     margin:0;
-    font-family:Arial,sans-serif;
+    font-family:Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     background:radial-gradient(circle at top,#101b33 0,var(--bg) 44%,#070b14 100%);
     color:var(--text);
 }
@@ -255,29 +303,33 @@ body{
     padding:22px 18px 34px;
 }
 
-.topbar{
+.services-header{
     display:flex;
     align-items:flex-start;
     justify-content:space-between;
     gap:16px;
-    margin-bottom:14px;
+    margin-bottom:18px;
 }
 
 .page-header{
     display:flex;
     flex-direction:column;
-    gap:2px;
+    gap:4px;
 }
 
-.topo h1{
+.services-title{
     margin:0 0 4px;
-    font-size:28px;
+    font-size:40px;
+    font-weight:800;
+    line-height:1.08;
+    letter-spacing:-0.02em;
 }
 
-.lead{
-    margin:0 0 8px;
-    color:var(--muted);
+.services-subtitle{
+    margin:0;
+    color:#b8d7f0;
     line-height:1.45;
+    font-size:16px;
 }
 
 .top-actions{
@@ -286,7 +338,11 @@ body{
     gap:10px;
     flex-wrap:wrap;
     justify-content:flex-end;
-    padding-top:4px;
+    padding-top:2px;
+}
+
+.top-actions .action-chip{
+    width:auto;
 }
 
 a{
@@ -305,7 +361,7 @@ a{
     display:grid;
     grid-template-columns:repeat(4,minmax(0,1fr));
     gap:10px;
-    margin:12px 0 10px;
+    margin:0 0 12px;
 }
 
 .metric-card{
@@ -313,10 +369,11 @@ a{
     gap:12px;
     align-items:flex-start;
     min-height:64px;
-    background:rgba(17,28,51,.72);
-    border:1px solid var(--border);
-    border-radius:12px;
+    background:linear-gradient(180deg, rgba(15,23,42,.94), rgba(10,18,32,.95));
+    border:1px solid rgba(56,189,248,.16);
+    border-radius:14px;
     padding:13px 15px;
+    box-shadow:0 12px 28px rgba(0,0,0,.18);
 }
 
 .metric-label{
@@ -329,7 +386,7 @@ a{
 
 .metric-value{
     display:block;
-    font-size:18px;
+    font-size:21px;
     font-weight:800;
     margin-top:4px;
     color:var(--text);
@@ -349,48 +406,81 @@ a{
     font-size:14px;
 }
 
+.metric-icon .ui-icon,
+.service-icon .ui-icon,
+.chip-icon .ui-icon{
+    display:block;
+    width:100%;
+    height:100%;
+    stroke:currentColor;
+    fill:none;
+}
+
+.metric-icon .ui-icon{
+    width:17px;
+    height:17px;
+}
+
 .metric-icon.ok{background:rgba(34,197,94,.12);border-color:rgba(34,197,94,.18);color:#bbf7d0}
 .metric-icon.bad{background:rgba(220,38,38,.12);border-color:rgba(220,38,38,.18);color:#fecaca}
 .metric-icon.time{background:rgba(168,85,247,.12);border-color:rgba(168,85,247,.18);color:#e9d5ff}
 
 .metric-content{
     min-width:0;
+    display:flex;
+    flex-direction:column;
+    justify-content:center;
 }
 
 .card{
     background:linear-gradient(180deg, rgba(15,23,42,.92), rgba(11,18,32,.94));
     border:1px solid rgba(36,50,74,.9);
-    padding:13px;
-    border-radius:12px;
+    padding:16px;
+    border-radius:14px;
     margin-bottom:0;
     box-shadow:0 10px 28px rgba(0,0,0,.16);
 }
 
-.card h2{
+.service-top{
+    display:grid;
+    grid-template-columns:auto 1fr auto;
+    gap:12px;
+    align-items:start;
+}
+
+.service-icon{
+    width:42px;
+    height:42px;
+    border-radius:14px;
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    background:rgba(56,189,248,.12);
+    border:1px solid rgba(56,189,248,.24);
+    color:#dbeafe;
+    flex:0 0 auto;
+}
+
+.service-icon .ui-icon{
+    width:19px;
+    height:19px;
+    stroke-width:2.2;
+}
+
+.service-content{
+    min-width:0;
+}
+
+.service-title{
     margin:0;
-    font-size:17px;
+    font-size:18px;
+    font-weight:800;
+    color:#fff;
+    line-height:1.1;
     letter-spacing:-0.01em;
 }
 
-.card small{
-    color:var(--muted);
-    display:block;
-    margin:7px 0 10px;
-    line-height:1.4;
-}
-
-.card-head{
-    display:flex;
-    align-items:center;
-    justify-content:space-between;
-    gap:10px;
-    margin-bottom:3px;
-}
-
-.card-head h2{
-    margin:0;
-}
-
+.service-badge,
 .service-tag{
     display:inline-flex;
     align-items:center;
@@ -403,10 +493,23 @@ a{
     white-space:nowrap;
 }
 
-.acoes{
+.service-status-row{
+    margin-top:6px;
+}
+
+.service-description{
+    margin:10px 0 0;
+    color:#b8d7f0;
+    font-size:13px;
+    line-height:1.45;
+    min-height:0;
+}
+
+.acoes,
+.service-actions{
     display:grid;
     gap:7px;
-    margin-top:8px;
+    margin-top:12px;
 }
 
 .acoes form{
@@ -419,16 +522,16 @@ a{
     justify-content:flex-start;
     gap:7px;
     width:100%;
-    padding:7px 10px;
+    padding:8px 11px;
     border:1px solid rgba(56,189,248,.30);
-    border-radius:10px;
+    border-radius:11px;
     background:rgba(17,26,47,.92);
     color:#fff;
     cursor:pointer;
     font-weight:700;
-    font-size:12px;
+    font-size:13px;
     line-height:1.2;
-    min-height:30px;
+    min-height:32px;
     transition:background-color .15s ease,border-color .15s ease,color .15s ease,transform .15s ease;
 }
 
@@ -456,8 +559,11 @@ a{
     display:inline-flex;
     align-items:center;
     justify-content:center;
+    width:14px;
+    height:14px;
     font-size:12px;
     line-height:1;
+    flex:0 0 auto;
 }
 
 .alerta{
@@ -466,6 +572,36 @@ a{
     color:#fed7aa;
     padding:11px 14px;
     line-height:1.45;
+}
+
+.warning-banner{
+    display:flex;
+    align-items:center;
+    gap:12px;
+    padding:14px 16px;
+    margin-bottom:12px;
+    border-radius:14px;
+    background:linear-gradient(90deg, rgba(127,29,29,.44), rgba(67,20,7,.40));
+    border:1px solid rgba(249,115,22,.48);
+    color:#fed7aa;
+    box-shadow:0 10px 24px rgba(0,0,0,.14);
+}
+
+.alert-icon{
+    width:36px;
+    height:36px;
+    border-radius:12px;
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    background:rgba(249,115,22,.15);
+    border:1px solid rgba(249,115,22,.26);
+    color:#fdba74;
+    flex:0 0 auto;
+}
+
+.warning-banner strong{
+    color:#ffedd5;
 }
 
 .ok{
@@ -520,11 +656,10 @@ pre{
 .service-card{
     display:flex;
     flex-direction:column;
-    min-height:100%;
     position:relative;
     overflow:hidden;
     height:auto;
-    min-height:auto;
+    min-height:0;
 }
 
 .service-card::before{
@@ -612,7 +747,7 @@ pre{
 }
 
 .service-footer{
-    margin-top:16px;
+    margin-top:12px;
     position:relative;
     z-index:1;
 }
@@ -674,8 +809,9 @@ pre{
 
 @media (max-width: 720px){
     .container{padding:16px 12px 28px}
-    .topbar{display:block}
-    .topo h1{font-size:24px}
+    .services-header{display:block}
+    .services-title{font-size:28px}
+    .services-subtitle{font-size:14px}
     .card{padding:14px}
     .metric-strip{grid-template-columns:repeat(2,minmax(0,1fr))}
     .top-actions{justify-content:flex-start;margin-top:12px;padding-top:0}
@@ -683,10 +819,53 @@ pre{
     .action-chip{width:100%;justify-content:center}
     .section-head{display:block}
     .section-head .link-chip{margin-top:8px}
+    .warning-banner{align-items:flex-start}
 }
 
 @media (max-width: 520px){
     .metric-strip{grid-template-columns:1fr}
+    .metric-card{min-height:60px}
+}
+
+.services-grid{
+    grid-template-columns:repeat(4,minmax(0,1fr));
+    align-items:start;
+}
+
+@media (max-width: 1100px){
+    .services-grid{
+        grid-template-columns:repeat(2,minmax(0,1fr));
+    }
+}
+
+@media (max-width: 700px){
+    .services-grid{
+        grid-template-columns:1fr;
+    }
+}
+
+.servico-bind .service-icon{
+    background:rgba(59,130,246,.14);
+    border-color:rgba(59,130,246,.26);
+    color:#bfdbfe;
+}
+
+.servico-fail2ban .service-icon{
+    background:rgba(34,197,94,.14);
+    border-color:rgba(34,197,94,.26);
+    color:#bbf7d0;
+}
+
+.servico-ssh .service-icon{
+    background:rgba(234,179,8,.14);
+    border-color:rgba(234,179,8,.26);
+    color:#fde68a;
+}
+
+.servico-firewall .service-icon{
+    background:rgba(168,85,247,.14);
+    border-color:rgba(168,85,247,.26);
+    color:#e9d5ff;
 }
 </style>
 </head>
@@ -720,26 +899,27 @@ setTimeout(function () {
 
 <div class="container">
 
-    <div class="topbar">
-        <div class="page-header topo">
-            <h1>Serviços</h1>
+    <div class="topbar services-header">
+        <div class="page-header">
+            <h1 class="services-title">Serviços</h1>
 
-            <p class="lead">
+            <p class="lead services-subtitle">
                 Central de gerenciamento dos serviços do servidor DNS.
             </p>
         </div>
 
         <div class="top-actions">
-            <a class="action-chip" href="dashboard.php"><span class="chip-icon" aria-hidden="true">←</span>Voltar ao painel</a>
+            <a class="action-chip back-button" href="dashboard.php"><span class="chip-icon" aria-hidden="true"><?= ui_icon_svg('arrow-left', 14) ?></span>Voltar ao painel</a>
         </div>
     </div>
 
-    <div class="card alerta">
-        <strong>Atenção:</strong>
-        ações como reiniciar SSH ou parar BIND podem impactar o acesso ao servidor e a resolução DNS.
+    <div class="card alerta warning-banner">
+        <span class="alert-icon" aria-hidden="true"><?= ui_icon_svg('alert-triangle', 16) ?></span>
+        <div><strong>Atenção:</strong>
+        ações como reiniciar SSH ou parar BIND podem impactar o acesso ao servidor e a resolução DNS.</div>
     </div>
 
-    <section class="metric-strip" aria-label="Resumo dos serviços">
+    <section class="metric-strip metrics-grid" aria-label="Resumo dos serviços">
         <div class="metric-card">
             <span class="metric-icon" aria-hidden="true"><?= service_metric_icon('monitorados') ?></span>
             <div class="metric-content">
@@ -770,64 +950,76 @@ setTimeout(function () {
         </div>
     </section>
 
-    <div class="grid">
+    <div class="grid services-grid">
 
-        <div class="card servico-bind service-card">
+        <div class="card servico-bind service-card service-card-bind">
             <div class="service-body">
-                <div class="card-head">
-                    <h2>BIND9</h2>
-                    <span class="service-tag">DNS</span>
+                <div class="service-top">
+                    <span class="service-icon" aria-hidden="true"><?= service_service_icon('bind') ?></span>
+                    <div class="service-content">
+                        <h2 class="service-title">BIND9</h2>
+                        <div class="service-status-row"><?= badge_status($statusBind) ?></div>
+                    </div>
+                    <span class="service-badge">DNS</span>
                 </div>
-                <?= badge_status($statusBind) ?>
-                <small>Verificação, reload e controle do serviço DNS.</small>
+                <p class="service-description">Verificação, reload e controle do serviço DNS.</p>
             </div>
 
-            <div class="acoes service-footer">
+            <div class="acoes service-actions service-footer">
                 <?php botoes_servico($acoes, ['CHECK_BIND', 'RELOAD_BIND', 'RESTART_BIND', 'START_BIND', 'STOP_BIND']); ?>
             </div>
         </div>
 
-        <div class="card servico-fail2ban service-card">
+        <div class="card servico-fail2ban service-card service-card-fail2ban">
             <div class="service-body">
-                <div class="card-head">
-                    <h2>Fail2Ban</h2>
-                    <span class="service-tag">Segurança</span>
+                <div class="service-top">
+                    <span class="service-icon" aria-hidden="true"><?= service_service_icon('fail2ban') ?></span>
+                    <div class="service-content">
+                        <h2 class="service-title">Fail2Ban</h2>
+                        <div class="service-status-row"><?= badge_status($statusFail2ban) ?></div>
+                    </div>
+                    <span class="service-badge">Segurança</span>
                 </div>
-                <?= badge_status($statusFail2ban) ?>
-                <small>Verificação e reinicialização do serviço de proteção.</small>
+                <p class="service-description">Verificação e reinicialização do serviço de proteção.</p>
             </div>
 
-            <div class="acoes service-footer">
+            <div class="acoes service-actions service-footer">
                 <?php botoes_servico($acoes, ['CHECK_FAIL2BAN', 'RESTART_FAIL2BAN']); ?>
             </div>
         </div>
 
-        <div class="card servico-ssh service-card">
+        <div class="card servico-ssh service-card service-card-ssh">
             <div class="service-body">
-                <div class="card-head">
-                    <h2>SSH</h2>
-                    <span class="service-tag">Acesso remoto</span>
+                <div class="service-top">
+                    <span class="service-icon" aria-hidden="true"><?= service_service_icon('ssh') ?></span>
+                    <div class="service-content">
+                        <h2 class="service-title">SSH</h2>
+                        <div class="service-status-row"><?= badge_status($statusSsh) ?></div>
+                    </div>
+                    <span class="service-badge">Acesso remoto</span>
                 </div>
-                <?= badge_status($statusSsh) ?>
-                <small>Verificação e reinicialização do serviço SSH.</small>
+                <p class="service-description">Verificação e reinicialização do serviço SSH.</p>
             </div>
 
-            <div class="acoes service-footer">
+            <div class="acoes service-actions service-footer">
                 <?php botoes_servico($acoes, ['CHECK_SSH', 'RESTART_SSH']); ?>
             </div>
         </div>
 
-        <div class="card servico-firewall service-card">
+        <div class="card servico-firewall service-card service-card-firewall">
             <div class="service-body">
-                <div class="card-head">
-                    <h2>Firewall</h2>
-                    <span class="service-tag">Firewall</span>
+                <div class="service-top">
+                    <span class="service-icon" aria-hidden="true"><?= service_service_icon('firewall') ?></span>
+                    <div class="service-content">
+                        <h2 class="service-title">Firewall</h2>
+                        <div class="service-status-row"><?= badge_status($statusFirewall) ?></div>
+                    </div>
+                    <span class="service-badge">Firewall</span>
                 </div>
-                <?= badge_status($statusFirewall) ?>
-                <small>Verificação e recarregamento das regras nftables.</small>
+                <p class="service-description">Verificação e recarregamento das regras nftables.</p>
             </div>
 
-            <div class="acoes service-footer">
+            <div class="acoes service-actions service-footer">
                 <?php botoes_servico($acoes, ['CHECK_FIREWALL', 'RELOAD_FIREWALL']); ?>
             </div>
         </div>
