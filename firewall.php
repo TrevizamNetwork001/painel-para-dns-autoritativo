@@ -1442,9 +1442,9 @@ tr:last-child td{border-bottom:0}tbody tr{background:#02061766}tbody tr:hover{ba
 .validation.error .validation-icon{background:#7f1d1d;color:#fecaca}.validation.pending .validation-icon{background:#1e293b;color:#cbd5e1}
 .validation strong{display:block;margin:1px 0 6px;color:#bbf7d0;font-size:13px}.validation span{display:block;color:var(--muted);font-size:10px;line-height:1.5}.validation time,.validation em{color:var(--text);font-style:normal;font-weight:700}
 .validation.error strong{color:#fecaca}.validation.pending strong{color:#cbd5e1}
-.preview-panel{margin-top:12px;padding:0}.preview-details>summary{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 15px;color:#fff;cursor:pointer;font-size:13px;font-weight:700;list-style:none}.preview-details>summary::-webkit-details-marker{display:none}.preview-details>summary::after{content:"Ver prévia";color:var(--accent);font-size:10px;font-weight:700}.preview-details[open]>summary::after{content:"Ocultar prévia"}.preview-content{padding:0 15px 15px;border-top:1px solid var(--line)}.rule-preview{max-height:300px;overflow:auto;margin:0;padding:12px;border:1px solid var(--line);border-radius:9px;background:#020617;color:#cbd5e1;font:11px/1.55 Consolas,Monaco,monospace;white-space:pre}.preview-note{margin:11px 0;color:var(--muted);font-size:10px;line-height:1.5}.technical-output{margin-top:8px;border-top:1px solid var(--line);padding-top:7px}.technical-output summary{color:#bae6fd;cursor:pointer;font-size:10px;font-weight:700}.technical-output pre{overflow:auto;max-height:180px;margin:7px 0 0;padding:9px;border:1px solid var(--line);border-radius:8px;background:#020617;color:#cbd5e1;font:10px/1.5 Consolas,Monaco,monospace;white-space:pre-wrap}
+.technical-output{margin-top:8px;border-top:1px solid var(--line);padding-top:7px}.technical-output summary{color:#bae6fd;cursor:pointer;font-size:10px;font-weight:700}.technical-output pre{overflow:auto;max-height:180px;margin:7px 0 0;padding:9px;border:1px solid var(--line);border-radius:8px;background:#020617;color:#cbd5e1;font:10px/1.5 Consolas,Monaco,monospace;white-space:pre-wrap}
 .inline-form{margin:0}.quick-action.validate{width:auto}
-.security-banner{display:flex;align-items:center;gap:9px;flex-wrap:wrap;margin:0 0 12px;padding:9px 11px;border:1px solid #f59e0b55;border-radius:9px;background:#78350f2e;color:#fde68a;font-size:10px;line-height:1.45}.security-banner strong{color:#fef3c7}.security-banner.error{border-color:#ef444455;background:#7f1d1d38;color:#fecaca}
+.security-note{display:block;margin:0 0 8px;padding:6px 8px;border-left:2px solid #d97706;background:#78350f1f;color:#d9b978;font-size:9px;line-height:1.4}.security-note.error{border-color:#ef4444;background:#7f1d1d26;color:#fecaca}.security-note strong{color:inherit}
 .application-actions{display:flex;gap:9px;flex-wrap:wrap;margin-top:14px}.button.warning{border-color:#b45309;background:#92400e;color:#fff}.button[disabled]{opacity:.45;cursor:not-allowed}.button[disabled]:hover{border-color:var(--line2)}
 .application-summary{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:5px;margin:8px 0}.application-summary span{padding:5px 7px;border:1px solid var(--line);border-radius:7px;background:#020617;color:var(--muted);font-size:9px}.application-summary strong{display:inline;margin-left:5px;color:#fff;font-size:10px}
 .status-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-top:12px}.status-grid>.panel{padding:13px}.status-grid>.panel:last-child{grid-column:1/-1}
@@ -1489,7 +1489,6 @@ body{background:#080d18}
 .summary-grid{gap:9px;margin-bottom:13px}.summary-card{background:#0b1424;border-color:#1a2940}.summary-icon{background:#071b2e}
 .quick-panel{display:flex;align-items:center;gap:14px;padding:10px 12px}.quick-panel .panel-header{flex:0 0 auto;margin:0}.quick-panel .panel-header h2{font-size:12px;color:#a8b7ca}.quick-grid{flex:1}.quick-grid>:nth-child(4){display:none}
 .quick-action{background:#09111e}.quick-action strong{font-size:10px}
-.security-banner{margin-bottom:13px;background:#2b211026}
 .content-grid{grid-template-columns:minmax(0,1.35fr) minmax(390px,.9fr);gap:13px}
 .access-stack{display:block;padding:0;border:1px solid var(--line);border-radius:11px;background:linear-gradient(160deg,#0d182a,var(--panel));overflow:hidden}
 .access-stack>.panel{padding:14px;border:0;border-radius:0;background:transparent}
@@ -1498,7 +1497,6 @@ body{background:#080d18}
 .access-stack>.panel:nth-child(2) .panel-header h2{font-size:13px}.access-stack>.panel:nth-child(2) .panel-header h2::before{content:"Acesso Administrativo / ";color:#64748b;font-size:10px}
 .ports-stack{display:grid;gap:13px}
 .record-count{display:flex;justify-content:flex-end;padding:7px 2px 0;color:#64748b;font-size:9px}
-.preview-panel{margin-top:13px}
 .status-grid{grid-template-columns:minmax(0,1fr) minmax(0,1fr) minmax(280px,.8fr);align-items:start}.status-grid>.panel:last-child{grid-column:auto}
 .status-grid .panel-header{margin-bottom:9px}.status-grid .panel-header h2{font-size:14px}.status-grid .panel-header p{display:none}
 .status-grid .validation{background:#07110d}.status-grid .validation.pending{background:#0a1220}.status-grid .validation.error{background:#190c10}
@@ -1589,12 +1587,6 @@ body{background:#080d18}
             <?php endforeach; ?>
         </div>
     </section>
-
-    <div class="security-banner<?= $aplicacaoBloqueios ? ' error' : '' ?>">
-        <strong>Aplicação real controlada</strong>
-        <span>Validar apenas verifica a sintaxe. Aplicar altera a tabela nftables gerenciada pelo painel após confirmação, validação e backup obrigatório.</span>
-        <?php foreach ($aplicacaoBloqueios as $bloqueio): ?><span>Bloqueio atual: <?= htmlspecialchars($bloqueio) ?></span><?php endforeach; ?>
-    </div>
 
     <div class="content-grid">
         <div class="stack access-stack">
@@ -1722,28 +1714,6 @@ body{background:#080d18}
         </div>
     </div>
 
-    <section class="panel preview-panel">
-        <details class="preview-details">
-            <summary>Prévia das regras <span class="summary-detail">Somente leitura</span></summary>
-            <div class="preview-content">
-                <div class="panel-header">
-                    <p class="preview-note">A prévia não altera o firewall ativo. A validação executa apenas checagem de sintaxe.</p>
-                    <form method="POST">
-                        <?= csrf_field() ?>
-                        <input type="hidden" name="acao" value="validar_configuracao">
-                        <button class="button primary small" type="submit">Validar configuração</button>
-                    </form>
-                </div>
-                <?php if ($previaAtual !== null): ?>
-                    <?php foreach ($previaAtual['avisos'] as $aviso): ?><div class="alert error"><?= htmlspecialchars($aviso) ?></div><?php endforeach; ?>
-                    <pre class="rule-preview" tabindex="0"><?= htmlspecialchars($previaAtual['regras']) ?></pre>
-                <?php else: ?>
-                    <div class="alert error"><?= htmlspecialchars($previaErro ?? 'Não foi possível gerar a prévia.') ?></div>
-                <?php endif; ?>
-            </div>
-        </details>
-    </section>
-
     <div class="status-grid">
         <section class="panel">
             <header class="panel-header">
@@ -1753,6 +1723,10 @@ body{background:#080d18}
                     <?php if ($backupDisponivel): ?><button class="button danger small" type="button" data-open-dialog="rollback-firewall-modal">Reverter</button><?php endif; ?>
                 </div>
             </header>
+            <div class="security-note<?= $aplicacaoBloqueios ? ' error' : '' ?>">
+                Aplicar altera regras reais após validação e backup obrigatório.
+                <?php foreach ($aplicacaoBloqueios as $bloqueio): ?><strong> Bloqueio atual: <?= htmlspecialchars($bloqueio) ?></strong><?php endforeach; ?>
+            </div>
             <?php
             $statusAplicacao = $ultimaAplicacao['status'] ?? 'NUNCA APLICADO';
             $aplicacaoErro = $statusAplicacao === 'ERRO';
