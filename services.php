@@ -864,36 +864,44 @@ pre{
 .status-cell{
     display:inline-flex;
     align-items:center;
-    gap:6px;
-    font-weight:700;
+    gap:8px;
+    font-size:14px;
+    font-weight:400;
+    border:0;
 }
 
 .status-mark{
     display:inline-flex;
     align-items:center;
     justify-content:center;
-    width:16px;
-    height:16px;
+    width:20px;
+    height:20px;
     border-radius:50%;
-    font-size:11px;
+    font-size:13px;
+    font-weight:700;
+    line-height:1;
 }
 
 .status-cell.ok{
-    color:#bbf7d0;
+    color:#d7dfeb;
+    border:0;
 }
 
 .status-cell.ok .status-mark{
-    background:rgba(34,197,94,.18);
-    color:#bbf7d0;
+    background:transparent;
+    border:2px solid #16c763;
+    color:#16c763;
 }
 
 .status-cell.bad{
-    color:#fecaca;
+    color:#d7dfeb;
+    border:0;
 }
 
 .status-cell.bad .status-mark{
-    background:rgba(220,38,38,.16);
-    color:#fecaca;
+    background:transparent;
+    border:2px solid #ff334f;
+    color:#ff334f;
 }
 
 @media (max-width: 720px){
