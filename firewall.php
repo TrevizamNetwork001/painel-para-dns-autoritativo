@@ -1,41 +1,324 @@
 <?php
 require_once __DIR__ . '/includes/auth.php';
+require_once __DIR__ . '/includes/security.php';
+require_once __DIR__ . '/includes/audit.php';
 
+function firewall_auditar(
+    string $acao,
+    string $alvo,
+    string $status,
+    string $mensagem,
+    ?string $valorAntigo = null,
+    ?string $valorNovo = null
+): void {
+    try {
+        registrar_auditoria([
+            'acao' => $acao,
+            'tipo_registro' => 'FIREWALL',
+            'nome_registro' => $alvo,
+            'valor_antigo' => $valorAntigo,
+            'valor_novo' => $valorNovo,
+            'status' => $status,
+            'mensagem' => $mensagem,
+        ]);
+    } catch (Throwable $e) {
+        error_log('Firewall - falha ao registrar auditoria: ' . $e->getMessage());
+    }
+}
+
+function firewall_redirecionar(string $tipo, string $mensagem): never
+{
+    $_SESSION['firewall_flash'] = ['tipo' => $tipo, 'mensagem' => $mensagem];
+    header('Location: firewall.php');
+    exit;
+}
+
+function firewall_validar_csrf(string $acao, string $alvo): void
+{
+    $token = $_POST['csrf_token'] ?? '';
+    if (!is_string($token) || !hash_equals(csrf_token(), $token)) {
+        firewall_auditar($acao, $alvo, 'ERROR', 'Tentativa rejeitada por validação de segurança.');
+        firewall_redirecionar('error', 'Não foi possível validar a solicitação. Atualize a página e tente novamente.');
+    }
+}
+
+function firewall_normalizar_ip_rede(string $valor): ?array
+{
+    $valor = strtolower(trim($valor));
+    if ($valor === '') {
+        return null;
+    }
+
+    $partes = explode('/', $valor, 2);
+    $endereco = $partes[0];
+    $binario = @inet_pton($endereco);
+    if ($binario === false) {
+        return null;
+    }
+
+    $tipo = strlen($binario) === 4 ? 'IPv4' : 'IPv6';
+    $normalizado = @inet_ntop($binario);
+    if ($normalizado === false) {
+        return null;
+    }
+
+    if (count($partes) === 2) {
+        $maximo = $tipo === 'IPv4' ? 32 : 128;
+        if ($partes[1] === '' || !ctype_digit($partes[1])) {
+            return null;
+        }
+        $prefixo = (int) $partes[1];
+        if ($prefixo < 0 || $prefixo > $maximo) {
+            return null;
+        }
+        $normalizado .= '/' . $prefixo;
+    }
+
+    return ['tipo' => $tipo, 'valor' => $normalizado];
+}
+
+function firewall_validar_porta(mixed $valor): ?int
+{
+    if (!is_string($valor) || $valor === '' || !ctype_digit($valor)) {
+        return null;
+    }
+    $porta = (int) $valor;
+    return $porta >= 1 && $porta <= 65535 ? $porta : null;
+}
+
+function firewall_descricao(string $valor): string
+{
+    return substr(trim($valor), 0, 120);
+}
+
+function firewall_servico(string $valor): string
+{
+    return substr(trim($valor), 0, 40);
+}
+
+$pdo = db();
+$pdo->exec("
+    CREATE TABLE IF NOT EXISTS firewall_admin_access (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        tipo TEXT NOT NULL CHECK (tipo IN ('IPv4', 'IPv6')),
+        rede TEXT NOT NULL COLLATE NOCASE UNIQUE,
+        descricao TEXT NOT NULL DEFAULT '',
+        criado_em DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        atualizado_em DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+    )
+");
+$pdo->exec("
+    CREATE TABLE IF NOT EXISTS firewall_ports (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        escopo TEXT NOT NULL CHECK (escopo IN ('admin', 'publica')),
+        porta INTEGER NOT NULL CHECK (porta BETWEEN 1 AND 65535),
+        protocolo TEXT NOT NULL CHECK (protocolo IN ('TCP', 'UDP', 'TCP/UDP')),
+        servico TEXT NOT NULL DEFAULT '',
+        descricao TEXT NOT NULL DEFAULT '',
+        criado_em DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        atualizado_em DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE (escopo, porta)
+    )
+");
+$pdo->exec("
+    CREATE TABLE IF NOT EXISTS firewall_meta (
+        chave TEXT PRIMARY KEY,
+        valor TEXT NOT NULL
+    )
+");
+
+$seeded = $pdo->query("SELECT 1 FROM firewall_meta WHERE chave = 'v1_seeded'")->fetchColumn();
+if (!$seeded) {
+    $pdo->beginTransaction();
+    try {
+        if ((int) $pdo->query('SELECT COUNT(*) FROM firewall_admin_access')->fetchColumn() === 0) {
+            $stmt = $pdo->prepare('INSERT INTO firewall_admin_access (tipo, rede, descricao, criado_em) VALUES (?, ?, ?, ?)');
+            $stmt->execute(['IPv4', '45.182.96.0/24', 'Rede principal', '2026-06-18 09:00:00']);
+            $stmt->execute(['IPv4', '168.194.14.101', 'Acesso externo', '2026-06-20 14:30:00']);
+        }
+        if ((int) $pdo->query('SELECT COUNT(*) FROM firewall_ports')->fetchColumn() === 0) {
+            $stmt = $pdo->prepare('INSERT INTO firewall_ports (escopo, porta, protocolo, servico, descricao) VALUES (?, ?, ?, ?, ?)');
+            foreach ([
+                ['admin', 22, 'TCP', 'SSH', 'Acesso remoto'],
+                ['admin', 80, 'TCP', 'HTTP', 'Painel'],
+                ['admin', 443, 'TCP', 'HTTPS', 'Painel seguro'],
+                ['publica', 53, 'TCP/UDP', 'DNS', 'Resolução de nomes'],
+                ['publica', 80, 'TCP', 'HTTP', 'Serviço web'],
+                ['publica', 443, 'TCP', 'HTTPS', 'Serviço web seguro'],
+            ] as $portaInicial) {
+                $stmt->execute($portaInicial);
+            }
+        }
+        $pdo->exec("INSERT INTO firewall_meta (chave, valor) VALUES ('v1_seeded', '1')");
+        $pdo->commit();
+    } catch (Throwable $e) {
+        $pdo->rollBack();
+        throw $e;
+    }
+}
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $acao = is_string($_POST['acao'] ?? null) ? $_POST['acao'] : '';
+    $acoesAuditoria = [
+        'adicionar_ip' => 'FIREWALL_ADICIONAR_IP_ADMIN',
+        'editar_ip' => 'FIREWALL_EDITAR_IP_ADMIN',
+        'remover_ip' => 'FIREWALL_REMOVER_IP_ADMIN',
+        'adicionar_porta_admin' => 'FIREWALL_ADICIONAR_PORTA_ADMIN',
+        'adicionar_porta_publica' => 'FIREWALL_ADICIONAR_PORTA_PUBLICA',
+        'remover_porta' => 'FIREWALL_REMOVER_PORTA',
+    ];
+
+    if (!isset($acoesAuditoria[$acao])) {
+        firewall_redirecionar('error', 'Ação inválida.');
+    }
+
+    $acaoAuditoria = $acoesAuditoria[$acao];
+    $alvoInformado = trim((string) ($_POST['rede'] ?? $_POST['porta'] ?? 'não informado'));
+    firewall_validar_csrf($acaoAuditoria, $alvoInformado);
+
+    try {
+        if ($acao === 'adicionar_ip') {
+            $ip = firewall_normalizar_ip_rede((string) ($_POST['rede'] ?? ''));
+            $descricao = firewall_descricao((string) ($_POST['descricao'] ?? ''));
+            if ($ip === null) {
+                throw new InvalidArgumentException('Informe um endereço IP ou rede válida.');
+            }
+            $stmt = $pdo->prepare('INSERT INTO firewall_admin_access (tipo, rede, descricao) VALUES (?, ?, ?)');
+            $stmt->execute([$ip['tipo'], $ip['valor'], $descricao]);
+            firewall_auditar($acaoAuditoria, $ip['valor'], 'SUCCESS', 'IP administrativo adicionado.', null, $ip['valor']);
+            firewall_redirecionar('success', 'IP administrativo adicionado com sucesso.');
+        }
+
+        if ($acao === 'editar_ip') {
+            $id = filter_var($_POST['id'] ?? null, FILTER_VALIDATE_INT);
+            $ip = firewall_normalizar_ip_rede((string) ($_POST['rede'] ?? ''));
+            $descricao = firewall_descricao((string) ($_POST['descricao'] ?? ''));
+            if (!$id || $ip === null) {
+                throw new InvalidArgumentException('Informe um endereço IP ou rede válida.');
+            }
+            $stmt = $pdo->prepare('SELECT * FROM firewall_admin_access WHERE id = ?');
+            $stmt->execute([$id]);
+            $anterior = $stmt->fetch(PDO::FETCH_ASSOC);
+            $stmt->closeCursor();
+            if (!$anterior) {
+                throw new InvalidArgumentException('O acesso administrativo não foi encontrado.');
+            }
+            $stmt = $pdo->prepare('UPDATE firewall_admin_access SET tipo = ?, rede = ?, descricao = ?, atualizado_em = CURRENT_TIMESTAMP WHERE id = ?');
+            $stmt->execute([$ip['tipo'], $ip['valor'], $descricao, $id]);
+            firewall_auditar($acaoAuditoria, $ip['valor'], 'SUCCESS', 'IP administrativo atualizado.', $anterior['rede'], $ip['valor']);
+            firewall_redirecionar('success', 'IP administrativo atualizado com sucesso.');
+        }
+
+        if ($acao === 'remover_ip') {
+            $id = filter_var($_POST['id'] ?? null, FILTER_VALIDATE_INT);
+            $confirmacao = trim((string) ($_POST['confirmacao'] ?? ''));
+            $stmt = $pdo->prepare('SELECT * FROM firewall_admin_access WHERE id = ?');
+            $stmt->execute([$id ?: 0]);
+            $registro = $stmt->fetch(PDO::FETCH_ASSOC);
+            $stmt->closeCursor();
+            if (!$registro) {
+                throw new InvalidArgumentException('O acesso administrativo não foi encontrado.');
+            }
+            $alvoInformado = $registro['rede'];
+            if (!hash_equals($registro['rede'], $confirmacao)) {
+                throw new InvalidArgumentException('A confirmação não corresponde ao IP ou rede informado.');
+            }
+            $stmt = $pdo->prepare('DELETE FROM firewall_admin_access WHERE id = ?');
+            $stmt->execute([$id]);
+            firewall_auditar($acaoAuditoria, $registro['rede'], 'SUCCESS', 'IP administrativo removido.', $registro['rede'], null);
+            firewall_redirecionar('success', 'IP administrativo removido com sucesso.');
+        }
+
+        if ($acao === 'adicionar_porta_admin' || $acao === 'adicionar_porta_publica') {
+            $escopo = $acao === 'adicionar_porta_admin' ? 'admin' : 'publica';
+            $porta = firewall_validar_porta($_POST['porta'] ?? null);
+            $protocolo = strtoupper(trim((string) ($_POST['protocolo'] ?? '')));
+            $servico = firewall_servico((string) ($_POST['servico'] ?? ''));
+            $descricao = firewall_descricao((string) ($_POST['descricao'] ?? ''));
+            if ($porta === null) {
+                throw new InvalidArgumentException('Informe uma porta entre 1 e 65535.');
+            }
+            if (!in_array($protocolo, ['TCP', 'UDP', 'TCP/UDP'], true)) {
+                throw new InvalidArgumentException('Selecione um protocolo válido.');
+            }
+            if ($servico === '') {
+                throw new InvalidArgumentException('Informe um nome para o serviço.');
+            }
+            $stmt = $pdo->prepare('INSERT INTO firewall_ports (escopo, porta, protocolo, servico, descricao) VALUES (?, ?, ?, ?, ?)');
+            $stmt->execute([$escopo, $porta, $protocolo, $servico, $descricao]);
+            $alvo = ($escopo === 'admin' ? 'Administrativa ' : 'Pública ') . $porta;
+            firewall_auditar($acaoAuditoria, $alvo, 'SUCCESS', 'Porta cadastrada no painel.', null, $porta . '/' . $protocolo);
+            firewall_redirecionar('success', 'Porta adicionada com sucesso.');
+        }
+
+        if ($acao === 'remover_porta') {
+            $id = filter_var($_POST['id'] ?? null, FILTER_VALIDATE_INT);
+            $confirmacao = trim((string) ($_POST['confirmacao'] ?? ''));
+            $stmt = $pdo->prepare('SELECT * FROM firewall_ports WHERE id = ?');
+            $stmt->execute([$id ?: 0]);
+            $registro = $stmt->fetch(PDO::FETCH_ASSOC);
+            $stmt->closeCursor();
+            if (!$registro) {
+                throw new InvalidArgumentException('A porta não foi encontrada.');
+            }
+            $alvoInformado = ($registro['escopo'] === 'admin' ? 'Administrativa ' : 'Pública ') . $registro['porta'];
+            if (!hash_equals((string) $registro['porta'], $confirmacao)) {
+                throw new InvalidArgumentException('A confirmação não corresponde à porta informada.');
+            }
+            $stmt = $pdo->prepare('DELETE FROM firewall_ports WHERE id = ?');
+            $stmt->execute([$id]);
+            $alvo = ($registro['escopo'] === 'admin' ? 'Administrativa ' : 'Pública ') . $registro['porta'];
+            firewall_auditar($acaoAuditoria, $alvo, 'SUCCESS', 'Porta removida do painel.', $registro['porta'] . '/' . $registro['protocolo'], null);
+            firewall_redirecionar('success', 'Porta removida com sucesso.');
+        }
+    } catch (PDOException $e) {
+        $duplicado = str_contains(strtolower($e->getMessage()), 'unique constraint');
+        $mensagem = $duplicado ? 'Este item já está cadastrado.' : 'Não foi possível salvar a alteração.';
+        firewall_auditar($acaoAuditoria, $alvoInformado, 'ERROR', $mensagem);
+        firewall_redirecionar('error', $mensagem);
+    } catch (InvalidArgumentException $e) {
+        firewall_auditar($acaoAuditoria, $alvoInformado, 'ERROR', $e->getMessage());
+        firewall_redirecionar('error', $e->getMessage());
+    } catch (Throwable $e) {
+        error_log('Firewall - falha na operação: ' . $e->getMessage());
+        firewall_auditar($acaoAuditoria, $alvoInformado, 'ERROR', 'Falha ao processar a alteração.');
+        firewall_redirecionar('error', 'Não foi possível concluir a alteração.');
+    }
+}
+
+$flash = $_SESSION['firewall_flash'] ?? null;
+unset($_SESSION['firewall_flash']);
+
+$adminAccess = $pdo->query('SELECT * FROM firewall_admin_access ORDER BY tipo, rede')->fetchAll(PDO::FETCH_ASSOC);
+$adminPorts = $pdo->query("SELECT * FROM firewall_ports WHERE escopo = 'admin' ORDER BY porta")->fetchAll(PDO::FETCH_ASSOC);
+$publicPorts = $pdo->query("SELECT * FROM firewall_ports WHERE escopo = 'publica' ORDER BY porta")->fetchAll(PDO::FETCH_ASSOC);
+
+$auditStmt = $pdo->query("
+    SELECT usuario, acao, nome_registro, status, mensagem, criado_em
+    FROM audit_logs
+    WHERE acao LIKE 'FIREWALL_%'
+    ORDER BY id DESC
+    LIMIT 4
+");
+$recentAudit = $auditStmt->fetchAll(PDO::FETCH_ASSOC);
+
+$ipv4Count = count(array_filter($adminAccess, static fn(array $item): bool => $item['tipo'] === 'IPv4'));
+$ipv6Count = count($adminAccess) - $ipv4Count;
 $summary = [
-    ['◉', 'IPv4 Liberados', '2', 'Redes e endereços', false],
-    ['⬡', 'IPv6 Liberados', '0', 'Nenhum cadastrado', false],
-    ['⌁', 'Portas Admin', '3', 'Acesso restrito', false],
-    ['⇄', 'Portas Públicas', '5', 'Acesso externo', false],
-    ['✓', 'Firewall Ativo', 'Ativo', 'Configuração em uso', true],
+    ['◉', 'IPv4 Liberados', (string) $ipv4Count, 'Redes e endereços', false],
+    ['⬡', 'IPv6 Liberados', (string) $ipv6Count, 'Redes e endereços', false],
+    ['⌁', 'Portas Admin', (string) count($adminPorts), 'Acesso restrito', false],
+    ['⇄', 'Portas Públicas', (string) count($publicPorts), 'Acesso externo', false],
+    ['✓', 'Firewall Ativo', 'Ativo', 'Somente dados do painel', true],
 ];
 $quickActions = [
-    ['+', 'Adicionar IP', 'Autorizar endereço'],
-    ['🔒', 'Porta Admin', 'Adicionar restrição'],
-    ['🌐', 'Porta Pública', 'Liberar serviço'],
-    ['▣', 'Backup', 'Salvar uma cópia'],
-    ['✓', 'Validar', 'Verificar configuração'],
-    ['↻', 'Aplicar', 'Publicar alterações'],
-    ['≡', 'Ver Logs', 'Consultar eventos'],
-];
-$adminAccess = [
-    ['IPv4', '45.182.96.0/24', 'Rede principal', '18/06/2026'],
-    ['IPv4', '168.194.14.101', 'Acesso externo', '20/06/2026'],
-];
-$adminPorts = [
-    ['22', 'TCP', 'SSH', 'Acesso remoto'],
-    ['80', 'TCP', 'HTTP', 'Painel'],
-    ['443', 'TCP', 'HTTPS', 'Painel seguro'],
-];
-$publicPorts = [
-    ['53', 'TCP/UDP', 'DNS', 'Resolução de nomes'],
-    ['80', 'TCP', 'HTTP', 'Serviço web'],
-    ['443', 'TCP', 'HTTPS', 'Serviço web seguro'],
-];
-$recentAudit = [
-    ['admin', 'Adicionou IP IPv4', 'Hoje, 09:28'],
-    ['admin', 'Removeu porta pública', 'Hoje, 09:14'],
-    ['admin', 'Validou configuração', 'Hoje, 09:05'],
-    ['admin', 'Aplicou novas alterações', 'Ontem, 18:42'],
+    ['+', 'Adicionar IP', 'Autorizar endereço', 'add-ip-modal'],
+    ['🔒', 'Porta Admin', 'Adicionar restrição', 'add-admin-port-modal'],
+    ['🌐', 'Porta Pública', 'Liberar serviço', 'add-public-port-modal'],
+    ['▣', 'Backup', 'Fase futura', null],
+    ['✓', 'Validar', 'Fase futura', null],
+    ['↻', 'Aplicar', 'Fase futura', null],
+    ['≡', 'Ver Logs', 'Consultar eventos', null],
 ];
 ?>
 <!DOCTYPE html>
@@ -87,11 +370,23 @@ tr:last-child td{border-bottom:0}tbody tr{background:#02061766}tbody tr:hover{ba
 .audit-item:first-child{padding-top:0}.audit-item:last-child{border-bottom:0}.audit-user{color:#fff;font-weight:700}.audit-action{color:#cbd5e1}.audit-time{color:var(--subtle);font-size:11px;white-space:nowrap}
 .secondary-button{display:inline-flex;align-items:center;justify-content:center;min-height:36px;margin-top:14px;padding:8px 12px;border:1px solid var(--line2);border-radius:9px;background:#0f172a;color:#dbeafe;font-size:12px;font-weight:700}
 .secondary-button:hover,.secondary-button:focus{border-color:var(--accent);outline:none}
+.alerts{display:grid;gap:10px;margin-bottom:18px}.alert{padding:12px 14px;border:1px solid;border-radius:10px;font-size:13px}.alert.success{border-color:#22c55e4d;background:#14532d52;color:#bbf7d0}.alert.error{border-color:#ef44444d;background:#7f1d1d52;color:#fecaca}
+.empty-state{padding:22px 14px!important;color:var(--muted);text-align:center}
+.modal{width:min(560px,calc(100vw - 28px));padding:0;border:1px solid var(--line2);border-radius:14px;background:#0b1424;color:var(--text);box-shadow:0 26px 70px #000a}
+.modal::backdrop{background:#020617d9;backdrop-filter:blur(3px)}
+.modal-header{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;padding:18px 20px;border-bottom:1px solid var(--line)}
+.modal-header h2{margin:0;color:#fff;font-size:19px}.modal-header p{margin:5px 0 0;color:var(--muted);font-size:12px;line-height:1.45}
+.modal-close{padding:7px 9px;border:1px solid var(--line2);border-radius:8px;background:var(--deep);color:#cbd5e1;cursor:pointer}.modal-close:hover,.modal-close:focus{border-color:var(--accent);outline:none}
+.modal-body{padding:20px}.modal-form{display:grid;gap:14px}.form-row{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.field label{display:block;margin-bottom:6px;color:#cbd5e1;font-size:12px;font-weight:700}.field input,.field select{width:100%;min-height:40px;padding:9px 11px;border:1px solid var(--line2);border-radius:9px;background:var(--deep);color:#fff;outline:none}
+.field input:focus,.field select:focus{border-color:var(--accent);box-shadow:0 0 0 3px #38bdf81a}.field-help{display:block;margin-top:5px;color:var(--subtle);font-size:11px}
+.modal-warning{padding:11px 12px;border:1px solid #ef44444d;border-radius:9px;background:#7f1d1d38;color:#fecaca;font-size:12px;line-height:1.45}
+.modal-actions{display:flex;justify-content:flex-end;gap:9px;padding-top:4px}.button{min-height:39px;padding:9px 13px;border:1px solid var(--line2);border-radius:9px;background:#172236;color:#e5edf7;font-weight:700;cursor:pointer}.button:hover,.button:focus{border-color:var(--accent);outline:none}.button.primary{border-color:#0369a1;background:#0369a1;color:#fff}.button.danger{border-color:#991b1b;background:#7f1d1d;color:#fff}
 .ui-toast{position:fixed;right:20px;bottom:20px;z-index:20;max-width:min(380px,calc(100vw - 40px));padding:12px 14px;border:1px solid var(--line2);border-radius:11px;background:#111827;color:#cbd5e1;box-shadow:0 18px 45px #0006;font-size:13px}
 .ui-toast[hidden],.empty-row[hidden]{display:none}.empty-row td{padding:22px 14px;color:var(--muted);text-align:center}
 @media(max-width:1200px){.quick-grid{grid-template-columns:repeat(4,minmax(0,1fr))}.content-grid{grid-template-columns:1fr}}
 @media(max-width:1050px){.summary-grid{grid-template-columns:repeat(3,minmax(0,1fr))}}
-@media(max-width:760px){.page{width:min(100% - 20px,1180px);margin:20px auto 30px}.page-header{align-items:flex-start;flex-direction:column}.page-header h1{font-size:27px}.summary-grid,.quick-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.panel{padding:16px}.panel-header{display:block}.search{width:100%;margin-top:13px}.audit-item{grid-template-columns:80px 1fr}.audit-time{grid-column:2}}
+@media(max-width:760px){.page{width:min(100% - 20px,1180px);margin:20px auto 30px}.page-header{align-items:flex-start;flex-direction:column}.page-header h1{font-size:27px}.summary-grid,.quick-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.panel{padding:16px}.panel-header{display:block}.search{width:100%;margin-top:13px}.audit-item{grid-template-columns:80px 1fr}.audit-time{grid-column:2}.form-row{grid-template-columns:1fr}.modal-actions{display:grid}.modal-actions .button{width:100%}}
 @media(max-width:460px){.summary-grid,.quick-grid{grid-template-columns:1fr}.summary-card{min-height:96px}}
 </style>
 </head>
@@ -105,6 +400,14 @@ tr:last-child td{border-bottom:0}tbody tr{background:#02061766}tbody tr:hover{ba
         </div>
         <button class="refresh-button" type="button" data-refresh-page><span aria-hidden="true">↻</span> Atualizar</button>
     </header>
+
+    <?php if (is_array($flash)): ?>
+        <div class="alerts">
+            <div class="alert <?= ($flash['tipo'] ?? '') === 'success' ? 'success' : 'error' ?>" role="status">
+                <?= htmlspecialchars((string) ($flash['mensagem'] ?? '')) ?>
+            </div>
+        </div>
+    <?php endif; ?>
 
     <section class="summary-grid" aria-label="Resumo do Firewall">
         <?php foreach ($summary as [$icon, $label, $value, $detail, $status]): ?>
@@ -120,8 +423,13 @@ tr:last-child td{border-bottom:0}tbody tr{background:#02061766}tbody tr:hover{ba
     <section class="panel quick-panel">
         <header class="panel-header"><div><h2>Ações rápidas</h2><p>Atalhos para as operações mais utilizadas.</p></div></header>
         <div class="quick-grid">
-            <?php foreach ($quickActions as [$icon, $label, $detail]): ?>
-                <button class="quick-action" type="button" data-future-action="<?= htmlspecialchars($label, ENT_QUOTES, 'UTF-8') ?>">
+            <?php foreach ($quickActions as [$icon, $label, $detail, $modalId]): ?>
+                <button
+                    class="quick-action"
+                    type="button"
+                    <?= $modalId !== null
+                        ? 'data-open-dialog="' . htmlspecialchars($modalId, ENT_QUOTES, 'UTF-8') . '"'
+                        : 'data-future-action="' . htmlspecialchars($label, ENT_QUOTES, 'UTF-8') . '"' ?>>
                     <span class="quick-icon" aria-hidden="true"><?= htmlspecialchars($icon) ?></span>
                     <strong><?= htmlspecialchars($label) ?></strong>
                     <small><?= htmlspecialchars($detail) ?></small>
@@ -139,15 +447,20 @@ tr:last-child td{border-bottom:0}tbody tr{background:#02061766}tbody tr:hover{ba
             <div class="table-wrap"><table>
                 <thead><tr><th>Tipo</th><th>IP/Rede</th><th>Descrição</th><th>Data de criação</th><th>Ações</th></tr></thead>
                 <tbody id="admin-access-rows">
-                    <?php foreach ($adminAccess as [$type, $network, $description, $createdAt]): ?>
-                        <tr data-search-text="<?= htmlspecialchars(strtolower("$type $network $description $createdAt"), ENT_QUOTES, 'UTF-8') ?>">
-                            <td><span class="type-badge"><?= htmlspecialchars($type) ?></span></td>
-                            <td class="strong"><?= htmlspecialchars($network) ?></td>
-                            <td><?= htmlspecialchars($description) ?></td>
+                    <?php foreach ($adminAccess as $access): ?>
+                        <?php $createdAt = (new DateTimeImmutable($access['criado_em']))->format('d/m/Y H:i'); ?>
+                        <tr data-search-text="<?= htmlspecialchars(strtolower($access['tipo'] . ' ' . $access['rede'] . ' ' . $access['descricao'] . ' ' . $createdAt), ENT_QUOTES, 'UTF-8') ?>">
+                            <td><span class="type-badge"><?= htmlspecialchars($access['tipo']) ?></span></td>
+                            <td class="strong"><?= htmlspecialchars($access['rede']) ?></td>
+                            <td><?= htmlspecialchars($access['descricao']) ?></td>
                             <td><?= htmlspecialchars($createdAt) ?></td>
-                            <td><div class="row-actions"><button class="text-action" type="button" data-future-action="Editar IP">Editar</button><button class="text-action remove" type="button" data-future-action="Remover IP">Remover</button></div></td>
+                            <td><div class="row-actions">
+                                <button class="text-action" type="button" data-open-dialog="edit-ip-modal" data-record-id="<?= (int) $access['id'] ?>" data-record-value="<?= htmlspecialchars($access['rede'], ENT_QUOTES, 'UTF-8') ?>" data-record-description="<?= htmlspecialchars($access['descricao'], ENT_QUOTES, 'UTF-8') ?>">Editar</button>
+                                <button class="text-action remove" type="button" data-open-dialog="remove-ip-modal" data-record-id="<?= (int) $access['id'] ?>" data-record-value="<?= htmlspecialchars($access['rede'], ENT_QUOTES, 'UTF-8') ?>">Remover</button>
+                            </div></td>
                         </tr>
                     <?php endforeach; ?>
+                    <?php if (!$adminAccess): ?><tr><td class="empty-state" colspan="5">Nenhum IP administrativo cadastrado.</td></tr><?php endif; ?>
                     <tr class="empty-row" id="admin-access-empty" hidden><td colspan="5">Nenhum IP ou rede encontrado.</td></tr>
                 </tbody>
             </table></div>
@@ -158,9 +471,10 @@ tr:last-child td{border-bottom:0}tbody tr{background:#02061766}tbody tr:hover{ba
             <div class="table-wrap"><table>
                 <thead><tr><th>Porta</th><th>Protocolo</th><th>Serviço</th><th>Descrição</th><th>Ações</th></tr></thead>
                 <tbody>
-                    <?php foreach ($adminPorts as [$port, $protocol, $service, $description]): ?>
-                        <tr><td class="strong"><?= htmlspecialchars($port) ?></td><td><span class="type-badge"><?= htmlspecialchars($protocol) ?></span></td><td><?= htmlspecialchars($service) ?></td><td><?= htmlspecialchars($description) ?></td><td><div class="row-actions"><button class="text-action" type="button" data-future-action="Editar porta administrativa">Editar</button><button class="text-action remove" type="button" data-future-action="Remover porta administrativa">Remover</button></div></td></tr>
+                    <?php foreach ($adminPorts as $port): ?>
+                        <tr><td class="strong"><?= (int) $port['porta'] ?></td><td><span class="type-badge"><?= htmlspecialchars($port['protocolo']) ?></span></td><td><?= htmlspecialchars($port['servico']) ?></td><td><?= htmlspecialchars($port['descricao']) ?></td><td><div class="row-actions"><button class="text-action" type="button" data-future-action="Editar porta administrativa">Editar</button><button class="text-action remove" type="button" data-open-dialog="remove-port-modal" data-record-id="<?= (int) $port['id'] ?>" data-record-value="<?= (int) $port['porta'] ?>" data-record-scope="administrativa">Remover</button></div></td></tr>
                     <?php endforeach; ?>
+                    <?php if (!$adminPorts): ?><tr><td class="empty-state" colspan="5">Nenhuma porta administrativa cadastrada.</td></tr><?php endif; ?>
                 </tbody>
             </table></div>
         </section>
@@ -170,9 +484,10 @@ tr:last-child td{border-bottom:0}tbody tr{background:#02061766}tbody tr:hover{ba
             <div class="table-wrap"><table>
                 <thead><tr><th>Porta</th><th>Protocolo</th><th>Serviço</th><th>Descrição</th><th>Ações</th></tr></thead>
                 <tbody>
-                    <?php foreach ($publicPorts as [$port, $protocol, $service, $description]): ?>
-                        <tr><td class="strong"><?= htmlspecialchars($port) ?></td><td><span class="type-badge"><?= htmlspecialchars($protocol) ?></span></td><td><?= htmlspecialchars($service) ?></td><td><?= htmlspecialchars($description) ?></td><td><div class="row-actions"><button class="text-action" type="button" data-future-action="Editar porta pública">Editar</button><button class="text-action remove" type="button" data-future-action="Remover porta pública">Remover</button></div></td></tr>
+                    <?php foreach ($publicPorts as $port): ?>
+                        <tr><td class="strong"><?= (int) $port['porta'] ?></td><td><span class="type-badge"><?= htmlspecialchars($port['protocolo']) ?></span></td><td><?= htmlspecialchars($port['servico']) ?></td><td><?= htmlspecialchars($port['descricao']) ?></td><td><div class="row-actions"><button class="text-action" type="button" data-future-action="Editar porta pública">Editar</button><button class="text-action remove" type="button" data-open-dialog="remove-port-modal" data-record-id="<?= (int) $port['id'] ?>" data-record-value="<?= (int) $port['porta'] ?>" data-record-scope="pública">Remover</button></div></td></tr>
                     <?php endforeach; ?>
+                    <?php if (!$publicPorts): ?><tr><td class="empty-state" colspan="5">Nenhuma porta pública cadastrada.</td></tr><?php endif; ?>
                 </tbody>
             </table></div>
         </section>
@@ -185,14 +500,93 @@ tr:last-child td{border-bottom:0}tbody tr{background:#02061766}tbody tr:hover{ba
             <section class="panel">
                 <header class="panel-header"><div><h2>Auditoria Recente</h2><p>Últimas alterações.</p></div></header>
                 <div class="audit-list">
-                    <?php foreach ($recentAudit as [$user, $action, $time]): ?>
-                        <div class="audit-item"><span class="audit-user"><?= htmlspecialchars($user) ?></span><span class="audit-action"><?= htmlspecialchars($action) ?></span><span class="audit-time"><?= htmlspecialchars($time) ?></span></div>
+                    <?php foreach ($recentAudit as $event): ?>
+                        <?php $eventTime = (new DateTimeImmutable($event['criado_em']))->format('d/m H:i'); ?>
+                        <div class="audit-item"><span class="audit-user"><?= htmlspecialchars($event['usuario']) ?></span><span class="audit-action"><?= htmlspecialchars($event['mensagem'] ?: $event['acao']) ?></span><span class="audit-time"><?= htmlspecialchars($eventTime) ?></span></div>
                     <?php endforeach; ?>
+                    <?php if (!$recentAudit): ?><div class="empty-state">Nenhuma alteração registrada.</div><?php endif; ?>
                 </div>
                 <a class="secondary-button" href="auditoria.php">Ver histórico completo</a>
             </section>
         </div>
     </div>
+
+    <dialog class="modal" id="add-ip-modal">
+        <header class="modal-header"><div><h2>Adicionar IP</h2><p>Autorizar um endereço ou rede para acesso administrativo.</p></div><button class="modal-close" type="button" data-close-dialog>Fechar</button></header>
+        <div class="modal-body">
+            <form method="POST" class="modal-form">
+                <?= csrf_field() ?>
+                <input type="hidden" name="acao" value="adicionar_ip">
+                <div class="field"><label for="add-ip-network">IP ou rede</label><input id="add-ip-network" name="rede" maxlength="80" placeholder="192.0.2.10 ou 2001:db8::/64" required><span class="field-help">IPv4, IPv6 ou rede com prefixo CIDR.</span></div>
+                <div class="field"><label for="add-ip-description">Descrição</label><input id="add-ip-description" name="descricao" maxlength="120" placeholder="Acesso da equipe técnica"></div>
+                <div class="modal-actions"><button class="button" type="button" data-close-dialog>Cancelar</button><button class="button primary" type="submit">Adicionar IP</button></div>
+            </form>
+        </div>
+    </dialog>
+
+    <dialog class="modal" id="edit-ip-modal">
+        <header class="modal-header"><div><h2>Editar IP</h2><p>Atualizar o endereço, rede ou descrição do acesso.</p></div><button class="modal-close" type="button" data-close-dialog>Fechar</button></header>
+        <div class="modal-body">
+            <form method="POST" class="modal-form">
+                <?= csrf_field() ?>
+                <input type="hidden" name="acao" value="editar_ip">
+                <input type="hidden" name="id" data-modal-id>
+                <div class="field"><label for="edit-ip-network">IP ou rede</label><input id="edit-ip-network" name="rede" maxlength="80" data-modal-value required></div>
+                <div class="field"><label for="edit-ip-description">Descrição</label><input id="edit-ip-description" name="descricao" maxlength="120" data-modal-description></div>
+                <div class="modal-actions"><button class="button" type="button" data-close-dialog>Cancelar</button><button class="button primary" type="submit">Salvar alterações</button></div>
+            </form>
+        </div>
+    </dialog>
+
+    <dialog class="modal" id="remove-ip-modal">
+        <header class="modal-header"><div><h2>Remover IP</h2><p>Esta ação remove o acesso apenas dos dados do painel.</p></div><button class="modal-close" type="button" data-close-dialog>Fechar</button></header>
+        <div class="modal-body">
+            <form method="POST" class="modal-form">
+                <?= csrf_field() ?>
+                <input type="hidden" name="acao" value="remover_ip">
+                <input type="hidden" name="id" data-modal-id>
+                <div class="modal-warning">Para confirmar, digite exatamente <strong data-confirmation-label></strong>.</div>
+                <div class="field"><label for="remove-ip-confirmation">Confirmação</label><input id="remove-ip-confirmation" name="confirmacao" autocomplete="off" data-confirmation-input required></div>
+                <div class="modal-actions"><button class="button" type="button" data-close-dialog>Cancelar</button><button class="button danger" type="submit">Remover IP</button></div>
+            </form>
+        </div>
+    </dialog>
+
+    <?php foreach ([
+        ['add-admin-port-modal', 'adicionar_porta_admin', 'Adicionar Porta Administrativa', 'Cadastrar uma porta restrita aos IPs autorizados.'],
+        ['add-public-port-modal', 'adicionar_porta_publica', 'Adicionar Porta Pública', 'Cadastrar uma porta disponível para acesso externo.'],
+    ] as [$modalId, $actionName, $title, $subtitle]): ?>
+        <dialog class="modal" id="<?= htmlspecialchars($modalId) ?>">
+            <header class="modal-header"><div><h2><?= htmlspecialchars($title) ?></h2><p><?= htmlspecialchars($subtitle) ?></p></div><button class="modal-close" type="button" data-close-dialog>Fechar</button></header>
+            <div class="modal-body">
+                <form method="POST" class="modal-form">
+                    <?= csrf_field() ?>
+                    <input type="hidden" name="acao" value="<?= htmlspecialchars($actionName) ?>">
+                    <div class="form-row">
+                        <div class="field"><label>Porta</label><input type="number" name="porta" min="1" max="65535" inputmode="numeric" required></div>
+                        <div class="field"><label>Protocolo</label><select name="protocolo" required><option value="TCP">TCP</option><option value="UDP">UDP</option><option value="TCP/UDP">TCP/UDP</option></select></div>
+                    </div>
+                    <div class="field"><label>Serviço</label><input name="servico" maxlength="40" placeholder="Ex.: HTTPS" required></div>
+                    <div class="field"><label>Descrição</label><input name="descricao" maxlength="120" placeholder="Finalidade da porta"></div>
+                    <div class="modal-actions"><button class="button" type="button" data-close-dialog>Cancelar</button><button class="button primary" type="submit">Adicionar porta</button></div>
+                </form>
+            </div>
+        </dialog>
+    <?php endforeach; ?>
+
+    <dialog class="modal" id="remove-port-modal">
+        <header class="modal-header"><div><h2>Remover Porta</h2><p>Remover a porta <span data-port-scope></span> dos dados do painel.</p></div><button class="modal-close" type="button" data-close-dialog>Fechar</button></header>
+        <div class="modal-body">
+            <form method="POST" class="modal-form">
+                <?= csrf_field() ?>
+                <input type="hidden" name="acao" value="remover_porta">
+                <input type="hidden" name="id" data-modal-id>
+                <div class="modal-warning">Para confirmar, digite exatamente a porta <strong data-confirmation-label></strong>.</div>
+                <div class="field"><label for="remove-port-confirmation">Confirmação</label><input id="remove-port-confirmation" name="confirmacao" inputmode="numeric" autocomplete="off" data-confirmation-input required></div>
+                <div class="modal-actions"><button class="button" type="button" data-close-dialog>Cancelar</button><button class="button danger" type="submit">Remover porta</button></div>
+            </form>
+        </div>
+    </dialog>
 
     <?php require __DIR__ . '/includes/footer.php'; ?>
 </main>
@@ -207,6 +601,27 @@ searchInput.addEventListener('input',()=>{
     accessRows.forEach(row=>{const show=row.dataset.searchText.includes(term);row.hidden=!show;if(show)visible++});
     emptyRow.hidden=visible!==0;
 });
+document.querySelectorAll('[data-open-dialog]').forEach(button=>button.addEventListener('click',()=>{
+    const dialog=document.getElementById(button.dataset.openDialog);
+    if(!dialog)return;
+    const idField=dialog.querySelector('[data-modal-id]');
+    const valueField=dialog.querySelector('[data-modal-value]');
+    const descriptionField=dialog.querySelector('[data-modal-description]');
+    const confirmationLabel=dialog.querySelector('[data-confirmation-label]');
+    const confirmationInput=dialog.querySelector('[data-confirmation-input]');
+    const scopeLabel=dialog.querySelector('[data-port-scope]');
+    if(idField)idField.value=button.dataset.recordId||'';
+    if(valueField)valueField.value=button.dataset.recordValue||'';
+    if(descriptionField)descriptionField.value=button.dataset.recordDescription||'';
+    if(confirmationLabel)confirmationLabel.textContent=button.dataset.recordValue||'';
+    if(confirmationInput)confirmationInput.value='';
+    if(scopeLabel)scopeLabel.textContent=button.dataset.recordScope||'';
+    dialog.showModal();
+}));
+document.querySelectorAll('[data-close-dialog]').forEach(button=>button.addEventListener('click',()=>button.closest('dialog')?.close()));
+document.querySelectorAll('dialog').forEach(dialog=>dialog.addEventListener('click',event=>{
+    if(event.target===dialog)dialog.close();
+}));
 const toast=document.getElementById('ui-toast');let toastTimer;
 document.querySelectorAll('[data-future-action]').forEach(button=>button.addEventListener('click',()=>{
     clearTimeout(toastTimer);
