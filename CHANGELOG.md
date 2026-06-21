@@ -2,6 +2,23 @@
 
 Historico de alteracoes do Painel DNS Trevizam Network.
 
+## [2.1.0] - 2026-06-21
+
+### Página de serviços
+
+- Redesenhada `services.php` conforme a referência visual aprovada.
+- Adicionada barra lateral compacta, cards de resumo e grade responsiva dos
+  serviços BIND9, Fail2Ban, SSH e Firewall.
+- Padronizados ícones SVG, estados ativo/inativo, botões e efeitos de hover.
+- Diferenciadas visualmente as ações Iniciar BIND, Reiniciar BIND, Parar BIND,
+  Reiniciar Fail2Ban e Reiniciar SSH.
+- Atualizada a tabela de últimas ações com nova tipografia, espaçamento,
+  ícone de título e status OK/ERRO.
+- Mantidas as confirmações para operações críticas.
+- Preservadas autenticação, CSRF, comandos permitidos e auditoria.
+- Documentação detalhada disponível em
+  `HANDOFF_SERVICES_UI_2026-06-21.md`.
+
 ## [2.0.0] - 2026-06-15
 
 ### NS2 slave - Fase 1
