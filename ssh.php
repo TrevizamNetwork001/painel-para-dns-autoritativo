@@ -65,19 +65,6 @@ h1{
     margin:0;
     color:var(--muted);
 }
-pre{
-    margin:12px 0 0;
-    padding:14px;
-    background:#091123;
-    border:1px solid var(--border);
-    border-radius:12px;
-    color:#cbd5e1;
-    font-size:12px;
-    line-height:1.55;
-    white-space:pre-wrap;
-    word-break:break-word;
-    overflow:auto;
-}
 .badge{
     display:inline-flex;
     align-items:center;
@@ -115,6 +102,19 @@ pre{
     margin:0 0 10px;
     font-size:15px;
 }
+pre{
+    margin:0;
+    padding:14px;
+    background:#091123;
+    border:1px solid var(--border);
+    border-radius:12px;
+    color:#cbd5e1;
+    font-size:12px;
+    line-height:1.55;
+    white-space:pre-wrap;
+    word-break:break-word;
+    overflow:auto;
+}
 @media (max-width: 720px){
     .page{width:calc(100% - 18px);padding-top:14px}
     h1{font-size:24px}
@@ -132,8 +132,8 @@ pre{
         <p>Últimas 50 linhas do journal do serviço SSH.</p>
 
         <div class="actions">
-            <a href="#dados">Ver dados</a>
             <a href="#info">Informações</a>
+            <a href="#dados">Ver dados</a>
         </div>
 
         <div class="badge">Fonte: journalctl -u ssh</div>
