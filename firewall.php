@@ -44,7 +44,7 @@ function fw_parse_ruleset(string $raw): array
             continue;
         }
 
-        if (preg_match('/^table\s+(\S+)\s+(\S+)$/i', $line, $m)) {
+        if (preg_match('/^table\s+(\S+)\s+(\S+)(?:\s*\{)?$/i', $line, $m)) {
             $tables[] = [
                 'family' => $m[1],
                 'name' => $m[2],
@@ -96,7 +96,7 @@ function fw_parse_tables_list(string $raw): array
 
     foreach (preg_split('/\R/u', $raw) ?: [] as $lineRaw) {
         $line = fw_clean($lineRaw);
-        if ($line === '' || !preg_match('/^table\s+(\S+)\s+(\S+)$/i', $line, $m)) {
+        if ($line === '' || !preg_match('/^table\s+(\S+)\s+(\S+)(?:\s*\{)?$/i', $line, $m)) {
             continue;
         }
 
@@ -131,12 +131,12 @@ function fw_count_rules(array $tables): int
 
 function fw_count_tables_raw(string $rulesetRaw): int
 {
-    return $rulesetRaw === '' ? 0 : (preg_match_all('/^table\s+\S+\s+\S+/mi', $rulesetRaw) ?: 0);
+    return $rulesetRaw === '' ? 0 : (preg_match_all('/^table\s+\S+\s+\S+(?:\s*\{)?/mi', $rulesetRaw) ?: 0);
 }
 
 function fw_count_chains_raw(string $rulesetRaw): int
 {
-    return $rulesetRaw === '' ? 0 : (preg_match_all('/^chain\s+\S+\s*\{/mi', $rulesetRaw) ?: 0);
+    return $rulesetRaw === '' ? 0 : (preg_match_all('/\bchain\s+[^\s{]+\s*\{/i', $rulesetRaw) ?: 0);
 }
 
 function fw_count_rules_raw(string $rulesetRaw): int
@@ -152,7 +152,7 @@ function fw_count_rules_raw(string $rulesetRaw): int
             continue;
         }
 
-        if (preg_match('/^\s*(table|chain)\b/i', $line)) {
+        if (preg_match('/\b(table|chain)\b/i', $line) && preg_match('/^\s*(table|chain)\b/i', $line)) {
             continue;
         }
 
