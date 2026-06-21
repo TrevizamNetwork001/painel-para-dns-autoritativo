@@ -1,317 +1,40 @@
 <?php
+require_once __DIR__ . '/includes/auth.php';
 
-require_once __DIR__ . "/includes/auth.php";
-
-function fw_exec(string $command): array
-{
-    $lines = [];
-    $exit = 0;
-    exec($command . ' 2>&1', $lines, $exit);
-    return [trim(implode("
-", $lines)), $exit];
-}
-
-function fw_exec_first_available(array $commands): array
-{
-    $fallback = ['', 1];
-
-    foreach ($commands as $command) {
-        [$stdout, $exit] = fw_exec($command);
-        if ($stdout !== '' && stripos($stdout, 'operation not permitted') === false && stripos($stdout, 'permission denied') === false) {
-            return [$stdout, $exit];
-        }
-
-        $fallback = [$stdout, $exit];
-    }
-
-    return $fallback;
-}
-
-function fw_clean(string $text): string
-{
-    return trim(preg_replace('/\s+/u', ' ', $text) ?? $text);
-}
-
-function fw_parse_ruleset(string $raw): array
-{
-    $tables = [];
-    $tableIndex = -1;
-    $chainIndex = -1;
-
-    foreach (preg_split('/\R/u', $raw) ?: [] as $lineRaw) {
-        $line = fw_clean($lineRaw);
-        if ($line === '') {
-            continue;
-        }
-
-        if (preg_match('/^table\s+(\S+)\s+(\S+)(?:\s*\{)?$/i', $line, $m)) {
-            $tables[] = [
-                'family' => $m[1],
-                'name' => $m[2],
-                'chains' => [],
-            ];
-            $tableIndex = array_key_last($tables);
-            $chainIndex = -1;
-            continue;
-        }
-
-        if ($tableIndex < 0) {
-            continue;
-        }
-
-        if (preg_match('/^chain\s+([^\s{]+)\s*\{/i', $line, $m)) {
-            $tables[$tableIndex]['chains'][] = [
-                'name' => $m[1],
-                'meta' => $line,
-                'rules' => [],
-            ];
-            $chainIndex = array_key_last($tables[$tableIndex]['chains']);
-            continue;
-        }
-
-        if ($chainIndex < 0) {
-            continue;
-        }
-
-        if (str_starts_with($line, 'type ') || str_contains($line, ' hook ') || str_contains($line, ' policy ')) {
-            $tables[$tableIndex]['chains'][$chainIndex]['meta'] = fw_clean(
-                $tables[$tableIndex]['chains'][$chainIndex]['meta'] . ' ' . $line
-            );
-            continue;
-        }
-
-        if ($line === '{' || $line === '}') {
-            continue;
-        }
-
-        $tables[$tableIndex]['chains'][$chainIndex]['rules'][] = $line;
-    }
-
-    return $tables;
-}
-
-function fw_parse_tables_list(string $raw): array
-{
-    $tables = [];
-
-    foreach (preg_split('/\R/u', $raw) ?: [] as $lineRaw) {
-        $line = fw_clean($lineRaw);
-        if ($line === '' || !preg_match('/^table\s+(\S+)\s+(\S+)(?:\s*\{)?$/i', $line, $m)) {
-            continue;
-        }
-
-        $tables[] = [
-            'family' => $m[1],
-            'name' => $m[2],
-        ];
-    }
-
-    return $tables;
-}
-
-function fw_count_chains(array $tables): int
-{
-    $total = 0;
-    foreach ($tables as $table) {
-        $total += count($table['chains']);
-    }
-    return $total;
-}
-
-function fw_count_rules(array $tables): int
-{
-    $total = 0;
-    foreach ($tables as $table) {
-        foreach ($table['chains'] as $chain) {
-            $total += count($chain['rules']);
-        }
-    }
-    return $total;
-}
-
-function fw_count_tables_raw(string $rulesetRaw): int
-{
-    return $rulesetRaw === '' ? 0 : (preg_match_all('/^table\s+\S+\s+\S+(?:\s*\{)?/mi', $rulesetRaw) ?: 0);
-}
-
-function fw_count_chains_raw(string $rulesetRaw): int
-{
-    return $rulesetRaw === '' ? 0 : (preg_match_all('/\bchain\s+[^\s{]+\s*\{/i', $rulesetRaw) ?: 0);
-}
-
-function fw_count_rules_raw(string $rulesetRaw): int
-{
-    if ($rulesetRaw === '') {
-        return 0;
-    }
-
-    $count = 0;
-    foreach (preg_split('/\R/u', $rulesetRaw) ?: [] as $lineRaw) {
-        $line = fw_clean($lineRaw);
-        if ($line === '') {
-            continue;
-        }
-
-        if (preg_match('/\b(table|chain)\b/i', $line) && preg_match('/^\s*(table|chain)\b/i', $line)) {
-            continue;
-        }
-
-        if (preg_match('/\b(accept|drop|reject|counter)\b/i', $line) || preg_match('/\b(dport|sport)\b/i', $line)) {
-            $count++;
-        }
-    }
-
-    return $count;
-}
-
-function fw_count_chains_from_tables(array $tables): int
-{
-    $total = 0;
-
-    foreach ($tables as $table) {
-        $family = $table['family'] ?? '';
-        $name = $table['name'] ?? '';
-        if ($family === '' || $name === '') {
-            continue;
-        }
-
-        [$out, $exit] = fw_exec_first_available([
-            'sudo -n /usr/sbin/nft list table ' . escapeshellarg($family) . ' ' . escapeshellarg($name),
-            '/usr/sbin/nft list table ' . escapeshellarg($family) . ' ' . escapeshellarg($name),
-            'nft list table ' . escapeshellarg($family) . ' ' . escapeshellarg($name),
-        ]);
-
-        if ($exit !== 0 || $out === '') {
-            continue;
-        }
-
-        $total += preg_match_all('/^\s*chain\s+\S+\s*\{/mi', $out) ?: 0;
-    }
-
-    return $total;
-}
-
-function fw_count_rules_from_tables(array $tables): int
-{
-    $total = 0;
-
-    foreach ($tables as $table) {
-        $family = $table['family'] ?? '';
-        $name = $table['name'] ?? '';
-        if ($family === '' || $name === '') {
-            continue;
-        }
-
-        [$out, $exit] = fw_exec_first_available([
-            'sudo -n /usr/sbin/nft list table ' . escapeshellarg($family) . ' ' . escapeshellarg($name),
-            '/usr/sbin/nft list table ' . escapeshellarg($family) . ' ' . escapeshellarg($name),
-            'nft list table ' . escapeshellarg($family) . ' ' . escapeshellarg($name),
-        ]);
-
-        if ($exit !== 0 || $out === '') {
-            continue;
-        }
-
-        foreach (preg_split('/\R/u', $out) ?: [] as $lineRaw) {
-            $line = fw_clean($lineRaw);
-            if ($line === '' || preg_match('/^\s*(table|chain)\b/i', $line)) {
-                continue;
-            }
-
-            if (preg_match('/\b(accept|drop|reject|counter)\b/i', $line) || preg_match('/\b(dport|sport)\b/i', $line)) {
-                $total++;
-            }
-        }
-    }
-
-    return $total;
-}
-
-function fw_count_drop_packets(string $rulesetRaw): int
-{
-    if ($rulesetRaw === '') {
-        return 0;
-    }
-
-    preg_match_all('/counter packets (\d+) bytes .* drop/i', $rulesetRaw, $matches);
-
-    return array_sum(array_map('intval', $matches[1] ?? []));
-}
-
-function fw_count_drop_packets_by_family(string $rulesetRaw): array
-{
-    $ipv4 = 0;
-    $ipv6 = 0;
-
-    foreach (preg_split('/\R/u', $rulesetRaw) ?: [] as $lineRaw) {
-        $line = fw_clean($lineRaw);
-        if ($line === '' || !preg_match('/counter packets (\d+) bytes .* drop/i', $line, $match)) {
-            continue;
-        }
-
-        $packets = (int) $match[1];
-        $isIpv6 = preg_match('/\b(ip6|ipv6|meta nfproto ipv6)\b/i', $line) === 1;
-        $isIpv4 = preg_match('/\b(ip\b|ipv4|meta nfproto ipv4)\b/i', $line) === 1 && !$isIpv6;
-
-        if ($isIpv6) {
-            $ipv6 += $packets;
-        } elseif ($isIpv4) {
-            $ipv4 += $packets;
-        } else {
-            $ipv4 += $packets;
-        }
-    }
-
-    return [
-        'ipv4' => $ipv4,
-        'ipv6' => $ipv6,
-        'total' => $ipv4 + $ipv6,
-    ];
-}
-
-function fw_chain_policy(string $meta): ?string
-{
-    return preg_match('/\bpolicy\s+([a-z]+)\b/i', $meta, $m) ? strtolower($m[1]) : null;
-}
-
-function fw_chain_hook(string $meta): ?string
-{
-    return preg_match('/\bhook\s+([a-z]+)\b/i', $meta, $m) ? strtolower($m[1]) : null;
-}
-
-function fw_format_time(): string
-{
-    try {
-        return (new DateTimeImmutable('now', new DateTimeZone('America/Sao_Paulo')))->format('d/m/Y H:i');
-    } catch (Throwable $e) {
-        return date('d/m/Y H:i');
-    }
-}
-
-[$serviceRaw, $serviceExit] = fw_exec('systemctl is-active nftables');
-[$rulesetRaw, $rulesetExit] = fw_exec_first_available([
-    'sudo -n /usr/sbin/nft list ruleset',
-    '/usr/sbin/nft list ruleset',
-    'nft list ruleset',
-]);
-[$tablesRaw, $tablesExit] = fw_exec_first_available([
-    'sudo -n /usr/sbin/nft list tables',
-    '/usr/sbin/nft list tables',
-    'nft list tables',
-]);
-
-$service = trim($serviceRaw);
-$serviceActive = $service === 'active';
-$serviceKnown = $service !== '';
-$rulesetOk = trim($rulesetRaw) !== '' && $rulesetExit === 0;
-$tables = $rulesetOk ? fw_parse_ruleset($rulesetRaw) : [];
-$tablesList = fw_parse_tables_list($tablesRaw);
-$tablesCount = count($tables) ?: fw_count_tables_raw($rulesetRaw) ?: count($tablesList);
-$chainsCount = fw_count_chains($tables) ?: fw_count_chains_raw($rulesetRaw) ?: fw_count_chains_from_tables($tablesList);
-$rulesCount = fw_count_rules($tables) ?: fw_count_rules_raw($rulesetRaw) ?: fw_count_rules_from_tables($tablesList);
-$dropPackets = fw_count_drop_packets_by_family($rulesetRaw);
-$checkTime = fw_format_time();
-
+$summary = [
+    ['IPv4 Liberados', '2', 'Redes e endereços', false],
+    ['IPv6 Liberados', '0', 'Nenhum cadastrado', false],
+    ['Portas Admin', '3', 'Acesso restrito', false],
+    ['Portas Públicas', '5', 'Acesso externo', false],
+    ['Status', 'Ativo', 'Configuração em uso', true],
+];
+$quickActions = [
+    ['+', 'Adicionar IP', 'Autorizar endereço'],
+    ['🔒', 'Porta Admin', 'Adicionar restrição'],
+    ['🌐', 'Porta Pública', 'Liberar serviço'],
+    ['✓', 'Validar', 'Verificar configuração'],
+    ['↻', 'Aplicar', 'Publicar alterações'],
+    ['▣', 'Backup', 'Salvar uma cópia'],
+];
+$adminAccess = [
+    ['IPv4', '45.182.96.0/24', 'Rede principal'],
+    ['IPv4', '168.194.14.101', 'Acesso externo'],
+];
+$adminPorts = [
+    ['22', 'SSH', 'Acesso remoto'],
+    ['80', 'HTTP', 'Painel'],
+    ['443', 'HTTPS', 'Painel seguro'],
+];
+$publicPorts = [
+    ['53', 'DNS', 'Resolução de nomes'],
+    ['80', 'HTTP', 'Serviço web'],
+    ['443', 'HTTPS', 'Serviço web seguro'],
+];
+$recentAudit = [
+    ['admin', 'Adicionou IP IPv4', 'Hoje, 09:28'],
+    ['admin', 'Removeu porta pública', 'Hoje, 09:14'],
+    ['admin', 'Validou configuração', 'Hoje, 09:05'],
+];
 ?>
 <!DOCTYPE html>
 <html lang="pt-BR">
@@ -320,276 +43,163 @@ $checkTime = fw_format_time();
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Firewall</title>
 <style>
-:root{
-    color-scheme: dark;
-    --bg:#0b1220;
-    --panel:#0f172a;
-    --panel-2:#111c33;
-    --border:#24324a;
-    --text:#e2e8f0;
-    --muted:#94a3b8;
-    --accent:#38bdf8;
-}
+:root{color-scheme:dark;--bg:#0f172a;--panel:#071226;--deep:#020617;--line:#1e293b;--line2:#334155;--text:#e2e8f0;--muted:#94a3b8;--subtle:#64748b;--accent:#38bdf8;--ok:#4ade80}
 *{box-sizing:border-box}
-body{
-    margin:0;
-    font-family:Arial,sans-serif;
-    background:radial-gradient(circle at top,#101b33 0,var(--bg) 44%,#070b14 100%);
-    color:var(--text);
-}
-a{color:inherit;text-decoration:none}
-.page{
-    width:min(980px, calc(100% - 28px));
-    margin:0 auto;
-    padding:22px 0 34px;
-}
-.back{
-    color:var(--accent);
-    font-size:14px;
-}
-h1{
-    margin:8px 0 6px;
-    font-size:28px;
-}
-.subtitle{
-    margin:0;
-    color:var(--muted);
-    line-height:1.5;
-}
-.card{
-    margin-top:18px;
-    padding:16px;
-    border:1px solid var(--border);
-    border-radius:14px;
-    background:linear-gradient(180deg, rgba(15,23,42,.96), rgba(11,18,32,.96));
-    box-shadow:0 16px 44px rgba(0,0,0,.18);
-}
-.card h2{
-    margin:0 0 6px;
-    font-size:18px;
-}
-.card p{
-    margin:0;
-    color:var(--muted);
-}
-.stats{
-    display:grid;
-    grid-template-columns:repeat(3, minmax(0, 1fr));
-    gap:12px;
-    margin-top:14px;
-}
-.stat{
-    padding:14px;
-    border-radius:12px;
-    border:1px solid var(--border);
-    background:rgba(17,28,51,.72);
-}
-.stat h3{
-    margin:0;
-    font-size:24px;
-}
-.stat p{
-    margin-top:8px;
-    color:var(--muted);
-    font-size:13px;
-}
-.stat.bad{background:rgba(63,13,18,.45)}
-.stat.warn{background:rgba(63,50,13,.42)}
-.stat.info{background:rgba(12,45,72,.42)}
-.badge{
-    display:inline-flex;
-    align-items:center;
-    padding:5px 10px;
-    border-radius:999px;
-    border:1px solid rgba(148,163,184,.18);
-    background:rgba(148,163,184,.10);
-    color:#dbe7f5;
-    font-size:12px;
-    white-space:nowrap;
-}
-.badges{
-    display:flex;
-    flex-wrap:wrap;
-    gap:8px;
-    margin-top:12px;
-}
-.badge-ok{background:rgba(22,163,74,.14);border-color:rgba(22,163,74,.3);color:#bbf7d0}
-.badge-warn{background:rgba(217,119,6,.14);border-color:rgba(217,119,6,.32);color:#fde68a}
-.badge-info{background:rgba(59,130,246,.14);border-color:rgba(59,130,246,.32);color:#bfdbfe}
-.actions{
-    display:flex;
-    flex-wrap:wrap;
-    gap:8px;
-    margin-top:12px;
-}
-.actions a{
-    border:1px solid var(--border);
-    background:transparent;
-    color:var(--muted);
-    border-radius:10px;
-    padding:9px 12px;
-    font-size:13px;
-}
-.panel{
-    margin-top:12px;
-    border:1px solid var(--border);
-    border-radius:12px;
-    background:rgba(17,28,51,.72);
-    padding:14px;
-}
-.panel h3{
-    margin:0 0 10px;
-    font-size:15px;
-}
-pre{
-    margin:0;
-    padding:14px;
-    background:#091123;
-    border:1px solid var(--border);
-    border-radius:12px;
-    color:#cbd5e1;
-    font-size:12px;
-    line-height:1.55;
-    white-space:pre-wrap;
-    word-break:break-word;
-    overflow:auto;
-}
-.table{
-    margin-top:12px;
-    padding-top:12px;
-    border-top:1px solid rgba(148,163,184,.12);
-}
-.table:first-child{
-    margin-top:0;
-    padding-top:0;
-    border-top:0;
-}
-.table h4{
-    margin:0 0 6px;
-    font-size:14px;
-}
-.chain{
-    margin-top:10px;
-    padding:10px 12px;
-    border:1px solid var(--border);
-    border-radius:12px;
-    background:#091123;
-}
-.chain-title{
-    margin:0 0 8px;
-    color:#dbe7f5;
-    font-size:13px;
-}
-.rule{
-    margin-top:8px;
-    padding:9px 12px;
-    border:1px solid rgba(148,163,184,.16);
-    border-radius:10px;
-    background:rgba(17,28,51,.55);
-    color:#cbd5e1;
-    font-size:12px;
-    line-height:1.5;
-    white-space:pre-wrap;
-    word-break:break-word;
-}
-@media (max-width: 720px){
-    .page{width:calc(100% - 18px);padding-top:14px}
-    h1{font-size:24px}
-}
+body{margin:0;background:var(--bg);color:var(--text);font-family:Arial,sans-serif}
+button,input,a{font:inherit}button{color:inherit}a{color:inherit;text-decoration:none}
+.page{width:min(1180px,calc(100% - 36px));margin:30px auto 38px}
+.page-header{margin-bottom:22px}.back-link{display:inline-flex;color:#cbd5e1;font-size:14px}.back-link:hover,.back-link:focus{color:var(--accent);outline:none}
+.page-header h1{margin:10px 0 6px;color:#fff;font-size:30px;letter-spacing:-.02em}.page-header p{margin:0;color:var(--muted)}
+.summary-grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:12px;margin-bottom:22px}
+.summary-card{min-height:112px;padding:16px;border:1px solid var(--line);border-radius:14px;background:var(--deep)}
+.summary-label{display:block;color:var(--muted);font-size:11px;letter-spacing:.04em;text-transform:uppercase}
+.summary-value{display:block;margin-top:8px;color:var(--accent);font-size:25px;font-weight:800}.summary-value.status{color:var(--ok);font-size:22px}
+.summary-detail{display:block;margin-top:7px;color:var(--subtle);font-size:11px}
+.panel{margin-bottom:22px;padding:22px;border:1px solid var(--line);border-radius:16px;background:var(--panel);box-shadow:0 0 20px #0003}
+.panel-header{display:flex;align-items:flex-start;justify-content:space-between;gap:18px;margin-bottom:17px}.panel-header h2{margin:0;color:#fff;font-size:18px}
+.panel-header p{margin:5px 0 0;color:var(--muted);font-size:13px;line-height:1.45}
+.quick-grid{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:12px}
+.quick-action{min-height:88px;padding:14px;border:1px solid var(--line);border-radius:12px;background:var(--deep);text-align:left;cursor:pointer;transition:.15s}
+.quick-action:hover,.quick-action:focus{border-color:var(--accent);outline:none;transform:translateY(-2px)}
+.quick-icon{display:block;height:19px;color:var(--accent);font-size:17px;font-weight:800}.quick-action strong{display:block;margin-top:8px;font-size:13px}
+.quick-action small{display:block;margin-top:5px;color:var(--subtle);font-size:11px}
+.search{width:min(280px,100%);min-height:38px;padding:8px 11px;border:1px solid var(--line2);border-radius:10px;background:var(--deep);color:#fff;outline:none}
+.search::placeholder{color:var(--subtle)}.search:focus{border-color:var(--accent);box-shadow:0 0 0 3px #38bdf81a}
+.table-wrap{overflow-x:auto;border:1px solid var(--line);border-radius:12px}table{width:100%;border-collapse:collapse;min-width:660px}
+th,td{padding:12px 14px;border-bottom:1px solid var(--line);text-align:left;font-size:13px}th{background:var(--deep);color:var(--muted);font-size:10px;letter-spacing:.05em;text-transform:uppercase}
+tr:last-child td{border-bottom:0}tbody tr{background:#02061766}tbody tr:hover{background:#0f172ab8}
+.type-badge{display:inline-flex;padding:4px 8px;border:1px solid #38bdf838;border-radius:999px;background:#0e74901f;color:#bae6fd;font-size:11px;font-weight:700}
+.strong{color:#fff;font-weight:700}.row-actions{display:flex;align-items:center;gap:7px;white-space:nowrap}
+.text-action{padding:0;border:0;background:transparent;color:var(--accent);cursor:pointer;font-size:12px}.text-action:hover,.text-action:focus{text-decoration:underline;outline:none}.divider{color:#475569}
+.lower-grid{display:grid;grid-template-columns:minmax(0,.8fr) minmax(0,1.2fr);gap:22px}
+.validation{display:flex;gap:13px;min-height:118px;padding:17px;border:1px solid #22c55e38;border-radius:12px;background:#14532d1f}
+.validation-icon{display:inline-flex;align-items:center;justify-content:center;flex:0 0 30px;width:30px;height:30px;border-radius:50%;background:#14532d;color:#bbf7d0;font-weight:800}
+.validation strong{display:block;margin:2px 0 13px;color:#bbf7d0;font-size:15px}.validation span{display:block;color:var(--muted);font-size:12px;line-height:1.5}.validation time{color:var(--text)}
+.audit-item{display:grid;grid-template-columns:minmax(80px,.35fr) minmax(160px,1fr) auto;gap:14px;align-items:center;padding:12px 0;border-bottom:1px solid var(--line);font-size:13px}
+.audit-item:first-child{padding-top:0}.audit-item:last-child{border-bottom:0}.audit-user{color:#fff;font-weight:700}.audit-action{color:#cbd5e1}.audit-time{color:var(--subtle);font-size:11px;white-space:nowrap}
+.secondary-button{display:inline-flex;align-items:center;justify-content:center;min-height:36px;margin-top:14px;padding:8px 12px;border:1px solid var(--line2);border-radius:9px;background:#0f172a;color:#dbeafe;font-size:12px;font-weight:700}
+.secondary-button:hover,.secondary-button:focus{border-color:var(--accent);outline:none}
+.ui-toast{position:fixed;right:20px;bottom:20px;z-index:20;max-width:min(380px,calc(100vw - 40px));padding:12px 14px;border:1px solid var(--line2);border-radius:11px;background:#111827;color:#cbd5e1;box-shadow:0 18px 45px #0006;font-size:13px}
+.ui-toast[hidden],.empty-row[hidden]{display:none}.empty-row td{padding:22px 14px;color:var(--muted);text-align:center}
+@media(max-width:1050px){.summary-grid{grid-template-columns:repeat(3,minmax(0,1fr))}.quick-grid{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media(max-width:760px){.page{width:min(100% - 20px,1180px);margin:20px auto 30px}.page-header h1{font-size:27px}.summary-grid,.quick-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.panel{padding:17px}.panel-header{display:block}.search{width:100%;margin-top:13px}.lower-grid{grid-template-columns:1fr}.audit-item{grid-template-columns:80px 1fr}.audit-time{grid-column:2}}
+@media(max-width:460px){.summary-grid,.quick-grid{grid-template-columns:1fr}.summary-card{min-height:96px}}
 </style>
 </head>
 <body>
-<div class="page">
-    <a class="back" href="dashboard.php">← Voltar</a>
-    <h1>Firewall</h1>
-    <p class="subtitle">Consulta somente leitura do nftables.</p>
+<main class="page">
+    <header class="page-header">
+        <a class="back-link" href="dashboard.php">← Voltar ao painel</a>
+        <h1>Firewall</h1>
+        <p>Controle de acesso e portas públicas.</p>
+    </header>
 
-    <section class="card">
-        <h2>nftables</h2>
-        <p>Estado atual do firewall e regras carregadas no servidor.</p>
+    <section class="summary-grid" aria-label="Resumo do Firewall">
+        <?php foreach ($summary as [$label, $value, $detail, $status]): ?>
+            <article class="summary-card">
+                <span class="summary-label"><?= htmlspecialchars($label) ?></span>
+                <span class="summary-value<?= $status ? ' status' : '' ?>"><?= htmlspecialchars($value) ?></span>
+                <span class="summary-detail"><?= htmlspecialchars($detail) ?></span>
+            </article>
+        <?php endforeach; ?>
+    </section>
 
-        <div class="badges">
-            <span class="badge <?= $serviceActive ? 'badge-ok' : ($serviceKnown ? 'badge-warn' : 'badge-warn') ?>"><?= $serviceActive ? 'Ativo' : ($serviceKnown ? 'Inativo' : 'Não identificado') ?></span>
-            <span class="badge badge-info"><?= $tablesCount ?> <?= $tablesCount === 1 ? 'tabela' : 'tabelas' ?></span>
-            <span class="badge badge-info"><?= $chainsCount ?> <?= $chainsCount === 1 ? 'chain' : 'chains' ?></span>
-            <span class="badge badge-info"><?= $rulesCount ?> <?= $rulesCount === 1 ? 'regra' : 'regras' ?></span>
-            <span class="badge">Verificado em <?= htmlspecialchars($checkTime) ?></span>
-        </div>
-
-        <div class="stats">
-            <div class="stat <?= $dropPackets['ipv4'] > 0 ? 'warn' : 'info' ?>">
-                <h3><?= $dropPackets['ipv4'] ?></h3>
-                <p>Drops IPv4</p>
-            </div>
-            <div class="stat <?= $dropPackets['ipv6'] > 0 ? 'warn' : 'info' ?>">
-                <h3><?= $dropPackets['ipv6'] ?></h3>
-                <p>Drops IPv6</p>
-            </div>
-            <div class="stat info">
-                <h3><?= $dropPackets['total'] ?></h3>
-                <p>Total de drops</p>
-            </div>
-        </div>
-
-        <div class="actions">
-            <a href="#dados">Mostrar regras</a>
-        </div>
-
-        <div class="panel" id="dados">
-            <h3>Regras</h3>
-            <?php if ($rulesetOk && $tables): ?>
-                <?php foreach ($tables as $table): ?>
-                    <div class="table">
-                        <h4>table <?= htmlspecialchars($table['family']) ?> <?= htmlspecialchars($table['name']) ?></h4>
-                        <p><?= count($table['chains']) ?> chain(s)</p>
-                        <?php foreach ($table['chains'] as $chain): ?>
-                            <?php $meta = $chain['meta'] ?? ''; ?>
-                            <div class="chain">
-                                <div class="chain-title">
-                                    chain <?= htmlspecialchars($chain['name']) ?>
-                                    <?php
-                                        $parts = [];
-                                        if (($hook = fw_chain_hook($meta))) {
-                                            $parts[] = 'hook ' . $hook;
-                                        }
-                                        if (($policy = fw_chain_policy($meta))) {
-                                            $parts[] = 'policy ' . $policy;
-                                        }
-                                    ?>
-                                    <?= $parts ? '— ' . htmlspecialchars(implode(', ', $parts)) : '' ?>
-                                </div>
-                                <?php if ($chain['rules']): ?>
-                                    <?php foreach ($chain['rules'] as $rule): ?>
-                                        <div class="rule"><?= htmlspecialchars($rule) ?></div>
-                                    <?php endforeach; ?>
-                                <?php else: ?>
-                                    <div class="rule">Nenhuma regra direta encontrada nesta chain.</div>
-                                <?php endif; ?>
-                            </div>
-                        <?php endforeach; ?>
-                    </div>
-                <?php endforeach; ?>
-
-                <?php if (trim($rulesetRaw) !== ''): ?>
-                    <div class="table">
-                        <h4>Texto bruto do ruleset</h4>
-                        <pre><?= htmlspecialchars($rulesetRaw) ?></pre>
-                    </div>
-                <?php endif; ?>
-            <?php else: ?>
-                <p>Não foi possível consultar o nftables no momento.</p>
-                <pre><?= htmlspecialchars($rulesetRaw !== '' ? $rulesetRaw : 'Sem saída disponível.') ?></pre>
-            <?php endif; ?>
+    <section class="panel">
+        <header class="panel-header"><div><h2>Ações rápidas</h2><p>Atalhos para as operações mais utilizadas.</p></div></header>
+        <div class="quick-grid">
+            <?php foreach ($quickActions as [$icon, $label, $detail]): ?>
+                <button class="quick-action" type="button" data-future-action="<?= htmlspecialchars($label, ENT_QUOTES, 'UTF-8') ?>">
+                    <span class="quick-icon" aria-hidden="true"><?= htmlspecialchars($icon) ?></span>
+                    <strong><?= htmlspecialchars($label) ?></strong>
+                    <small><?= htmlspecialchars($detail) ?></small>
+                </button>
+            <?php endforeach; ?>
         </div>
     </section>
-</div>
 
+    <section class="panel">
+        <header class="panel-header">
+            <div><h2>Acesso Administrativo</h2><p>IPs autorizados para acesso administrativo.</p></div>
+            <input class="search" id="admin-access-search" type="search" placeholder="Pesquisar IP ou rede..." aria-label="Pesquisar IP ou rede">
+        </header>
+        <div class="table-wrap">
+            <table>
+                <thead><tr><th>Tipo</th><th>IP/Rede</th><th>Descrição</th><th>Ações</th></tr></thead>
+                <tbody id="admin-access-rows">
+                    <?php foreach ($adminAccess as [$type, $network, $description]): ?>
+                        <tr data-search-text="<?= htmlspecialchars(strtolower("$type $network $description"), ENT_QUOTES, 'UTF-8') ?>">
+                            <td><span class="type-badge"><?= htmlspecialchars($type) ?></span></td>
+                            <td class="strong"><?= htmlspecialchars($network) ?></td>
+                            <td><?= htmlspecialchars($description) ?></td>
+                            <td><div class="row-actions"><button class="text-action" type="button" data-future-action="Editar IP">Editar</button><span class="divider">|</span><button class="text-action" type="button" data-future-action="Remover IP">Remover</button></div></td>
+                        </tr>
+                    <?php endforeach; ?>
+                    <tr class="empty-row" id="admin-access-empty" hidden><td colspan="4">Nenhum IP ou rede encontrado.</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </section>
+
+    <section class="panel">
+        <header class="panel-header"><div><h2>Portas Administrativas</h2><p>Portas restritas aos IPs autorizados.</p></div></header>
+        <div class="table-wrap"><table>
+            <thead><tr><th>Porta</th><th>Serviço</th><th>Descrição</th><th>Ações</th></tr></thead>
+            <tbody>
+                <?php foreach ($adminPorts as [$port, $service, $description]): ?>
+                    <tr><td class="strong"><?= htmlspecialchars($port) ?></td><td><?= htmlspecialchars($service) ?></td><td><?= htmlspecialchars($description) ?></td><td><div class="row-actions"><button class="text-action" type="button" data-future-action="Editar porta administrativa">Editar</button><span class="divider">|</span><button class="text-action" type="button" data-future-action="Remover porta administrativa">Remover</button></div></td></tr>
+                <?php endforeach; ?>
+            </tbody>
+        </table></div>
+    </section>
+
+    <section class="panel">
+        <header class="panel-header"><div><h2>Portas Públicas</h2><p>Disponíveis para acesso externo.</p></div></header>
+        <div class="table-wrap"><table>
+            <thead><tr><th>Porta</th><th>Serviço</th><th>Descrição</th><th>Ações</th></tr></thead>
+            <tbody>
+                <?php foreach ($publicPorts as [$port, $service, $description]): ?>
+                    <tr><td class="strong"><?= htmlspecialchars($port) ?></td><td><?= htmlspecialchars($service) ?></td><td><?= htmlspecialchars($description) ?></td><td><div class="row-actions"><button class="text-action" type="button" data-future-action="Editar porta pública">Editar</button><span class="divider">|</span><button class="text-action" type="button" data-future-action="Remover porta pública">Remover</button></div></td></tr>
+                <?php endforeach; ?>
+            </tbody>
+        </table></div>
+    </section>
+
+    <div class="lower-grid">
+        <section class="panel">
+            <header class="panel-header"><div><h2>Última Validação</h2><p>Resultado da verificação mais recente.</p></div></header>
+            <div class="validation"><span class="validation-icon" aria-hidden="true">✓</span><div><strong>Configuração válida</strong><span>Última validação:</span><span><time datetime="2026-06-21T09:35:00-03:00">21/06/2026 09:35</time></span></div></div>
+        </section>
+        <section class="panel">
+            <header class="panel-header"><div><h2>Auditoria Recente</h2><p>Últimas alterações.</p></div></header>
+            <div class="audit-list">
+                <?php foreach ($recentAudit as [$user, $action, $time]): ?>
+                    <div class="audit-item"><span class="audit-user"><?= htmlspecialchars($user) ?></span><span class="audit-action"><?= htmlspecialchars($action) ?></span><span class="audit-time"><?= htmlspecialchars($time) ?></span></div>
+                <?php endforeach; ?>
+            </div>
+            <a class="secondary-button" href="auditoria.php">Ver histórico</a>
+        </section>
+    </div>
+
+    <?php require __DIR__ . '/includes/footer.php'; ?>
+</main>
+<div class="ui-toast" id="ui-toast" role="status" aria-live="polite" hidden></div>
 <script>
-setTimeout(() => {
-    window.location.reload();
-}, 8000);
+const searchInput=document.getElementById('admin-access-search');
+const accessRows=[...document.querySelectorAll('#admin-access-rows tr[data-search-text]')];
+const emptyRow=document.getElementById('admin-access-empty');
+searchInput.addEventListener('input',()=>{
+    const term=searchInput.value.trim().toLocaleLowerCase('pt-BR');
+    let visible=0;
+    accessRows.forEach(row=>{const show=row.dataset.searchText.includes(term);row.hidden=!show;if(show)visible++});
+    emptyRow.hidden=visible!==0;
+});
+const toast=document.getElementById('ui-toast');let toastTimer;
+document.querySelectorAll('[data-future-action]').forEach(button=>button.addEventListener('click',()=>{
+    clearTimeout(toastTimer);
+    toast.textContent=button.dataset.futureAction+': ação disponível em uma próxima etapa.';
+    toast.hidden=false;
+    toastTimer=setTimeout(()=>{toast.hidden=true},3200);
+}));
 </script>
-
-<?php require __DIR__ . '/includes/footer.php'; ?>
 </body>
 </html>
