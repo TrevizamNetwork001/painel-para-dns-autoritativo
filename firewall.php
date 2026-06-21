@@ -377,8 +377,6 @@ pre{
             <span class="badge badge-info"><?= $tablesCount ?> <?= $tablesCount === 1 ? 'tabela' : 'tabelas' ?></span>
             <span class="badge badge-info"><?= $chainsCount ?> <?= $chainsCount === 1 ? 'chain' : 'chains' ?></span>
             <span class="badge badge-info"><?= $rulesCount ?> <?= $rulesCount === 1 ? 'regra' : 'regras' ?></span>
-            <span class="badge <?= $dropPackets['ipv4'] > 0 ? 'badge-warn' : 'badge-info' ?>">IPv4: <?= $dropPackets['ipv4'] ?></span>
-            <span class="badge <?= $dropPackets['ipv6'] > 0 ? 'badge-warn' : 'badge-info' ?>">IPv6: <?= $dropPackets['ipv6'] ?></span>
             <span class="badge">Verificado em <?= htmlspecialchars($checkTime) ?></span>
         </div>
 
