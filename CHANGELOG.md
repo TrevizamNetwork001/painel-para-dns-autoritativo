@@ -2,6 +2,23 @@
 
 Historico de alteracoes do Painel DNS Trevizam Network.
 
+## [2.3.4] - 2026-06-21
+
+### Limpeza visual da tela Firewall
+
+- Removida da interface principal a seção Prévia das regras.
+- Regras nftables deixaram de ocupar espaço visual na página.
+- Mantida a validação na faixa Ações rápidas.
+- Mantida a saída técnica recolhida nos cards de status.
+- Aviso de aplicação real movido para uma nota compacta em Última Aplicação.
+- Mantidos visíveis os bloqueios de segurança da aplicação.
+- Aproximados os cards Última Aplicação, Última Validação e Auditoria Recente
+  dos blocos operacionais.
+- Backend confirmado idêntico por hash; geração, validação, aplicação, backup,
+  rollback, auditoria e CSRF não foram alterados.
+- Nenhuma regra real de firewall foi aplicada.
+- Documentação disponível em `HANDOFF_LIMPEZA_VISUAL_PREVIA_FIREWALL.md`.
+
 ## [2.3.3] - 2026-06-21
 
 ### Alinhamento visual do Firewall ao mockup
