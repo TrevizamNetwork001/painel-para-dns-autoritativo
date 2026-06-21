@@ -1,0 +1,383 @@
+PROJETO: FIREWALL_V1
+STATUS: V1 concluída até a fase V1.6
+DATA DE FECHAMENTO: 2026-06-21
+
+RESUMO EXECUTIVO
+
+O módulo FIREWALL_V1 foi implementado no painel PHP existente.
+
+A evolução saiu de uma tela visual dark/NOC para um módulo operacional com:
+
+- CRUD de ACLs administrativas IPv4 e IPv6.
+- CRUD de portas administrativas e públicas.
+- Persistência SQLite própria.
+- Auditoria real de sucesso e erro.
+- Validação controlada com nft -c.
+- Geração conservadora de regras nftables.
+- Aplicação controlada com backup obrigatório.
+- Confirmações fortes.
+- Rollback manual validado.
+- Cards de última validação e última aplicação.
+- Changelog 2.3.0.
+- Handoffs por fase.
+
+A FIREWALL_V1 está funcional e protegida por múltiplas travas de segurança.
+
+COMMITS PRINCIPAIS
+
+V1.1:
+8d21ba9 feat: implementa CRUD inicial do firewall
+
+V1.2:
+e64dede feat: evolui firewall v1.2 com acl ipv4 e ipv6
+
+V1.5:
+772baf4 feat: adiciona validacao controlada do firewall v1.5
+
+V1.6:
+5eecc9f feat: implementa aplicacao controlada do firewall v1.6
+
+ARQUIVO PRINCIPAL
+
+firewall.php
+
+ARQUIVOS E DADOS RELACIONADOS
+
+- Persistência SQLite própria do módulo.
+- firewall_meta para metadados de validação, backup, aplicação e reversão.
+- HANDOFF_FIREWALL_V1_2.md.
+- HANDOFF_FIREWALL_V1_5.md.
+- HANDOFF_FIREWALL_V1_6.md.
+- CHANGELOG.md 2.3.0.
+
+Arquivos mantidos fora dos commits, conforme combinado:
+
+- db/dns_servers.secret
+- db/painel_dns.sqlite
+
+ESTADO DO SQLITE NO FECHAMENTO
+
+Verificação somente leitura realizada em 2026-06-21:
+
+- Tamanho aproximado: 324 KB.
+- PRAGMA integrity_check: ok.
+- page_size: 4096 bytes.
+- freelist_count: 0.
+- journal_mode persistido: delete.
+- synchronous observado: FULL.
+- busy_timeout configurado pela aplicação: 2000 ms.
+- firewall_admin_access possui índice UNIQUE automático para rede.
+- firewall_ports possui índice UNIQUE automático para escopo e porta.
+- firewall_meta possui índice de chave primária automático.
+- audit_logs não possui índices secundários.
+
+Conclusão:
+
+- O banco está íntegro, compacto e adequado ao volume atual.
+- As consultas do firewall estão cobertas pelos índices de unicidade relevantes.
+- Não foi executado VACUUM, ANALYZE, mudança para WAL ou qualquer escrita de
+  otimização no banco produtivo.
+- Para crescimento significativo da auditoria, recomenda-se avaliar índices em
+  audit_logs conforme as consultas reais e medir WAL em homologação antes de
+  qualquer alteração.
+
+FASE V1.1 - CRUD INICIAL
+
+Status: concluída e commitada.
+
+Implementado:
+
+- Adição, edição e remoção de IP administrativo.
+- Inclusão de portas administrativas e públicas.
+- Remoção de portas com confirmação exata.
+- Persistência SQLite.
+- POST e CSRF para ações mutáveis.
+- Validação de entradas e bloqueio de duplicidades.
+- Auditoria real de sucesso e erro.
+- Redirecionamento pós-POST.
+- Modais no layout dark/NOC.
+- Nenhum comando ou aplicação real de firewall.
+
+Validações reportadas:
+
+- php -l.
+- Fluxos válidos e inválidos em banco temporário.
+- CSRF inválido bloqueado e auditado.
+- Confirmações incorretas bloqueadas e auditadas.
+- Comandos proibidos ausentes.
+
+FASE V1.2 - ACL IPV4/IPV6 E CRUD EVOLUÍDO
+
+Status: concluída e commitada.
+
+Implementado:
+
+- Separação visual e lógica de ACL IPv4 e IPv6.
+- CRUD de ACLs com validação por família.
+- CRUD de portas com edição, remoção e confirmação.
+- Auditoria por tipo de registro e escopo.
+- Toast de feedback com auto-hide.
+- Handoff em HANDOFF_FIREWALL_V1_2.md.
+
+Validações reportadas:
+
+- php -l firewall.php.
+- Cadastro de IPv4 e IPv6 válidos.
+- Edição e remoção de porta.
+- Rejeição de IPv4, IPv6 e porta inválidos.
+- Rejeição de CSRF inválido.
+- Toast verificado em cópia de teste.
+
+FASE V1.5 - VALIDAÇÃO CONTROLADA
+
+Status: concluída e commitada.
+
+Implementado:
+
+- Geração conservadora de regras IPv4 e IPv6.
+- Bloqueio de ACL administrativa /0.
+- Validação via POST com CSRF.
+- Execução exclusiva de nft -c -f em arquivo temporário.
+- Timeout e captura de stdout/stderr.
+- Limpeza do arquivo temporário.
+- Card Última Validação persistido em firewall_meta.
+- Prévia somente leitura e saída técnica recolhida.
+- Auditoria de geração, validação, erros e CSRF inválido.
+- Tratamento de binário indisponível, permissão, timeout e erro de geração.
+- Sanitização de caminhos internos.
+- Nenhum reload, systemctl ou nft -f sem -c.
+- Nenhuma aplicação real nesta fase.
+
+Validações reportadas:
+
+- php -l firewall.php.
+- git diff --check.
+- CSRF inválido bloqueado e auditado.
+- Geração de ACLs IPv4/IPv6 e portas TCP/UDP.
+- Bloqueio de 0.0.0.0/0 e ::/0.
+- Erros de geração e permissão auditados.
+- Temporários removidos.
+
+Observação:
+
+O teste real de sucesso do nft -c ficou limitado porque o ambiente não concede
+permissão netlink. O erro foi tratado corretamente e não houve tentativa de
+contornar permissões.
+
+FASE V1.6 - APLICAÇÃO CONTROLADA
+
+Status: concluída e commitada.
+
+Implementado:
+
+- Aplicação real controlada da tabela inet painel_firewall.
+- Validação obrigatória antes da aplicação.
+- Backup obrigatório do estado anterior da tabela gerenciada.
+- Confirmação exata APLICAR FIREWALL e confirmação visual.
+- Rollback manual com confirmação REVERTER FIREWALL.
+- Validação obrigatória do backup antes do rollback.
+- Card Última Aplicação.
+- Persistência de aplicação, backup e reversão em firewall_meta.
+- Proteção contra alteração concorrente por hash.
+- Auditoria completa.
+- Handoff em HANDOFF_FIREWALL_V1_6.md.
+- Changelog 2.3.0.
+
+Regras de segurança:
+
+- Aplicação e rollback exigem POST, autenticação e CSRF.
+- nft -f nunca executa quando nft -c falha.
+- Aplicação é bloqueada sem ACL administrativa.
+- Aplicação é bloqueada sem porta administrativa.
+- ACL administrativa 0.0.0.0/0 ou ::/0 é bloqueada.
+- ACLs e portas administrativas precisam aparecer nas regras geradas.
+- Backup precisa ser criado antes da aplicação.
+- Rollback exige backup válido.
+- Caminhos internos e comandos completos não são exibidos.
+- Somente a tabela exclusiva do painel é gerenciada.
+- Nenhum flush ruleset, systemctl, reload ou restart é usado.
+
+Validações reportadas:
+
+- php -l firewall.php.
+- git diff --check.
+- Fluxos isolados de aplicação, erro e rollback.
+- Falha de validação sem execução posterior de nft -f.
+- Falha de backup bloqueando aplicação.
+- Rollback sem backup e com confirmação incorreta bloqueados.
+- Rollback restaurando tabela anterior.
+- Rollback removendo a tabela quando ela não existia antes.
+- Auditoria e persistência verificadas.
+- Nenhum temporário residual.
+- Nenhuma aplicação real no ambiente sem permissão netlink.
+
+LIMITAÇÕES DO AMBIENTE DE TESTE
+
+O ambiente de desenvolvimento não concede permissão netlink suficiente para
+confirmar aplicação real bem-sucedida do nftables.
+
+Impacto:
+
+- Fluxos de sucesso foram testados com executor isolado exclusivo para PHP CLI.
+- O fluxo real de erro de permissão foi testado.
+- A aplicação real não foi considerada bem-sucedida.
+- Nenhuma regra real foi aplicada indevidamente.
+- Nenhum contorno de permissão foi tentado.
+- Nenhum sudo foi forçado fora do padrão existente.
+
+Antes da produção, aplicação e rollback devem ser validados em ambiente
+autorizado e com acesso fora de banda.
+
+DECISÕES DE SEGURANÇA
+
+1. Separar validação de aplicação.
+
+A V1.5 valida com nft -c. A V1.6 aplica somente após validação bem-sucedida.
+
+2. Bloquear configuração insegura.
+
+Bloqueios incluem ACL administrativa vazia, porta administrativa vazia, ACL /0,
+CSRF inválido, confirmação incorreta, falha de validação e falha de backup.
+
+3. Não usar systemctl.
+
+A aplicação é direta e controlada via nft, sem reload ou restart amplo.
+
+4. Não misturar regras externas.
+
+Foi usada a tabela exclusiva inet painel_firewall. Nenhuma outra tabela é
+removida ou restaurada.
+
+5. Rollback manual.
+
+Rollback exige ação explícita, autenticação, CSRF, confirmação e validação.
+
+6. Não exibir caminhos internos.
+
+A interface apresenta mensagens sanitizadas e saída técnica recolhida.
+
+7. Auditar sucesso e erro.
+
+Solicitações, bloqueios, validações, backups, aplicações e reversões são
+auditados.
+
+ESTADO FUNCIONAL ESPERADO
+
+Ao abrir firewall.php, o operador deve encontrar:
+
+- Layout dark/NOC.
+- Cards superiores.
+- ACL IPv4 e IPv6 administrativas.
+- Portas administrativas e públicas.
+- Ações de adicionar, editar e remover.
+- Modais e toasts.
+- Última Validação.
+- Última Aplicação.
+- Prévia e saída técnica recolhida.
+- Auditoria recente.
+
+O painel deve permitir:
+
+- Gerenciar ACLs IPv4 e IPv6.
+- Gerenciar portas administrativas e públicas.
+- Validar configuração.
+- Aplicar firewall com travas.
+- Executar rollback manual quando houver backup válido.
+
+CHECKLIST PARA AMBIENTE REAL CONTROLADO
+
+1. Garantir acesso alternativo: console do provedor, IPMI, KVM, sessão local ou
+   outro caminho fora do firewall em teste.
+2. Confirmar nftables instalado com nft --version.
+3. Confirmar permissão operacional com nft list ruleset.
+4. Revisar as regras atuais e confirmar ausência de conflito com
+   inet painel_firewall.
+5. Cadastrar ao menos uma ACL administrativa segura do operador.
+6. Nunca usar 0.0.0.0/0 ou ::/0 para administração.
+7. Cadastrar ao menos uma porta administrativa, como SSH ou HTTPS do painel.
+8. Executar Validar configuração.
+9. Conferir ACLs, portas, famílias e escopos na prévia.
+10. Aplicar usando a confirmação forte.
+11. Testar imediatamente SSH, painel e portas públicas esperadas.
+12. Conferir o card Última Aplicação e a auditoria.
+13. Testar rollback manual em janela controlada.
+14. Conferir nft list ruleset após aplicação e rollback.
+
+PLANO DE ROLLBACK OPERACIONAL
+
+1. Usar o rollback do painel enquanto ele estiver acessível.
+2. Digitar a confirmação exata.
+3. Confirmar que o backup foi validado antes da reversão.
+4. Conferir auditoria e card de aplicação.
+5. Se o painel estiver inacessível, usar acesso fora de banda.
+6. Restaurar a política operacional conhecida ou remover somente a tabela
+   exclusiva inet painel_firewall, após análise do ambiente.
+
+Não improvisar comandos em produção sem compreender o estado da tabela
+gerenciada e das demais regras do servidor.
+
+VALIDAÇÕES TÉCNICAS FINAIS
+
+- php -l firewall.php: OK.
+- git diff --check: OK.
+- CRUD, validação, aplicação isolada, falhas e rollback testados.
+- CSRF e confirmações incorretas bloqueados e auditados.
+- ACL /0 bloqueada.
+- Temporários removidos.
+- Sem systemctl, reload amplo ou flush ruleset.
+- Sem aplicação real no ambiente sem permissão netlink.
+- SQLite e secret fora dos commits.
+
+PONTOS QUE NÃO DEVEM SER ALTERADOS SEM NECESSIDADE
+
+- Não redesenhar firewall.php inteiro.
+- Não remover layout dark/NOC.
+- Não remover confirmação forte ou CSRF.
+- Não remover bloqueio de /0.
+- Não remover backup obrigatório.
+- Não remover nft -c antes de nft -f.
+- Não misturar a tabela do painel com regras externas.
+- Não expor caminhos internos.
+- Não incluir db/dns_servers.secret em commit.
+- Não incluir db/painel_dns.sqlite em commit sem decisão explícita.
+
+PRÓXIMAS MELHORIAS OPCIONAIS
+
+V1.7 - Operação e observabilidade:
+
+- Filtros avançados na auditoria.
+- Histórico detalhado por aplicação.
+- Comparação entre configuração cadastrada e última aplicada.
+- Badge pendente de aplicação após alteração de CRUD.
+- Exportação de prévia e relatório de validação.
+- Detalhamento visual por escopo.
+
+V1.8 - Segurança operacional:
+
+- Checklist obrigatório antes da aplicação.
+- Alerta quando o IP atual não estiver em ACL.
+- Sugestão visual para incluir IP, sem cadastro automático.
+- Modo manutenção.
+- Restrição por perfil de usuário.
+
+V2.0 - Evolução arquitetural:
+
+- Separar firewall.php em includes especializados.
+- Criar serviços para geração e execução nftables.
+- Criar repositório para SQLite.
+- Criar testes CLI automatizados.
+- Criar página dedicada para histórico e rollback.
+- Suportar templates de política e múltiplos servidores.
+
+RECOMENDAÇÃO FINAL
+
+A FIREWALL_V1 está fechada até V1.6.
+
+Antes de qualquer nova feature:
+
+1. Validar aplicação e rollback em ambiente real controlado.
+2. Usar acesso fora de banda.
+3. Registrar o resultado da homologação.
+4. Somente depois avançar para V1.7 ou V2.0.
+
+Não iniciar refatoração ampla antes da validação real controlada.
