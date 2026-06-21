@@ -2,6 +2,24 @@
 
 Historico de alteracoes do Painel DNS Trevizam Network.
 
+## [2.3.2] - 2026-06-21
+
+### Ajuste visual Firewall pós-V1.6
+
+- Compactados os cards de resumo, cabeçalho e espaçamentos gerais.
+- Ações rápidas convertidas visualmente em botões discretos.
+- Prévia das regras recolhida por padrão em `details/summary`.
+- Cards Última Aplicação e Última Validação reduzidos.
+- Auditoria recente reorganizada em uma linha própria.
+- Tabelas ajustadas para evitar scroll horizontal desnecessário no desktop.
+- Reduzidos padding, tipografia, badges e botões das tabelas.
+- Corrigida a mensagem duplicada no estado vazio da ACL IPv6.
+- Preservados CRUD, validação, aplicação, rollback, auditoria, CSRF, SQLite e
+  todas as travas de segurança.
+- Nenhuma regra real de firewall foi aplicada.
+- Documentação disponível em
+  `HANDOFF_AJUSTE_VISUAL_FIREWALL_POS_V1_6.md`.
+
 ## [2.3.1] - 2026-06-21
 
 ### Fechamento FIREWALL_V1
