@@ -216,27 +216,28 @@ function acao_curta(string $acao): string
 <style>
 body{
     margin:0;
-    font-family:Arial;
-    background:#0f172a;
+    font-family:Arial,sans-serif;
+    background:radial-gradient(circle at top,#101b33 0,#0b1220 44%,#070b14 100%);
     color:#e2e8f0;
 }
 
 .container{
-    max-width:1200px;
-    margin:40px auto;
-    padding:0 20px;
+    max-width:1180px;
+    margin:0 auto;
+    padding:22px 20px 34px;
 }
 
 .topo{
-    margin-bottom:25px;
+    margin-bottom:18px;
 }
 
 .topo h1{
-    margin-bottom:8px;
-    font-size:34px;
+    margin:0 0 6px;
+    font-size:28px;
 }
 
 .topo p{
+    margin:0 0 8px;
     color:#94a3b8;
 }
 
@@ -247,33 +248,33 @@ a{
 
 .grid{
     display:grid;
-    grid-template-columns:repeat(auto-fit,minmax(280px,1fr));
-    gap:18px;
+    grid-template-columns:repeat(auto-fit,minmax(260px,1fr));
+    gap:14px;
 }
 
 .card{
-    background:#020617;
-    border:1px solid #1e293b;
-    padding:22px;
-    border-radius:12px;
-    margin-bottom:18px;
+    background:linear-gradient(180deg, rgba(15,23,42,.96), rgba(11,18,32,.96));
+    border:1px solid #24324a;
+    padding:18px;
+    border-radius:14px;
+    margin-bottom:0;
+    box-shadow:0 16px 44px rgba(0,0,0,.18);
 }
 
 .card h2{
-    margin-top:0;
-    margin-bottom:8px;
+    margin:0 0 8px;
 }
 
 .card small{
     color:#94a3b8;
     display:block;
-    margin-bottom:18px;
+    margin-bottom:14px;
 }
 
 .acoes{
     display:flex;
     flex-wrap:wrap;
-    gap:10px;
+    gap:8px;
 }
 
 .acoes form{
@@ -281,29 +282,30 @@ a{
 }
 
 button{
-    padding:11px 16px;
-    border:0;
-    border-radius:7px;
-    background:#2563eb;
+    padding:10px 14px;
+    border:1px solid rgba(56,189,248,.35);
+    border-radius:10px;
+    background:#111a2f;
     color:#fff;
     cursor:pointer;
     font-weight:bold;
 }
 
 button:hover{
-    background:#1d4ed8;
+    border-color:#3b82f6;
 }
 
 .btn-danger{
-    background:#dc2626;
+    background:rgba(220,38,38,.14);
+    border-color:rgba(220,38,38,.35);
 }
 
 .btn-danger:hover{
-    background:#b91c1c;
+    background:rgba(220,38,38,.2);
 }
 
 .alerta{
-    background:#7c2d12;
+    background:rgba(124,45,18,.45);
     border:1px solid #ea580c;
     color:#fed7aa;
 }
@@ -322,6 +324,7 @@ pre{
     white-space:pre-wrap;
     overflow-wrap:anywhere;
     margin:0;
+    color:#cbd5e1;
 }
 
 .badge{
@@ -332,12 +335,12 @@ pre{
     border:1px solid #334155;
     color:#cbd5e1;
     font-size:12px;
-    margin-bottom:12px;
+    margin-bottom:10px;
 }
 
 .status{
     display:inline-block;
-    margin-bottom:14px;
+    margin-bottom:12px;
     padding:5px 10px;
     border-radius:999px;
     font-size:13px;
@@ -345,13 +348,13 @@ pre{
 }
 
 .online{
-    background:#052e16;
+    background:rgba(22,163,74,.14);
     color:#86efac;
     border:1px solid #16a34a;
 }
 
 .offline{
-    background:#450a0a;
+    background:rgba(69,10,10,.4);
     color:#fecaca;
     border:1px solid #dc2626;
 }
