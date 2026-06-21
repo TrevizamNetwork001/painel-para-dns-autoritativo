@@ -768,28 +768,39 @@ pre{
     border-collapse:collapse;
     margin-top:10px;
     overflow:hidden;
+    font-family:Inter,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
 }
 
 .tabela th,
 .tabela td{
-    border:1px solid #334155;
-    padding:8px 9px;
-    font-size:12px;
-    vertical-align:top;
+    padding:11px 14px;
+    font-size:14px;
+    line-height:1.35;
+    vertical-align:middle;
+    border:0;
+    border-bottom:1px solid #1e293b;
 }
 
 .tabela th{
-    background:#111827;
-    color:#dbe7f5;
+    background:#0b1728;
+    color:#aebbd0;
     text-align:left;
+    font-size:13px;
+    font-weight:500;
 }
 
 .tabela td{
-    background:#020617;
+    background:#07111f;
+    color:#d7dfeb;
+    font-weight:400;
 }
 
 .tabela tr:hover td{
-    background:#0b1327;
+    background:#0b1829;
+}
+
+.tabela tbody tr:last-child td{
+    border-bottom:0;
 }
 
 .table-wrap{
