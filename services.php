@@ -275,6 +275,7 @@ function ui_icon_svg(string $name, int $size = 18): string
         'home' => '<path d="m3 11 9-8 9 8"/><path d="M5 10v10h14V10M9 20v-6h6v6"/>',
         'grid' => '<rect x="4" y="4" width="6" height="6" rx="1"/><rect x="14" y="4" width="6" height="6" rx="1"/><rect x="4" y="14" width="6" height="6" rx="1"/><rect x="14" y="14" width="6" height="6" rx="1"/>',
         'chart' => '<path d="M4 19V9M10 19V5M16 19v-7M22 19H2"/>',
+        'history-log' => '<path d="M5 4h11a2 2 0 0 1 2 2v5"/><path d="M5 4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h7"/><path d="M7 8h7M7 12h5M7 16h3"/><circle cx="17" cy="17" r="4"/><path d="M17 15v2l1.5 1"/>',
         'settings' => '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1-2.8 2.8-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.6v.2h-4V21a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1L4.2 17l.1-.1a1.7 1.7 0 0 0 .3-1.9A1.7 1.7 0 0 0 3 14H2.8v-4H3a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.3-1.9L4.2 7 7 4.2l.1.1A1.7 1.7 0 0 0 9 4.6 1.7 1.7 0 0 0 10 3V2.8h4V3a1.7 1.7 0 0 0 1 1.6 1.7 1.7 0 0 0 1.9-.3l.1-.1L19.8 7l-.1.1a1.7 1.7 0 0 0-.3 1.9 1.7 1.7 0 0 0 1.6 1h.2v4H21a1.7 1.7 0 0 0-1.6 1Z"/>',
         'help' => '<circle cx="12" cy="12" r="9"/><path d="M9.8 9a2.3 2.3 0 1 1 3.5 2c-.8.5-1.3 1-1.3 2M12 17h.01"/>',
         default => '<circle cx="12" cy="12" r="1.5"/>',
@@ -799,8 +800,22 @@ pre{
 }
 
 .section-title{
-    margin:0 0 8px;
+    margin:0;
     font-size:17px;
+}
+
+.section-title-wrap{
+    display:flex;
+    align-items:center;
+    gap:10px;
+}
+
+.section-title-icon{
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    color:#18c8e8;
+    flex:0 0 auto;
 }
 
 .service-body{
@@ -1075,7 +1090,10 @@ setTimeout(function () {
 
     <div class="card">
         <div class="section-head">
-            <h2 class="section-title">Últimas ações de serviços</h2>
+            <div class="section-title-wrap">
+                <span class="section-title-icon" aria-hidden="true"><?= ui_icon_svg('history-log', 27) ?></span>
+                <h2 class="section-title">Últimas ações de serviços</h2>
+            </div>
             <?php if ($historicoLink): ?>
                 <a class="link-chip" href="<?= htmlspecialchars($historicoLink) ?>">Ver histórico completo</a>
             <?php endif; ?>
