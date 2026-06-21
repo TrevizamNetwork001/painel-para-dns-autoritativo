@@ -94,6 +94,41 @@ function fw_count_rules(array $tables): int
     return $total;
 }
 
+function fw_count_tables_raw(string $rulesetRaw): int
+{
+    return $rulesetRaw === '' ? 0 : (preg_match_all('/^table\s+\S+\s+\S+/mi', $rulesetRaw) ?: 0);
+}
+
+function fw_count_chains_raw(string $rulesetRaw): int
+{
+    return $rulesetRaw === '' ? 0 : (preg_match_all('/^chain\s+\S+\s*\{/mi', $rulesetRaw) ?: 0);
+}
+
+function fw_count_rules_raw(string $rulesetRaw): int
+{
+    if ($rulesetRaw === '') {
+        return 0;
+    }
+
+    $count = 0;
+    foreach (preg_split('/\R/u', $rulesetRaw) ?: [] as $lineRaw) {
+        $line = fw_clean($lineRaw);
+        if ($line === '') {
+            continue;
+        }
+
+        if (preg_match('/^\s*(table|chain)\b/i', $line)) {
+            continue;
+        }
+
+        if (preg_match('/\b(accept|drop|reject|counter)\b/i', $line) || preg_match('/\b(dport|sport)\b/i', $line)) {
+            $count++;
+        }
+    }
+
+    return $count;
+}
+
 function fw_count_drop_packets(string $rulesetRaw): int
 {
     if ($rulesetRaw === '') {
@@ -163,9 +198,9 @@ $serviceActive = $service === 'active';
 $serviceKnown = $service !== '';
 $rulesetOk = trim($rulesetRaw) !== '' && $rulesetExit === 0;
 $tables = $rulesetOk ? fw_parse_ruleset($rulesetRaw) : [];
-$tablesCount = count($tables);
-$chainsCount = fw_count_chains($tables);
-$rulesCount = fw_count_rules($tables);
+$tablesCount = count($tables) ?: fw_count_tables_raw($rulesetRaw);
+$chainsCount = fw_count_chains($tables) ?: fw_count_chains_raw($rulesetRaw);
+$rulesCount = fw_count_rules($tables) ?: fw_count_rules_raw($rulesetRaw);
 $dropPackets = fw_count_drop_packets_by_family($rulesetRaw);
 $checkTime = fw_format_time();
 
