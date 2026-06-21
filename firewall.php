@@ -1479,8 +1479,7 @@ body{background:#080d18}
 .menu-toggle{display:none;position:fixed;top:12px;left:12px;z-index:40;min-height:36px;padding:8px 11px;border:1px solid var(--line2);border-radius:8px;background:#0b1424;color:#e5edf7;cursor:pointer}
 .menu-overlay{display:none}
 .sidebar{position:fixed;inset:0 auto 0 0;z-index:30;width:220px;padding:18px 14px;background:#050a13;border-right:1px solid #1e293b;overflow-y:auto}
-.sidebar-brand{display:flex;align-items:center;gap:10px;padding:4px 8px 20px;color:#f8fafc;font-size:16px;font-weight:800}.sidebar-brand-mark{display:grid;place-items:center;width:34px;height:34px;border:1px solid #0e7490;border-radius:10px;background:#0c4a6e55;color:#7dd3fc}
-.sidebar-label{display:block;padding:12px 9px 6px;color:#53647b;font-size:9px;font-weight:800;letter-spacing:.1em;text-transform:uppercase}
+.sidebar-brand{display:flex;align-items:center;gap:10px;padding:4px 8px 20px;color:#f8fafc}.sidebar-brand-copy strong{display:block;font-size:16px;font-weight:800}.sidebar-brand-copy small{display:block;margin-top:2px;color:#94a3b8;font-size:10px;font-weight:400}.sidebar-brand-mark{display:grid;place-items:center;width:38px;height:38px;border:1px solid #0e7490;border-radius:10px;background:#0c4a6e55;color:#38bdf8;font-size:18px;font-weight:800}
 .sidebar a{display:flex;align-items:center;gap:10px;min-height:38px;margin:2px 0;padding:8px 10px;border-radius:8px;color:#94a3b8;font-size:12px;font-weight:700;transition:.15s}
 .sidebar a:hover,.sidebar a:focus{background:#111c2e;color:#e2e8f0;outline:none}.sidebar a.active{background:#0c4a6e4d;color:#7dd3fc;border:1px solid #0e749066}
 .sidebar-spacer{height:12px;border-bottom:1px solid #172236;margin:4px 8px 8px}
@@ -1504,30 +1503,41 @@ body{background:#080d18}
 .audit-item{grid-template-columns:72px minmax(0,1fr) auto;gap:7px}.audit-kind{font-size:8px}.audit-action{font-size:10px;line-height:1.35}.audit-time{font-size:9px}
 @media(max-width:1260px){.content-grid{grid-template-columns:1fr}.access-stack{grid-row:auto}.ports-stack{grid-template-columns:repeat(2,minmax(0,1fr))}.status-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.status-grid>.panel:last-child{grid-column:1/-1}}
 @media(max-width:860px){.menu-toggle{display:block}.sidebar{transform:translateX(-100%);transition:transform .2s;width:min(260px,86vw)}.sidebar.open{transform:translateX(0)}.menu-overlay.open{display:block;position:fixed;inset:0;z-index:20;background:#020617b8}.page{margin-left:0;padding:64px 14px 24px}.ports-stack{grid-template-columns:1fr}.status-grid{grid-template-columns:1fr}.status-grid>.panel:last-child{grid-column:auto}.quick-panel{display:block}.quick-panel .panel-header{margin-bottom:8px}}
+
+/* Ajuste final conforme a estrutura da referência esse.png */
+.sidebar{display:flex;flex-direction:column}.sidebar-user{margin-top:auto;padding:14px 9px 4px;border-top:1px solid #172236}.sidebar-user strong{display:block;color:#e2e8f0;font-size:11px}.sidebar-user span{display:block;margin-top:3px;color:#53647b;font-size:9px}.sidebar-version{padding:8px 9px 0;color:#3f4f65;font-size:8px}
+.page-header-right{display:flex;align-items:flex-end;flex-direction:column;gap:10px}.breadcrumb{color:#64748b;font-size:10px}.breadcrumb strong{color:#a8b7ca}
+.summary-card{min-height:82px;padding-top:13px}.summary-icon{top:13px}.summary-value.status{font-size:14px}
+.quick-panel{display:block;padding:12px}.quick-panel .panel-header{margin-bottom:10px}.quick-panel .panel-header p{display:block;font-size:9px}.quick-grid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:7px}.quick-grid>:nth-child(4){display:block}
+.quick-action{display:grid;grid-template-columns:32px minmax(0,1fr);grid-template-rows:auto auto;width:100%;min-height:58px;padding:8px 10px}.quick-action .quick-icon{grid-row:1/3;align-self:center;font-size:20px;text-align:center}.quick-action strong{align-self:end;font-size:10px}.quick-action small{display:block;align-self:start;margin:2px 0 0;color:#64748b;font-size:8px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.main-layout{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:13px;align-items:start}.main-layout>.access-card{grid-column:1}.main-layout>.admin-ports-card{grid-column:2}.main-layout>.public-ports-card{grid-column:1}.main-layout>.side-status{grid-column:2;display:grid;grid-template-columns:minmax(0,.72fr) minmax(0,1.28fr);gap:13px;align-items:stretch}
+.access-card{padding:14px}.access-card .panel-header{align-items:center}.access-card .header-actions{flex-wrap:nowrap}.access-search{width:min(250px,100%)}.access-table tbody[data-family-section]+tbody[data-family-section] tr:first-child td{border-top:1px solid #25344a}
+.table-wrap{overflow-x:hidden}.access-table th:first-child,.access-table td:first-child{width:11%}.access-table th:nth-child(2),.access-table td:nth-child(2){width:25%}.access-table th:nth-child(3),.access-table td:nth-child(3){width:auto}.access-table th:nth-child(4),.access-table td:nth-child(4){width:18%}.access-table th:last-child,.access-table td:last-child{width:22%}
+.ports-table th:first-child,.ports-table td:first-child{width:11%}.ports-table th:nth-child(2),.ports-table td:nth-child(2){width:16%}.ports-table th:nth-child(3),.ports-table td:nth-child(3){width:19%}.ports-table th:nth-child(4),.ports-table td:nth-child(4){width:auto}.ports-table th:last-child,.ports-table td:last-child{width:24%}
+.cell-description{overflow:hidden;white-space:nowrap;text-overflow:ellipsis}.audit-action{display:-webkit-box;overflow:hidden;-webkit-line-clamp:2;-webkit-box-orient:vertical}.audit-list .audit-item:nth-child(n+5){display:none}
+.status-grid{display:none}.compact-status.panel{height:100%;padding:13px}.compact-status .panel-header{margin-bottom:9px}.compact-status .panel-header h2{font-size:13px}.compact-status .panel-header p{display:block;font-size:9px}.compact-status .validation{height:calc(100% - 42px);padding:10px}.compact-status .validation span{font-size:9px}.compact-status .application-summary{display:none}
+.application-details{margin-top:8px}.application-details>summary{cursor:pointer;color:#93c5fd;font-size:9px;font-weight:700}
+@media(max-width:1320px){.quick-grid{grid-template-columns:repeat(4,minmax(0,1fr))}.main-layout{grid-template-columns:1fr}.main-layout>.access-card,.main-layout>.admin-ports-card,.main-layout>.public-ports-card,.main-layout>.side-status{grid-column:1}.main-layout>.side-status{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:860px){.page-header-right{align-items:flex-end;flex-direction:column}.breadcrumb{display:none}.quick-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.main-layout>.side-status{grid-template-columns:1fr}.access-card .header-actions{align-items:stretch;flex-direction:column}.table-wrap{overflow-x:auto}.access-table,.ports-table{min-width:620px}.quick-action small{display:none}}
 </style>
 </head>
 <body>
 <button class="menu-toggle" type="button" aria-controls="firewall-sidebar" aria-expanded="false">☰ Menu</button>
 <div class="menu-overlay" aria-hidden="true"></div>
 <nav class="sidebar" id="firewall-sidebar" aria-label="Navegação principal">
-    <div class="sidebar-brand"><span class="sidebar-brand-mark" aria-hidden="true">◆</span><span>DNS Panel</span></div>
-    <span class="sidebar-label">Principal</span>
+    <div class="sidebar-brand"><span class="sidebar-brand-mark" aria-hidden="true">◈</span><span class="sidebar-brand-copy"><strong>Painel DNS</strong><small>Servidores</small></span></div>
     <a href="dashboard.php">⌂ Dashboard</a>
-    <span class="sidebar-label">DNS</span>
+    <a href="zones.php">▣ Inventário DNS</a>
     <a href="domains.php">◎ Domínios</a>
-    <a href="dns-zones.php">▣ Zonas DNS</a>
-    <a href="reverse-zones.php">↔ Zonas Reversas</a>
-    <a href="zones.php">⌖ Inventário</a>
-    <span class="sidebar-label">Segurança</span>
-    <a href="security.php">◇ Segurança DNS</a>
-    <a href="fail2ban.php">⊘ Fail2Ban</a>
-    <span class="sidebar-label">Infraestrutura</span>
-    <a href="services.php">⚙ Serviços</a>
+    <a href="auditoria.php">▤ Auditoria</a>
     <a class="active" href="firewall.php" aria-current="page">🔥 Firewall</a>
-    <a href="auditoria.php">≡ Auditoria</a>
+    <a href="dns-servers.php">▰ Servidores</a>
+    <?php if (function_exists('usuario_eh_administrador') && usuario_eh_administrador()): ?><a href="usuarios.php">♧ Usuários</a><?php endif; ?>
+    <a href="security.php">⚙ Configurações</a>
+    <a href="logs.php">▤ Logs do Sistema</a>
     <div class="sidebar-spacer"></div>
-    <a href="alterar-senha.php">⌁ Minha senha</a>
-    <a href="logout.php">→ Sair</a>
+    <div class="sidebar-user"><strong><?= htmlspecialchars((string) ($_SESSION['usuario'] ?? 'admin')) ?></strong><span><?= htmlspecialchars((string) ($_SESSION['perfil'] ?? 'Administrador')) ?></span></div>
+    <div class="sidebar-version">Versão 1.0.0</div>
 </nav>
 <main class="page">
     <header class="page-header">
@@ -1536,14 +1546,17 @@ body{background:#080d18}
             <h1>Firewall</h1>
             <p>Controle de acesso e portas públicas.</p>
         </div>
-        <button class="refresh-button" type="button" data-refresh-page><span aria-hidden="true">↻</span> Atualizar</button>
+        <div class="page-header-right">
+            <span class="breadcrumb">Home / <strong>Firewall</strong></span>
+            <button class="refresh-button" type="button" data-refresh-page><span aria-hidden="true">↻</span> Atualizar</button>
+        </div>
     </header>
 
     <section class="summary-grid" aria-label="Resumo do Firewall">
         <?php foreach ($summary as [$icon, $label, $value, $detail, $status]): ?>
             <article class="summary-card">
                 <span class="summary-icon<?= $status ? ' status' : '' ?>" aria-hidden="true"><?= htmlspecialchars($icon) ?></span>
-                <span class="summary-label"><?= htmlspecialchars($label) ?></span>
+                <span class="summary-label"><?= htmlspecialchars($label === 'Aplicação' ? 'Firewall' : $label) ?></span>
                 <span class="summary-value<?= $status ? ' status' : '' ?>"><?= htmlspecialchars($value) ?></span>
                 <span class="summary-detail"><?= htmlspecialchars($detail) ?></span>
             </article>
@@ -1557,8 +1570,8 @@ body{background:#080d18}
                 <?php if ($modalId === 'disabled-action'): ?>
                     <button class="quick-action" type="button" disabled>
                         <span class="quick-icon" aria-hidden="true"><?= htmlspecialchars($icon) ?></span>
-                        <strong><?= htmlspecialchars($label) ?></strong>
-                        <small><?= htmlspecialchars($detail) ?></small>
+                        <strong><?= htmlspecialchars($label === 'Rollback' ? 'Backup' : $label) ?></strong>
+                        <small><?= htmlspecialchars($label === 'Rollback' ? ($backupDisponivel ? 'Cópia disponível' : 'Sem cópia disponível') : $detail) ?></small>
                     </button>
                     <?php continue; ?>
                 <?php endif; ?>
@@ -1568,7 +1581,7 @@ body{background:#080d18}
                         <input type="hidden" name="acao" value="validar_configuracao">
                         <button class="quick-action validate" type="submit">
                             <span class="quick-icon" aria-hidden="true"><?= htmlspecialchars($icon) ?></span>
-                            <strong><?= htmlspecialchars($label) ?></strong>
+                            <strong><?= htmlspecialchars($label === 'Rollback' ? 'Backup' : $label) ?></strong>
                             <small><?= htmlspecialchars($detail) ?></small>
                         </button>
                     </form>
@@ -1581,32 +1594,31 @@ body{background:#080d18}
                         ? 'data-open-dialog="' . htmlspecialchars($modalId, ENT_QUOTES, 'UTF-8') . '"'
                         : 'data-future-action="' . htmlspecialchars($label, ENT_QUOTES, 'UTF-8') . '"' ?>>
                     <span class="quick-icon" aria-hidden="true"><?= htmlspecialchars($icon) ?></span>
-                    <strong><?= htmlspecialchars($label) ?></strong>
-                    <small><?= htmlspecialchars($detail) ?></small>
+                    <strong><?= htmlspecialchars($label === 'Rollback' ? 'Backup' : $label) ?></strong>
+                    <small><?= htmlspecialchars($label === 'Aplicar' ? 'Validar + backup' : $detail) ?></small>
                 </button>
             <?php endforeach; ?>
         </div>
     </section>
 
-    <div class="content-grid">
-        <div class="stack access-stack">
-            <section class="panel">
-                <header class="panel-header">
-                    <div><h2>Acesso Administrativo</h2><p>Endereços e redes autorizados para administração.</p></div>
-                    <div class="header-actions">
-                        <input class="search" id="acl-ipv4-search" data-search-target="acl-ipv4-rows" type="search" placeholder="Pesquisar IPv4..." aria-label="Pesquisar IPv4">
-                        <button class="button small" type="button" data-open-dialog="add-ip-modal" data-default-family="IPv4">Adicionar IPv4</button>
-                    </div>
-                </header>
-                <div class="table-wrap"><table>
+    <div class="main-layout">
+        <section class="panel access-card">
+            <header class="panel-header">
+                <div><h2>Acesso Administrativo</h2><p>IPs autorizados para acesso administrativo.</p></div>
+                <div class="header-actions">
+                    <input class="search access-search" id="acl-all-search" type="search" placeholder="Pesquisar IP ou rede..." aria-label="Pesquisar IP ou rede">
+                    <button class="button small" type="button" data-open-dialog="add-ip-modal">Adicionar IP</button>
+                </div>
+            </header>
+            <div class="table-wrap"><table class="access-table">
                     <thead><tr><th>Tipo</th><th>IP/Rede</th><th>Descrição</th><th>Data de criação</th><th>Ações</th></tr></thead>
-                    <tbody id="acl-ipv4-rows">
+                    <tbody id="acl-ipv4-rows" data-family-section>
                         <?php foreach ($aclIpv4 as $access): ?>
                             <?php $createdAt = (new DateTimeImmutable($access['criado_em']))->format('d/m/Y H:i'); ?>
-                            <tr data-search-text="<?= htmlspecialchars(strtolower($access['tipo'] . ' ' . $access['rede'] . ' ' . $access['descricao'] . ' ' . $createdAt), ENT_QUOTES, 'UTF-8') ?>">
+                            <tr data-admin-search="<?= htmlspecialchars(strtolower($access['tipo'] . ' ' . $access['rede'] . ' ' . $access['descricao'] . ' ' . $createdAt), ENT_QUOTES, 'UTF-8') ?>">
                                 <td><span class="type-badge"><?= htmlspecialchars($access['tipo']) ?></span></td>
                                 <td class="strong"><?= htmlspecialchars($access['rede']) ?></td>
-                                <td><?= htmlspecialchars($access['descricao']) ?></td>
+                                <td class="cell-description" title="<?= htmlspecialchars($access['descricao'], ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars($access['descricao']) ?></td>
                                 <td><?= htmlspecialchars($createdAt) ?></td>
                                 <td><div class="row-actions">
                                     <button class="text-action" type="button" data-open-dialog="edit-ip-modal" data-record-id="<?= (int) $access['id'] ?>" data-record-family="<?= htmlspecialchars($access['tipo'], ENT_QUOTES, 'UTF-8') ?>" data-record-value="<?= htmlspecialchars($access['rede'], ENT_QUOTES, 'UTF-8') ?>" data-record-description="<?= htmlspecialchars($access['descricao'], ENT_QUOTES, 'UTF-8') ?>">Editar</button>
@@ -1614,30 +1626,14 @@ body{background:#080d18}
                                 </div></td>
                             </tr>
                         <?php endforeach; ?>
-                        <?php if (!$aclIpv4): ?><tr><td class="empty-state" colspan="5">Nenhum IPv4 administrativo cadastrado.</td></tr><?php endif; ?>
-                        <?php if ($aclIpv4): ?><tr class="empty-row" id="acl-ipv4-empty" hidden><td colspan="5">Nenhum IPv4 encontrado.</td></tr><?php endif; ?>
                     </tbody>
-                </table></div>
-                <div class="record-count"><?= $ipv4Count ?> <?= $ipv4Count === 1 ? 'registro IPv4' : 'registros IPv4' ?></div>
-            </section>
-
-            <section class="panel">
-                <header class="panel-header">
-                    <div><h2>IPv6</h2><p>Endereços e redes administrativas IPv6.</p></div>
-                    <div class="header-actions">
-                        <input class="search" id="acl-ipv6-search" data-search-target="acl-ipv6-rows" type="search" placeholder="Pesquisar IPv6..." aria-label="Pesquisar IPv6">
-                        <button class="button small" type="button" data-open-dialog="add-ip-modal" data-default-family="IPv6">Adicionar IPv6</button>
-                    </div>
-                </header>
-                <div class="table-wrap"><table>
-                    <thead><tr><th>Tipo</th><th>IP/Rede</th><th>Descrição</th><th>Data de criação</th><th>Ações</th></tr></thead>
-                    <tbody id="acl-ipv6-rows">
+                    <tbody id="acl-ipv6-rows" data-family-section>
                         <?php foreach ($aclIpv6 as $access): ?>
                             <?php $createdAt = (new DateTimeImmutable($access['criado_em']))->format('d/m/Y H:i'); ?>
-                            <tr data-search-text="<?= htmlspecialchars(strtolower($access['tipo'] . ' ' . $access['rede'] . ' ' . $access['descricao'] . ' ' . $createdAt), ENT_QUOTES, 'UTF-8') ?>">
+                            <tr data-admin-search="<?= htmlspecialchars(strtolower($access['tipo'] . ' ' . $access['rede'] . ' ' . $access['descricao'] . ' ' . $createdAt), ENT_QUOTES, 'UTF-8') ?>">
                                 <td><span class="type-badge"><?= htmlspecialchars($access['tipo']) ?></span></td>
                                 <td class="strong"><?= htmlspecialchars($access['rede']) ?></td>
-                                <td><?= htmlspecialchars($access['descricao']) ?></td>
+                                <td class="cell-description" title="<?= htmlspecialchars($access['descricao'], ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars($access['descricao']) ?></td>
                                 <td><?= htmlspecialchars($createdAt) ?></td>
                                 <td><div class="row-actions">
                                     <button class="text-action" type="button" data-open-dialog="edit-ip-modal" data-record-id="<?= (int) $access['id'] ?>" data-record-family="<?= htmlspecialchars($access['tipo'], ENT_QUOTES, 'UTF-8') ?>" data-record-value="<?= htmlspecialchars($access['rede'], ENT_QUOTES, 'UTF-8') ?>" data-record-description="<?= htmlspecialchars($access['descricao'], ENT_QUOTES, 'UTF-8') ?>">Editar</button>
@@ -1645,16 +1641,14 @@ body{background:#080d18}
                                 </div></td>
                             </tr>
                         <?php endforeach; ?>
-                        <?php if (!$aclIpv6): ?><tr><td class="empty-state" colspan="5">Nenhum IPv6 administrativo cadastrado.</td></tr><?php endif; ?>
-                        <?php if ($aclIpv6): ?><tr class="empty-row" id="acl-ipv6-empty" hidden><td colspan="5">Nenhum IPv6 encontrado.</td></tr><?php endif; ?>
                     </tbody>
+                    <?php if (!$aclIpv4 && !$aclIpv6): ?><tbody><tr><td class="empty-state" colspan="5">Nenhum IP administrativo cadastrado.</td></tr></tbody><?php endif; ?>
+                    <tbody><tr class="empty-row" id="acl-all-empty" hidden><td colspan="5">Nenhum IP ou rede encontrado.</td></tr></tbody>
                 </table></div>
-                <div class="record-count"><?= $ipv6Count ?> <?= $ipv6Count === 1 ? 'registro IPv6' : 'registros IPv6' ?></div>
-            </section>
-        </div>
+            <div class="record-count"><?= $ipv4Count + $ipv6Count ?> <?= ($ipv4Count + $ipv6Count) === 1 ? 'registro administrativo' : 'registros administrativos' ?></div>
+        </section>
 
-        <div class="stack ports-stack">
-            <section class="panel">
+        <section class="panel admin-ports-card">
                 <header class="panel-header">
                     <div><h2>Portas Administrativas</h2><p>Portas restritas aos IPs autorizados.</p></div>
                     <div class="header-actions">
@@ -1662,7 +1656,7 @@ body{background:#080d18}
                         <button class="button small" type="button" data-open-dialog="add-admin-port-modal">Adicionar porta</button>
                     </div>
                 </header>
-                <div class="table-wrap"><table>
+                <div class="table-wrap"><table class="ports-table">
                     <thead><tr><th>Porta</th><th>Protocolo</th><th>Serviço</th><th>Descrição</th><th>Ações</th></tr></thead>
                     <tbody>
                         <?php foreach ($adminPorts as $port): ?>
@@ -1670,7 +1664,7 @@ body{background:#080d18}
                                 <td class="strong"><?= (int) $port['porta'] ?></td>
                                 <td><span class="type-badge"><?= htmlspecialchars($port['protocolo']) ?></span></td>
                                 <td><?= htmlspecialchars($port['servico']) ?></td>
-                                <td><?= htmlspecialchars($port['descricao']) ?></td>
+                                <td class="cell-description" title="<?= htmlspecialchars($port['descricao'], ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars($port['descricao']) ?></td>
                                 <td><div class="row-actions">
                                     <button class="text-action" type="button" data-open-dialog="edit-port-modal" data-record-id="<?= (int) $port['id'] ?>" data-record-scope="admin" data-record-port="<?= (int) $port['porta'] ?>" data-record-protocol="<?= htmlspecialchars($port['protocolo'], ENT_QUOTES, 'UTF-8') ?>" data-record-service="<?= htmlspecialchars($port['servico'], ENT_QUOTES, 'UTF-8') ?>" data-record-description="<?= htmlspecialchars($port['descricao'], ENT_QUOTES, 'UTF-8') ?>">Editar</button>
                                     <button class="text-action remove" type="button" data-open-dialog="remove-port-modal" data-record-id="<?= (int) $port['id'] ?>" data-record-scope="administrativa" data-record-value="<?= (int) $port['porta'] ?>">Remover</button>
@@ -1681,9 +1675,9 @@ body{background:#080d18}
                     </tbody>
                 </table></div>
                 <div class="record-count"><?= count($adminPorts) ?> <?= count($adminPorts) === 1 ? 'porta administrativa' : 'portas administrativas' ?></div>
-            </section>
+        </section>
 
-            <section class="panel">
+        <section class="panel public-ports-card">
                 <header class="panel-header">
                     <div><h2>Portas Públicas</h2><p>Disponíveis para acesso externo.</p></div>
                     <div class="header-actions">
@@ -1691,7 +1685,7 @@ body{background:#080d18}
                         <button class="button small" type="button" data-open-dialog="add-public-port-modal">Adicionar porta</button>
                     </div>
                 </header>
-                <div class="table-wrap"><table>
+                <div class="table-wrap"><table class="ports-table">
                     <thead><tr><th>Porta</th><th>Protocolo</th><th>Serviço</th><th>Descrição</th><th>Ações</th></tr></thead>
                     <tbody>
                         <?php foreach ($publicPorts as $port): ?>
@@ -1699,7 +1693,7 @@ body{background:#080d18}
                                 <td class="strong"><?= (int) $port['porta'] ?></td>
                                 <td><span class="type-badge"><?= htmlspecialchars($port['protocolo']) ?></span></td>
                                 <td><?= htmlspecialchars($port['servico']) ?></td>
-                                <td><?= htmlspecialchars($port['descricao']) ?></td>
+                                <td class="cell-description" title="<?= htmlspecialchars($port['descricao'], ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars($port['descricao']) ?></td>
                                 <td><div class="row-actions">
                                     <button class="text-action" type="button" data-open-dialog="edit-port-modal" data-record-id="<?= (int) $port['id'] ?>" data-record-scope="publica" data-record-port="<?= (int) $port['porta'] ?>" data-record-protocol="<?= htmlspecialchars($port['protocolo'], ENT_QUOTES, 'UTF-8') ?>" data-record-service="<?= htmlspecialchars($port['servico'], ENT_QUOTES, 'UTF-8') ?>" data-record-description="<?= htmlspecialchars($port['descricao'], ENT_QUOTES, 'UTF-8') ?>">Editar</button>
                                     <button class="text-action remove" type="button" data-open-dialog="remove-port-modal" data-record-id="<?= (int) $port['id'] ?>" data-record-scope="pública" data-record-value="<?= (int) $port['porta'] ?>">Remover</button>
@@ -1710,67 +1704,10 @@ body{background:#080d18}
                     </tbody>
                 </table></div>
                 <div class="record-count"><?= count($publicPorts) ?> <?= count($publicPorts) === 1 ? 'porta pública' : 'portas públicas' ?></div>
-            </section>
-        </div>
-    </div>
-
-    <div class="status-grid">
-        <section class="panel">
-            <header class="panel-header">
-                <div><h2>Última Aplicação</h2><p>Estado persistente da aplicação real mais recente.</p></div>
-                <div class="header-actions">
-                    <button class="button warning small" type="button" data-open-dialog="apply-firewall-modal"<?= $aplicacaoBloqueios ? ' disabled' : '' ?>>Aplicar firewall</button>
-                    <?php if ($backupDisponivel): ?><button class="button danger small" type="button" data-open-dialog="rollback-firewall-modal">Reverter</button><?php endif; ?>
-                </div>
-            </header>
-            <div class="security-note<?= $aplicacaoBloqueios ? ' error' : '' ?>">
-                Aplicar altera regras reais após validação e backup obrigatório.
-                <?php foreach ($aplicacaoBloqueios as $bloqueio): ?><strong> Bloqueio atual: <?= htmlspecialchars($bloqueio) ?></strong><?php endforeach; ?>
-            </div>
-            <?php
-            $statusAplicacao = $ultimaAplicacao['status'] ?? 'NUNCA APLICADO';
-            $aplicacaoErro = $statusAplicacao === 'ERRO';
-            $aplicacaoPendente = !in_array($statusAplicacao, ['APLICADO', 'REVERTIDO', 'ERRO'], true);
-            $classeAplicacao = $aplicacaoErro ? ' error' : ($aplicacaoPendente ? ' pending' : '');
-            $iconeAplicacao = $statusAplicacao === 'APLICADO' ? '✓' : ($aplicacaoErro ? '!' : ($statusAplicacao === 'REVERTIDO' ? '↶' : '–'));
-            $tituloAplicacao = match ($statusAplicacao) {
-                'APLICADO' => 'Aplicado com sucesso',
-                'ERRO' => 'Erro na aplicação',
-                'REVERTIDO' => 'Última aplicação revertida',
-                default => 'Nunca aplicado',
-            };
-            $dataAplicacao = null;
-            if (!empty($ultimaAplicacao['data_hora'])) {
-                try {
-                    $dataAplicacao = new DateTimeImmutable((string) $ultimaAplicacao['data_hora']);
-                } catch (Throwable) {
-                    $dataAplicacao = null;
-                }
-            }
-            $contagensAplicacao = is_array($ultimaAplicacao['contagens'] ?? null) ? $ultimaAplicacao['contagens'] : [];
-            ?>
-            <div class="validation<?= $classeAplicacao ?>"><span class="validation-icon" aria-hidden="true"><?= $iconeAplicacao ?></span><div>
-                <strong><?= htmlspecialchars($tituloAplicacao) ?></strong>
-                <?php if ($ultimaAplicacao !== null): ?>
-                    <span>Data/hora: <time<?= $dataAplicacao ? ' datetime="' . htmlspecialchars($dataAplicacao->format(DATE_ATOM), ENT_QUOTES, 'UTF-8') . '"' : '' ?>><?= htmlspecialchars($dataAplicacao ? $dataAplicacao->format('d/m/Y H:i:s') : 'Não informada') ?></time></span>
-                    <span>Usuário: <em><?= htmlspecialchars((string) ($ultimaAplicacao['usuario'] ?? 'desconhecido')) ?></em></span>
-                    <span>Validação prévia: <em><?= htmlspecialchars((string) ($ultimaAplicacao['validacao_previa'] ?? 'Não informada')) ?></em></span>
-                    <span>Backup disponível: <em><?= $backupDisponivel ? 'Sim' : 'Não' ?></em></span>
-                    <div class="application-summary">
-                        <span>ACLs IPv4<strong><?= (int) ($contagensAplicacao['acl_ipv4'] ?? 0) ?></strong></span>
-                        <span>ACLs IPv6<strong><?= (int) ($contagensAplicacao['acl_ipv6'] ?? 0) ?></strong></span>
-                        <span>Portas administrativas<strong><?= (int) ($contagensAplicacao['portas_admin'] ?? 0) ?></strong></span>
-                        <span>Portas públicas<strong><?= (int) ($contagensAplicacao['portas_publicas'] ?? 0) ?></strong></span>
-                    </div>
-                    <span><?= htmlspecialchars((string) ($ultimaAplicacao['resumo'] ?? 'Sem resumo disponível.')) ?></span>
-                    <details class="technical-output"><summary>Ver saída técnica</summary><pre><?= htmlspecialchars((string) ($ultimaAplicacao['saida'] ?? 'Sem saída técnica.')) ?></pre></details>
-                <?php else: ?>
-                    <span>Nenhuma aplicação real foi registrada pelo painel.</span>
-                    <span>Backup disponível: <em><?= $backupDisponivel ? 'Sim' : 'Não' ?></em></span>
-                <?php endif; ?>
-            </div></div>
         </section>
-        <section class="panel">
+
+        <div class="side-status">
+        <section class="panel compact-status">
             <header class="panel-header"><div><h2>Última Validação</h2><p>Resultado da verificação mais recente.</p></div></header>
             <?php
             $statusValidacao = $ultimaValidacao['status'] ?? 'NÃO VALIDADO';
@@ -1799,7 +1736,7 @@ body{background:#080d18}
                 <?php endif; ?>
             </div></div>
         </section>
-        <section class="panel">
+        <section class="panel compact-status">
             <header class="panel-header"><div><h2>Auditoria Recente</h2><p>Últimas alterações.</p></div></header>
             <div class="audit-list">
                 <?php foreach ($recentAudit as $event): ?>
@@ -1820,6 +1757,7 @@ body{background:#080d18}
             </div>
             <a class="secondary-button" href="auditoria.php">Ver histórico completo</a>
         </section>
+        </div>
     </div>
 
     <dialog class="modal" id="apply-firewall-modal">
@@ -2008,6 +1946,23 @@ document.querySelectorAll('[data-search-target]').forEach(input=>{
     input.addEventListener('input',applyFilter);
     applyFilter();
 });
+const adminSearch=document.getElementById('acl-all-search');
+if(adminSearch){
+    const rows=[...document.querySelectorAll('tr[data-admin-search]')];
+    const emptyRow=document.getElementById('acl-all-empty');
+    const filterAdmin=()=>{
+        const term=adminSearch.value.trim().toLocaleLowerCase('pt-BR');
+        let visible=0;
+        rows.forEach(row=>{
+            const show=String(row.dataset.adminSearch||'').includes(term);
+            row.hidden=!show;
+            if(show)visible++;
+        });
+        if(emptyRow)emptyRow.hidden=visible!==0||rows.length===0;
+    };
+    adminSearch.addEventListener('input',filterAdmin);
+    filterAdmin();
+}
 document.querySelectorAll('[data-open-dialog]').forEach(button=>button.addEventListener('click',()=>{
     const dialog=document.getElementById(button.dataset.openDialog);
     if(!dialog)return;
