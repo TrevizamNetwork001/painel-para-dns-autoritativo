@@ -2,6 +2,34 @@
 
 Historico de alteracoes do Painel DNS Trevizam Network.
 
+## [2.2.0] - 2026-06-21
+
+### Firewall V1.5
+
+- Adicionada geração conservadora de prévia nftables a partir das ACLs IPv4,
+  ACLs IPv6, portas administrativas e portas públicas cadastradas.
+- Separadas regras administrativas por família com `ip saddr` e `ip6 saddr`.
+- Adicionadas políticas seguras, loopback, conexões estabelecidas e
+  ICMP/ICMPv6 à prévia.
+- Bloqueadas ACLs administrativas abertas `0.0.0.0/0` e `::/0`.
+- Adicionada ação POST com CSRF para validar a configuração.
+- Implementada execução controlada somente com `nft -c -f` em arquivo
+  temporário, timeout e captura de stdout/stderr.
+- Adicionados tratamento de binário indisponível, falta de permissão, timeout e
+  erro de sintaxe.
+- Adicionadas remoção do arquivo temporário e sanitização de caminhos internos.
+- Ativados o botão Validar, a área de prévia somente leitura e o card Última
+  Validação com estados OK, ERRO e NÃO VALIDADO.
+- Adicionada saída técnica recolhida sem exibir comandos ou caminhos internos.
+- Persistido o último resultado na tabela existente `firewall_meta`, sem
+  migração destrutiva.
+- Adicionada auditoria de geração, validação, erros e CSRF inválido com
+  quantidades de ACLs e portas.
+- Preservados CRUD, SQLite existente, modais, toast e layout dark/NOC.
+- Nenhuma regra real, reload, systemctl, arquivo produtivo ou rollback foi
+  implementado.
+- Documentação detalhada disponível em `HANDOFF_FIREWALL_V1_5.md`.
+
 ## [2.1.0] - 2026-06-21
 
 ### Página de serviços

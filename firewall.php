@@ -34,11 +34,15 @@ function firewall_redirecionar(string $tipo, string $mensagem): never
     exit;
 }
 
-function firewall_validar_csrf(string $acao, string $alvo): void
+function firewall_validar_csrf(string $acao, string $alvo, string $detalhesAuditoria = ''): void
 {
     $token = $_POST['csrf_token'] ?? '';
     if (!is_string($token) || !hash_equals(csrf_token(), $token)) {
-        firewall_auditar($acao, $alvo, 'ERROR', 'Tentativa rejeitada por validação de segurança.');
+        $mensagem = 'Tentativa rejeitada por validação de segurança.';
+        if ($detalhesAuditoria !== '') {
+            $mensagem .= ' ' . $detalhesAuditoria;
+        }
+        firewall_auditar($acao, $alvo, 'ERROR', $mensagem);
         firewall_redirecionar('error', 'Não foi possível validar a solicitação. Atualize a página e tente novamente.');
     }
 }
@@ -111,6 +115,265 @@ function firewall_tipo_registro_porta(string $escopo): string
     return $escopo === 'admin' ? 'PORTA_ADMIN' : 'PORTA_PUBLICA';
 }
 
+function firewall_carregar_configuracao(PDO $pdo): array
+{
+    return [
+        'acl_ipv4' => $pdo->query("SELECT * FROM firewall_admin_access WHERE tipo = 'IPv4' ORDER BY rede")->fetchAll(PDO::FETCH_ASSOC),
+        'acl_ipv6' => $pdo->query("SELECT * FROM firewall_admin_access WHERE tipo = 'IPv6' ORDER BY rede")->fetchAll(PDO::FETCH_ASSOC),
+        'portas_admin' => $pdo->query("SELECT * FROM firewall_ports WHERE escopo = 'admin' ORDER BY porta")->fetchAll(PDO::FETCH_ASSOC),
+        'portas_publicas' => $pdo->query("SELECT * FROM firewall_ports WHERE escopo = 'publica' ORDER BY porta")->fetchAll(PDO::FETCH_ASSOC),
+    ];
+}
+
+function firewall_contagens(array $configuracao): array
+{
+    return [
+        'acl_ipv4' => count($configuracao['acl_ipv4'] ?? []),
+        'acl_ipv6' => count($configuracao['acl_ipv6'] ?? []),
+        'portas_admin' => count($configuracao['portas_admin'] ?? []),
+        'portas_publicas' => count($configuracao['portas_publicas'] ?? []),
+    ];
+}
+
+function firewall_resumo_contagens(array $contagens): string
+{
+    return sprintf(
+        'ACLs IPv4: %d; ACLs IPv6: %d; portas administrativas: %d; portas públicas: %d.',
+        (int) ($contagens['acl_ipv4'] ?? 0),
+        (int) ($contagens['acl_ipv6'] ?? 0),
+        (int) ($contagens['portas_admin'] ?? 0),
+        (int) ($contagens['portas_publicas'] ?? 0)
+    );
+}
+
+function firewall_protocolos_portas(array $portas): array
+{
+    $resultado = ['tcp' => [], 'udp' => []];
+    foreach ($portas as $registro) {
+        $porta = firewall_validar_porta((string) ($registro['porta'] ?? ''));
+        $protocolo = strtoupper((string) ($registro['protocolo'] ?? ''));
+        if ($porta === null || !in_array($protocolo, ['TCP', 'UDP', 'TCP/UDP'], true)) {
+            throw new RuntimeException('Há uma porta cadastrada com dados inválidos.');
+        }
+        if ($protocolo === 'TCP' || $protocolo === 'TCP/UDP') {
+            $resultado['tcp'][$porta] = $porta;
+        }
+        if ($protocolo === 'UDP' || $protocolo === 'TCP/UDP') {
+            $resultado['udp'][$porta] = $porta;
+        }
+    }
+    sort($resultado['tcp'], SORT_NUMERIC);
+    sort($resultado['udp'], SORT_NUMERIC);
+    return $resultado;
+}
+
+function firewall_acl_para_previa(array $registros, string $familia): array
+{
+    $resultado = [];
+    foreach ($registros as $registro) {
+        $normalizado = firewall_normalizar_acl((string) ($registro['rede'] ?? ''), $familia);
+        if ($normalizado === null) {
+            throw new RuntimeException("Há uma ACL {$familia} cadastrada com formato inválido.");
+        }
+        if (
+            ($familia === 'IPv4' && str_ends_with($normalizado['valor'], '/0'))
+            || ($familia === 'IPv6' && str_ends_with($normalizado['valor'], '/0'))
+        ) {
+            throw new RuntimeException("A ACL administrativa {$familia} aberta para toda a Internet não é permitida.");
+        }
+        $resultado[$normalizado['valor']] = $normalizado['valor'];
+    }
+    return array_values($resultado);
+}
+
+function firewall_lista_nft(array $valores): string
+{
+    return '{ ' . implode(', ', $valores) . ' }';
+}
+
+function firewall_gerar_previa(array $configuracao): array
+{
+    $aclIpv4 = firewall_acl_para_previa($configuracao['acl_ipv4'] ?? [], 'IPv4');
+    $aclIpv6 = firewall_acl_para_previa($configuracao['acl_ipv6'] ?? [], 'IPv6');
+    $admin = firewall_protocolos_portas($configuracao['portas_admin'] ?? []);
+    $publicas = firewall_protocolos_portas($configuracao['portas_publicas'] ?? []);
+    $regras = [
+        'table inet painel_firewall_preview {',
+        '    chain input {',
+        '        type filter hook input priority 0; policy drop;',
+        '        iifname "lo" accept',
+        '        ct state established,related accept',
+        '        ip protocol icmp accept',
+        '        ip6 nexthdr ipv6-icmp accept',
+    ];
+    $avisos = [];
+
+    foreach (['tcp', 'udp'] as $protocolo) {
+        if ($publicas[$protocolo]) {
+            $regras[] = '        ' . $protocolo . ' dport ' . firewall_lista_nft($publicas[$protocolo]) . ' accept';
+        }
+    }
+
+    if ($admin['tcp'] || $admin['udp']) {
+        if (!$aclIpv4 && !$aclIpv6) {
+            $avisos[] = 'Portas administrativas não foram incluídas porque não há ACL administrativa cadastrada.';
+        }
+        foreach (['tcp', 'udp'] as $protocolo) {
+            if (!$admin[$protocolo]) {
+                continue;
+            }
+            $portas = firewall_lista_nft($admin[$protocolo]);
+            if ($aclIpv4) {
+                $regras[] = '        ip saddr ' . firewall_lista_nft($aclIpv4) . ' ' . $protocolo . ' dport ' . $portas . ' accept';
+            }
+            if ($aclIpv6) {
+                $regras[] = '        ip6 saddr ' . firewall_lista_nft($aclIpv6) . ' ' . $protocolo . ' dport ' . $portas . ' accept';
+            }
+        }
+    }
+
+    $regras[] = '    }';
+    $regras[] = '    chain forward {';
+    $regras[] = '        type filter hook forward priority 0; policy drop;';
+    $regras[] = '    }';
+    $regras[] = '    chain output {';
+    $regras[] = '        type filter hook output priority 0; policy accept;';
+    $regras[] = '    }';
+    $regras[] = '}';
+
+    return [
+        'regras' => implode("\n", $regras) . "\n",
+        'avisos' => $avisos,
+    ];
+}
+
+function firewall_binario_nft(): ?string
+{
+    foreach (['/usr/sbin/nft', '/usr/bin/nft'] as $binario) {
+        if (is_file($binario) && is_executable($binario)) {
+            return $binario;
+        }
+    }
+    return null;
+}
+
+function firewall_limpar_saida_tecnica(string $saida, ?string $arquivoTemporario = null): string
+{
+    if ($arquivoTemporario !== null && $arquivoTemporario !== '') {
+        $saida = str_replace($arquivoTemporario, '[arquivo temporário]', $saida);
+    }
+    $saida = preg_replace('#/(?:tmp|var/tmp)/[^\s:]+#', '[arquivo temporário]', $saida) ?? $saida;
+    $saida = preg_replace('#/(?:etc|usr|var|home|root)/[^\s:]+#', '[caminho interno]', $saida) ?? $saida;
+    $saida = trim($saida);
+    if (strlen($saida) > 6000) {
+        $saida = substr($saida, 0, 6000) . "\n[saída truncada]";
+    }
+    return $saida !== '' ? $saida : 'Validação concluída sem mensagens técnicas.';
+}
+
+function firewall_falha_operacional_nft(array $validacao): ?string
+{
+    $codigo = $validacao['codigo'] ?? null;
+    $saida = strtolower((string) ($validacao['saida'] ?? ''));
+    if ($codigo === 124) {
+        return 'A validação excedeu o tempo limite permitido.';
+    }
+    if (in_array($codigo, [126, 127], true)) {
+        return 'O validador nft não pôde ser executado no servidor.';
+    }
+    if (
+        str_contains($saida, 'operation not permitted')
+        || str_contains($saida, 'permission denied')
+        || str_contains($saida, 'unable to initialize netlink')
+        || str_contains($saida, 'netlink socket')
+        || str_contains($saida, 'sudo:')
+    ) {
+        return 'O validador nft não possui permissão suficiente para realizar a checagem.';
+    }
+    return null;
+}
+
+function firewall_executar_validacao(string $regras, int $timeout = 8): array
+{
+    $binario = firewall_binario_nft();
+    if ($binario === null) {
+        throw new RuntimeException('O validador nft não está disponível no servidor.');
+    }
+
+    $arquivo = tempnam(sys_get_temp_dir(), 'fw-preview-');
+    if ($arquivo === false) {
+        throw new RuntimeException('Não foi possível criar o arquivo temporário de validação.');
+    }
+
+    try {
+        @chmod($arquivo, 0600);
+        $bytes = file_put_contents($arquivo, $regras, LOCK_EX);
+        if ($bytes === false || $bytes !== strlen($regras)) {
+            throw new RuntimeException('Não foi possível gravar a prévia para validação.');
+        }
+
+        $argumentosNft = [$binario, '-c', '-f', $arquivo];
+        $euid = function_exists('posix_geteuid') ? posix_geteuid() : null;
+        if ($euid !== null && $euid !== 0 && is_executable('/usr/bin/sudo')) {
+            $argumentosNft = array_merge(['/usr/bin/sudo', '-n'], $argumentosNft);
+        }
+        $comando = array_merge(['/usr/bin/timeout', (string) $timeout], $argumentosNft);
+        $descritores = [
+            0 => ['pipe', 'r'],
+            1 => ['pipe', 'w'],
+            2 => ['pipe', 'w'],
+        ];
+        $inicio = microtime(true);
+        $processo = proc_open($comando, $descritores, $pipes);
+        if (!is_resource($processo)) {
+            throw new RuntimeException('Não foi possível iniciar a validação controlada.');
+        }
+        fclose($pipes[0]);
+        $stdout = stream_get_contents($pipes[1]);
+        $stderr = stream_get_contents($pipes[2]);
+        fclose($pipes[1]);
+        fclose($pipes[2]);
+        $codigo = proc_close($processo);
+        $saida = trim((string) $stdout . ((string) $stderr !== '' ? "\n" . (string) $stderr : ''));
+
+        return [
+            'ok' => $codigo === 0,
+            'codigo' => $codigo,
+            'saida' => firewall_limpar_saida_tecnica($saida, $arquivo),
+            'duracao_ms' => (int) round((microtime(true) - $inicio) * 1000),
+        ];
+    } finally {
+        if (is_file($arquivo) && !@unlink($arquivo)) {
+            error_log('Firewall - não foi possível remover arquivo temporário de validação.');
+        }
+    }
+}
+
+function firewall_salvar_ultima_validacao(PDO $pdo, array $resultado): void
+{
+    $json = json_encode($resultado, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    if ($json === false) {
+        throw new RuntimeException('Não foi possível registrar o resultado da validação.');
+    }
+    $stmt = $pdo->prepare("
+        INSERT INTO firewall_meta (chave, valor) VALUES ('ultima_validacao_v15', :valor)
+        ON CONFLICT(chave) DO UPDATE SET valor = excluded.valor
+    ");
+    $stmt->execute([':valor' => $json]);
+}
+
+function firewall_carregar_ultima_validacao(PDO $pdo): ?array
+{
+    $stmt = $pdo->prepare("SELECT valor FROM firewall_meta WHERE chave = 'ultima_validacao_v15'");
+    $stmt->execute();
+    $valor = $stmt->fetchColumn();
+    if (!is_string($valor) || $valor === '') {
+        return null;
+    }
+    $resultado = json_decode($valor, true);
+    return is_array($resultado) ? $resultado : null;
+}
+
 $pdo = db();
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -123,6 +386,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         'adicionar_porta_publica' => 'FIREWALL_ADICIONAR_PORTA_PUBLICA',
         'editar_porta' => 'FIREWALL_EDITAR_PORTA',
         'remover_porta' => 'FIREWALL_REMOVER_PORTA',
+        'validar_configuracao' => 'FIREWALL_VALIDAR_CONFIGURACAO',
     ];
 
     if (!isset($acoesAuditoria[$acao])) {
@@ -132,9 +396,108 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $acaoAuditoria = $acoesAuditoria[$acao];
     $alvoInformado = trim((string) ($_POST['rede'] ?? $_POST['porta'] ?? 'não informado'));
     $tipoRegistroAuditoria = 'FIREWALL';
-    firewall_validar_csrf($acaoAuditoria, $alvoInformado);
+    $detalhesCsrf = '';
+    if ($acao === 'validar_configuracao') {
+        try {
+            $detalhesCsrf = firewall_resumo_contagens(firewall_contagens(firewall_carregar_configuracao($pdo)));
+        } catch (Throwable) {
+            $detalhesCsrf = 'Contagens indisponíveis.';
+        }
+    }
+    firewall_validar_csrf($acaoAuditoria, $alvoInformado, $detalhesCsrf);
 
     try {
+        if ($acao === 'validar_configuracao') {
+            $configuracao = firewall_carregar_configuracao($pdo);
+            $contagens = firewall_contagens($configuracao);
+            $resumoContagens = firewall_resumo_contagens($contagens);
+
+            try {
+                $previa = firewall_gerar_previa($configuracao);
+                firewall_auditar(
+                    'FIREWALL_GERAR_PREVIA',
+                    'Configuração nftables',
+                    'SUCCESS',
+                    'Prévia gerada para validação controlada. ' . $resumoContagens,
+                    'FIREWALL_VALIDACAO'
+                );
+            } catch (Throwable $e) {
+                firewall_auditar(
+                    'FIREWALL_GERAR_PREVIA_ERRO',
+                    'Configuração nftables',
+                    'ERROR',
+                    $e->getMessage() . ' ' . $resumoContagens,
+                    'FIREWALL_VALIDACAO'
+                );
+                $resultadoPersistido = [
+                    'status' => 'ERRO',
+                    'data_hora' => date(DATE_ATOM),
+                    'usuario' => audit_usuario_atual(),
+                    'resumo' => $e->getMessage(),
+                    'saida' => 'A prévia não foi enviada ao validador porque sua geração segura falhou.',
+                    'contagens' => $contagens,
+                ];
+                firewall_salvar_ultima_validacao($pdo, $resultadoPersistido);
+                firewall_auditar(
+                    'FIREWALL_VALIDAR_CONFIGURACAO_ERRO',
+                    'Configuração nftables',
+                    'ERROR',
+                    'Validação não executada porque a geração segura da prévia falhou. ' . $resumoContagens,
+                    'FIREWALL_VALIDACAO'
+                );
+                firewall_redirecionar('error', $e->getMessage() . ' Nenhuma regra foi aplicada.');
+            }
+
+            $falhaExecucao = null;
+            try {
+                $validacao = firewall_executar_validacao($previa['regras']);
+                if (!$validacao['ok']) {
+                    $falhaExecucao = firewall_falha_operacional_nft($validacao);
+                }
+            } catch (Throwable $e) {
+                $falhaExecucao = $e->getMessage();
+                $validacao = [
+                    'ok' => false,
+                    'codigo' => null,
+                    'saida' => firewall_limpar_saida_tecnica($falhaExecucao),
+                    'duracao_ms' => 0,
+                ];
+            }
+
+            $status = $validacao['ok'] ? 'OK' : 'ERRO';
+            $resumo = $validacao['ok']
+                ? 'A sintaxe da prévia foi validada com sucesso. Nenhuma regra foi aplicada.'
+                : ($falhaExecucao !== null
+                    ? $falhaExecucao . ' Nenhuma regra foi aplicada.'
+                    : 'A prévia não passou na validação controlada. Nenhuma regra foi aplicada.');
+            if ($previa['avisos']) {
+                $resumo .= ' ' . implode(' ', $previa['avisos']);
+            }
+            $resultadoPersistido = [
+                'status' => $status,
+                'data_hora' => date(DATE_ATOM),
+                'usuario' => audit_usuario_atual(),
+                'resumo' => $resumo,
+                'saida' => $validacao['saida'],
+                'codigo' => $validacao['codigo'],
+                'duracao_ms' => $validacao['duracao_ms'],
+                'contagens' => $contagens,
+                'hash_previa' => hash('sha256', $previa['regras']),
+            ];
+            firewall_salvar_ultima_validacao($pdo, $resultadoPersistido);
+            firewall_auditar(
+                $validacao['ok'] ? 'FIREWALL_VALIDAR_CONFIGURACAO' : 'FIREWALL_VALIDAR_CONFIGURACAO_ERRO',
+                'Configuração nftables',
+                $validacao['ok'] ? 'SUCCESS' : 'ERROR',
+                $resumo . ' ' . $resumoContagens,
+                'FIREWALL_VALIDACAO'
+            );
+            firewall_redirecionar(
+                $validacao['ok'] ? 'success' : 'error',
+                $validacao['ok'] ? 'Configuração validada com sucesso. Nenhuma regra foi aplicada.' : 'A configuração apresentou erro na validação. Nenhuma regra foi aplicada.'
+            );
+        }
+
         if ($acao === 'adicionar_ip') {
             $familiaEntrada = strtolower(trim((string) ($_POST['familia'] ?? '')));
             $familia = match ($familiaEntrada) {
@@ -335,12 +698,22 @@ $adminPorts = [];
 $publicPorts = [];
 $recentAudit = [];
 $firewallLoadWarning = null;
+$ultimaValidacao = null;
+$previaAtual = null;
+$previaErro = null;
 
 try {
-    $aclIpv4 = $pdo->query("SELECT * FROM firewall_admin_access WHERE tipo = 'IPv4' ORDER BY rede")->fetchAll(PDO::FETCH_ASSOC);
-    $aclIpv6 = $pdo->query("SELECT * FROM firewall_admin_access WHERE tipo = 'IPv6' ORDER BY rede")->fetchAll(PDO::FETCH_ASSOC);
-    $adminPorts = $pdo->query("SELECT * FROM firewall_ports WHERE escopo = 'admin' ORDER BY porta")->fetchAll(PDO::FETCH_ASSOC);
-    $publicPorts = $pdo->query("SELECT * FROM firewall_ports WHERE escopo = 'publica' ORDER BY porta")->fetchAll(PDO::FETCH_ASSOC);
+    $configuracaoAtual = firewall_carregar_configuracao($pdo);
+    $aclIpv4 = $configuracaoAtual['acl_ipv4'];
+    $aclIpv6 = $configuracaoAtual['acl_ipv6'];
+    $adminPorts = $configuracaoAtual['portas_admin'];
+    $publicPorts = $configuracaoAtual['portas_publicas'];
+    $ultimaValidacao = firewall_carregar_ultima_validacao($pdo);
+    try {
+        $previaAtual = firewall_gerar_previa($configuracaoAtual);
+    } catch (Throwable $e) {
+        $previaErro = $e->getMessage();
+    }
 
     $auditStmt = $pdo->query("
         SELECT usuario, acao, tipo_registro, nome_registro, status, mensagem, criado_em
@@ -367,14 +740,14 @@ $summary = [
     ['⬡', 'IPv6 Liberados', (string) $ipv6Count, 'Redes e endereços', false],
     ['⌁', 'Portas Admin', (string) count($adminPorts), 'Acesso restrito', false],
     ['⇄', 'Portas Públicas', (string) count($publicPorts), 'Acesso externo', false],
-    ['✓', 'Firewall Ativo', 'Ativo', 'Somente dados do painel', true],
+    ['✓', 'Validação', $ultimaValidacao['status'] ?? 'Não validado', 'Nenhuma aplicação automática', ($ultimaValidacao['status'] ?? '') === 'OK'],
 ];
 $quickActions = [
     ['+', 'Adicionar IP', 'Autorizar endereço', 'add-ip-modal'],
     ['🔒', 'Porta Admin', 'Adicionar restrição', 'add-admin-port-modal'],
     ['🌐', 'Porta Pública', 'Liberar serviço', 'add-public-port-modal'],
     ['▣', 'Backup', 'Fase futura', null],
-    ['✓', 'Validar', 'Fase futura', null],
+    ['✓', 'Validar', 'Checar sintaxe nftables', 'validate-firewall'],
     ['↻', 'Aplicar', 'Fase futura', null],
     ['≡', 'Ver Logs', 'Consultar eventos', null],
 ];
@@ -424,8 +797,13 @@ tr:last-child td{border-bottom:0}tbody tr{background:#02061766}tbody tr:hover{ba
 .strong{color:#fff;font-weight:700}.row-actions{display:flex;align-items:center;gap:7px;white-space:nowrap}
 .text-action{padding:5px 8px;border:1px solid var(--line2);border-radius:7px;background:#101827;color:#cfeeff;cursor:pointer;font-size:11px;font-weight:700}.text-action:hover,.text-action:focus{border-color:var(--accent);outline:none}.text-action.remove{color:#fecaca}.text-action.remove:hover,.text-action.remove:focus{border-color:var(--danger)}
 .validation{display:flex;gap:13px;min-height:128px;padding:17px;border:1px solid #22c55e4d;border-radius:11px;background:linear-gradient(135deg,#14532d38,#07170e)}
+.validation.error{border-color:#ef44444d;background:linear-gradient(135deg,#7f1d1d38,#170707)}.validation.pending{border-color:#33465f;background:linear-gradient(135deg,#172236,#080d18)}
 .validation-icon{display:inline-flex;align-items:center;justify-content:center;flex:0 0 30px;width:30px;height:30px;border-radius:50%;background:#14532d;color:#bbf7d0;font-weight:800}
+.validation.error .validation-icon{background:#7f1d1d;color:#fecaca}.validation.pending .validation-icon{background:#1e293b;color:#cbd5e1}
 .validation strong{display:block;margin:2px 0 13px;color:#bbf7d0;font-size:15px}.validation span{display:block;color:var(--muted);font-size:12px;line-height:1.65}.validation time,.validation em{color:var(--text);font-style:normal;font-weight:700}
+.validation.error strong{color:#fecaca}.validation.pending strong{color:#cbd5e1}
+.preview-panel{margin-top:18px}.rule-preview{max-height:430px;overflow:auto;margin:0;padding:16px;border:1px solid var(--line);border-radius:11px;background:#020617;color:#cbd5e1;font:12px/1.65 Consolas,Monaco,monospace;white-space:pre}.preview-note{margin:0 0 12px;color:var(--muted);font-size:12px;line-height:1.55}.technical-output{margin-top:13px;border-top:1px solid var(--line);padding-top:11px}.technical-output summary{color:#bae6fd;cursor:pointer;font-size:12px;font-weight:700}.technical-output pre{overflow:auto;max-height:240px;margin:10px 0 0;padding:12px;border:1px solid var(--line);border-radius:9px;background:#020617;color:#cbd5e1;font:11px/1.55 Consolas,Monaco,monospace;white-space:pre-wrap}
+.inline-form{margin:0}.quick-action.validate{width:100%}
 .status-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px;margin-top:18px}
 .audit-list{display:grid;gap:10px}
 .audit-item{display:grid;grid-template-columns:minmax(92px,.4fr) minmax(0,1fr) auto;gap:14px;align-items:start;padding:12px 0;border-bottom:1px solid var(--line);font-size:13px}
@@ -481,6 +859,18 @@ tr:last-child td{border-bottom:0}tbody tr{background:#02061766}tbody tr:hover{ba
         <header class="panel-header"><div><h2>Ações rápidas</h2><p>Atalhos para as operações mais utilizadas.</p></div></header>
         <div class="quick-grid">
             <?php foreach ($quickActions as [$icon, $label, $detail, $modalId]): ?>
+                <?php if ($modalId === 'validate-firewall'): ?>
+                    <form method="POST" class="inline-form">
+                        <?= csrf_field() ?>
+                        <input type="hidden" name="acao" value="validar_configuracao">
+                        <button class="quick-action validate" type="submit">
+                            <span class="quick-icon" aria-hidden="true"><?= htmlspecialchars($icon) ?></span>
+                            <strong><?= htmlspecialchars($label) ?></strong>
+                            <small><?= htmlspecialchars($detail) ?></small>
+                        </button>
+                    </form>
+                    <?php continue; ?>
+                <?php endif; ?>
                 <button
                     class="quick-action"
                     type="button"
@@ -617,10 +1007,53 @@ tr:last-child td{border-bottom:0}tbody tr{background:#02061766}tbody tr:hover{ba
         </div>
     </div>
 
+    <section class="panel preview-panel">
+        <header class="panel-header">
+            <div><h2>Prévia das regras</h2><p>Conteúdo somente leitura gerado a partir dos dados cadastrados.</p></div>
+            <form method="POST">
+                <?= csrf_field() ?>
+                <input type="hidden" name="acao" value="validar_configuracao">
+                <button class="button primary" type="submit">Validar configuração</button>
+            </form>
+        </header>
+        <p class="preview-note">Esta prévia não altera o firewall ativo. A validação executa apenas checagem de sintaxe e remove o arquivo temporário ao final.</p>
+        <?php if ($previaAtual !== null): ?>
+            <?php foreach ($previaAtual['avisos'] as $aviso): ?><div class="alert error"><?= htmlspecialchars($aviso) ?></div><?php endforeach; ?>
+            <pre class="rule-preview" tabindex="0"><?= htmlspecialchars($previaAtual['regras']) ?></pre>
+        <?php else: ?>
+            <div class="alert error"><?= htmlspecialchars($previaErro ?? 'Não foi possível gerar a prévia.') ?></div>
+        <?php endif; ?>
+    </section>
+
     <div class="status-grid">
         <section class="panel">
             <header class="panel-header"><div><h2>Última Validação</h2><p>Resultado da verificação mais recente.</p></div></header>
-            <div class="validation"><span class="validation-icon" aria-hidden="true">✓</span><div><strong>Configuração válida</strong><span>Última validação: <time datetime="2026-06-21T09:35:00-03:00">21/06/2026 09:35</time></span><span>Tempo desde validação: <em>12 minutos atrás</em></span></div></div>
+            <?php
+            $statusValidacao = $ultimaValidacao['status'] ?? 'NÃO VALIDADO';
+            $classeValidacao = $statusValidacao === 'OK' ? '' : ($statusValidacao === 'ERRO' ? ' error' : ' pending');
+            $iconeValidacao = $statusValidacao === 'OK' ? '✓' : ($statusValidacao === 'ERRO' ? '!' : '–');
+            $tituloValidacao = $statusValidacao === 'OK' ? 'Configuração válida' : ($statusValidacao === 'ERRO' ? 'Erro na validação' : 'Configuração não validada');
+            $dataValidacao = null;
+            if (!empty($ultimaValidacao['data_hora'])) {
+                try {
+                    $dataValidacao = new DateTimeImmutable((string) $ultimaValidacao['data_hora']);
+                } catch (Throwable) {
+                    $dataValidacao = null;
+                }
+            }
+            ?>
+            <div class="validation<?= $classeValidacao ?>"><span class="validation-icon" aria-hidden="true"><?= $iconeValidacao ?></span><div>
+                <strong><?= htmlspecialchars($tituloValidacao) ?></strong>
+                <?php if ($ultimaValidacao !== null): ?>
+                    <span>Data/hora: <time<?= $dataValidacao ? ' datetime="' . htmlspecialchars($dataValidacao->format(DATE_ATOM), ENT_QUOTES, 'UTF-8') . '"' : '' ?>><?= htmlspecialchars($dataValidacao ? $dataValidacao->format('d/m/Y H:i:s') : 'Não informada') ?></time></span>
+                    <span>Usuário: <em><?= htmlspecialchars((string) ($ultimaValidacao['usuario'] ?? 'desconhecido')) ?></em></span>
+                    <span><?= htmlspecialchars((string) ($ultimaValidacao['resumo'] ?? 'Sem resumo disponível.')) ?></span>
+                    <details class="technical-output"><summary>Ver saída técnica</summary><pre><?= htmlspecialchars((string) ($ultimaValidacao['saida'] ?? 'Sem saída técnica.')) ?></pre></details>
+                <?php else: ?>
+                    <span>Use “Validar configuração” para checar a sintaxe da prévia.</span>
+                    <span>Nenhuma regra será aplicada nesta fase.</span>
+                <?php endif; ?>
+            </div></div>
         </section>
         <section class="panel">
             <header class="panel-header"><div><h2>Auditoria Recente</h2><p>Últimas alterações.</p></div></header>
