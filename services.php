@@ -298,6 +298,7 @@ a{
     display:grid;
     grid-template-columns:repeat(auto-fit,minmax(240px,1fr));
     gap:12px;
+    align-items:start;
 }
 
 .metric-strip{
@@ -311,10 +312,11 @@ a{
     display:flex;
     gap:12px;
     align-items:flex-start;
+    min-height:64px;
     background:rgba(17,28,51,.72);
     border:1px solid var(--border);
     border-radius:12px;
-    padding:12px;
+    padding:13px 15px;
 }
 
 .metric-label{
@@ -334,8 +336,8 @@ a{
 }
 
 .metric-icon{
-    width:32px;
-    height:32px;
+    width:34px;
+    height:34px;
     border-radius:10px;
     display:inline-flex;
     align-items:center;
@@ -462,7 +464,7 @@ a{
     background:rgba(124,45,18,.24);
     border:1px solid rgba(234,88,12,.35);
     color:#fed7aa;
-    padding:12px 14px;
+    padding:11px 14px;
     line-height:1.45;
 }
 
@@ -521,6 +523,8 @@ pre{
     min-height:100%;
     position:relative;
     overflow:hidden;
+    height:auto;
+    min-height:auto;
 }
 
 .service-card::before{
@@ -602,13 +606,13 @@ pre{
 }
 
 .service-body{
-    flex:1 1 auto;
+    flex:0 0 auto;
     position:relative;
     z-index:1;
 }
 
 .service-footer{
-    margin-top:auto;
+    margin-top:16px;
     position:relative;
     z-index:1;
 }
