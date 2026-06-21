@@ -5,33 +5,20 @@ require_once __DIR__ . '/db.php';
 function usuarios_garantir_esquema(): void
 {
     static $pronto = false;
-
     if ($pronto) {
         return;
     }
 
-    db()->exec("
-        CREATE TABLE IF NOT EXISTS usuarios (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            usuario TEXT NOT NULL COLLATE NOCASE UNIQUE,
-            senha_hash TEXT NOT NULL,
-            perfil TEXT NOT NULL DEFAULT 'moderador'
-                CHECK (perfil IN ('administrador', 'moderador')),
-            ativo INTEGER NOT NULL DEFAULT 1 CHECK (ativo IN (0, 1)),
-            trocar_senha INTEGER NOT NULL DEFAULT 0 CHECK (trocar_senha IN (0, 1)),
-            auth_version INTEGER NOT NULL DEFAULT 1,
-            criado_em DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-            atualizado_em DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
-        )
-    ");
-
+    // O esquema de usuarios e criado por includes/setup_db.php.
+    // Manter esta funcao evita quebrar chamadas antigas sem executar DDL
+    // em cada requisicao, o que poderia disputar lock no SQLite.
     $pronto = true;
 }
 
 function usuario_por_login(string $usuario): ?array
 {
     usuarios_garantir_esquema();
-    $stmt = db()->prepare('SELECT * FROM usuarios WHERE usuario = :usuario COLLATE NOCASE LIMIT 1');
+    $stmt = db_leitura()->prepare('SELECT * FROM usuarios WHERE usuario = :usuario COLLATE NOCASE LIMIT 1');
     $stmt->execute([':usuario' => trim($usuario)]);
     $registro = $stmt->fetch(PDO::FETCH_ASSOC);
 
@@ -41,7 +28,7 @@ function usuario_por_login(string $usuario): ?array
 function usuario_por_id(int $id): ?array
 {
     usuarios_garantir_esquema();
-    $stmt = db()->prepare('SELECT * FROM usuarios WHERE id = :id LIMIT 1');
+    $stmt = db_leitura()->prepare('SELECT * FROM usuarios WHERE id = :id LIMIT 1');
     $stmt->execute([':id' => $id]);
     $registro = $stmt->fetch(PDO::FETCH_ASSOC);
 
@@ -91,7 +78,7 @@ function total_administradores_ativos(?int $ignorarId = null): int
         $params[':id'] = $ignorarId;
     }
 
-    $stmt = db()->prepare($sql);
+    $stmt = db_leitura()->prepare($sql);
     $stmt->execute($params);
 
     return (int) $stmt->fetchColumn();

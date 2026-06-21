@@ -20,21 +20,49 @@ if (empty($_SESSION['logado'])) {
 }
 
 $usuarioId = (int) ($_SESSION['usuario_id'] ?? 0);
+$usuarioAtual = null;
 
-if ($usuarioId <= 0 && !empty($_SESSION['usuario'])) {
-    $usuarioLegado = usuario_por_login((string) $_SESSION['usuario']);
+try {
+    if ($usuarioId <= 0 && !empty($_SESSION['usuario'])) {
+        $usuarioLegado = usuario_por_login((string) $_SESSION['usuario']);
 
-    if ($usuarioLegado && (int) $usuarioLegado['ativo'] === 1) {
-        $usuarioId = (int) $usuarioLegado['id'];
-        $_SESSION['usuario_id'] = $usuarioId;
-        $_SESSION['usuario'] = $usuarioLegado['usuario'];
-        $_SESSION['perfil'] = $usuarioLegado['perfil'];
-        $_SESSION['trocar_senha'] = (int) $usuarioLegado['trocar_senha'];
-        $_SESSION['auth_version'] = (int) $usuarioLegado['auth_version'];
+        if ($usuarioLegado && (int) $usuarioLegado['ativo'] === 1) {
+            $usuarioId = (int) $usuarioLegado['id'];
+            $_SESSION['usuario_id'] = $usuarioId;
+            $_SESSION['usuario'] = $usuarioLegado['usuario'];
+            $_SESSION['perfil'] = $usuarioLegado['perfil'];
+            $_SESSION['trocar_senha'] = (int) $usuarioLegado['trocar_senha'];
+            $_SESSION['auth_version'] = (int) $usuarioLegado['auth_version'];
+        }
+    }
+
+    $usuarioAtual = $usuarioId > 0 ? usuario_por_id($usuarioId) : null;
+} catch (PDOException $e) {
+    $lockMessage = strtolower($e->getMessage());
+    if (
+        $usuarioId > 0
+        && !empty($_SESSION['usuario'])
+        && !empty($_SESSION['perfil'])
+        && isset($_SESSION['auth_version'])
+        && (
+            str_contains($lockMessage, 'database is locked')
+            || str_contains($lockMessage, 'readonly database')
+            || str_contains($lockMessage, 'attempt to write a readonly database')
+        )
+    ) {
+        $usuarioAtual = [
+            'id' => $usuarioId,
+            'usuario' => (string) $_SESSION['usuario'],
+            'perfil' => (string) $_SESSION['perfil'],
+            'trocar_senha' => (int) ($_SESSION['trocar_senha'] ?? 0),
+            'auth_version' => (int) ($_SESSION['auth_version'] ?? 0),
+            'ativo' => 1,
+        ];
+        error_log('Auth - usando sessão em fallback por indisponibilidade do SQLite: ' . $e->getMessage());
+    } else {
+        throw $e;
     }
 }
-
-$usuarioAtual = $usuarioId > 0 ? usuario_por_id($usuarioId) : null;
 
 if (
     !$usuarioAtual
