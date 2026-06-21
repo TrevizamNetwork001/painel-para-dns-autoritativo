@@ -5,67 +5,156 @@ require_once __DIR__ . "/includes/auth.php";
 $logs = shell_exec(
     "tail -n 100 /var/log/named/named.log"
 );
-
 ?>
-
 <!DOCTYPE html>
-<html>
+<html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Logs BIND</title>
-
 <style>
-
+:root{
+    color-scheme: dark;
+    --bg:#0b1220;
+    --panel:#0f172a;
+    --panel-2:#111c33;
+    --border:#24324a;
+    --text:#e2e8f0;
+    --muted:#94a3b8;
+    --accent:#38bdf8;
+}
+*{box-sizing:border-box}
 body{
     margin:0;
-    font-family:Arial;
-    background:#0f172a;
-    color:#e2e8f0;
+    font-family:Arial,sans-serif;
+    background:radial-gradient(circle at top,#101b33 0,var(--bg) 44%,#070b14 100%);
+    color:var(--text);
 }
-
-.container{
-    padding:30px;
+a{color:inherit;text-decoration:none}
+.page{
+    width:min(980px, calc(100% - 28px));
+    margin:0 auto;
+    padding:22px 0 34px;
 }
-
+.back{
+    color:var(--accent);
+    font-size:14px;
+}
+h1{
+    margin:8px 0 6px;
+    font-size:28px;
+}
+.subtitle{
+    margin:0;
+    color:var(--muted);
+    line-height:1.5;
+}
 .card{
-    background:#071226;
-    border:1px solid #1e293b;
+    margin-top:18px;
+    padding:16px;
+    border:1px solid var(--border);
     border-radius:14px;
-    padding:25px;
+    background:linear-gradient(180deg, rgba(15,23,42,.96), rgba(11,18,32,.96));
+    box-shadow:0 16px 44px rgba(0,0,0,.18);
 }
-
-pre{
-    white-space:pre-wrap;
+.card h2{
+    margin:0 0 6px;
+    font-size:18px;
+}
+.card p{
+    margin:0;
+    color:var(--muted);
+}
+.badge{
+    display:inline-flex;
+    align-items:center;
+    padding:5px 10px;
+    border-radius:999px;
+    border:1px solid rgba(148,163,184,.18);
+    background:rgba(148,163,184,.10);
+    color:#dbe7f5;
+    font-size:12px;
+    white-space:nowrap;
+    margin-top:12px;
+}
+.actions{
+    display:flex;
+    flex-wrap:wrap;
+    gap:8px;
+    margin-top:12px;
+}
+.actions a{
+    border:1px solid var(--border);
+    background:transparent;
+    color:var(--muted);
+    border-radius:10px;
+    padding:9px 12px;
     font-size:13px;
-    line-height:1.6;
+}
+.panel{
+    margin-top:12px;
+    border:1px solid var(--border);
+    border-radius:12px;
+    background:rgba(17,28,51,.72);
+    padding:14px;
+}
+.panel h3{
+    margin:0 0 10px;
+    font-size:15px;
+}
+pre{
+    margin:0;
+    padding:14px;
+    background:#091123;
+    border:1px solid var(--border);
+    border-radius:12px;
     color:#cbd5e1;
+    font-size:12px;
+    line-height:1.55;
+    white-space:pre-wrap;
+    word-break:break-word;
+    overflow:auto;
 }
-
-a{
-    color:#38bdf8;
-    text-decoration:none;
+@media (max-width: 720px){
+    .page{width:calc(100% - 18px);padding-top:14px}
+    h1{font-size:24px}
 }
-
 </style>
 </head>
-
 <body>
+<div class="page">
+    <a class="back" href="dashboard.php">← Voltar</a>
+    <h1>Logs BIND</h1>
+    <p class="subtitle">Consulta somente leitura dos registros do BIND.</p>
 
-<div class="container">
+    <section class="card">
+        <h2>Logs recentes</h2>
+        <p>Últimas 100 linhas do arquivo de log do BIND.</p>
 
-<h2>🌐 Logs BIND</h2>
+        <div class="actions">
+            <a href="#info">Informações</a>
+            <a href="#dados">Ver dados</a>
+        </div>
 
-<p>
-<a href="dashboard.php">← Voltar</a>
-</p>
+        <div class="badge">Fonte: /var/log/named/named.log</div>
 
-<div class="card">
+        <div class="panel" id="info">
+            <h3>Informação</h3>
+            <p>Os logs exibidos abaixo são somente leitura e atualizam ao recarregar a página.</p>
+        </div>
 
-<pre><?= htmlspecialchars($logs ?: 'Sem logs disponíveis') ?></pre>
-
+        <div class="panel" id="dados">
+            <h3>Dados brutos</h3>
+            <pre><?= htmlspecialchars($logs ?: 'Sem logs disponíveis') ?></pre>
+        </div>
+    </section>
 </div>
 
-</div>
+<script>
+setTimeout(() => {
+    window.location.reload();
+}, 8000);
+</script>
 
 <?php require __DIR__ . '/includes/footer.php'; ?>
 </body>
