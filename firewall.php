@@ -112,65 +112,6 @@ function firewall_tipo_registro_porta(string $escopo): string
 }
 
 $pdo = db();
-$pdo->exec("
-    CREATE TABLE IF NOT EXISTS firewall_admin_access (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        tipo TEXT NOT NULL CHECK (tipo IN ('IPv4', 'IPv6')),
-        rede TEXT NOT NULL COLLATE NOCASE UNIQUE,
-        descricao TEXT NOT NULL DEFAULT '',
-        criado_em DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        atualizado_em DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
-    )
-");
-$pdo->exec("
-    CREATE TABLE IF NOT EXISTS firewall_ports (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        escopo TEXT NOT NULL CHECK (escopo IN ('admin', 'publica')),
-        porta INTEGER NOT NULL CHECK (porta BETWEEN 1 AND 65535),
-        protocolo TEXT NOT NULL CHECK (protocolo IN ('TCP', 'UDP', 'TCP/UDP')),
-        servico TEXT NOT NULL DEFAULT '',
-        descricao TEXT NOT NULL DEFAULT '',
-        criado_em DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        atualizado_em DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        UNIQUE (escopo, porta)
-    )
-");
-$pdo->exec("
-    CREATE TABLE IF NOT EXISTS firewall_meta (
-        chave TEXT PRIMARY KEY,
-        valor TEXT NOT NULL
-    )
-");
-
-$seeded = $pdo->query("SELECT 1 FROM firewall_meta WHERE chave = 'v1_seeded'")->fetchColumn();
-if (!$seeded) {
-    $pdo->beginTransaction();
-    try {
-        if ((int) $pdo->query('SELECT COUNT(*) FROM firewall_admin_access')->fetchColumn() === 0) {
-            $stmt = $pdo->prepare('INSERT INTO firewall_admin_access (tipo, rede, descricao, criado_em) VALUES (?, ?, ?, ?)');
-            $stmt->execute(['IPv4', '45.182.96.0/24', 'Rede principal', '2026-06-18 09:00:00']);
-            $stmt->execute(['IPv4', '168.194.14.101', 'Acesso externo', '2026-06-20 14:30:00']);
-        }
-        if ((int) $pdo->query('SELECT COUNT(*) FROM firewall_ports')->fetchColumn() === 0) {
-            $stmt = $pdo->prepare('INSERT INTO firewall_ports (escopo, porta, protocolo, servico, descricao) VALUES (?, ?, ?, ?, ?)');
-            foreach ([
-                ['admin', 22, 'TCP', 'SSH', 'Acesso remoto'],
-                ['admin', 80, 'TCP', 'HTTP', 'Painel'],
-                ['admin', 443, 'TCP', 'HTTPS', 'Painel seguro'],
-                ['publica', 53, 'TCP/UDP', 'DNS', 'Resolução de nomes'],
-                ['publica', 80, 'TCP', 'HTTP', 'Serviço web'],
-                ['publica', 443, 'TCP', 'HTTPS', 'Serviço web seguro'],
-            ] as $portaInicial) {
-                $stmt->execute($portaInicial);
-            }
-        }
-        $pdo->exec("INSERT INTO firewall_meta (chave, valor) VALUES ('v1_seeded', '1')");
-        $pdo->commit();
-    } catch (Throwable $e) {
-        $pdo->rollBack();
-        throw $e;
-    }
-}
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $acao = is_string($_POST['acao'] ?? null) ? $_POST['acao'] : '';
@@ -388,19 +329,36 @@ if (is_array($flash)) {
     $toastTipoInicial = ($flash['tipo'] ?? '') === 'success' ? 'success' : 'error';
 }
 
-$aclIpv4 = $pdo->query("SELECT * FROM firewall_admin_access WHERE tipo = 'IPv4' ORDER BY rede")->fetchAll(PDO::FETCH_ASSOC);
-$aclIpv6 = $pdo->query("SELECT * FROM firewall_admin_access WHERE tipo = 'IPv6' ORDER BY rede")->fetchAll(PDO::FETCH_ASSOC);
-$adminPorts = $pdo->query("SELECT * FROM firewall_ports WHERE escopo = 'admin' ORDER BY porta")->fetchAll(PDO::FETCH_ASSOC);
-$publicPorts = $pdo->query("SELECT * FROM firewall_ports WHERE escopo = 'publica' ORDER BY porta")->fetchAll(PDO::FETCH_ASSOC);
+$aclIpv4 = [];
+$aclIpv6 = [];
+$adminPorts = [];
+$publicPorts = [];
+$recentAudit = [];
+$firewallLoadWarning = null;
 
-$auditStmt = $pdo->query("
-    SELECT usuario, acao, tipo_registro, nome_registro, status, mensagem, criado_em
-    FROM audit_logs
-    WHERE acao LIKE 'FIREWALL_%'
-    ORDER BY id DESC
-    LIMIT 4
-");
-$recentAudit = $auditStmt->fetchAll(PDO::FETCH_ASSOC);
+try {
+    $aclIpv4 = $pdo->query("SELECT * FROM firewall_admin_access WHERE tipo = 'IPv4' ORDER BY rede")->fetchAll(PDO::FETCH_ASSOC);
+    $aclIpv6 = $pdo->query("SELECT * FROM firewall_admin_access WHERE tipo = 'IPv6' ORDER BY rede")->fetchAll(PDO::FETCH_ASSOC);
+    $adminPorts = $pdo->query("SELECT * FROM firewall_ports WHERE escopo = 'admin' ORDER BY porta")->fetchAll(PDO::FETCH_ASSOC);
+    $publicPorts = $pdo->query("SELECT * FROM firewall_ports WHERE escopo = 'publica' ORDER BY porta")->fetchAll(PDO::FETCH_ASSOC);
+
+    $auditStmt = $pdo->query("
+        SELECT usuario, acao, tipo_registro, nome_registro, status, mensagem, criado_em
+        FROM audit_logs
+        WHERE acao LIKE 'FIREWALL_%'
+        ORDER BY id DESC
+        LIMIT 4
+    ");
+    $recentAudit = $auditStmt->fetchAll(PDO::FETCH_ASSOC);
+} catch (PDOException $e) {
+    error_log('Firewall - leitura indisponivel: ' . $e->getMessage());
+    $firewallLoadWarning = 'Os dados do firewall estao temporariamente indisponiveis. A pagina abriu em modo seguro.';
+}
+
+if ($firewallLoadWarning !== null && $toastMensagemInicial === '') {
+    $toastMensagemInicial = $firewallLoadWarning;
+    $toastTipoInicial = 'error';
+}
 
 $ipv4Count = count($aclIpv4);
 $ipv6Count = count($aclIpv6);
