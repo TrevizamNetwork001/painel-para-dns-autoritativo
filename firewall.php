@@ -260,34 +260,6 @@ h1{
 .stat.bad{background:rgba(63,13,18,.45)}
 .stat.warn{background:rgba(63,50,13,.42)}
 .stat.info{background:rgba(12,45,72,.42)}
-.banner{
-    display:grid;
-    grid-template-columns:repeat(2, minmax(0, 1fr));
-    gap:12px;
-    margin-top:14px;
-}
-.banner-card{
-    padding:16px;
-    border-radius:12px;
-    border:1px solid var(--border);
-    background:rgba(17,28,51,.72);
-}
-.banner-card.bad{
-    background:rgba(63,13,18,.45);
-}
-.banner-card.warn{
-    background:rgba(63,50,13,.42);
-}
-.banner-value{
-    margin:0;
-    font-size:28px;
-    font-weight:700;
-}
-.banner-label{
-    margin:8px 0 0;
-    color:var(--muted);
-    font-size:13px;
-}
 .badge{
     display:inline-flex;
     align-items:center;
@@ -410,14 +382,18 @@ pre{
             <span class="badge">Verificado em <?= htmlspecialchars($checkTime) ?></span>
         </div>
 
-        <div class="banner">
-            <div class="banner-card <?= $dropPackets['ipv4'] > 0 ? 'warn' : '' ?>">
-                <p class="banner-value"><?= $dropPackets['ipv4'] ?></p>
-                <p class="banner-label">Drops IPv4</p>
+        <div class="stats">
+            <div class="stat <?= $dropPackets['ipv4'] > 0 ? 'warn' : 'info' ?>">
+                <h3><?= $dropPackets['ipv4'] ?></h3>
+                <p>Drops IPv4</p>
             </div>
-            <div class="banner-card <?= $dropPackets['ipv6'] > 0 ? 'warn' : '' ?>">
-                <p class="banner-value"><?= $dropPackets['ipv6'] ?></p>
-                <p class="banner-label">Drops IPv6</p>
+            <div class="stat <?= $dropPackets['ipv6'] > 0 ? 'warn' : 'info' ?>">
+                <h3><?= $dropPackets['ipv6'] ?></h3>
+                <p>Drops IPv6</p>
+            </div>
+            <div class="stat info">
+                <h3><?= $dropPackets['total'] ?></h3>
+                <p>Total de drops</p>
             </div>
         </div>
 
