@@ -173,6 +173,7 @@ function botoes_servico(array $acoes, array $nomes): void
         $visualClass = match ($nome) {
             'START_BIND' => 'action-start',
             'RESTART_BIND' => 'action-restart-bind',
+            'STOP_BIND' => 'action-stop-bind',
             'RESTART_SSH' => 'action-restart-ssh',
             default => '',
         };
@@ -638,6 +639,22 @@ a{
 .action-chip.action-restart-ssh:focus{
     background:rgba(92,12,28,.52);
     border-color:#ff334f;
+}
+
+.action-chip.action-stop-bind .chip-icon{
+    color:#ff334f;
+}
+
+.action-chip.action-stop-bind:hover .chip-icon,
+.action-chip.action-stop-bind:focus .chip-icon{
+    color:#ff4d67;
+    filter:drop-shadow(0 0 5px rgba(255,51,79,.72));
+}
+
+.action-chip.action-stop-bind:hover,
+.action-chip.action-stop-bind:focus{
+    border-color:#ff334f;
+    color:#fecdd3;
 }
 
 .chip-icon{
