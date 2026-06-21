@@ -3,6 +3,11 @@ require_once __DIR__ . '/includes/auth.php';
 require_once __DIR__ . '/includes/security.php';
 require_once __DIR__ . '/includes/audit.php';
 
+const FIREWALL_TABELA_PREVIA = 'painel_firewall_preview';
+const FIREWALL_TABELA_GERENCIADA = 'painel_firewall';
+const FIREWALL_CONFIRMACAO_APLICAR = 'APLICAR FIREWALL';
+const FIREWALL_CONFIRMACAO_ROLLBACK = 'REVERTER FIREWALL';
+
 function firewall_auditar(
     string $acao,
     string $alvo,
@@ -191,14 +196,17 @@ function firewall_lista_nft(array $valores): string
     return '{ ' . implode(', ', $valores) . ' }';
 }
 
-function firewall_gerar_previa(array $configuracao): array
+function firewall_gerar_previa(array $configuracao, string $nomeTabela = FIREWALL_TABELA_PREVIA): array
 {
+    if (!preg_match('/^[a-z][a-z0-9_]{0,31}$/', $nomeTabela)) {
+        throw new RuntimeException('Nome interno da tabela de firewall inválido.');
+    }
     $aclIpv4 = firewall_acl_para_previa($configuracao['acl_ipv4'] ?? [], 'IPv4');
     $aclIpv6 = firewall_acl_para_previa($configuracao['acl_ipv6'] ?? [], 'IPv6');
     $admin = firewall_protocolos_portas($configuracao['portas_admin'] ?? []);
     $publicas = firewall_protocolos_portas($configuracao['portas_publicas'] ?? []);
     $regras = [
-        'table inet painel_firewall_preview {',
+        'table inet ' . $nomeTabela . ' {',
         '    chain input {',
         '        type filter hook input priority 0; policy drop;',
         '        iifname "lo" accept',
@@ -244,11 +252,51 @@ function firewall_gerar_previa(array $configuracao): array
     return [
         'regras' => implode("\n", $regras) . "\n",
         'avisos' => $avisos,
+        'acl_ipv4' => $aclIpv4,
+        'acl_ipv6' => $aclIpv6,
+        'portas_admin' => $admin,
+        'portas_publicas' => $publicas,
     ];
+}
+
+function firewall_validar_precondicoes_aplicacao(array $configuracao, array $gerado): void
+{
+    $contagens = firewall_contagens($configuracao);
+    if (($contagens['acl_ipv4'] + $contagens['acl_ipv6']) < 1) {
+        throw new RuntimeException('Cadastre ao menos uma ACL administrativa IPv4 ou IPv6 antes de aplicar.');
+    }
+    if ($contagens['portas_admin'] < 1) {
+        throw new RuntimeException('Cadastre ao menos uma porta administrativa antes de aplicar.');
+    }
+    if (!empty($gerado['avisos'])) {
+        throw new RuntimeException(implode(' ', $gerado['avisos']));
+    }
+
+    $regras = (string) ($gerado['regras'] ?? '');
+    foreach (array_merge($gerado['acl_ipv4'] ?? [], $gerado['acl_ipv6'] ?? []) as $acl) {
+        if (!str_contains($regras, (string) $acl)) {
+            throw new RuntimeException('Uma ACL administrativa não foi incluída nas regras geradas.');
+        }
+    }
+
+    $portasAdmin = $gerado['portas_admin'] ?? ['tcp' => [], 'udp' => []];
+    foreach (['tcp', 'udp'] as $protocolo) {
+        foreach ($portasAdmin[$protocolo] ?? [] as $porta) {
+            $padrao = '/(?:ip|ip6) saddr [^\n]+ ' . preg_quote($protocolo, '/') . ' dport \{ [^}]*\b'
+                . preg_quote((string) $porta, '/') . '\b[^}]*\} accept/';
+            if (!preg_match($padrao, $regras)) {
+                throw new RuntimeException("A porta administrativa {$porta}/" . strtoupper($protocolo) . ' não foi protegida por ACL.');
+            }
+        }
+    }
 }
 
 function firewall_binario_nft(): ?string
 {
+    $binarioTeste = PHP_SAPI === 'cli' ? getenv('FIREWALL_NFT_TEST_BINARY') : false;
+    if (is_string($binarioTeste) && $binarioTeste !== '' && is_file($binarioTeste) && is_executable($binarioTeste)) {
+        return $binarioTeste;
+    }
     foreach (['/usr/sbin/nft', '/usr/bin/nft'] as $binario) {
         if (is_file($binario) && is_executable($binario)) {
             return $binario;
@@ -268,7 +316,7 @@ function firewall_limpar_saida_tecnica(string $saida, ?string $arquivoTemporario
     if (strlen($saida) > 6000) {
         $saida = substr($saida, 0, 6000) . "\n[saída truncada]";
     }
-    return $saida !== '' ? $saida : 'Validação concluída sem mensagens técnicas.';
+    return $saida !== '' ? $saida : 'Operação concluída sem mensagens técnicas.';
 }
 
 function firewall_falha_operacional_nft(array $validacao): ?string
@@ -293,60 +341,187 @@ function firewall_falha_operacional_nft(array $validacao): ?string
     return null;
 }
 
-function firewall_executar_validacao(string $regras, int $timeout = 8): array
+function firewall_argumentos_nft(array $argumentos): array
 {
     $binario = firewall_binario_nft();
     if ($binario === null) {
-        throw new RuntimeException('O validador nft não está disponível no servidor.');
+        throw new RuntimeException('O utilitário nft não está disponível no servidor.');
+    }
+    $argumentosNft = array_merge([$binario], $argumentos);
+    $euid = function_exists('posix_geteuid') ? posix_geteuid() : null;
+    if ($euid !== null && $euid !== 0 && is_executable('/usr/bin/sudo')) {
+        $argumentosNft = array_merge(['/usr/bin/sudo', '-n'], $argumentosNft);
+    }
+    return $argumentosNft;
+}
+
+function firewall_executar_nft(array $argumentos, int $timeout = 8, array $caminhosSensiveis = []): array
+{
+    $comando = array_merge(['/usr/bin/timeout', (string) $timeout], firewall_argumentos_nft($argumentos));
+    $descritores = [
+        0 => ['pipe', 'r'],
+        1 => ['pipe', 'w'],
+        2 => ['pipe', 'w'],
+    ];
+    $inicio = microtime(true);
+    $processo = proc_open($comando, $descritores, $pipes);
+    if (!is_resource($processo)) {
+        throw new RuntimeException('Não foi possível iniciar a operação controlada do firewall.');
+    }
+    fclose($pipes[0]);
+    $stdout = stream_get_contents($pipes[1]);
+    $stderr = stream_get_contents($pipes[2]);
+    fclose($pipes[1]);
+    fclose($pipes[2]);
+    $codigo = proc_close($processo);
+    $stdout = (string) $stdout;
+    $stderr = (string) $stderr;
+    $saida = trim($stdout . ($stderr !== '' ? "\n" . $stderr : ''));
+    foreach ($caminhosSensiveis as $caminho) {
+        $saida = str_replace((string) $caminho, '[arquivo temporário]', $saida);
     }
 
-    $arquivo = tempnam(sys_get_temp_dir(), 'fw-preview-');
+    return [
+        'ok' => $codigo === 0,
+        'codigo' => $codigo,
+        'saida' => firewall_limpar_saida_tecnica($saida),
+        'stdout' => $stdout,
+        'stderr' => $stderr,
+        'duracao_ms' => (int) round((microtime(true) - $inicio) * 1000),
+    ];
+}
+
+function firewall_criar_arquivo_temporario(string $conteudo, string $prefixo = 'fw-preview-'): string
+{
+    $arquivo = tempnam(sys_get_temp_dir(), $prefixo);
     if ($arquivo === false) {
         throw new RuntimeException('Não foi possível criar o arquivo temporário de validação.');
     }
-
     try {
         @chmod($arquivo, 0600);
-        $bytes = file_put_contents($arquivo, $regras, LOCK_EX);
-        if ($bytes === false || $bytes !== strlen($regras)) {
+        $bytes = file_put_contents($arquivo, $conteudo, LOCK_EX);
+        if ($bytes === false || $bytes !== strlen($conteudo)) {
             throw new RuntimeException('Não foi possível gravar a prévia para validação.');
         }
+        register_shutdown_function(static function () use ($arquivo): void {
+            if (is_file($arquivo) && !@unlink($arquivo)) {
+                error_log('Firewall - não foi possível remover arquivo temporário no encerramento.');
+            }
+        });
+        return $arquivo;
+    } catch (Throwable $e) {
+        @unlink($arquivo);
+        throw $e;
+    }
+}
 
-        $argumentosNft = [$binario, '-c', '-f', $arquivo];
-        $euid = function_exists('posix_geteuid') ? posix_geteuid() : null;
-        if ($euid !== null && $euid !== 0 && is_executable('/usr/bin/sudo')) {
-            $argumentosNft = array_merge(['/usr/bin/sudo', '-n'], $argumentosNft);
-        }
-        $comando = array_merge(['/usr/bin/timeout', (string) $timeout], $argumentosNft);
-        $descritores = [
-            0 => ['pipe', 'r'],
-            1 => ['pipe', 'w'],
-            2 => ['pipe', 'w'],
-        ];
-        $inicio = microtime(true);
-        $processo = proc_open($comando, $descritores, $pipes);
-        if (!is_resource($processo)) {
-            throw new RuntimeException('Não foi possível iniciar a validação controlada.');
-        }
-        fclose($pipes[0]);
-        $stdout = stream_get_contents($pipes[1]);
-        $stderr = stream_get_contents($pipes[2]);
-        fclose($pipes[1]);
-        fclose($pipes[2]);
-        $codigo = proc_close($processo);
-        $saida = trim((string) $stdout . ((string) $stderr !== '' ? "\n" . (string) $stderr : ''));
-
-        return [
-            'ok' => $codigo === 0,
-            'codigo' => $codigo,
-            'saida' => firewall_limpar_saida_tecnica($saida, $arquivo),
-            'duracao_ms' => (int) round((microtime(true) - $inicio) * 1000),
-        ];
+function firewall_executar_validacao(string $regras, int $timeout = 8): array
+{
+    $arquivo = firewall_criar_arquivo_temporario($regras);
+    try {
+        return firewall_executar_nft(['-c', '-f', $arquivo], $timeout, [$arquivo]);
     } finally {
         if (is_file($arquivo) && !@unlink($arquivo)) {
             error_log('Firewall - não foi possível remover arquivo temporário de validação.');
         }
     }
+}
+
+function firewall_tabela_gerenciada_atual(): array
+{
+    $resultado = firewall_executar_nft(['list', 'table', 'inet', FIREWALL_TABELA_GERENCIADA], 8);
+    if ($resultado['ok']) {
+        $conteudo = trim((string) $resultado['stdout']) . "\n";
+        if (!str_starts_with($conteudo, 'table inet ' . FIREWALL_TABELA_GERENCIADA . ' {')) {
+            throw new RuntimeException('O estado atual da tabela gerenciada não pôde ser convertido em backup válido.');
+        }
+        return [
+            'existe' => true,
+            'conteudo' => $conteudo,
+            'hash' => hash('sha256', $conteudo),
+            'saida' => 'Tabela gerenciada localizada.',
+        ];
+    }
+
+    $saida = strtolower((string) $resultado['saida']);
+    if (
+        str_contains($saida, 'no such file or directory')
+        || str_contains($saida, 'does not exist')
+        || str_contains($saida, 'not found')
+    ) {
+        return [
+            'existe' => false,
+            'conteudo' => null,
+            'hash' => hash('sha256', 'TABELA_AUSENTE'),
+            'saida' => 'Nenhuma tabela anterior gerenciada pelo painel.',
+        ];
+    }
+
+    $falha = firewall_falha_operacional_nft($resultado);
+    throw new RuntimeException($falha ?? 'Não foi possível consultar o estado atual da tabela gerenciada.');
+}
+
+function firewall_montar_transacao_aplicacao(array $gerado, bool $tabelaExiste): string
+{
+    $conteudo = '';
+    if ($tabelaExiste) {
+        $conteudo .= 'delete table inet ' . FIREWALL_TABELA_GERENCIADA . "\n";
+    }
+    return $conteudo . (string) $gerado['regras'];
+}
+
+function firewall_montar_transacao_rollback(array $backup, bool $tabelaAtualExiste): string
+{
+    $conteudo = '';
+    if ($tabelaAtualExiste) {
+        $conteudo .= 'delete table inet ' . FIREWALL_TABELA_GERENCIADA . "\n";
+    }
+    if (!empty($backup['tabela_existia'])) {
+        $regras = trim((string) ($backup['conteudo'] ?? ''));
+        if ($regras === '' || !str_starts_with($regras, 'table inet ' . FIREWALL_TABELA_GERENCIADA . ' {')) {
+            throw new RuntimeException('O backup armazenado não contém uma tabela gerenciada válida.');
+        }
+        $conteudo .= $regras . "\n";
+    } elseif (!$tabelaAtualExiste) {
+        throw new RuntimeException('A tabela gerenciada já está ausente; não há alteração para reverter.');
+    }
+    return $conteudo;
+}
+
+function firewall_meta_salvar_json(PDO $pdo, string $chave, array $dados): void
+{
+    $json = json_encode($dados, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    if ($json === false) {
+        throw new RuntimeException('Não foi possível serializar o registro do firewall.');
+    }
+    $stmt = $pdo->prepare("
+        INSERT INTO firewall_meta (chave, valor) VALUES (:chave, :valor)
+        ON CONFLICT(chave) DO UPDATE SET valor = excluded.valor
+    ");
+    $stmt->execute([':chave' => $chave, ':valor' => $json]);
+}
+
+function firewall_meta_carregar_json(PDO $pdo, string $chave): ?array
+{
+    $stmt = $pdo->prepare('SELECT valor FROM firewall_meta WHERE chave = :chave');
+    $stmt->execute([':chave' => $chave]);
+    $valor = $stmt->fetchColumn();
+    if (!is_string($valor) || $valor === '') {
+        return null;
+    }
+    $dados = json_decode($valor, true);
+    return is_array($dados) ? $dados : null;
+}
+
+function firewall_backup_valido(?array $backup): bool
+{
+    if (!is_array($backup) || empty($backup['disponivel']) || !isset($backup['hash'])) {
+        return false;
+    }
+    $esperado = !empty($backup['tabela_existia'])
+        ? hash('sha256', (string) ($backup['conteudo'] ?? ''))
+        : hash('sha256', 'TABELA_AUSENTE');
+    return hash_equals((string) $backup['hash'], $esperado);
 }
 
 function firewall_salvar_ultima_validacao(PDO $pdo, array $resultado): void
@@ -387,6 +562,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         'editar_porta' => 'FIREWALL_EDITAR_PORTA',
         'remover_porta' => 'FIREWALL_REMOVER_PORTA',
         'validar_configuracao' => 'FIREWALL_VALIDAR_CONFIGURACAO',
+        'aplicar_firewall' => 'FIREWALL_APLICAR_SOLICITADO',
+        'rollback_firewall' => 'FIREWALL_ROLLBACK_SOLICITADO',
     ];
 
     if (!isset($acoesAuditoria[$acao])) {
@@ -397,16 +574,465 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $alvoInformado = trim((string) ($_POST['rede'] ?? $_POST['porta'] ?? 'não informado'));
     $tipoRegistroAuditoria = 'FIREWALL';
     $detalhesCsrf = '';
-    if ($acao === 'validar_configuracao') {
+    if (in_array($acao, ['validar_configuracao', 'aplicar_firewall', 'rollback_firewall'], true)) {
         try {
             $detalhesCsrf = firewall_resumo_contagens(firewall_contagens(firewall_carregar_configuracao($pdo)));
         } catch (Throwable) {
             $detalhesCsrf = 'Contagens indisponíveis.';
         }
     }
-    firewall_validar_csrf($acaoAuditoria, $alvoInformado, $detalhesCsrf);
+    $acaoCsrf = in_array($acao, ['aplicar_firewall', 'rollback_firewall'], true)
+        ? 'FIREWALL_CSRF_INVALIDO'
+        : $acaoAuditoria;
+    firewall_validar_csrf($acaoCsrf, $alvoInformado, $detalhesCsrf);
 
     try {
+        if ($acao === 'aplicar_firewall') {
+            $configuracao = firewall_carregar_configuracao($pdo);
+            $contagens = firewall_contagens($configuracao);
+            $resumoContagens = firewall_resumo_contagens($contagens);
+            firewall_auditar(
+                'FIREWALL_APLICAR_SOLICITADO',
+                'Tabela gerenciada',
+                'SUCCESS',
+                'Aplicação real solicitada pelo operador. ' . $resumoContagens,
+                'FIREWALL_APLICACAO'
+            );
+
+            $confirmacao = is_string($_POST['confirmacao'] ?? null) ? trim($_POST['confirmacao']) : '';
+            $ciente = ($_POST['ciente'] ?? null) === '1';
+            if (!hash_equals(FIREWALL_CONFIRMACAO_APLICAR, $confirmacao) || !$ciente) {
+                firewall_auditar(
+                    'FIREWALL_APLICAR_BLOQUEADO',
+                    'Tabela gerenciada',
+                    'ERROR',
+                    'Aplicação bloqueada por confirmação forte inválida. ' . $resumoContagens,
+                    'FIREWALL_APLICACAO'
+                );
+                firewall_redirecionar('error', 'Digite exatamente “' . FIREWALL_CONFIRMACAO_APLICAR . '” para aplicar.');
+            }
+
+            try {
+                $gerado = firewall_gerar_previa($configuracao, FIREWALL_TABELA_GERENCIADA);
+                firewall_validar_precondicoes_aplicacao($configuracao, $gerado);
+            } catch (Throwable $e) {
+                firewall_auditar(
+                    'FIREWALL_APLICAR_BLOQUEADO',
+                    'Tabela gerenciada',
+                    'ERROR',
+                    $e->getMessage() . ' ' . $resumoContagens,
+                    'FIREWALL_APLICACAO'
+                );
+                firewall_meta_salvar_json($pdo, 'ultima_aplicacao_v16', [
+                    'status' => 'ERRO',
+                    'data_hora' => date(DATE_ATOM),
+                    'usuario' => audit_usuario_atual(),
+                    'resumo' => $e->getMessage(),
+                    'saida' => 'Aplicação bloqueada antes da validação.',
+                    'validacao_previa' => 'NÃO EXECUTADA',
+                    'backup_disponivel' => firewall_backup_valido(firewall_meta_carregar_json($pdo, 'ultimo_backup_v16')),
+                    'contagens' => $contagens,
+                ]);
+                firewall_redirecionar('error', $e->getMessage() . ' Nenhuma regra foi aplicada.');
+            }
+
+            try {
+                $estadoInicial = firewall_tabela_gerenciada_atual();
+            } catch (Throwable $e) {
+                firewall_auditar(
+                    'FIREWALL_BACKUP_ERRO',
+                    'Tabela gerenciada',
+                    'ERROR',
+                    $e->getMessage() . ' Aplicação bloqueada. ' . $resumoContagens,
+                    'FIREWALL_BACKUP'
+                );
+                firewall_auditar(
+                    'FIREWALL_APLICAR_BLOQUEADO',
+                    'Tabela gerenciada',
+                    'ERROR',
+                    'Não foi possível garantir backup antes da aplicação. ' . $resumoContagens,
+                    'FIREWALL_APLICACAO'
+                );
+                firewall_meta_salvar_json($pdo, 'ultima_aplicacao_v16', [
+                    'status' => 'ERRO',
+                    'data_hora' => date(DATE_ATOM),
+                    'usuario' => audit_usuario_atual(),
+                    'resumo' => 'Não foi possível garantir um backup seguro.',
+                    'saida' => firewall_limpar_saida_tecnica($e->getMessage()),
+                    'validacao_previa' => 'NÃO EXECUTADA',
+                    'backup_disponivel' => firewall_backup_valido(firewall_meta_carregar_json($pdo, 'ultimo_backup_v16')),
+                    'contagens' => $contagens,
+                ]);
+                firewall_redirecionar('error', 'Não foi possível garantir um backup seguro. Nenhuma regra foi aplicada.');
+            }
+
+            $transacao = firewall_montar_transacao_aplicacao($gerado, (bool) $estadoInicial['existe']);
+            $arquivo = null;
+            $etapaAplicacao = 'temporario';
+            try {
+                $arquivo = firewall_criar_arquivo_temporario($transacao, 'fw-apply-');
+                $etapaAplicacao = 'validacao';
+                $validacao = firewall_executar_nft(['-c', '-f', $arquivo], 8, [$arquivo]);
+                if (!$validacao['ok']) {
+                    $falha = firewall_falha_operacional_nft($validacao);
+                    $resumo = $falha ?? 'A configuração não passou na validação obrigatória.';
+                    firewall_auditar(
+                        'FIREWALL_APLICAR_VALIDACAO_ERRO',
+                        'Tabela gerenciada',
+                        'ERROR',
+                        $resumo . ' ' . $resumoContagens,
+                        'FIREWALL_APLICACAO'
+                    );
+                    firewall_meta_salvar_json($pdo, 'ultima_aplicacao_v16', [
+                        'status' => 'ERRO',
+                        'data_hora' => date(DATE_ATOM),
+                        'usuario' => audit_usuario_atual(),
+                        'resumo' => $resumo . ' Nenhuma regra foi aplicada.',
+                        'saida' => $validacao['saida'],
+                        'validacao_previa' => 'ERRO',
+                        'backup_disponivel' => firewall_backup_valido(firewall_meta_carregar_json($pdo, 'ultimo_backup_v16')),
+                        'contagens' => $contagens,
+                        'hash_configuracao' => hash('sha256', $transacao),
+                    ]);
+                    firewall_redirecionar('error', $resumo . ' Nenhuma regra foi aplicada.');
+                }
+                firewall_auditar(
+                    'FIREWALL_APLICAR_VALIDACAO_OK',
+                    'Tabela gerenciada',
+                    'SUCCESS',
+                    'Validação obrigatória concluída antes da aplicação. ' . $resumoContagens,
+                    'FIREWALL_APLICACAO'
+                );
+
+                $etapaAplicacao = 'backup';
+                $estadoBackup = firewall_tabela_gerenciada_atual();
+                if (
+                    (bool) $estadoBackup['existe'] !== (bool) $estadoInicial['existe']
+                    || !hash_equals((string) $estadoInicial['hash'], (string) $estadoBackup['hash'])
+                ) {
+                    throw new RuntimeException('O estado do firewall mudou durante a operação; aplicação bloqueada por segurança.');
+                }
+
+                $backup = [
+                    'disponivel' => true,
+                    'data_hora' => date(DATE_ATOM),
+                    'usuario' => audit_usuario_atual(),
+                    'tabela_existia' => (bool) $estadoBackup['existe'],
+                    'conteudo' => $estadoBackup['conteudo'],
+                    'hash' => $estadoBackup['hash'],
+                    'referencia' => 'Backup persistente da tabela gerenciada anterior',
+                ];
+                firewall_meta_salvar_json($pdo, 'ultimo_backup_v16', $backup);
+                firewall_auditar(
+                    'FIREWALL_BACKUP_CRIADO',
+                    'Tabela gerenciada',
+                    'SUCCESS',
+                    ($backup['tabela_existia'] ? 'Backup da tabela anterior criado.' : 'Backup registrou ausência de tabela anterior.')
+                        . ' ' . $resumoContagens,
+                    'FIREWALL_BACKUP'
+                );
+
+                $etapaAplicacao = 'aplicacao';
+                $aplicacao = firewall_executar_nft(['-f', $arquivo], 8, [$arquivo]);
+                if (!$aplicacao['ok']) {
+                    $falha = firewall_falha_operacional_nft($aplicacao);
+                    $resumo = $falha ?? 'O nft retornou erro durante a aplicação controlada.';
+                    firewall_auditar(
+                        'FIREWALL_APLICAR_ERRO',
+                        'Tabela gerenciada',
+                        'ERROR',
+                        $resumo . ' Backup preservado. ' . $resumoContagens,
+                        'FIREWALL_APLICACAO'
+                    );
+                    firewall_meta_salvar_json($pdo, 'ultima_aplicacao_v16', [
+                        'status' => 'ERRO',
+                        'data_hora' => date(DATE_ATOM),
+                        'usuario' => audit_usuario_atual(),
+                        'resumo' => $resumo,
+                        'saida' => $aplicacao['saida'],
+                        'validacao_previa' => 'OK',
+                        'backup_disponivel' => true,
+                        'contagens' => $contagens,
+                        'hash_configuracao' => hash('sha256', $transacao),
+                    ]);
+                    firewall_redirecionar('error', $resumo . ' O backup anterior foi preservado.');
+                }
+
+                $etapaAplicacao = 'persistencia';
+                $registroAplicacao = [
+                    'status' => 'APLICADO',
+                    'data_hora' => date(DATE_ATOM),
+                    'usuario' => audit_usuario_atual(),
+                    'resumo' => 'Firewall aplicado com sucesso na tabela gerenciada pelo painel.',
+                    'saida' => $aplicacao['saida'],
+                    'validacao_previa' => 'OK',
+                    'backup_disponivel' => true,
+                    'contagens' => $contagens,
+                    'hash_configuracao' => hash('sha256', $transacao),
+                ];
+                firewall_meta_salvar_json($pdo, 'ultima_aplicacao_v16', $registroAplicacao);
+                firewall_auditar(
+                    'FIREWALL_APLICAR_SUCESSO',
+                    'Tabela gerenciada',
+                    'SUCCESS',
+                    'Firewall aplicado com validação prévia e backup preservado. ' . $resumoContagens,
+                    'FIREWALL_APLICACAO'
+                );
+                firewall_redirecionar('success', 'Firewall aplicado com sucesso. O backup anterior está disponível para rollback.');
+            } catch (Throwable $e) {
+                if ($etapaAplicacao === 'validacao') {
+                    firewall_auditar(
+                        'FIREWALL_APLICAR_VALIDACAO_ERRO',
+                        'Tabela gerenciada',
+                        'ERROR',
+                        $e->getMessage() . ' ' . $resumoContagens,
+                        'FIREWALL_APLICACAO'
+                    );
+                    firewall_meta_salvar_json($pdo, 'ultima_aplicacao_v16', [
+                        'status' => 'ERRO',
+                        'data_hora' => date(DATE_ATOM),
+                        'usuario' => audit_usuario_atual(),
+                        'resumo' => $e->getMessage(),
+                        'saida' => firewall_limpar_saida_tecnica($e->getMessage()),
+                        'validacao_previa' => 'ERRO',
+                        'backup_disponivel' => firewall_backup_valido(firewall_meta_carregar_json($pdo, 'ultimo_backup_v16')),
+                        'contagens' => $contagens,
+                        'hash_configuracao' => hash('sha256', $transacao),
+                    ]);
+                    firewall_redirecionar('error', $e->getMessage() . ' Nenhuma regra foi aplicada.');
+                }
+                if (in_array($etapaAplicacao, ['temporario', 'backup'], true)) {
+                    firewall_auditar(
+                        'FIREWALL_BACKUP_ERRO',
+                        'Tabela gerenciada',
+                        'ERROR',
+                        $e->getMessage() . ' Nenhuma aplicação foi autorizada. ' . $resumoContagens,
+                        'FIREWALL_BACKUP'
+                    );
+                    firewall_auditar(
+                        'FIREWALL_APLICAR_BLOQUEADO',
+                        'Tabela gerenciada',
+                        'ERROR',
+                        'Aplicação bloqueada porque a etapa segura de backup não foi concluída. ' . $resumoContagens,
+                        'FIREWALL_APLICACAO'
+                    );
+                    firewall_meta_salvar_json($pdo, 'ultima_aplicacao_v16', [
+                        'status' => 'ERRO',
+                        'data_hora' => date(DATE_ATOM),
+                        'usuario' => audit_usuario_atual(),
+                        'resumo' => $e->getMessage(),
+                        'saida' => firewall_limpar_saida_tecnica($e->getMessage()),
+                        'validacao_previa' => $etapaAplicacao === 'backup' ? 'OK' : 'NÃO EXECUTADA',
+                        'backup_disponivel' => firewall_backup_valido(firewall_meta_carregar_json($pdo, 'ultimo_backup_v16')),
+                        'contagens' => $contagens,
+                        'hash_configuracao' => hash('sha256', $transacao),
+                    ]);
+                    firewall_redirecionar('error', $e->getMessage() . ' Nenhuma regra foi aplicada.');
+                }
+                if ($etapaAplicacao === 'aplicacao') {
+                    firewall_auditar(
+                        'FIREWALL_APLICAR_ERRO',
+                        'Tabela gerenciada',
+                        'ERROR',
+                        $e->getMessage() . ' Backup preservado. ' . $resumoContagens,
+                        'FIREWALL_APLICACAO'
+                    );
+                    firewall_meta_salvar_json($pdo, 'ultima_aplicacao_v16', [
+                        'status' => 'ERRO',
+                        'data_hora' => date(DATE_ATOM),
+                        'usuario' => audit_usuario_atual(),
+                        'resumo' => $e->getMessage(),
+                        'saida' => firewall_limpar_saida_tecnica($e->getMessage()),
+                        'validacao_previa' => 'OK',
+                        'backup_disponivel' => true,
+                        'contagens' => $contagens,
+                        'hash_configuracao' => hash('sha256', $transacao),
+                    ]);
+                    firewall_redirecionar('error', $e->getMessage() . ' O backup anterior foi preservado.');
+                }
+                firewall_auditar(
+                    'FIREWALL_APLICAR_ERRO',
+                    'Tabela gerenciada',
+                    'ERROR',
+                    'As regras foram aplicadas, mas o registro persistente falhou: ' . $e->getMessage() . ' ' . $resumoContagens,
+                    'FIREWALL_APLICACAO'
+                );
+                firewall_redirecionar('error', 'As regras foram aplicadas, mas não foi possível registrar o resultado. Verifique o firewall e a auditoria.');
+            } finally {
+                if (is_string($arquivo) && is_file($arquivo) && !@unlink($arquivo)) {
+                    error_log('Firewall - não foi possível remover arquivo temporário de aplicação.');
+                }
+            }
+        }
+
+        if ($acao === 'rollback_firewall') {
+            $configuracao = firewall_carregar_configuracao($pdo);
+            $contagens = firewall_contagens($configuracao);
+            $resumoContagens = firewall_resumo_contagens($contagens);
+            firewall_auditar(
+                'FIREWALL_ROLLBACK_SOLICITADO',
+                'Tabela gerenciada',
+                'SUCCESS',
+                'Rollback manual solicitado pelo operador. ' . $resumoContagens,
+                'FIREWALL_ROLLBACK'
+            );
+
+            $confirmacao = is_string($_POST['confirmacao'] ?? null) ? trim($_POST['confirmacao']) : '';
+            $ciente = ($_POST['ciente'] ?? null) === '1';
+            if (!hash_equals(FIREWALL_CONFIRMACAO_ROLLBACK, $confirmacao) || !$ciente) {
+                firewall_auditar(
+                    'FIREWALL_ROLLBACK_BLOQUEADO',
+                    'Tabela gerenciada',
+                    'ERROR',
+                    'Rollback bloqueado por confirmação forte inválida. ' . $resumoContagens,
+                    'FIREWALL_ROLLBACK'
+                );
+                firewall_redirecionar('error', 'Digite exatamente “' . FIREWALL_CONFIRMACAO_ROLLBACK . '” para reverter.');
+            }
+
+            $backup = firewall_meta_carregar_json($pdo, 'ultimo_backup_v16');
+            if (!firewall_backup_valido($backup)) {
+                firewall_auditar(
+                    'FIREWALL_ROLLBACK_BLOQUEADO',
+                    'Tabela gerenciada',
+                    'ERROR',
+                    'Rollback bloqueado porque não existe backup válido disponível. ' . $resumoContagens,
+                    'FIREWALL_ROLLBACK'
+                );
+                firewall_redirecionar('error', 'Não existe backup válido disponível para rollback.');
+            }
+
+            $arquivo = null;
+            $etapaRollback = 'preparacao';
+            try {
+                $estadoAtual = firewall_tabela_gerenciada_atual();
+                $transacaoRollback = firewall_montar_transacao_rollback($backup, (bool) $estadoAtual['existe']);
+                $arquivo = firewall_criar_arquivo_temporario($transacaoRollback, 'fw-rollback-');
+                $etapaRollback = 'validacao';
+                $validacao = firewall_executar_nft(['-c', '-f', $arquivo], 8, [$arquivo]);
+                if (!$validacao['ok']) {
+                    $falha = firewall_falha_operacional_nft($validacao);
+                    $resumo = $falha ?? 'O backup não passou na validação obrigatória.';
+                    firewall_auditar(
+                        'FIREWALL_ROLLBACK_VALIDACAO_ERRO',
+                        'Tabela gerenciada',
+                        'ERROR',
+                        $resumo . ' ' . $resumoContagens,
+                        'FIREWALL_ROLLBACK'
+                    );
+                    firewall_meta_salvar_json($pdo, 'ultima_reversao_v16', [
+                        'status' => 'ERRO',
+                        'data_hora' => date(DATE_ATOM),
+                        'usuario' => audit_usuario_atual(),
+                        'resumo' => $resumo,
+                        'saida' => $validacao['saida'],
+                        'validacao_previa' => 'ERRO',
+                        'backup_disponivel' => true,
+                        'contagens' => $contagens,
+                        'hash_configuracao' => hash('sha256', $transacaoRollback),
+                    ]);
+                    firewall_redirecionar('error', $resumo . ' Nenhuma regra foi revertida.');
+                }
+                firewall_auditar(
+                    'FIREWALL_ROLLBACK_VALIDACAO_OK',
+                    'Tabela gerenciada',
+                    'SUCCESS',
+                    'Backup validado antes do rollback manual. ' . $resumoContagens,
+                    'FIREWALL_ROLLBACK'
+                );
+
+                $etapaRollback = 'reversao';
+                $reversao = firewall_executar_nft(['-f', $arquivo], 8, [$arquivo]);
+                if (!$reversao['ok']) {
+                    $falha = firewall_falha_operacional_nft($reversao);
+                    $resumo = $falha ?? 'O nft retornou erro durante o rollback.';
+                    firewall_auditar(
+                        'FIREWALL_ROLLBACK_ERRO',
+                        'Tabela gerenciada',
+                        'ERROR',
+                        $resumo . ' ' . $resumoContagens,
+                        'FIREWALL_ROLLBACK'
+                    );
+                    firewall_meta_salvar_json($pdo, 'ultima_reversao_v16', [
+                        'status' => 'ERRO',
+                        'data_hora' => date(DATE_ATOM),
+                        'usuario' => audit_usuario_atual(),
+                        'resumo' => $resumo,
+                        'saida' => $reversao['saida'],
+                        'validacao_previa' => 'OK',
+                        'backup_disponivel' => true,
+                        'contagens' => $contagens,
+                        'hash_configuracao' => hash('sha256', $transacaoRollback),
+                    ]);
+                    firewall_redirecionar('error', $resumo . ' O backup foi mantido.');
+                }
+
+                $etapaRollback = 'persistencia';
+                $backup['disponivel'] = false;
+                $backup['utilizado_em'] = date(DATE_ATOM);
+                $backup['utilizado_por'] = audit_usuario_atual();
+                firewall_meta_salvar_json($pdo, 'ultimo_backup_v16', $backup);
+                $registroReversao = [
+                    'status' => 'REVERTIDO',
+                    'data_hora' => date(DATE_ATOM),
+                    'usuario' => audit_usuario_atual(),
+                    'resumo' => !empty($backup['tabela_existia'])
+                        ? 'A tabela gerenciada anterior foi restaurada.'
+                        : 'A tabela criada pelo painel foi removida conforme o backup.',
+                    'saida' => $reversao['saida'],
+                    'validacao_previa' => 'OK',
+                    'backup_disponivel' => false,
+                    'contagens' => $contagens,
+                    'hash_configuracao' => hash('sha256', $transacaoRollback),
+                ];
+                firewall_meta_salvar_json($pdo, 'ultima_reversao_v16', $registroReversao);
+                firewall_meta_salvar_json($pdo, 'ultima_aplicacao_v16', $registroReversao);
+                firewall_auditar(
+                    'FIREWALL_ROLLBACK_SUCESSO',
+                    'Tabela gerenciada',
+                    'SUCCESS',
+                    'Rollback manual concluído após validação do backup. ' . $resumoContagens,
+                    'FIREWALL_ROLLBACK'
+                );
+                firewall_redirecionar('success', 'Rollback concluído com sucesso.');
+            } catch (Throwable $e) {
+                $mensagemAuditoria = $e->getMessage() . ' ' . $resumoContagens;
+                $mensagemInterface = $e->getMessage() . ' Nenhuma regra foi revertida.';
+                if ($etapaRollback === 'persistencia') {
+                    $mensagemAuditoria = 'O rollback foi aplicado, mas o registro persistente falhou: ' . $mensagemAuditoria;
+                    $mensagemInterface = 'O rollback foi aplicado, mas não foi possível registrar o resultado. Verifique o firewall e a auditoria.';
+                }
+                $acaoErroRollback = $etapaRollback === 'validacao'
+                    ? 'FIREWALL_ROLLBACK_VALIDACAO_ERRO'
+                    : ($etapaRollback === 'preparacao' ? 'FIREWALL_ROLLBACK_BLOQUEADO' : 'FIREWALL_ROLLBACK_ERRO');
+                if ($etapaRollback !== 'persistencia') {
+                    firewall_meta_salvar_json($pdo, 'ultima_reversao_v16', [
+                        'status' => 'ERRO',
+                        'data_hora' => date(DATE_ATOM),
+                        'usuario' => audit_usuario_atual(),
+                        'resumo' => $e->getMessage(),
+                        'saida' => firewall_limpar_saida_tecnica($e->getMessage()),
+                        'validacao_previa' => $etapaRollback === 'reversao' ? 'OK' : 'ERRO',
+                        'backup_disponivel' => true,
+                        'contagens' => $contagens,
+                        'hash_configuracao' => isset($transacaoRollback) ? hash('sha256', $transacaoRollback) : null,
+                    ]);
+                }
+                firewall_auditar(
+                    $acaoErroRollback,
+                    'Tabela gerenciada',
+                    'ERROR',
+                    $mensagemAuditoria,
+                    'FIREWALL_ROLLBACK'
+                );
+                firewall_redirecionar('error', $mensagemInterface);
+            } finally {
+                if (is_string($arquivo) && is_file($arquivo) && !@unlink($arquivo)) {
+                    error_log('Firewall - não foi possível remover arquivo temporário de rollback.');
+                }
+            }
+        }
+
         if ($acao === 'validar_configuracao') {
             $configuracao = firewall_carregar_configuracao($pdo);
             $contagens = firewall_contagens($configuracao);
@@ -699,8 +1325,11 @@ $publicPorts = [];
 $recentAudit = [];
 $firewallLoadWarning = null;
 $ultimaValidacao = null;
+$ultimaAplicacao = null;
+$ultimoBackup = null;
 $previaAtual = null;
 $previaErro = null;
+$aplicacaoBloqueios = [];
 
 try {
     $configuracaoAtual = firewall_carregar_configuracao($pdo);
@@ -709,10 +1338,18 @@ try {
     $adminPorts = $configuracaoAtual['portas_admin'];
     $publicPorts = $configuracaoAtual['portas_publicas'];
     $ultimaValidacao = firewall_carregar_ultima_validacao($pdo);
+    $ultimaAplicacao = firewall_meta_carregar_json($pdo, 'ultima_aplicacao_v16');
+    $ultimoBackup = firewall_meta_carregar_json($pdo, 'ultimo_backup_v16');
     try {
         $previaAtual = firewall_gerar_previa($configuracaoAtual);
     } catch (Throwable $e) {
         $previaErro = $e->getMessage();
+    }
+    try {
+        $regrasAplicacaoAtual = firewall_gerar_previa($configuracaoAtual, FIREWALL_TABELA_GERENCIADA);
+        firewall_validar_precondicoes_aplicacao($configuracaoAtual, $regrasAplicacaoAtual);
+    } catch (Throwable $e) {
+        $aplicacaoBloqueios[] = $e->getMessage();
     }
 
     $auditStmt = $pdo->query("
@@ -735,20 +1372,21 @@ if ($firewallLoadWarning !== null && $toastMensagemInicial === '') {
 
 $ipv4Count = count($aclIpv4);
 $ipv6Count = count($aclIpv6);
+$backupDisponivel = firewall_backup_valido($ultimoBackup);
 $summary = [
     ['◉', 'IPv4 Liberados', (string) $ipv4Count, 'Redes e endereços', false],
     ['⬡', 'IPv6 Liberados', (string) $ipv6Count, 'Redes e endereços', false],
     ['⌁', 'Portas Admin', (string) count($adminPorts), 'Acesso restrito', false],
     ['⇄', 'Portas Públicas', (string) count($publicPorts), 'Acesso externo', false],
-    ['✓', 'Validação', $ultimaValidacao['status'] ?? 'Não validado', 'Nenhuma aplicação automática', ($ultimaValidacao['status'] ?? '') === 'OK'],
+    ['✓', 'Aplicação', $ultimaAplicacao['status'] ?? 'Nunca aplicado', $backupDisponivel ? 'Rollback disponível' : 'Sem backup disponível', ($ultimaAplicacao['status'] ?? '') === 'APLICADO'],
 ];
 $quickActions = [
     ['+', 'Adicionar IP', 'Autorizar endereço', 'add-ip-modal'],
     ['🔒', 'Porta Admin', 'Adicionar restrição', 'add-admin-port-modal'],
     ['🌐', 'Porta Pública', 'Liberar serviço', 'add-public-port-modal'],
-    ['▣', 'Backup', 'Fase futura', null],
+    ['↶', 'Rollback', $backupDisponivel ? 'Reverter última aplicação' : 'Sem backup disponível', $backupDisponivel ? 'rollback-firewall-modal' : 'disabled-action'],
     ['✓', 'Validar', 'Checar sintaxe nftables', 'validate-firewall'],
-    ['↻', 'Aplicar', 'Fase futura', null],
+    ['↻', 'Aplicar', 'Alterar regras reais', 'apply-firewall-modal'],
     ['≡', 'Ver Logs', 'Consultar eventos', null],
 ];
 ?>
@@ -804,6 +1442,9 @@ tr:last-child td{border-bottom:0}tbody tr{background:#02061766}tbody tr:hover{ba
 .validation.error strong{color:#fecaca}.validation.pending strong{color:#cbd5e1}
 .preview-panel{margin-top:18px}.rule-preview{max-height:430px;overflow:auto;margin:0;padding:16px;border:1px solid var(--line);border-radius:11px;background:#020617;color:#cbd5e1;font:12px/1.65 Consolas,Monaco,monospace;white-space:pre}.preview-note{margin:0 0 12px;color:var(--muted);font-size:12px;line-height:1.55}.technical-output{margin-top:13px;border-top:1px solid var(--line);padding-top:11px}.technical-output summary{color:#bae6fd;cursor:pointer;font-size:12px;font-weight:700}.technical-output pre{overflow:auto;max-height:240px;margin:10px 0 0;padding:12px;border:1px solid var(--line);border-radius:9px;background:#020617;color:#cbd5e1;font:11px/1.55 Consolas,Monaco,monospace;white-space:pre-wrap}
 .inline-form{margin:0}.quick-action.validate{width:100%}
+.security-banner{display:grid;gap:8px;margin:0 0 18px;padding:14px;border:1px solid #f59e0b55;border-radius:11px;background:#78350f2e;color:#fde68a;font-size:12px;line-height:1.55}.security-banner strong{color:#fef3c7}.security-banner.error{border-color:#ef444455;background:#7f1d1d38;color:#fecaca}
+.application-actions{display:flex;gap:9px;flex-wrap:wrap;margin-top:14px}.button.warning{border-color:#b45309;background:#92400e;color:#fff}.button[disabled]{opacity:.45;cursor:not-allowed}.button[disabled]:hover{border-color:var(--line2)}
+.application-summary{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin:12px 0}.application-summary span{padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:#020617;color:var(--muted);font-size:11px}.application-summary strong{display:block;margin-top:4px;color:#fff;font-size:13px}
 .status-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px;margin-top:18px}
 .audit-list{display:grid;gap:10px}
 .audit-item{display:grid;grid-template-columns:minmax(92px,.4fr) minmax(0,1fr) auto;gap:14px;align-items:start;padding:12px 0;border-bottom:1px solid var(--line);font-size:13px}
@@ -829,7 +1470,7 @@ tr:last-child td{border-bottom:0}tbody tr{background:#02061766}tbody tr:hover{ba
 .ui-toast[hidden],.empty-row[hidden]{display:none}.empty-row td{padding:22px 14px;color:var(--muted);text-align:center}
 @media(max-width:1200px){.quick-grid{grid-template-columns:repeat(4,minmax(0,1fr))}.content-grid,.status-grid{grid-template-columns:1fr}}
 @media(max-width:1050px){.summary-grid{grid-template-columns:repeat(3,minmax(0,1fr))}}
-@media(max-width:760px){.page{width:min(100% - 20px,1180px);margin:20px auto 30px}.page-header{align-items:flex-start;flex-direction:column}.page-header h1{font-size:27px}.summary-grid,.quick-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.panel{padding:16px}.panel-header{display:block}.search{width:100%;margin-top:13px}.audit-item{grid-template-columns:80px 1fr}.audit-time{grid-column:2}.form-row{grid-template-columns:1fr}.modal-actions{display:grid}.modal-actions .button{width:100%}}
+@media(max-width:760px){.page{width:min(100% - 20px,1180px);margin:20px auto 30px}.page-header{align-items:flex-start;flex-direction:column}.page-header h1{font-size:27px}.summary-grid,.quick-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.panel{padding:16px}.panel-header{display:block}.search{width:100%;margin-top:13px}.audit-item{grid-template-columns:80px 1fr}.audit-time{grid-column:2}.form-row,.application-summary{grid-template-columns:1fr}.modal-actions{display:grid}.modal-actions .button{width:100%}}
 @media(max-width:460px){.summary-grid,.quick-grid{grid-template-columns:1fr}.summary-card{min-height:96px}}
 </style>
 </head>
@@ -859,6 +1500,14 @@ tr:last-child td{border-bottom:0}tbody tr{background:#02061766}tbody tr:hover{ba
         <header class="panel-header"><div><h2>Ações rápidas</h2><p>Atalhos para as operações mais utilizadas.</p></div></header>
         <div class="quick-grid">
             <?php foreach ($quickActions as [$icon, $label, $detail, $modalId]): ?>
+                <?php if ($modalId === 'disabled-action'): ?>
+                    <button class="quick-action" type="button" disabled>
+                        <span class="quick-icon" aria-hidden="true"><?= htmlspecialchars($icon) ?></span>
+                        <strong><?= htmlspecialchars($label) ?></strong>
+                        <small><?= htmlspecialchars($detail) ?></small>
+                    </button>
+                    <?php continue; ?>
+                <?php endif; ?>
                 <?php if ($modalId === 'validate-firewall'): ?>
                     <form method="POST" class="inline-form">
                         <?= csrf_field() ?>
@@ -884,6 +1533,12 @@ tr:last-child td{border-bottom:0}tbody tr{background:#02061766}tbody tr:hover{ba
             <?php endforeach; ?>
         </div>
     </section>
+
+    <div class="security-banner<?= $aplicacaoBloqueios ? ' error' : '' ?>">
+        <strong>Aplicação real controlada</strong>
+        <span>Validar apenas verifica a sintaxe. Aplicar altera a tabela nftables gerenciada pelo painel após confirmação, validação e backup obrigatório.</span>
+        <?php foreach ($aplicacaoBloqueios as $bloqueio): ?><span>Bloqueio atual: <?= htmlspecialchars($bloqueio) ?></span><?php endforeach; ?>
+    </div>
 
     <div class="content-grid">
         <div class="stack">
@@ -1027,6 +1682,57 @@ tr:last-child td{border-bottom:0}tbody tr{background:#02061766}tbody tr:hover{ba
 
     <div class="status-grid">
         <section class="panel">
+            <header class="panel-header">
+                <div><h2>Última Aplicação</h2><p>Estado persistente da aplicação real mais recente.</p></div>
+                <div class="header-actions">
+                    <button class="button warning small" type="button" data-open-dialog="apply-firewall-modal"<?= $aplicacaoBloqueios ? ' disabled' : '' ?>>Aplicar firewall</button>
+                    <?php if ($backupDisponivel): ?><button class="button danger small" type="button" data-open-dialog="rollback-firewall-modal">Reverter</button><?php endif; ?>
+                </div>
+            </header>
+            <?php
+            $statusAplicacao = $ultimaAplicacao['status'] ?? 'NUNCA APLICADO';
+            $aplicacaoErro = $statusAplicacao === 'ERRO';
+            $aplicacaoPendente = !in_array($statusAplicacao, ['APLICADO', 'REVERTIDO', 'ERRO'], true);
+            $classeAplicacao = $aplicacaoErro ? ' error' : ($aplicacaoPendente ? ' pending' : '');
+            $iconeAplicacao = $statusAplicacao === 'APLICADO' ? '✓' : ($aplicacaoErro ? '!' : ($statusAplicacao === 'REVERTIDO' ? '↶' : '–'));
+            $tituloAplicacao = match ($statusAplicacao) {
+                'APLICADO' => 'Aplicado com sucesso',
+                'ERRO' => 'Erro na aplicação',
+                'REVERTIDO' => 'Última aplicação revertida',
+                default => 'Nunca aplicado',
+            };
+            $dataAplicacao = null;
+            if (!empty($ultimaAplicacao['data_hora'])) {
+                try {
+                    $dataAplicacao = new DateTimeImmutable((string) $ultimaAplicacao['data_hora']);
+                } catch (Throwable) {
+                    $dataAplicacao = null;
+                }
+            }
+            $contagensAplicacao = is_array($ultimaAplicacao['contagens'] ?? null) ? $ultimaAplicacao['contagens'] : [];
+            ?>
+            <div class="validation<?= $classeAplicacao ?>"><span class="validation-icon" aria-hidden="true"><?= $iconeAplicacao ?></span><div>
+                <strong><?= htmlspecialchars($tituloAplicacao) ?></strong>
+                <?php if ($ultimaAplicacao !== null): ?>
+                    <span>Data/hora: <time<?= $dataAplicacao ? ' datetime="' . htmlspecialchars($dataAplicacao->format(DATE_ATOM), ENT_QUOTES, 'UTF-8') . '"' : '' ?>><?= htmlspecialchars($dataAplicacao ? $dataAplicacao->format('d/m/Y H:i:s') : 'Não informada') ?></time></span>
+                    <span>Usuário: <em><?= htmlspecialchars((string) ($ultimaAplicacao['usuario'] ?? 'desconhecido')) ?></em></span>
+                    <span>Validação prévia: <em><?= htmlspecialchars((string) ($ultimaAplicacao['validacao_previa'] ?? 'Não informada')) ?></em></span>
+                    <span>Backup disponível: <em><?= $backupDisponivel ? 'Sim' : 'Não' ?></em></span>
+                    <div class="application-summary">
+                        <span>ACLs IPv4<strong><?= (int) ($contagensAplicacao['acl_ipv4'] ?? 0) ?></strong></span>
+                        <span>ACLs IPv6<strong><?= (int) ($contagensAplicacao['acl_ipv6'] ?? 0) ?></strong></span>
+                        <span>Portas administrativas<strong><?= (int) ($contagensAplicacao['portas_admin'] ?? 0) ?></strong></span>
+                        <span>Portas públicas<strong><?= (int) ($contagensAplicacao['portas_publicas'] ?? 0) ?></strong></span>
+                    </div>
+                    <span><?= htmlspecialchars((string) ($ultimaAplicacao['resumo'] ?? 'Sem resumo disponível.')) ?></span>
+                    <details class="technical-output"><summary>Ver saída técnica</summary><pre><?= htmlspecialchars((string) ($ultimaAplicacao['saida'] ?? 'Sem saída técnica.')) ?></pre></details>
+                <?php else: ?>
+                    <span>Nenhuma aplicação real foi registrada pelo painel.</span>
+                    <span>Backup disponível: <em><?= $backupDisponivel ? 'Sim' : 'Não' ?></em></span>
+                <?php endif; ?>
+            </div></div>
+        </section>
+        <section class="panel">
             <header class="panel-header"><div><h2>Última Validação</h2><p>Resultado da verificação mais recente.</p></div></header>
             <?php
             $statusValidacao = $ultimaValidacao['status'] ?? 'NÃO VALIDADO';
@@ -1077,6 +1783,48 @@ tr:last-child td{border-bottom:0}tbody tr{background:#02061766}tbody tr:hover{ba
             <a class="secondary-button" href="auditoria.php">Ver histórico completo</a>
         </section>
     </div>
+
+    <dialog class="modal" id="apply-firewall-modal">
+        <header class="modal-header"><div><h2>Aplicar firewall</h2><p>Esta ação altera regras reais na tabela gerenciada pelo painel.</p></div><button class="modal-close" type="button" data-close-dialog>Fechar</button></header>
+        <div class="modal-body">
+            <form method="POST" class="modal-form">
+                <?= csrf_field() ?>
+                <input type="hidden" name="acao" value="aplicar_firewall">
+                <div class="modal-warning">A aplicação somente continuará após validação obrigatória e criação de backup. Um erro pode interromper acessos administrativos não contemplados pelas ACLs cadastradas.</div>
+                <?php foreach ($aplicacaoBloqueios as $bloqueio): ?><div class="alert error"><?= htmlspecialchars($bloqueio) ?></div><?php endforeach; ?>
+                <div class="application-summary">
+                    <span>ACLs IPv4<strong><?= $ipv4Count ?></strong></span>
+                    <span>ACLs IPv6<strong><?= $ipv6Count ?></strong></span>
+                    <span>Portas administrativas<strong><?= count($adminPorts) ?></strong></span>
+                    <span>Portas públicas<strong><?= count($publicPorts) ?></strong></span>
+                </div>
+                <div class="field">
+                    <label for="apply-firewall-confirmation">Digite exatamente <?= FIREWALL_CONFIRMACAO_APLICAR ?></label>
+                    <input id="apply-firewall-confirmation" name="confirmacao" autocomplete="off" data-confirmation-input required>
+                </div>
+                <label class="field-help"><input type="checkbox" name="ciente" value="1" required> Confirmo que revisei as ACLs e portas administrativas exibidas.</label>
+                <div class="modal-actions"><button class="button" type="button" data-close-dialog>Cancelar</button><button class="button warning" type="submit"<?= $aplicacaoBloqueios ? ' disabled' : '' ?>>Aplicar regras reais</button></div>
+            </form>
+        </div>
+    </dialog>
+
+    <dialog class="modal" id="rollback-firewall-modal">
+        <header class="modal-header"><div><h2>Reverter última aplicação</h2><p>Restaura somente o estado anterior da tabela gerenciada pelo painel.</p></div><button class="modal-close" type="button" data-close-dialog>Fechar</button></header>
+        <div class="modal-body">
+            <form method="POST" class="modal-form">
+                <?= csrf_field() ?>
+                <input type="hidden" name="acao" value="rollback_firewall">
+                <div class="modal-warning">O backup será validado com nft antes da reversão. Outras tabelas e regras do sistema não serão alteradas.</div>
+                <?php if (!$backupDisponivel): ?><div class="alert error">Não existe backup válido disponível para rollback.</div><?php endif; ?>
+                <div class="field">
+                    <label for="rollback-firewall-confirmation">Digite exatamente <?= FIREWALL_CONFIRMACAO_ROLLBACK ?></label>
+                    <input id="rollback-firewall-confirmation" name="confirmacao" autocomplete="off" data-confirmation-input required>
+                </div>
+                <label class="field-help"><input type="checkbox" name="ciente" value="1" required> Confirmo que desejo restaurar o estado anterior da tabela gerenciada.</label>
+                <div class="modal-actions"><button class="button" type="button" data-close-dialog>Cancelar</button><button class="button danger" type="submit"<?= $backupDisponivel ? '' : ' disabled' ?>>Reverter firewall</button></div>
+            </form>
+        </div>
+    </dialog>
 
     <dialog class="modal" id="add-ip-modal">
         <header class="modal-header"><div><h2>Adicionar ACL</h2><p>Autorizar um endereço ou rede para acesso administrativo.</p></div><button class="modal-close" type="button" data-close-dialog>Fechar</button></header>

@@ -2,6 +2,39 @@
 
 Historico de alteracoes do Painel DNS Trevizam Network.
 
+## [2.3.0] - 2026-06-21
+
+### Firewall V1.6
+
+- Adicionada aplicação real controlada da tabela `inet painel_firewall`.
+- Implementadas confirmação exata `APLICAR FIREWALL` e confirmação visual
+  adicional.
+- Aplicação bloqueada sem ACL administrativa, sem porta administrativa ou com
+  ACL aberta `/0`.
+- Verificada a presença das ACLs e portas administrativas nas regras geradas.
+- Tornada obrigatória a sequência `nft -c -f` antes de qualquer `nft -f`.
+- Aplicação usa o mesmo arquivo temporário previamente validado.
+- Adicionado backup persistente do estado anterior da tabela gerenciada em
+  `firewall_meta`.
+- Adicionada proteção contra alteração concorrente por comparação de hash.
+- Implementado rollback manual com confirmação `REVERTER FIREWALL`.
+- Rollback valida o backup antes de restaurar ou remover a tabela gerenciada.
+- Nenhuma tabela nftables externa ao painel é removida ou restaurada.
+- Adicionado card Última Aplicação com status, usuário, data, contagens,
+  validação prévia, backup e saída técnica recolhida.
+- Adicionados modais de aplicação e rollback e alertas claros de segurança.
+- Implementada auditoria completa para solicitação, bloqueio, validação,
+  backup, aplicação, rollback e CSRF inválido.
+- Persistidos `ultima_aplicacao_v16`, `ultimo_backup_v16` e
+  `ultima_reversao_v16`.
+- Adicionada limpeza de temporários também no encerramento do PHP.
+- Testados os fluxos de sucesso com executor isolado exclusivo para PHP CLI.
+- No ambiente real, a falta de permissão netlink bloqueou a operação antes da
+  aplicação, conforme esperado.
+- Nenhum systemctl, reload, restart, `flush ruleset` ou substituição de arquivo
+  produtivo foi implementado.
+- Documentação detalhada disponível em `HANDOFF_FIREWALL_V1_6.md`.
+
 ## [2.2.0] - 2026-06-21
 
 ### Firewall V1.5
