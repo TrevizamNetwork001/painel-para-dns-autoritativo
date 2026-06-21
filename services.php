@@ -184,10 +184,10 @@ function botoes_servico(array $acoes, array $nomes): void
 function badge_status(array $status): string
 {
     if ($status['ok']) {
-        return '<span class="status online">🟢 Online</span>';
+        return '<span class="status-badge status-online">Ativo</span>';
     }
 
-    return '<span class="status offline">🔴 Offline</span>';
+    return '<span class="status-badge status-offline">Inativo</span>';
 }
 
 function acao_curta(string $acao): string
@@ -214,21 +214,32 @@ function acao_curta(string $acao): string
 <meta charset="UTF-8">
 <title>Serviços</title>
 <style>
+:root{
+    color-scheme: dark;
+    --bg:#0b1220;
+    --panel:#0f172a;
+    --panel-2:#111c33;
+    --border:#24324a;
+    --text:#e2e8f0;
+    --muted:#94a3b8;
+    --accent:#38bdf8;
+    --accent-2:#60a5fa;
+}
 body{
     margin:0;
     font-family:Arial,sans-serif;
-    background:radial-gradient(circle at top,#101b33 0,#0b1220 44%,#070b14 100%);
-    color:#e2e8f0;
+    background:radial-gradient(circle at top,#101b33 0,var(--bg) 44%,#070b14 100%);
+    color:var(--text);
 }
 
 .container{
-    max-width:1180px;
+    max-width:1120px;
     margin:0 auto;
-    padding:22px 20px 34px;
+    padding:22px 18px 34px;
 }
 
 .topo{
-    margin-bottom:18px;
+    margin-bottom:16px;
 }
 
 .topo h1{
@@ -238,43 +249,70 @@ body{
 
 .topo p{
     margin:0 0 8px;
-    color:#94a3b8;
+    color:var(--muted);
 }
 
 a{
-    color:#38bdf8;
+    color:var(--accent);
     text-decoration:none;
 }
 
 .grid{
     display:grid;
-    grid-template-columns:repeat(auto-fit,minmax(260px,1fr));
-    gap:14px;
+    grid-template-columns:repeat(auto-fit,minmax(240px,1fr));
+    gap:12px;
 }
 
 .card{
     background:linear-gradient(180deg, rgba(15,23,42,.96), rgba(11,18,32,.96));
-    border:1px solid #24324a;
-    padding:18px;
+    border:1px solid var(--border);
+    padding:16px;
     border-radius:14px;
     margin-bottom:0;
     box-shadow:0 16px 44px rgba(0,0,0,.18);
 }
 
 .card h2{
-    margin:0 0 8px;
+    margin:0;
+    font-size:18px;
 }
 
 .card small{
-    color:#94a3b8;
+    color:var(--muted);
     display:block;
-    margin-bottom:14px;
+    margin:8px 0 12px;
+    line-height:1.45;
+}
+
+.card-head{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:10px;
+    margin-bottom:4px;
+}
+
+.card-head h2{
+    margin:0;
+}
+
+.service-tag{
+    display:inline-flex;
+    align-items:center;
+    padding:5px 10px;
+    border-radius:999px;
+    border:1px solid rgba(148,163,184,.18);
+    background:rgba(148,163,184,.10);
+    color:#dbe7f5;
+    font-size:12px;
+    white-space:nowrap;
 }
 
 .acoes{
     display:flex;
     flex-wrap:wrap;
     gap:8px;
+    margin-top:10px;
 }
 
 .acoes form{
@@ -282,13 +320,15 @@ a{
 }
 
 button{
-    padding:10px 14px;
-    border:1px solid rgba(56,189,248,.35);
+    padding:8px 11px;
+    border:1px solid rgba(56,189,248,.30);
     border-radius:10px;
-    background:#111a2f;
+    background:rgba(17,26,47,.92);
     color:#fff;
     cursor:pointer;
-    font-weight:bold;
+    font-weight:700;
+    font-size:13px;
+    line-height:1.2;
 }
 
 button:hover{
@@ -305,9 +345,11 @@ button:hover{
 }
 
 .alerta{
-    background:rgba(124,45,18,.45);
-    border:1px solid #ea580c;
+    background:rgba(124,45,18,.30);
+    border:1px solid rgba(234,88,12,.45);
     color:#fed7aa;
+    padding:14px 16px;
+    line-height:1.5;
 }
 
 .ok{
@@ -338,22 +380,22 @@ pre{
     margin-bottom:10px;
 }
 
-.status{
+.status-badge{
     display:inline-block;
-    margin-bottom:12px;
     padding:5px 10px;
     border-radius:999px;
-    font-size:13px;
-    font-weight:bold;
+    font-size:12px;
+    font-weight:700;
+    white-space:nowrap;
 }
 
-.online{
+.status-online{
     background:rgba(22,163,74,.14);
     color:#86efac;
     border:1px solid #16a34a;
 }
 
-.offline{
+.status-offline{
     background:rgba(69,10,10,.4);
     color:#fecaca;
     border:1px solid #dc2626;
@@ -392,21 +434,62 @@ pre{
     width:100%;
     border-collapse:collapse;
     margin-top:10px;
+    overflow:hidden;
 }
 
 .tabela th,
 .tabela td{
     border:1px solid #334155;
-    padding:9px;
+    padding:9px 10px;
     font-size:13px;
+    vertical-align:top;
 }
 
 .tabela th{
     background:#111827;
+    color:#dbe7f5;
+    text-align:left;
 }
 
 .tabela td{
     background:#020617;
+}
+
+.tabela tr:hover td{
+    background:#0b1327;
+}
+
+.table-wrap{
+    overflow:auto;
+    border:1px solid var(--border);
+    border-radius:12px;
+    margin-top:10px;
+}
+
+.section-title{
+    margin:0 0 10px;
+    font-size:18px;
+}
+
+.service-card{
+    display:flex;
+    flex-direction:column;
+    min-height:100%;
+}
+
+.service-body{
+    flex:1 1 auto;
+}
+
+.service-footer{
+    margin-top:auto;
+}
+
+@media (max-width: 720px){
+    .container{padding:16px 12px 28px}
+    .topo h1{font-size:24px}
+    .card{padding:14px}
+    button{width:100%}
 }
 </style>
 </head>
@@ -459,46 +542,62 @@ setTimeout(function () {
 
     <div class="grid">
 
-        <div class="card servico-bind">
-            <span class="badge">DNS</span>
-            <h2>BIND9</h2>
-            <?= badge_status($statusBind) ?>
-            <small>Verificação, reload e controle do serviço DNS.</small>
+        <div class="card servico-bind service-card">
+            <div class="service-body">
+                <div class="card-head">
+                    <h2>BIND9</h2>
+                    <span class="service-tag">DNS</span>
+                </div>
+                <?= badge_status($statusBind) ?>
+                <small>Verificação, reload e controle do serviço DNS.</small>
+            </div>
 
-            <div class="acoes">
+            <div class="acoes service-footer">
                 <?php botoes_servico($acoes, ['CHECK_BIND', 'RELOAD_BIND', 'RESTART_BIND', 'START_BIND', 'STOP_BIND']); ?>
             </div>
         </div>
 
-        <div class="card servico-fail2ban">
-            <span class="badge">Segurança</span>
-            <h2>Fail2Ban</h2>
-            <?= badge_status($statusFail2ban) ?>
-            <small>Verificação e reinicialização do serviço de proteção.</small>
+        <div class="card servico-fail2ban service-card">
+            <div class="service-body">
+                <div class="card-head">
+                    <h2>Fail2Ban</h2>
+                    <span class="service-tag">Segurança</span>
+                </div>
+                <?= badge_status($statusFail2ban) ?>
+                <small>Verificação e reinicialização do serviço de proteção.</small>
+            </div>
 
-            <div class="acoes">
+            <div class="acoes service-footer">
                 <?php botoes_servico($acoes, ['CHECK_FAIL2BAN', 'RESTART_FAIL2BAN']); ?>
             </div>
         </div>
 
-        <div class="card servico-ssh">
-            <span class="badge">Acesso remoto</span>
-            <h2>SSH</h2>
-            <?= badge_status($statusSsh) ?>
-            <small>Verificação e reinicialização do serviço SSH.</small>
+        <div class="card servico-ssh service-card">
+            <div class="service-body">
+                <div class="card-head">
+                    <h2>SSH</h2>
+                    <span class="service-tag">Acesso remoto</span>
+                </div>
+                <?= badge_status($statusSsh) ?>
+                <small>Verificação e reinicialização do serviço SSH.</small>
+            </div>
 
-            <div class="acoes">
+            <div class="acoes service-footer">
                 <?php botoes_servico($acoes, ['CHECK_SSH', 'RESTART_SSH']); ?>
             </div>
         </div>
 
-        <div class="card servico-firewall">
-            <span class="badge">Firewall</span>
-            <h2>Firewall</h2>
-            <?= badge_status($statusFirewall) ?>
-            <small>Verificação e recarregamento das regras nftables.</small>
+        <div class="card servico-firewall service-card">
+            <div class="service-body">
+                <div class="card-head">
+                    <h2>Firewall</h2>
+                    <span class="service-tag">Firewall</span>
+                </div>
+                <?= badge_status($statusFirewall) ?>
+                <small>Verificação e recarregamento das regras nftables.</small>
+            </div>
 
-            <div class="acoes">
+            <div class="acoes service-footer">
                 <?php botoes_servico($acoes, ['CHECK_FIREWALL', 'RELOAD_FIREWALL']); ?>
             </div>
         </div>
@@ -506,33 +605,35 @@ setTimeout(function () {
     </div>
 
     <div class="card">
-        <h2>Últimas ações de serviços</h2>
+        <h2 class="section-title">Últimas ações de serviços</h2>
 
         <?php if (empty($ultimasAcoes)): ?>
             <p>Nenhuma ação de serviço registrada ainda.</p>
         <?php else: ?>
-            <table class="tabela">
-                <thead>
-                    <tr>
-                        <th>Data</th>
-                        <th>Usuário</th>
-                        <th>Serviço</th>
-                        <th>Ação</th>
-                        <th>Status</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <?php foreach ($ultimasAcoes as $log): ?>
+            <div class="table-wrap">
+                <table class="tabela">
+                    <thead>
                         <tr>
-                            <td><?= htmlspecialchars(date('d/m/Y H:i:s', strtotime($log['criado_em']))) ?></td>
-                            <td><?= htmlspecialchars($log['usuario'] ?? '-') ?></td>
-                            <td><?= htmlspecialchars($log['nome_registro'] ?? '-') ?></td>
-                            <td><?= htmlspecialchars(acao_curta($log['acao'] ?? '-')) ?></td>
-                            <td><?= htmlspecialchars($log['status'] ?? '-') ?></td>
+                            <th>Data</th>
+                            <th>Usuário</th>
+                            <th>Serviço</th>
+                            <th>Ação</th>
+                            <th>Status</th>
                         </tr>
-                    <?php endforeach; ?>
-                </tbody>
-            </table>
+                    </thead>
+                    <tbody>
+                        <?php foreach ($ultimasAcoes as $log): ?>
+                            <tr>
+                                <td><?= htmlspecialchars(date('d/m/Y H:i:s', strtotime($log['criado_em']))) ?></td>
+                                <td><?= htmlspecialchars($log['usuario'] ?? '-') ?></td>
+                                <td><?= htmlspecialchars($log['nome_registro'] ?? '-') ?></td>
+                                <td><?= htmlspecialchars(acao_curta($log['acao'] ?? '-')) ?></td>
+                                <td><?= htmlspecialchars($log['status'] ?? '-') ?></td>
+                            </tr>
+                        <?php endforeach; ?>
+                    </tbody>
+                </table>
+            </div>
         <?php endif; ?>
     </div>
 
