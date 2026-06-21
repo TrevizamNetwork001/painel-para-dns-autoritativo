@@ -105,6 +105,37 @@ function fw_count_drop_packets(string $rulesetRaw): int
     return array_sum(array_map('intval', $matches[1] ?? []));
 }
 
+function fw_count_drop_packets_by_family(string $rulesetRaw): array
+{
+    $ipv4 = 0;
+    $ipv6 = 0;
+
+    foreach (preg_split('/\R/u', $rulesetRaw) ?: [] as $lineRaw) {
+        $line = fw_clean($lineRaw);
+        if ($line === '' || !preg_match('/counter packets (\d+) bytes .* drop/i', $line, $match)) {
+            continue;
+        }
+
+        $packets = (int) $match[1];
+        $isIpv6 = preg_match('/\b(ip6|ipv6|meta nfproto ipv6)\b/i', $line) === 1;
+        $isIpv4 = preg_match('/\b(ip\b|ipv4|meta nfproto ipv4)\b/i', $line) === 1 && !$isIpv6;
+
+        if ($isIpv6) {
+            $ipv6 += $packets;
+        } elseif ($isIpv4) {
+            $ipv4 += $packets;
+        } else {
+            $ipv4 += $packets;
+        }
+    }
+
+    return [
+        'ipv4' => $ipv4,
+        'ipv6' => $ipv6,
+        'total' => $ipv4 + $ipv6,
+    ];
+}
+
 function fw_chain_policy(string $meta): ?string
 {
     return preg_match('/\bpolicy\s+([a-z]+)\b/i', $meta, $m) ? strtolower($m[1]) : null;
@@ -135,7 +166,7 @@ $tables = $rulesetOk ? fw_parse_ruleset($rulesetRaw) : [];
 $tablesCount = count($tables);
 $chainsCount = fw_count_chains($tables);
 $rulesCount = fw_count_rules($tables);
-$dropPackets = fw_count_drop_packets($rulesetRaw);
+$dropPackets = fw_count_drop_packets_by_family($rulesetRaw);
 $checkTime = fw_format_time();
 
 $diagnostic = [];
@@ -205,6 +236,30 @@ h1{
     margin:0;
     color:var(--muted);
 }
+.stats{
+    display:grid;
+    grid-template-columns:repeat(3, minmax(0, 1fr));
+    gap:12px;
+    margin-top:14px;
+}
+.stat{
+    padding:14px;
+    border-radius:12px;
+    border:1px solid var(--border);
+    background:rgba(17,28,51,.72);
+}
+.stat h3{
+    margin:0;
+    font-size:24px;
+}
+.stat p{
+    margin-top:8px;
+    color:var(--muted);
+    font-size:13px;
+}
+.stat.bad{background:rgba(63,13,18,.45)}
+.stat.warn{background:rgba(63,50,13,.42)}
+.stat.info{background:rgba(12,45,72,.42)}
 .badge{
     display:inline-flex;
     align-items:center;
@@ -322,8 +377,24 @@ pre{
             <span class="badge badge-info"><?= $tablesCount ?> <?= $tablesCount === 1 ? 'tabela' : 'tabelas' ?></span>
             <span class="badge badge-info"><?= $chainsCount ?> <?= $chainsCount === 1 ? 'chain' : 'chains' ?></span>
             <span class="badge badge-info"><?= $rulesCount ?> <?= $rulesCount === 1 ? 'regra' : 'regras' ?></span>
-            <span class="badge <?= $dropPackets > 0 ? 'badge-warn' : 'badge-info' ?>">Drops de ameaça: <?= $dropPackets ?></span>
+            <span class="badge <?= $dropPackets['ipv4'] > 0 ? 'badge-warn' : 'badge-info' ?>">IPv4: <?= $dropPackets['ipv4'] ?></span>
+            <span class="badge <?= $dropPackets['ipv6'] > 0 ? 'badge-warn' : 'badge-info' ?>">IPv6: <?= $dropPackets['ipv6'] ?></span>
             <span class="badge">Verificado em <?= htmlspecialchars($checkTime) ?></span>
+        </div>
+
+        <div class="stats">
+            <div class="stat <?= $dropPackets['ipv4'] > 0 ? 'warn' : 'info' ?>">
+                <h3><?= $dropPackets['ipv4'] ?></h3>
+                <p>Drops IPv4</p>
+            </div>
+            <div class="stat <?= $dropPackets['ipv6'] > 0 ? 'warn' : 'info' ?>">
+                <h3><?= $dropPackets['ipv6'] ?></h3>
+                <p>Drops IPv6</p>
+            </div>
+            <div class="stat info">
+                <h3><?= $dropPackets['total'] ?></h3>
+                <p>Total de drops</p>
+            </div>
         </div>
 
         <div class="actions">
