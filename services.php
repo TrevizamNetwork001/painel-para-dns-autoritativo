@@ -83,6 +83,10 @@ $statusBind = status_servico('/usr/bin/systemctl is-active bind9 2>&1');
 $statusFail2ban = status_servico('/usr/bin/systemctl is-active fail2ban 2>&1');
 $statusSsh = status_servico('/usr/bin/systemctl is-active ssh 2>&1');
 $statusFirewall = status_servico('/usr/bin/systemctl is-active nftables 2>&1');
+$servicosMonitorados = 4;
+$servicosAtivos = (int) $statusBind['ok'] + (int) $statusFail2ban['ok'] + (int) $statusSsh['ok'] + (int) $statusFirewall['ok'];
+$servicosInativos = $servicosMonitorados - $servicosAtivos;
+$ultimaVerificacao = date('d/m/Y H:i');
 
 $resultado = null;
 $status = null;
@@ -261,6 +265,36 @@ a{
     display:grid;
     grid-template-columns:repeat(auto-fit,minmax(240px,1fr));
     gap:12px;
+}
+
+.metric-strip{
+    display:grid;
+    grid-template-columns:repeat(4,minmax(0,1fr));
+    gap:10px;
+    margin:14px 0 12px;
+}
+
+.metric-card{
+    background:rgba(17,28,51,.72);
+    border:1px solid var(--border);
+    border-radius:12px;
+    padding:12px 13px;
+}
+
+.metric-label{
+    display:block;
+    color:var(--muted);
+    font-size:11px;
+    text-transform:uppercase;
+    letter-spacing:.04em;
+}
+
+.metric-value{
+    display:block;
+    font-size:19px;
+    font-weight:800;
+    margin-top:5px;
+    color:var(--text);
 }
 
 .card{
@@ -489,7 +523,12 @@ pre{
     .container{padding:16px 12px 28px}
     .topo h1{font-size:24px}
     .card{padding:14px}
+    .metric-strip{grid-template-columns:repeat(2,minmax(0,1fr))}
     button{width:100%}
+}
+
+@media (max-width: 520px){
+    .metric-strip{grid-template-columns:1fr}
 }
 </style>
 </head>
@@ -539,6 +578,25 @@ setTimeout(function () {
         <strong>Atenção:</strong>
         ações como reiniciar SSH ou parar BIND podem impactar o acesso ao servidor e a resolução DNS.
     </div>
+
+    <section class="metric-strip" aria-label="Resumo dos serviços">
+        <div class="metric-card">
+            <span class="metric-label">Monitorados</span>
+            <span class="metric-value"><?= (int) $servicosMonitorados ?></span>
+        </div>
+        <div class="metric-card">
+            <span class="metric-label">Ativos</span>
+            <span class="metric-value"><?= (int) $servicosAtivos ?></span>
+        </div>
+        <div class="metric-card">
+            <span class="metric-label">Inativos</span>
+            <span class="metric-value"><?= (int) $servicosInativos ?></span>
+        </div>
+        <div class="metric-card">
+            <span class="metric-label">Última verificação</span>
+            <span class="metric-value" style="font-size:15px"><?= htmlspecialchars($ultimaVerificacao) ?></span>
+        </div>
+    </section>
 
     <div class="grid">
 
