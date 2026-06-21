@@ -752,24 +752,97 @@ pre{
     z-index:1;
 }
 
-.section-head{
+.service-history-card{
+    margin-top:18px;
+}
+
+.history-header{
     display:flex;
     justify-content:space-between;
     align-items:center;
     gap:12px;
-    margin-bottom:10px;
+    padding:15px 16px;
+    border-bottom:1px solid rgba(148,163,184,.16);
 }
 
-.link-chip{
+.history-title{
+    margin:0;
+    font-size:16px;
+    font-weight:700;
+    color:#fff;
+    line-height:1.2;
+}
+
+.history-full-button{
     display:inline-flex;
     align-items:center;
     justify-content:center;
-    padding:8px 11px;
-    border:1px solid var(--border);
+    gap:7px;
+    width:auto;
+    min-height:32px;
+    padding:0 12px;
     border-radius:10px;
-    color:#dbe7f5;
-    background:rgba(15,23,42,.92);
+    border:1px solid rgba(56,189,248,.30);
+    background:rgba(17,26,47,.92);
+    color:#fff;
     font-size:13px;
+    font-weight:700;
+    line-height:1;
+}
+
+.history-full-button:hover,
+.history-full-button:focus{
+    border-color:#3b82f6;
+    outline:none;
+    background:#13243a;
+    transform:translateY(-1px);
+}
+
+.history-table-wrap{
+    padding:0 16px 16px;
+    overflow:auto;
+}
+
+.history-table{
+    width:100%;
+    border-collapse:collapse;
+    font-size:13px;
+}
+
+.history-table thead th{
+    padding:9px 12px;
+    border-bottom:1px solid rgba(148,163,184,.16);
+    background:rgba(15,23,42,.55);
+    color:#bfdbfe;
+    text-align:left;
+    font-size:12px;
+    font-weight:700;
+    letter-spacing:0;
+    text-transform:none;
+}
+
+.history-table tbody td{
+    padding:8px 12px;
+    border-bottom:1px solid rgba(148,163,184,.12);
+    color:#e5f2ff;
+}
+
+.history-table tbody tr:hover{
+    background:rgba(14,165,233,.06);
+}
+
+.status-ok{
+    display:inline-flex;
+    align-items:center;
+    gap:5px;
+    padding:2px 8px;
+    border-radius:999px;
+    background:rgba(22,163,74,.12);
+    border:1px solid rgba(34,197,94,.35);
+    color:#86efac;
+    font-weight:700;
+    font-size:12px;
+    line-height:1.3;
 }
 
 .status-cell{
@@ -817,8 +890,8 @@ pre{
     .top-actions{justify-content:flex-start;margin-top:12px;padding-top:0}
     .actions,.acoes{display:grid}
     .action-chip{width:100%;justify-content:center}
-    .section-head{display:block}
-    .section-head .link-chip{margin-top:8px}
+    .history-header{display:block}
+    .history-full-button{margin-top:8px}
     .warning-banner{align-items:flex-start}
 }
 
@@ -1026,19 +1099,19 @@ setTimeout(function () {
 
     </div>
 
-    <div class="card">
-        <div class="section-head">
-            <h2 class="section-title">Últimas ações de serviços</h2>
+    <div class="card service-history-card">
+        <div class="history-header">
+            <h2 class="history-title">Últimas ações de serviços</h2>
             <?php if ($historicoLink): ?>
-                <a class="link-chip" href="<?= htmlspecialchars($historicoLink) ?>">Ver histórico completo</a>
+                <a class="action-chip history-full-button" href="<?= htmlspecialchars($historicoLink) ?>"><span class="chip-icon" aria-hidden="true"><?= ui_icon_svg('history', 14) ?></span>Ver histórico completo</a>
             <?php endif; ?>
         </div>
 
         <?php if (empty($ultimasAcoes)): ?>
             <p>Nenhuma ação de serviço registrada ainda.</p>
         <?php else: ?>
-            <div class="table-wrap">
-                <table class="tabela">
+            <div class="history-table-wrap">
+                <table class="history-table">
                     <thead>
                         <tr>
                             <th>Data</th>
