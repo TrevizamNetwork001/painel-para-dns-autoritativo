@@ -167,13 +167,13 @@ function botoes_servico(array $acoes, array $nomes): void
 
         $danger = in_array($nome, [
             'STOP_BIND',
-            'RESTART_FAIL2BAN',
             'RESTART_SSH',
         ], true);
         $visualClass = match ($nome) {
             'START_BIND' => 'action-start',
             'RESTART_BIND' => 'action-restart-bind',
             'STOP_BIND' => 'action-stop-bind',
+            'RESTART_FAIL2BAN' => 'action-restart-fail2ban',
             'RESTART_SSH' => 'action-restart-ssh',
             default => '',
         };
@@ -613,6 +613,16 @@ a{
     color:#16c763;
 }
 
+.action-chip.action-restart-fail2ban{
+    background:rgba(17,26,47,.92);
+    border-color:#263851;
+    color:#e5edf7;
+}
+
+.action-chip.action-restart-fail2ban .chip-icon{
+    color:#16c763;
+}
+
 .action-chip.action-start:hover,
 .action-chip.action-start:focus{
     background:rgba(10,40,70,.88);
@@ -620,7 +630,9 @@ a{
 }
 
 .action-chip.action-restart-bind:hover,
-.action-chip.action-restart-bind:focus{
+.action-chip.action-restart-bind:focus,
+.action-chip.action-restart-fail2ban:hover,
+.action-chip.action-restart-fail2ban:focus{
     background:rgba(8,52,37,.55);
     border-color:#16c763;
 }
