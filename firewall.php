@@ -11,6 +11,22 @@ function fw_exec(string $command): array
 ", $lines)), $exit];
 }
 
+function fw_exec_first_available(array $commands): array
+{
+    $fallback = ['', 1];
+
+    foreach ($commands as $command) {
+        [$stdout, $exit] = fw_exec($command);
+        if ($stdout !== '' && stripos($stdout, 'operation not permitted') === false && stripos($stdout, 'permission denied') === false) {
+            return [$stdout, $exit];
+        }
+
+        $fallback = [$stdout, $exit];
+    }
+
+    return $fallback;
+}
+
 function fw_clean(string $text): string
 {
     return trim(preg_replace('/\s+/u', ' ', $text) ?? $text);
@@ -191,14 +207,23 @@ function fw_format_time(): string
 }
 
 [$serviceRaw, $serviceExit] = fw_exec('systemctl is-active nftables');
-[$rulesetRaw, $rulesetExit] = fw_exec('sudo -n /usr/sbin/nft list ruleset');
+[$rulesetRaw, $rulesetExit] = fw_exec_first_available([
+    'sudo -n /usr/sbin/nft list ruleset',
+    '/usr/sbin/nft list ruleset',
+    'nft list ruleset',
+]);
+[$tablesRaw, $tablesExit] = fw_exec_first_available([
+    'sudo -n /usr/sbin/nft list tables',
+    '/usr/sbin/nft list tables',
+    'nft list tables',
+]);
 
 $service = trim($serviceRaw);
 $serviceActive = $service === 'active';
 $serviceKnown = $service !== '';
 $rulesetOk = trim($rulesetRaw) !== '' && $rulesetExit === 0;
 $tables = $rulesetOk ? fw_parse_ruleset($rulesetRaw) : [];
-$tablesCount = count($tables) ?: fw_count_tables_raw($rulesetRaw);
+$tablesCount = count($tables) ?: fw_count_tables_raw($rulesetRaw) ?: (preg_match_all('/^table\s+\S+\s+\S+/mi', $tablesRaw) ?: 0);
 $chainsCount = fw_count_chains($tables) ?: fw_count_chains_raw($rulesetRaw);
 $rulesCount = fw_count_rules($tables) ?: fw_count_rules_raw($rulesetRaw);
 $dropPackets = fw_count_drop_packets_by_family($rulesetRaw);
