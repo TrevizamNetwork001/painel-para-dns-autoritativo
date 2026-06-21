@@ -6,6 +6,8 @@ function db(): PDO
 
     $pdo = new PDO('sqlite:' . $arquivo);
     $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+    $pdo->setAttribute(PDO::ATTR_TIMEOUT, 2);
+    $pdo->exec('PRAGMA busy_timeout = 2000');
 
     return $pdo;
 }
