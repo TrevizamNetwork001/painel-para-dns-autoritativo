@@ -166,11 +166,16 @@ function botoes_servico(array $acoes, array $nomes): void
         $acao = $acoes[$nome];
 
         $danger = in_array($nome, [
-            'RESTART_BIND',
             'STOP_BIND',
             'RESTART_FAIL2BAN',
             'RESTART_SSH',
         ], true);
+        $visualClass = match ($nome) {
+            'START_BIND' => 'action-start',
+            'RESTART_BIND' => 'action-restart-bind',
+            'RESTART_SSH' => 'action-restart-ssh',
+            default => '',
+        };
 
         ?>
         <form method="POST">
@@ -178,7 +183,7 @@ function botoes_servico(array $acoes, array $nomes): void
             <input type="hidden" name="acao" value="<?= htmlspecialchars($nome) ?>">
             <button
                 type="submit"
-                class="action-chip <?= $danger ? 'danger' : '' ?>"
+                class="action-chip <?= $danger ? 'danger' : '' ?> <?= $visualClass ?>"
                 onclick="return confirmarAcao('<?= htmlspecialchars($nome) ?>')"
             >
                 <span class="chip-icon" aria-hidden="true"><?= service_action_icon($nome) ?></span>
@@ -233,7 +238,7 @@ function service_action_icon(string $acao): string
         'CHECK_BIND', 'CHECK_FAIL2BAN', 'CHECK_SSH', 'CHECK_FIREWALL' => 'search',
         'RELOAD_BIND', 'RELOAD_FIREWALL' => 'refresh',
         'RESTART_BIND', 'RESTART_FAIL2BAN', 'RESTART_SSH' => 'restart',
-        'START_BIND' => 'play',
+        'START_BIND' => 'play-box',
         'STOP_BIND' => 'stop',
         default => 'dot',
     }, 17);
@@ -260,7 +265,7 @@ function ui_icon_svg(string $name, int $size = 18): string
         'search' => '<circle cx="11" cy="11" r="6"/><path d="m20 20-4.2-4.2"/>',
         'refresh' => '<path d="M20 7v5h-5"/><path d="M4 17v-5h5"/><path d="M6.1 8a7 7 0 0 1 11.5-2L20 8M4 16l2.4 2a7 7 0 0 0 11.5-2"/>',
         'restart' => '<path d="M4 4v6h6"/><path d="M5.5 15a8 8 0 1 0 1.3-8.7L4 10"/>',
-        'play' => '<path d="m8 5 11 7-11 7z"/>',
+        'play-box' => '<rect x="4" y="4" width="16" height="16" rx="3"/><path d="m10 8 6 4-6 4z"/>',
         'stop' => '<rect x="6" y="6" width="12" height="12" rx="2"/>',
         'globe' => '<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a15 15 0 0 1 0 18M12 3a15 15 0 0 0 0 18"/>',
         'shield' => '<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"/><path d="m9 12 2 2 4-5"/>',
@@ -591,10 +596,56 @@ a{
     border-color:#ef4444;
 }
 
+.action-chip.action-start,
+.action-chip.action-restart-bind{
+    background:rgba(17,26,47,.92);
+    border-color:#263851;
+    color:#e5edf7;
+}
+
+.action-chip.action-start .chip-icon{
+    color:#168cff;
+}
+
+.action-chip.action-restart-bind .chip-icon{
+    color:#16c763;
+}
+
+.action-chip.action-start:hover,
+.action-chip.action-start:focus{
+    background:rgba(10,40,70,.88);
+    border-color:#168cff;
+}
+
+.action-chip.action-restart-bind:hover,
+.action-chip.action-restart-bind:focus{
+    background:rgba(8,52,37,.55);
+    border-color:#16c763;
+}
+
+.action-chip.action-restart-ssh{
+    background:rgba(72,10,22,.36);
+    border-color:rgba(239,68,68,.48);
+    color:#fda4af;
+}
+
+.action-chip.action-restart-ssh .chip-icon{
+    color:#ff334f;
+}
+
+.action-chip.action-restart-ssh:hover,
+.action-chip.action-restart-ssh:focus{
+    background:rgba(92,12,28,.52);
+    border-color:#ff334f;
+}
+
 .chip-icon{
     display:inline-flex;
     align-items:center;
     justify-content:center;
+    width:18px;
+    height:18px;
+    flex:0 0 18px;
     font-size:12px;
     line-height:1;
 }
