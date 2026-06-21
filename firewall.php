@@ -94,6 +94,17 @@ function fw_count_rules(array $tables): int
     return $total;
 }
 
+function fw_count_drop_packets(string $rulesetRaw): int
+{
+    if ($rulesetRaw === '') {
+        return 0;
+    }
+
+    preg_match_all('/counter packets (\d+) bytes .* drop/i', $rulesetRaw, $matches);
+
+    return array_sum(array_map('intval', $matches[1] ?? []));
+}
+
 function fw_chain_policy(string $meta): ?string
 {
     return preg_match('/\bpolicy\s+([a-z]+)\b/i', $meta, $m) ? strtolower($m[1]) : null;
@@ -124,6 +135,7 @@ $tables = $rulesetOk ? fw_parse_ruleset($rulesetRaw) : [];
 $tablesCount = count($tables);
 $chainsCount = fw_count_chains($tables);
 $rulesCount = fw_count_rules($tables);
+$dropPackets = fw_count_drop_packets($rulesetRaw);
 $checkTime = fw_format_time();
 
 $diagnostic = [];
@@ -310,6 +322,7 @@ pre{
             <span class="badge badge-info"><?= $tablesCount ?> <?= $tablesCount === 1 ? 'tabela' : 'tabelas' ?></span>
             <span class="badge badge-info"><?= $chainsCount ?> <?= $chainsCount === 1 ? 'chain' : 'chains' ?></span>
             <span class="badge badge-info"><?= $rulesCount ?> <?= $rulesCount === 1 ? 'regra' : 'regras' ?></span>
+            <span class="badge <?= $dropPackets > 0 ? 'badge-warn' : 'badge-info' ?>">Drops de ameaça: <?= $dropPackets ?></span>
             <span class="badge">Verificado em <?= htmlspecialchars($checkTime) ?></span>
         </div>
 
