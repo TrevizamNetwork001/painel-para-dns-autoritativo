@@ -90,6 +90,25 @@ function fw_parse_ruleset(string $raw): array
     return $tables;
 }
 
+function fw_parse_tables_list(string $raw): array
+{
+    $tables = [];
+
+    foreach (preg_split('/\R/u', $raw) ?: [] as $lineRaw) {
+        $line = fw_clean($lineRaw);
+        if ($line === '' || !preg_match('/^table\s+(\S+)\s+(\S+)$/i', $line, $m)) {
+            continue;
+        }
+
+        $tables[] = [
+            'family' => $m[1],
+            'name' => $m[2],
+        ];
+    }
+
+    return $tables;
+}
+
 function fw_count_chains(array $tables): int
 {
     $total = 0;
@@ -143,6 +162,69 @@ function fw_count_rules_raw(string $rulesetRaw): int
     }
 
     return $count;
+}
+
+function fw_count_chains_from_tables(array $tables): int
+{
+    $total = 0;
+
+    foreach ($tables as $table) {
+        $family = $table['family'] ?? '';
+        $name = $table['name'] ?? '';
+        if ($family === '' || $name === '') {
+            continue;
+        }
+
+        [$out, $exit] = fw_exec_first_available([
+            'sudo -n /usr/sbin/nft list table ' . escapeshellarg($family) . ' ' . escapeshellarg($name),
+            '/usr/sbin/nft list table ' . escapeshellarg($family) . ' ' . escapeshellarg($name),
+            'nft list table ' . escapeshellarg($family) . ' ' . escapeshellarg($name),
+        ]);
+
+        if ($exit !== 0 || $out === '') {
+            continue;
+        }
+
+        $total += preg_match_all('/^\s*chain\s+\S+\s*\{/mi', $out) ?: 0;
+    }
+
+    return $total;
+}
+
+function fw_count_rules_from_tables(array $tables): int
+{
+    $total = 0;
+
+    foreach ($tables as $table) {
+        $family = $table['family'] ?? '';
+        $name = $table['name'] ?? '';
+        if ($family === '' || $name === '') {
+            continue;
+        }
+
+        [$out, $exit] = fw_exec_first_available([
+            'sudo -n /usr/sbin/nft list table ' . escapeshellarg($family) . ' ' . escapeshellarg($name),
+            '/usr/sbin/nft list table ' . escapeshellarg($family) . ' ' . escapeshellarg($name),
+            'nft list table ' . escapeshellarg($family) . ' ' . escapeshellarg($name),
+        ]);
+
+        if ($exit !== 0 || $out === '') {
+            continue;
+        }
+
+        foreach (preg_split('/\R/u', $out) ?: [] as $lineRaw) {
+            $line = fw_clean($lineRaw);
+            if ($line === '' || preg_match('/^\s*(table|chain)\b/i', $line)) {
+                continue;
+            }
+
+            if (preg_match('/\b(accept|drop|reject|counter)\b/i', $line) || preg_match('/\b(dport|sport)\b/i', $line)) {
+                $total++;
+            }
+        }
+    }
+
+    return $total;
 }
 
 function fw_count_drop_packets(string $rulesetRaw): int
@@ -223,19 +305,13 @@ $serviceActive = $service === 'active';
 $serviceKnown = $service !== '';
 $rulesetOk = trim($rulesetRaw) !== '' && $rulesetExit === 0;
 $tables = $rulesetOk ? fw_parse_ruleset($rulesetRaw) : [];
-$tablesCount = count($tables) ?: fw_count_tables_raw($rulesetRaw) ?: (preg_match_all('/^table\s+\S+\s+\S+/mi', $tablesRaw) ?: 0);
-$chainsCount = fw_count_chains($tables) ?: fw_count_chains_raw($rulesetRaw);
-$rulesCount = fw_count_rules($tables) ?: fw_count_rules_raw($rulesetRaw);
+$tablesList = fw_parse_tables_list($tablesRaw);
+$tablesCount = count($tables) ?: fw_count_tables_raw($rulesetRaw) ?: count($tablesList);
+$chainsCount = fw_count_chains($tables) ?: fw_count_chains_raw($rulesetRaw) ?: fw_count_chains_from_tables($tablesList);
+$rulesCount = fw_count_rules($tables) ?: fw_count_rules_raw($rulesetRaw) ?: fw_count_rules_from_tables($tablesList);
 $dropPackets = fw_count_drop_packets_by_family($rulesetRaw);
 $checkTime = fw_format_time();
 
-$diagnostic = [];
-$diagnostic[] = $serviceActive ? ['ok', 'Serviço nftables ativo'] : ($serviceKnown ? ['warn', 'Serviço nftables inativo'] : ['warn', 'Serviço nftables não identificado']);
-$diagnostic[] = $rulesetOk ? ['ok', 'Ruleset carregado'] : ['warn', 'Não foi possível consultar nftables'];
-$diagnostic[] = $tablesCount > 0 ? ['ok', $tablesCount . ' ' . ($tablesCount === 1 ? 'tabela encontrada' : 'tabelas encontradas')] : ['warn', 'Nenhuma tabela encontrada'];
-$diagnostic[] = $chainsCount > 0 ? ['ok', $chainsCount . ' ' . ($chainsCount === 1 ? 'chain encontrada' : 'chains encontradas')] : ['warn', 'Nenhuma chain encontrada'];
-$diagnostic[] = $rulesCount > 0 ? ['ok', $rulesCount . ' ' . ($rulesCount === 1 ? 'regra encontrada' : 'regras encontradas')] : ['warn', 'Nenhuma regra encontrada'];
-$diagnostic[] = $rulesetOk && array_filter($tables, fn($t) => true) ? ['ok', 'Ruleset disponível para leitura'] : ['warn', 'Ruleset indisponível'];
 ?>
 <!DOCTYPE html>
 <html lang="pt-BR">
@@ -456,17 +532,7 @@ pre{
         </div>
 
         <div class="actions">
-            <a href="#diagnostico">Mostrar diagnóstico</a>
             <a href="#dados">Mostrar regras</a>
-        </div>
-
-        <div class="panel" id="diagnostico">
-            <h3>Diagnóstico</h3>
-            <div class="badges">
-                <?php foreach ($diagnostic as [$level, $message]): ?>
-                    <span class="badge <?= $level === 'ok' ? 'badge-ok' : 'badge-warn' ?>"><?= htmlspecialchars($message) ?></span>
-                <?php endforeach; ?>
-            </div>
         </div>
 
         <div class="panel" id="dados">
