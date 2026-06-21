@@ -141,7 +141,7 @@ exit;
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>ACL IPv4</title>
+<title>Gerenciar ACL IPv4</title>
 <style>
 :root{
     color-scheme: dark;
@@ -288,8 +288,8 @@ h1{
 <body>
 <div class="page">
     <a class="back" href="dashboard.php">← Voltar</a>
-    <h1>ACL IPv4</h1>
-    <p class="subtitle">Cadastro e remoção de ACL IPv4 para nftables.</p>
+    <h1>Gerenciar ACL IPv4</h1>
+    <p class="subtitle">Cadastre e remova endereços permitidos no nftables.</p>
 
     <?php if($error): ?>
         <div class="notice error"><?= $error ?></div>
@@ -300,14 +300,14 @@ h1{
     <?php endif; ?>
 
     <section class="card">
-        <h2>Adicionar IP/Rede</h2>
+        <h2>Adicionar nova ACL</h2>
         <p>Informe um IP ou rede em CIDR para liberar acesso no firewall.</p>
 
         <form method="POST">
             <?= csrf_field() ?>
             <div class="form-grid">
                 <div class="field">
-                    <input type="text" name="ip" placeholder="Ex: 198.50.0.10/32 ou 198.50.0.0/24">
+                    <input type="text" name="ip" placeholder="ACL IPv4 (ex: 198.50.0.10/32 ou 198.50.0.0/24)">
                 </div>
                 <button class="btn" type="submit">Adicionar ACL</button>
             </div>
@@ -315,7 +315,7 @@ h1{
     </section>
 
     <section class="card">
-        <h2>ACL Atual</h2>
+        <h2>ACLs cadastradas</h2>
         <p>IPs e redes atualmente permitidos.</p>
 
         <div class="acl-list">
