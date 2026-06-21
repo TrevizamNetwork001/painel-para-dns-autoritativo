@@ -569,6 +569,13 @@ pre{
                         <?php endforeach; ?>
                     </div>
                 <?php endforeach; ?>
+
+                <?php if (trim($rulesetRaw) !== ''): ?>
+                    <div class="table">
+                        <h4>Texto bruto do ruleset</h4>
+                        <pre><?= htmlspecialchars($rulesetRaw) ?></pre>
+                    </div>
+                <?php endif; ?>
             <?php else: ?>
                 <p>Não foi possível consultar o nftables no momento.</p>
                 <pre><?= htmlspecialchars($rulesetRaw !== '' ? $rulesetRaw : 'Sem saída disponível.') ?></pre>
