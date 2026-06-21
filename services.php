@@ -175,9 +175,10 @@ function botoes_servico(array $acoes, array $nomes): void
             <input type="hidden" name="acao" value="<?= htmlspecialchars($nome) ?>">
             <button
                 type="submit"
-                class="<?= $danger ? 'btn-danger' : '' ?>"
+                class="action-chip <?= $danger ? 'danger' : '' ?>"
                 onclick="return confirmarAcao('<?= htmlspecialchars($nome) ?>')"
             >
+                <span class="chip-icon" aria-hidden="true"><?= $danger ? '⚠' : '⚙' ?></span>
                 <?= htmlspecialchars($acao['rotulo']) ?>
             </button>
         </form>
@@ -242,18 +243,32 @@ body{
     padding:22px 18px 34px;
 }
 
-.topo{
-    margin-bottom:16px;
+.topbar{
+    display:flex;
+    align-items:flex-start;
+    justify-content:space-between;
+    gap:16px;
+    margin-bottom:14px;
 }
 
 .topo h1{
-    margin:0 0 6px;
+    margin:0 0 4px;
     font-size:28px;
 }
 
-.topo p{
+.lead{
     margin:0 0 8px;
     color:var(--muted);
+    line-height:1.45;
+}
+
+.top-actions{
+    display:flex;
+    align-items:center;
+    gap:10px;
+    flex-wrap:wrap;
+    justify-content:flex-end;
+    padding-top:4px;
 }
 
 a{
@@ -353,7 +368,11 @@ a{
     margin:0;
 }
 
-button{
+.action-chip{
+    display:inline-flex;
+    align-items:center;
+    gap:6px;
+    width:auto;
     padding:8px 11px;
     border:1px solid rgba(56,189,248,.30);
     border-radius:10px;
@@ -363,19 +382,35 @@ button{
     font-weight:700;
     font-size:13px;
     line-height:1.2;
+    min-height:32px;
 }
 
-button:hover{
+.action-chip:hover,
+.action-chip:focus{
     border-color:#3b82f6;
+    outline:none;
+    background:#13243a;
+    transform:translateY(-1px);
 }
 
-.btn-danger{
+.action-chip.danger{
     background:rgba(220,38,38,.14);
     border-color:rgba(220,38,38,.35);
+    color:#fecaca;
 }
 
-.btn-danger:hover{
+.action-chip.danger:hover,
+.action-chip.danger:focus{
     background:rgba(220,38,38,.2);
+    border-color:#ef4444;
+}
+
+.chip-icon{
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    font-size:13px;
+    line-height:1;
 }
 
 .alerta{
@@ -519,12 +554,27 @@ pre{
     margin-top:auto;
 }
 
+.section-title{
+    margin:0 0 10px;
+    font-size:18px;
+}
+
+.table-wrap{
+    overflow:auto;
+    border:1px solid var(--border);
+    border-radius:12px;
+    margin-top:10px;
+}
+
 @media (max-width: 720px){
     .container{padding:16px 12px 28px}
+    .topbar{display:block}
     .topo h1{font-size:24px}
     .card{padding:14px}
     .metric-strip{grid-template-columns:repeat(2,minmax(0,1fr))}
-    button{width:100%}
+    .top-actions{justify-content:flex-start;margin-top:12px;padding-top:0}
+    .actions,.acoes{display:grid}
+    .action-chip{width:100%;justify-content:center}
 }
 
 @media (max-width: 520px){
@@ -562,16 +612,18 @@ setTimeout(function () {
 
 <div class="container">
 
-    <div class="topo">
-        <h1>Serviços</h1>
+    <div class="topbar">
+        <div class="topo">
+            <h1>Serviços</h1>
 
-        <p>
-            Central de gerenciamento dos serviços do servidor DNS.
-        </p>
+            <p class="lead">
+                Central de gerenciamento dos serviços do servidor DNS.
+            </p>
+        </div>
 
-        <p>
-            <a href="dashboard.php">← Voltar ao painel</a>
-        </p>
+        <div class="top-actions">
+            <a class="action-chip" href="dashboard.php"><span class="chip-icon" aria-hidden="true">←</span>Voltar ao painel</a>
+        </div>
     </div>
 
     <div class="card alerta">
