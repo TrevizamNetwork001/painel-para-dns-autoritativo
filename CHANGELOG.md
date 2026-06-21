@@ -2,6 +2,16 @@
 
 Historico de alteracoes do Painel DNS Trevizam Network.
 
+## [2.3.1] - 2026-06-21
+
+### Fechamento FIREWALL_V1
+
+- Consolidado o encerramento das fases V1.1, V1.2, V1.5 e V1.6.
+- Registrados commits, decisões de segurança, limitações do ambiente, checklist
+  de homologação real e plano operacional de rollback.
+- Documentação final disponível em `HANDOFF_FINAL_FIREWALL_V1.txt`.
+- Nenhuma alteração funcional foi realizada nesta revisão documental.
+
 ## [2.3.0] - 2026-06-21
 
 ### Firewall V1.6
