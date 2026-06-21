@@ -87,6 +87,7 @@ $servicosMonitorados = 4;
 $servicosAtivos = (int) $statusBind['ok'] + (int) $statusFail2ban['ok'] + (int) $statusSsh['ok'] + (int) $statusFirewall['ok'];
 $servicosInativos = $servicosMonitorados - $servicosAtivos;
 $ultimaVerificacao = date('d/m/Y H:i');
+$historicoLink = is_file(__DIR__ . '/auditoria.php') ? 'auditoria.php' : null;
 
 $resultado = null;
 $status = null;
@@ -212,6 +213,17 @@ function acao_curta(string $acao): string
         default => $acao
     };
 }
+
+function service_metric_icon(string $key): string
+{
+    return match ($key) {
+        'monitorados' => '≡',
+        'ativos' => '✓',
+        'inativos' => '!',
+        'ultima' => '⟳',
+        default => '•',
+    };
+}
 ?>
 <!DOCTYPE html>
 <html lang="pt-br">
@@ -249,6 +261,12 @@ body{
     justify-content:space-between;
     gap:16px;
     margin-bottom:14px;
+}
+
+.page-header{
+    display:flex;
+    flex-direction:column;
+    gap:2px;
 }
 
 .topo h1{
@@ -290,10 +308,13 @@ a{
 }
 
 .metric-card{
+    display:flex;
+    gap:12px;
+    align-items:flex-start;
     background:rgba(17,28,51,.72);
     border:1px solid var(--border);
     border-radius:12px;
-    padding:11px 12px;
+    padding:12px;
 }
 
 .metric-label{
@@ -310,6 +331,28 @@ a{
     font-weight:800;
     margin-top:4px;
     color:var(--text);
+}
+
+.metric-icon{
+    width:32px;
+    height:32px;
+    border-radius:10px;
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    background:rgba(56,189,248,.12);
+    border:1px solid rgba(56,189,248,.18);
+    color:#bfdbfe;
+    flex:0 0 auto;
+    font-size:14px;
+}
+
+.metric-icon.ok{background:rgba(34,197,94,.12);border-color:rgba(34,197,94,.18);color:#bbf7d0}
+.metric-icon.bad{background:rgba(220,38,38,.12);border-color:rgba(220,38,38,.18);color:#fecaca}
+.metric-icon.time{background:rgba(168,85,247,.12);border-color:rgba(168,85,247,.18);color:#e9d5ff}
+
+.metric-content{
+    min-width:0;
 }
 
 .card{
@@ -359,8 +402,7 @@ a{
 }
 
 .acoes{
-    display:flex;
-    flex-wrap:wrap;
+    display:grid;
     gap:7px;
     margin-top:8px;
 }
@@ -372,8 +414,9 @@ a{
 .action-chip{
     display:inline-flex;
     align-items:center;
-    gap:5px;
-    width:auto;
+    justify-content:flex-start;
+    gap:7px;
+    width:100%;
     padding:7px 10px;
     border:1px solid rgba(56,189,248,.30);
     border-radius:10px;
@@ -570,11 +613,59 @@ pre{
     z-index:1;
 }
 
-.table-wrap{
-    overflow:auto;
+.section-head{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    gap:12px;
+    margin-bottom:10px;
+}
+
+.link-chip{
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    padding:8px 11px;
     border:1px solid var(--border);
-    border-radius:12px;
-    margin-top:10px;
+    border-radius:10px;
+    color:#dbe7f5;
+    background:rgba(15,23,42,.92);
+    font-size:13px;
+}
+
+.status-cell{
+    display:inline-flex;
+    align-items:center;
+    gap:6px;
+    font-weight:700;
+}
+
+.status-mark{
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    width:16px;
+    height:16px;
+    border-radius:50%;
+    font-size:11px;
+}
+
+.status-cell.ok{
+    color:#bbf7d0;
+}
+
+.status-cell.ok .status-mark{
+    background:rgba(34,197,94,.18);
+    color:#bbf7d0;
+}
+
+.status-cell.bad{
+    color:#fecaca;
+}
+
+.status-cell.bad .status-mark{
+    background:rgba(220,38,38,.16);
+    color:#fecaca;
 }
 
 @media (max-width: 720px){
@@ -586,6 +677,8 @@ pre{
     .top-actions{justify-content:flex-start;margin-top:12px;padding-top:0}
     .actions,.acoes{display:grid}
     .action-chip{width:100%;justify-content:center}
+    .section-head{display:block}
+    .section-head .link-chip{margin-top:8px}
 }
 
 @media (max-width: 520px){
@@ -624,7 +717,7 @@ setTimeout(function () {
 <div class="container">
 
     <div class="topbar">
-        <div class="topo">
+        <div class="page-header topo">
             <h1>Serviços</h1>
 
             <p class="lead">
@@ -644,20 +737,32 @@ setTimeout(function () {
 
     <section class="metric-strip" aria-label="Resumo dos serviços">
         <div class="metric-card">
-            <span class="metric-label">Monitorados</span>
-            <span class="metric-value"><?= (int) $servicosMonitorados ?></span>
+            <span class="metric-icon" aria-hidden="true"><?= service_metric_icon('monitorados') ?></span>
+            <div class="metric-content">
+                <span class="metric-label">Monitorados</span>
+                <span class="metric-value"><?= (int) $servicosMonitorados ?></span>
+            </div>
         </div>
         <div class="metric-card">
-            <span class="metric-label">Ativos</span>
-            <span class="metric-value"><?= (int) $servicosAtivos ?></span>
+            <span class="metric-icon ok" aria-hidden="true"><?= service_metric_icon('ativos') ?></span>
+            <div class="metric-content">
+                <span class="metric-label">Ativos</span>
+                <span class="metric-value"><?= (int) $servicosAtivos ?></span>
+            </div>
         </div>
         <div class="metric-card">
-            <span class="metric-label">Inativos</span>
-            <span class="metric-value"><?= (int) $servicosInativos ?></span>
+            <span class="metric-icon bad" aria-hidden="true"><?= service_metric_icon('inativos') ?></span>
+            <div class="metric-content">
+                <span class="metric-label">Inativos</span>
+                <span class="metric-value"><?= (int) $servicosInativos ?></span>
+            </div>
         </div>
         <div class="metric-card">
-            <span class="metric-label">Última verificação</span>
-            <span class="metric-value" style="font-size:15px"><?= htmlspecialchars($ultimaVerificacao) ?></span>
+            <span class="metric-icon time" aria-hidden="true"><?= service_metric_icon('ultima') ?></span>
+            <div class="metric-content">
+                <span class="metric-label">Última verificação</span>
+                <span class="metric-value" style="font-size:15px"><?= htmlspecialchars($ultimaVerificacao) ?></span>
+            </div>
         </div>
     </section>
 
@@ -726,7 +831,12 @@ setTimeout(function () {
     </div>
 
     <div class="card">
-        <h2 class="section-title">Últimas ações de serviços</h2>
+        <div class="section-head">
+            <h2 class="section-title">Últimas ações de serviços</h2>
+            <?php if ($historicoLink): ?>
+                <a class="link-chip" href="<?= htmlspecialchars($historicoLink) ?>">Ver histórico completo</a>
+            <?php endif; ?>
+        </div>
 
         <?php if (empty($ultimasAcoes)): ?>
             <p>Nenhuma ação de serviço registrada ainda.</p>
@@ -749,7 +859,13 @@ setTimeout(function () {
                                 <td><?= htmlspecialchars($log['usuario'] ?? '-') ?></td>
                                 <td><?= htmlspecialchars($log['nome_registro'] ?? '-') ?></td>
                                 <td><?= htmlspecialchars(acao_curta($log['acao'] ?? '-')) ?></td>
-                                <td><?= htmlspecialchars($log['status'] ?? '-') ?></td>
+                                <td>
+                                    <?php $statusLog = strtoupper((string) ($log['status'] ?? '-')); ?>
+                                    <span class="status-cell <?= $statusLog === 'OK' ? 'ok' : ($statusLog === 'ERRO' ? 'bad' : '') ?>">
+                                        <span class="status-mark" aria-hidden="true"><?= $statusLog === 'OK' ? '✓' : ($statusLog === 'ERRO' ? '!' : '•') ?></span>
+                                        <?= htmlspecialchars($statusLog) ?>
+                                    </span>
+                                </td>
                             </tr>
                         <?php endforeach; ?>
                     </tbody>
