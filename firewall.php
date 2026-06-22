@@ -1578,6 +1578,8 @@ body{background:#080d18}
 .quick-grid .inline-form,.quick-grid .quick-action.validate{width:100%}
 .quick-icon{display:grid;place-items:center;width:30px;height:30px;border-radius:9px;background:color-mix(in srgb,currentColor 12%,transparent)}
 .quick-icon svg{width:23px;height:23px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.quick-icon.icon-backup{align-self:center;transform:translateY(-1px)}
+.quick-icon.icon-backup svg{display:block;width:22px;height:22px}
 .quick-icon.blue{color:#1797ff}.quick-icon.orange{color:#f59e0b}.quick-icon.purple{color:#9b7cff}.quick-icon.green{color:#16d982}
 .main-layout{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:13px;align-items:start}.main-layout>.access-card{grid-column:1}.main-layout>.admin-ports-card{grid-column:2}.main-layout>.public-ports-card{grid-column:1}.main-layout>.side-status{grid-column:2;display:grid;grid-template-columns:minmax(0,.72fr) minmax(0,1.28fr);gap:13px;align-items:stretch}
 .access-card{padding:14px}.access-card .panel-header{align-items:center}.access-card .header-actions{flex-wrap:nowrap}.access-search{width:min(250px,100%)}.access-table tbody[data-family-section]+tbody[data-family-section] tr:first-child td{border-top:1px solid #25344a}
@@ -1643,7 +1645,7 @@ body{background:#080d18}
             <?php foreach ($quickActions as [$icon, $iconTone, $label, $detail, $modalId]): ?>
                 <?php if ($modalId === 'disabled-action'): ?>
                     <button class="quick-action" type="button" disabled>
-                        <span class="quick-icon <?= htmlspecialchars($iconTone) ?>" aria-hidden="true"><?= firewall_icone_acao_rapida($icon) ?></span>
+                        <span class="quick-icon <?= htmlspecialchars($iconTone) ?> icon-<?= htmlspecialchars($icon) ?>" aria-hidden="true"><?= firewall_icone_acao_rapida($icon) ?></span>
                         <strong><?= htmlspecialchars($label === 'Rollback' ? 'Backup' : $label) ?></strong>
                         <small><?= htmlspecialchars($label === 'Rollback' ? ($backupDisponivel ? 'Cópia disponível' : 'Sem cópia disponível') : $detail) ?></small>
                     </button>
@@ -1654,7 +1656,7 @@ body{background:#080d18}
                         <?= csrf_field() ?>
                         <input type="hidden" name="acao" value="validar_configuracao">
                         <button class="quick-action validate" type="submit">
-                            <span class="quick-icon <?= htmlspecialchars($iconTone) ?>" aria-hidden="true"><?= firewall_icone_acao_rapida($icon) ?></span>
+                            <span class="quick-icon <?= htmlspecialchars($iconTone) ?> icon-<?= htmlspecialchars($icon) ?>" aria-hidden="true"><?= firewall_icone_acao_rapida($icon) ?></span>
                             <strong><?= htmlspecialchars($label === 'Rollback' ? 'Backup' : $label) ?></strong>
                             <small><?= htmlspecialchars($detail) ?></small>
                         </button>
@@ -1667,7 +1669,7 @@ body{background:#080d18}
                     <?= $modalId !== null
                         ? 'data-open-dialog="' . htmlspecialchars($modalId, ENT_QUOTES, 'UTF-8') . '"'
                         : 'data-future-action="' . htmlspecialchars($label, ENT_QUOTES, 'UTF-8') . '"' ?>>
-                    <span class="quick-icon <?= htmlspecialchars($iconTone) ?>" aria-hidden="true"><?= firewall_icone_acao_rapida($icon) ?></span>
+                    <span class="quick-icon <?= htmlspecialchars($iconTone) ?> icon-<?= htmlspecialchars($icon) ?>" aria-hidden="true"><?= firewall_icone_acao_rapida($icon) ?></span>
                     <strong><?= htmlspecialchars($label === 'Rollback' ? 'Backup' : $label) ?></strong>
                     <small><?= htmlspecialchars($label === 'Aplicar' ? 'Validar + backup' : $detail) ?></small>
                 </button>
