@@ -1542,6 +1542,7 @@ body{background:#080d18}
 .quick-icon.blue{color:#1797ff}.quick-icon.orange{color:#f59e0b}.quick-icon.purple{color:#9b7cff}.quick-icon.green{color:#16d982}
 .main-layout{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:13px;align-items:start}.main-layout>.access-card{grid-column:1}.main-layout>.admin-ports-card{grid-column:2}.main-layout>.public-ports-card{grid-column:1}.main-layout>.side-status{grid-column:2;display:grid;grid-template-columns:minmax(0,.72fr) minmax(0,1.28fr);gap:13px;align-items:stretch}
 .access-card{padding:14px}.access-card .panel-header{align-items:center}.access-card .header-actions{flex-wrap:nowrap}.access-search{width:min(250px,100%)}.access-table tbody[data-family-section]+tbody[data-family-section] tr:first-child td{border-top:1px solid #25344a}
+.access-card{padding:16px}.access-card .panel-header{margin-bottom:14px}.access-card .panel-header h2{font-size:16px}.access-card .panel-header p{font-size:10px}.access-search-wrap{position:relative;width:min(250px,100%)}.access-search-wrap svg{position:absolute;left:10px;top:50%;width:15px;height:15px;transform:translateY(-50%);fill:none;stroke:#94a3b8;stroke-width:1.8;stroke-linecap:round}.access-search{width:100%;min-height:34px;padding-left:32px;background:#091321}.access-card .table-wrap{border:0;border-radius:0}.access-table thead{border-bottom:1px solid #213047}.access-table th{padding:8px 6px;background:transparent;color:#8493a8}.access-table td{padding:9px 6px}.access-table tbody tr{background:transparent}.access-table tbody tr:hover{background:#0d192b}.access-card .type-badge{border-color:#075eaa;background:#073a6b;color:#38bdf8}.access-card .text-action{display:inline-flex;align-items:center;gap:5px;padding:4px 8px;border-color:#075eaa;background:transparent;color:#2196f3}.access-card .text-action.remove{border-color:#7f1d1d;color:#ef4444}.access-card .text-action svg{width:11px;height:11px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}.access-footer{display:flex;align-items:center;justify-content:space-between;gap:12px;padding-top:10px;color:#8190a5;font-size:10px}.access-pagination{display:flex;align-items:center;gap:5px}.page-chip{display:grid;place-items:center;min-width:28px;height:28px;padding:0 8px;border:1px solid #263852;border-radius:6px;background:#0a1423;color:#8fa0b6}.page-chip.current{border-color:#168cff;background:#168cff;color:#fff;box-shadow:0 0 12px #168cff3d}.page-chip[disabled]{opacity:.55}
 .table-wrap{overflow-x:hidden}.access-table th:first-child,.access-table td:first-child{width:11%}.access-table th:nth-child(2),.access-table td:nth-child(2){width:25%}.access-table th:nth-child(3),.access-table td:nth-child(3){width:auto}.access-table th:nth-child(4),.access-table td:nth-child(4){width:18%}.access-table th:last-child,.access-table td:last-child{width:22%}
 .ports-table th:first-child,.ports-table td:first-child{width:11%}.ports-table th:nth-child(2),.ports-table td:nth-child(2){width:16%}.ports-table th:nth-child(3),.ports-table td:nth-child(3){width:19%}.ports-table th:nth-child(4),.ports-table td:nth-child(4){width:auto}.ports-table th:last-child,.ports-table td:last-child{width:24%}
 .cell-description{overflow:hidden;white-space:nowrap;text-overflow:ellipsis}.audit-action{display:-webkit-box;overflow:hidden;-webkit-line-clamp:2;-webkit-box-orient:vertical}.audit-list .audit-item:nth-child(n+5){display:none}
@@ -1636,8 +1637,10 @@ body{background:#080d18}
             <header class="panel-header">
                 <div><h2>Acesso Administrativo</h2><p>IPs autorizados para acesso administrativo.</p></div>
                 <div class="header-actions">
-                    <input class="search access-search" id="acl-all-search" type="search" placeholder="Pesquisar IP ou rede..." aria-label="Pesquisar IP ou rede">
-                    <button class="button small" type="button" data-open-dialog="add-ip-modal">Adicionar IP</button>
+                    <label class="access-search-wrap">
+                        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m16 16 5 5"/></svg>
+                        <input class="search access-search" id="acl-all-search" type="search" placeholder="Pesquisar IP ou rede..." aria-label="Pesquisar IP ou rede">
+                    </label>
                 </div>
             </header>
             <div class="table-wrap"><table class="access-table">
@@ -1651,8 +1654,8 @@ body{background:#080d18}
                                 <td class="cell-description" title="<?= htmlspecialchars($access['descricao'], ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars($access['descricao']) ?></td>
                                 <td><?= htmlspecialchars($createdAt) ?></td>
                                 <td><div class="row-actions">
-                                    <button class="text-action" type="button" data-open-dialog="edit-ip-modal" data-record-id="<?= (int) $access['id'] ?>" data-record-family="<?= htmlspecialchars($access['tipo'], ENT_QUOTES, 'UTF-8') ?>" data-record-value="<?= htmlspecialchars($access['rede'], ENT_QUOTES, 'UTF-8') ?>" data-record-description="<?= htmlspecialchars($access['descricao'], ENT_QUOTES, 'UTF-8') ?>">Editar</button>
-                                    <button class="text-action remove" type="button" data-open-dialog="remove-ip-modal" data-record-id="<?= (int) $access['id'] ?>" data-record-family="<?= htmlspecialchars($access['tipo'], ENT_QUOTES, 'UTF-8') ?>" data-record-value="<?= htmlspecialchars($access['rede'], ENT_QUOTES, 'UTF-8') ?>">Remover</button>
+                                    <button class="text-action" type="button" data-open-dialog="edit-ip-modal" data-record-id="<?= (int) $access['id'] ?>" data-record-family="<?= htmlspecialchars($access['tipo'], ENT_QUOTES, 'UTF-8') ?>" data-record-value="<?= htmlspecialchars($access['rede'], ENT_QUOTES, 'UTF-8') ?>" data-record-description="<?= htmlspecialchars($access['descricao'], ENT_QUOTES, 'UTF-8') ?>"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m4 20 4.5-1 10-10a2.1 2.1 0 0 0-3-3l-10 10zM14 7l3 3"/></svg>Editar</button>
+                                    <button class="text-action remove" type="button" data-open-dialog="remove-ip-modal" data-record-id="<?= (int) $access['id'] ?>" data-record-family="<?= htmlspecialchars($access['tipo'], ENT_QUOTES, 'UTF-8') ?>" data-record-value="<?= htmlspecialchars($access['rede'], ENT_QUOTES, 'UTF-8') ?>"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M7 7l1 13h8l1-13M10 11v5M14 11v5"/></svg>Remover</button>
                                 </div></td>
                             </tr>
                         <?php endforeach; ?>
@@ -1666,8 +1669,8 @@ body{background:#080d18}
                                 <td class="cell-description" title="<?= htmlspecialchars($access['descricao'], ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars($access['descricao']) ?></td>
                                 <td><?= htmlspecialchars($createdAt) ?></td>
                                 <td><div class="row-actions">
-                                    <button class="text-action" type="button" data-open-dialog="edit-ip-modal" data-record-id="<?= (int) $access['id'] ?>" data-record-family="<?= htmlspecialchars($access['tipo'], ENT_QUOTES, 'UTF-8') ?>" data-record-value="<?= htmlspecialchars($access['rede'], ENT_QUOTES, 'UTF-8') ?>" data-record-description="<?= htmlspecialchars($access['descricao'], ENT_QUOTES, 'UTF-8') ?>">Editar</button>
-                                    <button class="text-action remove" type="button" data-open-dialog="remove-ip-modal" data-record-id="<?= (int) $access['id'] ?>" data-record-family="<?= htmlspecialchars($access['tipo'], ENT_QUOTES, 'UTF-8') ?>" data-record-value="<?= htmlspecialchars($access['rede'], ENT_QUOTES, 'UTF-8') ?>">Remover</button>
+                                    <button class="text-action" type="button" data-open-dialog="edit-ip-modal" data-record-id="<?= (int) $access['id'] ?>" data-record-family="<?= htmlspecialchars($access['tipo'], ENT_QUOTES, 'UTF-8') ?>" data-record-value="<?= htmlspecialchars($access['rede'], ENT_QUOTES, 'UTF-8') ?>" data-record-description="<?= htmlspecialchars($access['descricao'], ENT_QUOTES, 'UTF-8') ?>"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m4 20 4.5-1 10-10a2.1 2.1 0 0 0-3-3l-10 10zM14 7l3 3"/></svg>Editar</button>
+                                    <button class="text-action remove" type="button" data-open-dialog="remove-ip-modal" data-record-id="<?= (int) $access['id'] ?>" data-record-family="<?= htmlspecialchars($access['tipo'], ENT_QUOTES, 'UTF-8') ?>" data-record-value="<?= htmlspecialchars($access['rede'], ENT_QUOTES, 'UTF-8') ?>"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M7 7l1 13h8l1-13M10 11v5M14 11v5"/></svg>Remover</button>
                                 </div></td>
                             </tr>
                         <?php endforeach; ?>
@@ -1675,7 +1678,15 @@ body{background:#080d18}
                     <?php if (!$aclIpv4 && !$aclIpv6): ?><tbody><tr><td class="empty-state" colspan="5">Nenhum IP administrativo cadastrado.</td></tr></tbody><?php endif; ?>
                     <tbody><tr class="empty-row" id="acl-all-empty" hidden><td colspan="5">Nenhum IP ou rede encontrado.</td></tr></tbody>
                 </table></div>
-            <div class="record-count"><?= $ipv4Count + $ipv6Count ?> <?= ($ipv4Count + $ipv6Count) === 1 ? 'registro administrativo' : 'registros administrativos' ?></div>
+            <?php $totalAdminAccess = $ipv4Count + $ipv6Count; ?>
+            <footer class="access-footer">
+                <span>Mostrando <?= $totalAdminAccess > 0 ? '1 a ' . $totalAdminAccess : '0' ?> de <?= $totalAdminAccess ?> registros</span>
+                <nav class="access-pagination" aria-label="Paginação do acesso administrativo">
+                    <button class="page-chip" type="button" disabled aria-label="Página anterior">‹</button>
+                    <span class="page-chip current" aria-current="page">1</span>
+                    <button class="page-chip" type="button" disabled aria-label="Próxima página">›</button>
+                </nav>
+            </footer>
         </section>
 
         <section class="panel admin-ports-card">

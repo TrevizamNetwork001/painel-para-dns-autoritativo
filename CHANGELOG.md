@@ -2,6 +2,18 @@
 
 Historico de alteracoes do Painel DNS Trevizam Network.
 
+## [2.3.11] - 2026-06-22
+
+### Acesso Administrativo alinhado à referência
+
+- Ajustado o card Acesso Administrativo conforme a imagem `esse.png`.
+- Mantidos título e subtítulo com busca compacta e ícone à direita.
+- Removido o botão Adicionar IP do cabeçalho; a ação permanece nos atalhos.
+- Tabela, badges e botões Editar/Remover receberam o estilo da referência.
+- Adicionado rodapé com total de registros e paginação visual.
+- Handoff disponível em
+  `HANDOFF_ACESSO_ADMINISTRATIVO_FIREWALL_2026-06-22.md`.
+
 ## [2.3.10] - 2026-06-22
 
 ### Cor do card Firewall
