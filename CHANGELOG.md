@@ -2,6 +2,18 @@
 
 Historico de alteracoes do Painel DNS Trevizam Network.
 
+## [2.3.15] - 2026-06-22
+
+### Ícones superiores fiéis à referência
+
+- Redesenhados os cinco ícones dos cards de resumo com SVGs próprios.
+- IPv4 e IPv6 agora possuem escudos internos diferentes como em `esse.png`.
+- Cadeado, globo e escudo Firewall receberam geometria e detalhes equivalentes
+  aos da referência.
+- Ajustados tamanho, preenchimento translúcido e espaçamento dos ícones.
+- Handoff disponível em
+  `HANDOFF_ICONES_SUPERIORES_FIREWALL_2026-06-22.md`.
+
 ## [2.3.14] - 2026-06-22
 
 ### Permissão segura para validação nftables

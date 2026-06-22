@@ -1413,8 +1413,8 @@ $ipv6Count = count($aclIpv6);
 $backupDisponivel = firewall_backup_valido($ultimoBackup);
 $firewallAtivo = ($ultimaAplicacao['status'] ?? '') === 'APLICADO';
 $summary = [
-    ['shield', 'blue', 'IPv4 Liberados', (string) $ipv4Count, 'Redes e endereços', false],
-    ['shield', 'green', 'IPv6 Liberados', (string) $ipv6Count, 'Redes e endereços', false],
+    ['shield-v4', 'blue', 'IPv4 Liberados', (string) $ipv4Count, 'Redes e endereços', false],
+    ['shield-v6', 'green', 'IPv6 Liberados', (string) $ipv6Count, 'Redes e endereços', false],
     ['lock', 'orange', 'Portas Admin', (string) count($adminPorts), 'Acesso restrito', false],
     ['globe', 'purple', 'Portas Públicas', (string) count($publicPorts), 'Acesso externo', false],
     ['firewall', 'green', 'Firewall', $firewallAtivo ? 'Ativo' : 'Inativo', $firewallAtivo ? 'Configuração em uso' : 'Firewall inativo', $firewallAtivo],
@@ -1446,10 +1446,11 @@ function firewall_icone_acao_rapida(string $icone): string
 function firewall_icone_resumo(string $icone): string
 {
     return match ($icone) {
-        'shield' => '<svg viewBox="0 0 24 24"><path d="M12 3 5 6v5c0 4.6 2.9 8.4 7 10 4.1-1.6 7-5.4 7-10V6z"/><path d="M12 7v10"/></svg>',
-        'lock' => '<svg viewBox="0 0 24 24"><rect x="5" y="10" width="14" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3M12 14v3"/></svg>',
-        'globe' => '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a15 15 0 0 1 0 18M12 3a15 15 0 0 0 0 18"/></svg>',
-        'firewall' => '<svg viewBox="0 0 24 24"><path d="M12 3 5 6v5c0 4.6 2.9 8.4 7 10 4.1-1.6 7-5.4 7-10V6z"/><path d="M9 14.5c0-1.6 1.2-2.4 2-3.4.5-.6.8-1.3.8-2.1 1.5 1 3.2 2.5 3.2 4.7A3 3 0 0 1 12 17a3 3 0 0 1-3-2.5Z"/></svg>',
+        'shield-v4' => '<svg viewBox="0 0 32 32"><path class="icon-fill" d="M16 2.8 27 7v8.1c0 7-4.4 11.9-11 14.1C9.4 27 5 22.1 5 15.1V7z"/><path d="m16 6.8 7 2.7v5.3c0 4.5-2.8 7.8-7 9.5-4.2-1.7-7-5-7-9.5V9.5z"/><path d="M16 9.5v11.8M16 17l4.4-4.4"/></svg>',
+        'shield-v6' => '<svg viewBox="0 0 32 32"><path class="icon-fill" d="M16 2.8 27 7v8.1c0 7-4.4 11.9-11 14.1C9.4 27 5 22.1 5 15.1V7z"/><path d="m16 6.8 7 2.7v5.3c0 4.5-2.8 7.8-7 9.5-4.2-1.7-7-5-7-9.5V9.5z"/><path d="M12 19c.2-4.5 3.1-7.2 7.5-7.8-.2 4.4-2.7 7.3-7.5 7.8Z"/><path d="M12 19c1.5-2.2 3.2-3.7 5.5-5"/></svg>',
+        'lock' => '<svg viewBox="0 0 32 32"><path class="icon-fill" d="M8 13h16a2 2 0 0 1 2 2v12H6V15a2 2 0 0 1 2-2Z"/><rect x="7" y="13" width="18" height="15" rx="2.5"/><path d="M11 13V9a5 5 0 0 1 10 0v4M16 19v4"/></svg>',
+        'globe' => '<svg viewBox="0 0 32 32"><circle class="icon-fill" cx="16" cy="16" r="13"/><circle cx="16" cy="16" r="12"/><path d="M4 16h24M16 4c4 4.1 5.3 8.1 5.3 12S20 23.9 16 28M16 4c-4 4.1-5.3 8.1-5.3 12S12 23.9 16 28M6.5 10.5h19M6.5 21.5h19"/></svg>',
+        'firewall' => '<svg viewBox="0 0 32 32"><path class="icon-fill" d="M15 2.8 26 7v8.1c0 6.8-4.2 11.6-10.5 13.9C9.1 26.8 5 22 5 15.1V7z"/><path d="m15 6.8 7 2.7v5.3c0 4.2-2.5 7.4-6.4 9.1-4-1.7-6.6-4.9-6.6-9.1V9.5z"/><circle cx="23.8" cy="22.8" r="2.2"/><circle cx="27.3" cy="26.4" r="1.5"/><path d="m20.7 20 1.7 1.5M25.3 24.4l1 1"/></svg>',
         default => '',
     };
 }
@@ -1571,7 +1572,7 @@ body{background:#080d18}
 /* Ajuste final conforme a estrutura da referência esse.png */
 .sidebar{display:flex;flex-direction:column}.sidebar-user{margin-top:auto;padding:14px 9px 4px;border-top:1px solid #172236}.sidebar-user strong{display:block;color:#e2e8f0;font-size:11px}.sidebar-user span{display:block;margin-top:3px;color:#53647b;font-size:9px}.sidebar-version{padding:8px 9px 0;color:#3f4f65;font-size:8px}
 .page-header-right{display:flex;align-items:flex-end;flex-direction:column;gap:10px}.breadcrumb{color:#64748b;font-size:10px}.breadcrumb strong{color:#a8b7ca}
-.summary-card{min-height:82px;padding-top:13px}.summary-icon{top:13px;width:34px;height:34px;border:0;font-size:0}.summary-icon svg{width:25px;height:25px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}.summary-icon.blue{background:#063b6d;color:#1797ff}.summary-icon.green{background:#064e3b;color:#22e68d}.summary-icon.orange{background:#4a2b09;color:#f59e0b}.summary-icon.purple{background:#31205c;color:#a78bfa}.summary-icon.off{background:#2b1720;color:#f87171}.summary-value.status{font-size:14px}
+.summary-card{min-height:82px;padding:13px 10px 9px 59px}.summary-icon{top:13px;width:40px;height:40px;border:0;font-size:0}.summary-icon svg{width:31px;height:31px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}.summary-icon .icon-fill{fill:currentColor;fill-opacity:.13;stroke:none}.summary-icon.blue{background:#063b6d;color:#1797ff}.summary-icon.green{background:#064e3b;color:#22e68d}.summary-icon.orange{background:#4a2b09;color:#f59e0b}.summary-icon.purple{background:#31205c;color:#a78bfa}.summary-icon.off{background:#2b1720;color:#f87171}.summary-value.status{font-size:14px}
 .quick-panel{display:block;padding:12px}.quick-panel .panel-header{margin-bottom:10px}.quick-panel .panel-header p{display:block;font-size:9px}.quick-grid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:7px}.quick-grid>:nth-child(4){display:block}
 .quick-action{display:grid;grid-template-columns:32px minmax(0,1fr);grid-template-rows:auto auto;width:100%;min-height:58px;padding:8px 10px}.quick-action .quick-icon{grid-row:1/3;align-self:center;font-size:20px;text-align:center}.quick-action strong{align-self:end;font-size:10px}.quick-action small{display:block;align-self:start;margin:2px 0 0;color:#64748b;font-size:8px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .quick-grid .inline-form,.quick-grid .quick-action.validate{width:100%}
