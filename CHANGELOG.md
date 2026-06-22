@@ -2,6 +2,14 @@
 
 Historico de alteracoes do Painel DNS Trevizam Network.
 
+## [2.3.9] - 2026-06-22
+
+### Terminologia do status do Firewall
+
+- Substituído o estado `Off` por `Inativo` no card Firewall.
+- Ajustado o texto auxiliar para `Firewall inativo`.
+- Handoff de status atualizado com a terminologia em português.
+
 ## [2.3.8] - 2026-06-22
 
 ### Status Ativo/Off no card Firewall
