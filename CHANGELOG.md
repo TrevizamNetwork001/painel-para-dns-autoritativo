@@ -2,6 +2,18 @@
 
 Historico de alteracoes do Painel DNS Trevizam Network.
 
+## [2.3.20] - 2026-06-22
+
+### Fechamento do ajuste visual do Firewall
+
+- Ajustado o layout visual do módulo Firewall para alinhar à referência
+  operacional.
+- Removida a prévia técnica de regras nftables da tela principal.
+- Compactados cards, ações rápidas, tabelas e blocos de status.
+- Preservada integralmente a lógica da V1.6.
+- Handoff final disponível em
+  `HANDOFF_FECHAMENTO_VISUAL_FIREWALL_2026-06-22.md`.
+
 ## [2.3.19] - 2026-06-22
 
 ### Correção pontual dos botões cortados
