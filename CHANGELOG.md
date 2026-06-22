@@ -2,6 +2,14 @@
 
 Historico de alteracoes do Painel DNS Trevizam Network.
 
+## [2.3.10] - 2026-06-22
+
+### Cor do card Firewall
+
+- Mantido o ícone do Firewall na cor verde nos estados `Ativo` e `Inativo`.
+- O estado operacional continua identificado pelo texto do card.
+- Handoff de status atualizado.
+
 ## [2.3.9] - 2026-06-22
 
 ### Terminologia do status do Firewall
