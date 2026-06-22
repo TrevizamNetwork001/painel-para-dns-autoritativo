@@ -2,6 +2,16 @@
 
 Historico de alteracoes do Painel DNS Trevizam Network.
 
+## [2.3.6] - 2026-06-22
+
+### Ícones das ações rápidas do Firewall
+
+- Substituídos caracteres e emojis por ícones SVG lineares equivalentes aos
+  apresentados na imagem de referência `esse.png`.
+- Aplicadas as cores visuais de cada ação: azul, laranja, roxo e verde.
+- Ajustado o botão Validar para ocupar a mesma largura dos demais atalhos.
+- Mantidas inalteradas as ações, os modais e a lógica do firewall.
+
 ## [2.3.5] - 2026-06-21
 
 ### Ajuste visual final do Firewall conforme `esse.png`
