@@ -2,6 +2,18 @@
 
 Historico de alteracoes do Painel DNS Trevizam Network.
 
+## [2.3.12] - 2026-06-22
+
+### Portas Administrativas alinhadas à referência
+
+- Aplicado ao card Portas Administrativas o mesmo padrão visual de Acesso
+  Administrativo.
+- Removidos o badge e o botão duplicado do cabeçalho.
+- Ajustados tabela, protocolo e ações Editar/Remover com ícones.
+- Adicionado rodapé com total de portas e paginação visual.
+- Handoff disponível em
+  `HANDOFF_PORTAS_ADMINISTRATIVAS_FIREWALL_2026-06-22.md`.
+
 ## [2.3.11] - 2026-06-22
 
 ### Acesso Administrativo alinhado à referência

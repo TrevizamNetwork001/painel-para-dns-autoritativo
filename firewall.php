@@ -1543,6 +1543,7 @@ body{background:#080d18}
 .main-layout{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:13px;align-items:start}.main-layout>.access-card{grid-column:1}.main-layout>.admin-ports-card{grid-column:2}.main-layout>.public-ports-card{grid-column:1}.main-layout>.side-status{grid-column:2;display:grid;grid-template-columns:minmax(0,.72fr) minmax(0,1.28fr);gap:13px;align-items:stretch}
 .access-card{padding:14px}.access-card .panel-header{align-items:center}.access-card .header-actions{flex-wrap:nowrap}.access-search{width:min(250px,100%)}.access-table tbody[data-family-section]+tbody[data-family-section] tr:first-child td{border-top:1px solid #25344a}
 .access-card{padding:16px}.access-card .panel-header{margin-bottom:14px}.access-card .panel-header h2{font-size:16px}.access-card .panel-header p{font-size:10px}.access-search-wrap{position:relative;width:min(250px,100%)}.access-search-wrap svg{position:absolute;left:10px;top:50%;width:15px;height:15px;transform:translateY(-50%);fill:none;stroke:#94a3b8;stroke-width:1.8;stroke-linecap:round}.access-search{width:100%;min-height:34px;padding-left:32px;background:#091321}.access-card .table-wrap{border:0;border-radius:0}.access-table thead{border-bottom:1px solid #213047}.access-table th{padding:8px 6px;background:transparent;color:#8493a8}.access-table td{padding:9px 6px}.access-table tbody tr{background:transparent}.access-table tbody tr:hover{background:#0d192b}.access-card .type-badge{border-color:#075eaa;background:#073a6b;color:#38bdf8}.access-card .text-action{display:inline-flex;align-items:center;gap:5px;padding:4px 8px;border-color:#075eaa;background:transparent;color:#2196f3}.access-card .text-action.remove{border-color:#7f1d1d;color:#ef4444}.access-card .text-action svg{width:11px;height:11px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}.access-footer{display:flex;align-items:center;justify-content:space-between;gap:12px;padding-top:10px;color:#8190a5;font-size:10px}.access-pagination{display:flex;align-items:center;gap:5px}.page-chip{display:grid;place-items:center;min-width:28px;height:28px;padding:0 8px;border:1px solid #263852;border-radius:6px;background:#0a1423;color:#8fa0b6}.page-chip.current{border-color:#168cff;background:#168cff;color:#fff;box-shadow:0 0 12px #168cff3d}.page-chip[disabled]{opacity:.55}
+.admin-ports-card{padding:16px}.admin-ports-card .panel-header{margin-bottom:14px}.admin-ports-card .panel-header h2{font-size:16px}.admin-ports-card .panel-header p{font-size:10px}.admin-ports-card .table-wrap{border:0;border-radius:0}.admin-ports-card .ports-table thead{border-bottom:1px solid #213047}.admin-ports-card .ports-table th{padding:8px 6px;background:transparent;color:#8493a8}.admin-ports-card .ports-table td{padding:9px 6px}.admin-ports-card .ports-table tbody tr{background:transparent}.admin-ports-card .ports-table tbody tr:hover{background:#0d192b}.admin-ports-card .type-badge{border-color:#075eaa;background:#073a6b;color:#38bdf8}.admin-ports-card .text-action{display:inline-flex;align-items:center;gap:5px;padding:4px 8px;border-color:#075eaa;background:transparent;color:#2196f3}.admin-ports-card .text-action.remove{border-color:#7f1d1d;color:#ef4444}.admin-ports-card .text-action svg{width:11px;height:11px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
 .table-wrap{overflow-x:hidden}.access-table th:first-child,.access-table td:first-child{width:11%}.access-table th:nth-child(2),.access-table td:nth-child(2){width:25%}.access-table th:nth-child(3),.access-table td:nth-child(3){width:auto}.access-table th:nth-child(4),.access-table td:nth-child(4){width:18%}.access-table th:last-child,.access-table td:last-child{width:22%}
 .ports-table th:first-child,.ports-table td:first-child{width:11%}.ports-table th:nth-child(2),.ports-table td:nth-child(2){width:16%}.ports-table th:nth-child(3),.ports-table td:nth-child(3){width:19%}.ports-table th:nth-child(4),.ports-table td:nth-child(4){width:auto}.ports-table th:last-child,.ports-table td:last-child{width:24%}
 .cell-description{overflow:hidden;white-space:nowrap;text-overflow:ellipsis}.audit-action{display:-webkit-box;overflow:hidden;-webkit-line-clamp:2;-webkit-box-orient:vertical}.audit-list .audit-item:nth-child(n+5){display:none}
@@ -1692,10 +1693,6 @@ body{background:#080d18}
         <section class="panel admin-ports-card">
                 <header class="panel-header">
                     <div><h2>Portas Administrativas</h2><p>Portas restritas aos IPs autorizados.</p></div>
-                    <div class="header-actions">
-                        <span class="family-badge">Admin</span>
-                        <button class="button small" type="button" data-open-dialog="add-admin-port-modal">Adicionar porta</button>
-                    </div>
                 </header>
                 <div class="table-wrap"><table class="ports-table">
                     <thead><tr><th>Porta</th><th>Protocolo</th><th>Serviço</th><th>Descrição</th><th>Ações</th></tr></thead>
@@ -1707,15 +1704,22 @@ body{background:#080d18}
                                 <td><?= htmlspecialchars($port['servico']) ?></td>
                                 <td class="cell-description" title="<?= htmlspecialchars($port['descricao'], ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars($port['descricao']) ?></td>
                                 <td><div class="row-actions">
-                                    <button class="text-action" type="button" data-open-dialog="edit-port-modal" data-record-id="<?= (int) $port['id'] ?>" data-record-scope="admin" data-record-port="<?= (int) $port['porta'] ?>" data-record-protocol="<?= htmlspecialchars($port['protocolo'], ENT_QUOTES, 'UTF-8') ?>" data-record-service="<?= htmlspecialchars($port['servico'], ENT_QUOTES, 'UTF-8') ?>" data-record-description="<?= htmlspecialchars($port['descricao'], ENT_QUOTES, 'UTF-8') ?>">Editar</button>
-                                    <button class="text-action remove" type="button" data-open-dialog="remove-port-modal" data-record-id="<?= (int) $port['id'] ?>" data-record-scope="administrativa" data-record-value="<?= (int) $port['porta'] ?>">Remover</button>
+                                    <button class="text-action" type="button" data-open-dialog="edit-port-modal" data-record-id="<?= (int) $port['id'] ?>" data-record-scope="admin" data-record-port="<?= (int) $port['porta'] ?>" data-record-protocol="<?= htmlspecialchars($port['protocolo'], ENT_QUOTES, 'UTF-8') ?>" data-record-service="<?= htmlspecialchars($port['servico'], ENT_QUOTES, 'UTF-8') ?>" data-record-description="<?= htmlspecialchars($port['descricao'], ENT_QUOTES, 'UTF-8') ?>"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m4 20 4.5-1 10-10a2.1 2.1 0 0 0-3-3l-10 10zM14 7l3 3"/></svg>Editar</button>
+                                    <button class="text-action remove" type="button" data-open-dialog="remove-port-modal" data-record-id="<?= (int) $port['id'] ?>" data-record-scope="administrativa" data-record-value="<?= (int) $port['porta'] ?>"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M7 7l1 13h8l1-13M10 11v5M14 11v5"/></svg>Remover</button>
                                 </div></td>
                             </tr>
                         <?php endforeach; ?>
                         <?php if (!$adminPorts): ?><tr><td class="empty-state" colspan="5">Nenhuma porta administrativa cadastrada.</td></tr><?php endif; ?>
                     </tbody>
                 </table></div>
-                <div class="record-count"><?= count($adminPorts) ?> <?= count($adminPorts) === 1 ? 'porta administrativa' : 'portas administrativas' ?></div>
+                <footer class="access-footer">
+                    <span>Mostrando <?= count($adminPorts) > 0 ? '1 a ' . count($adminPorts) : '0' ?> de <?= count($adminPorts) ?> portas</span>
+                    <nav class="access-pagination" aria-label="Paginação das portas administrativas">
+                        <button class="page-chip" type="button" disabled aria-label="Página anterior">‹</button>
+                        <span class="page-chip current" aria-current="page">1</span>
+                        <button class="page-chip" type="button" disabled aria-label="Próxima página">›</button>
+                    </nav>
+                </footer>
         </section>
 
         <section class="panel public-ports-card">
