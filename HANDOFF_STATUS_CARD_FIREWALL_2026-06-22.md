@@ -11,7 +11,8 @@ o estado operacional:
 - `Inativo`: nenhum estado aplicado ou último estado diferente de `APLICADO`.
 
 O texto auxiliar passa a ser `Configuração em uso` ou `Firewall inativo`.
-Quando estiver Inativo, o ícone utiliza destaque vermelho.
+O ícone permanece verde nos estados Ativo e Inativo, conforme o padrão visual
+do card Firewall na referência.
 
 ## Escopo preservado
 

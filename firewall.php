@@ -1379,7 +1379,7 @@ $summary = [
     ['shield', 'green', 'IPv6 Liberados', (string) $ipv6Count, 'Redes e endereços', false],
     ['lock', 'orange', 'Portas Admin', (string) count($adminPorts), 'Acesso restrito', false],
     ['globe', 'purple', 'Portas Públicas', (string) count($publicPorts), 'Acesso externo', false],
-    ['firewall', $firewallAtivo ? 'green' : 'off', 'Firewall', $firewallAtivo ? 'Ativo' : 'Inativo', $firewallAtivo ? 'Configuração em uso' : 'Firewall inativo', $firewallAtivo],
+    ['firewall', 'green', 'Firewall', $firewallAtivo ? 'Ativo' : 'Inativo', $firewallAtivo ? 'Configuração em uso' : 'Firewall inativo', $firewallAtivo],
 ];
 $quickActions = [
     ['plus', 'blue', 'Adicionar IP', 'Autorizar endereço', 'add-ip-modal'],
