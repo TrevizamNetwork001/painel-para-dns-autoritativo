@@ -1,0 +1,39 @@
+#!/bin/sh
+
+set -eu
+
+ARQUIVO=${1:-}
+NFT=/usr/sbin/nft
+
+falhar() {
+    printf '%s\n' "Validação recusada: $1" >&2
+    exit 2
+}
+
+[ "$#" -eq 1 ] || falhar "informe somente o arquivo temporário."
+[ -x "$NFT" ] || falhar "nft não está disponível."
+
+case "$ARQUIVO" in
+    /tmp/fw-preview-*) ;;
+    *) falhar "caminho temporário inválido." ;;
+esac
+
+[ -f "$ARQUIVO" ] || falhar "arquivo inexistente ou não regular."
+[ ! -L "$ARQUIVO" ] || falhar "links simbólicos não são permitidos."
+[ "$(stat -c %u "$ARQUIVO")" = "33" ] || falhar "proprietário inválido."
+[ "$(stat -c %a "$ARQUIVO")" = "600" ] || falhar "permissões inválidas."
+
+TAMANHO=$(stat -c %s "$ARQUIVO")
+[ "$TAMANHO" -gt 0 ] || falhar "arquivo vazio."
+[ "$TAMANHO" -le 1048576 ] || falhar "arquivo excede o limite."
+
+if grep -Eiq '(^|[[:space:];])(include|import)[[:space:]]' "$ARQUIVO"; then
+    falhar "diretivas externas não são permitidas."
+fi
+
+COPIA=$(mktemp /tmp/fw-root-preview-XXXXXX)
+trap 'rm -f "$COPIA"' EXIT HUP INT TERM
+chmod 600 "$COPIA"
+cp -- "$ARQUIVO" "$COPIA"
+
+"$NFT" -c -f "$COPIA"
