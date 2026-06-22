@@ -419,7 +419,45 @@ function firewall_executar_validacao(string $regras, int $timeout = 8): array
 {
     $arquivo = firewall_criar_arquivo_temporario($regras);
     try {
-        return firewall_executar_nft(['-c', '-f', $arquivo], $timeout, [$arquivo]);
+        $wrapper = '/usr/local/sbin/painel-firewall-validar';
+        if (!is_file($wrapper) || !is_executable($wrapper)) {
+            throw new RuntimeException('O validador seguro do firewall não está instalado no servidor.');
+        }
+
+        $comandoValidacao = [$wrapper, $arquivo];
+        $euid = function_exists('posix_geteuid') ? posix_geteuid() : null;
+        if ($euid !== null && $euid !== 0 && is_executable('/usr/bin/sudo')) {
+            $comandoValidacao = array_merge(['/usr/bin/sudo', '-n'], $comandoValidacao);
+        }
+
+        $comando = array_merge(['/usr/bin/timeout', (string) $timeout], $comandoValidacao);
+        $descritores = [
+            0 => ['pipe', 'r'],
+            1 => ['pipe', 'w'],
+            2 => ['pipe', 'w'],
+        ];
+        $inicio = microtime(true);
+        $processo = proc_open($comando, $descritores, $pipes);
+        if (!is_resource($processo)) {
+            throw new RuntimeException('Não foi possível iniciar o validador seguro do firewall.');
+        }
+        fclose($pipes[0]);
+        $stdout = (string) stream_get_contents($pipes[1]);
+        $stderr = (string) stream_get_contents($pipes[2]);
+        fclose($pipes[1]);
+        fclose($pipes[2]);
+        $codigo = proc_close($processo);
+        $saida = trim($stdout . ($stderr !== '' ? "\n" . $stderr : ''));
+        $saida = str_replace($arquivo, '[arquivo temporário]', $saida);
+
+        return [
+            'ok' => $codigo === 0,
+            'codigo' => $codigo,
+            'saida' => firewall_limpar_saida_tecnica($saida),
+            'stdout' => $stdout,
+            'stderr' => $stderr,
+            'duracao_ms' => (int) round((microtime(true) - $inicio) * 1000),
+        ];
     } finally {
         if (is_file($arquivo) && !@unlink($arquivo)) {
             error_log('Firewall - não foi possível remover arquivo temporário de validação.');

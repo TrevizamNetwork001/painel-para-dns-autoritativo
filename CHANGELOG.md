@@ -2,6 +2,20 @@
 
 Historico de alteracoes do Painel DNS Trevizam Network.
 
+## [2.3.14] - 2026-06-22
+
+### Permissão segura para validação nftables
+
+- Adicionado wrapper restrito para executar somente `nft -c -f` em arquivos
+  temporários de prévia criados pelo painel.
+- O wrapper valida caminho, proprietário, permissões, tamanho e bloqueia
+  diretivas externas antes da checagem.
+- O painel passou a usar o wrapper somente na ação Validar.
+- Adicionada regra `sudoers` específica para o usuário `www-data`.
+- Nenhuma permissão genérica de aplicação de regras foi concedida.
+- Handoff disponível em
+  `HANDOFF_VALIDACAO_NFT_FIREWALL_2026-06-22.md`.
+
 ## [2.3.13] - 2026-06-22
 
 ### Portas Públicas, Validação e Auditoria alinhadas à referência
