@@ -2,6 +2,18 @@
 
 Historico de alteracoes do Painel DNS Trevizam Network.
 
+## [2.3.19] - 2026-06-22
+
+### Correção pontual dos botões cortados
+
+- Substituídas larguras percentuais por medidas fixas na coluna Ações.
+- Impedido o encolhimento dos botões Editar e Remover.
+- Compactados padding, gap, fonte e ícones somente nas ações das tabelas.
+- Ajustadas as colunas auxiliares para preservar espaço de Descrição.
+- Nenhuma lógica ou estrutura geral foi alterada.
+- Handoff disponível em
+  `HANDOFF_CORRECAO_BOTOES_CORTADOS_FIREWALL_2026-06-22.md`.
+
 ## [2.3.18] - 2026-06-22
 
 ### Ajuste final de alinhamento das tabelas
