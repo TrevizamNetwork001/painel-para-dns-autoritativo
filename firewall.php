@@ -3,6 +3,10 @@ require_once __DIR__ . '/includes/auth.php';
 require_once __DIR__ . '/includes/security.php';
 require_once __DIR__ . '/includes/audit.php';
 
+if (!ini_get('date.timezone') || date_default_timezone_get() === 'UTC') {
+    date_default_timezone_set('America/Sao_Paulo');
+}
+
 const FIREWALL_TABELA_PREVIA = 'painel_firewall_preview';
 const FIREWALL_TABELA_GERENCIADA = 'painel_firewall';
 const FIREWALL_CONFIRMACAO_APLICAR = 'APLICAR FIREWALL';
@@ -37,6 +41,41 @@ function firewall_redirecionar(string $tipo, string $mensagem): never
     $_SESSION['firewall_flash'] = ['tipo' => $tipo, 'mensagem' => $mensagem];
     header('Location: firewall.php');
     exit;
+}
+
+function firewall_timezone(): DateTimeZone
+{
+    static $timezone = null;
+    if ($timezone instanceof DateTimeZone) {
+        return $timezone;
+    }
+
+    $nome = date_default_timezone_get() ?: 'UTC';
+    try {
+        $timezone = new DateTimeZone($nome);
+    } catch (Throwable) {
+        $timezone = new DateTimeZone('UTC');
+    }
+
+    return $timezone;
+}
+
+function firewall_timestamp_para_datetime(?string $valor): ?DateTimeImmutable
+{
+    $valor = trim((string) $valor);
+    if ($valor === '') {
+        return null;
+    }
+
+    try {
+        if (preg_match('/(?:Z|[+-]\d{2}:\d{2})$/', $valor) || str_contains($valor, 'T')) {
+            return (new DateTimeImmutable($valor))->setTimezone(firewall_timezone());
+        }
+
+        return (new DateTimeImmutable($valor, new DateTimeZone('UTC')))->setTimezone(firewall_timezone());
+    } catch (Throwable) {
+        return null;
+    }
 }
 
 function firewall_validar_csrf(string $acao, string $alvo, string $detalhesAuditoria = ''): void
@@ -1478,7 +1517,7 @@ button,input,a{font:inherit}button{color:inherit}a{color:inherit;text-decoration
 .summary-label{display:block;color:var(--muted);font-size:9px;letter-spacing:.04em;text-transform:uppercase}
 .summary-value{display:block;margin-top:4px;color:var(--accent);font-size:18px;font-weight:800;line-height:1.1}.summary-value.status{color:var(--ok);font-size:15px}
 .summary-detail{display:block;margin-top:3px;overflow:hidden;color:var(--subtle);font-size:9px;white-space:nowrap;text-overflow:ellipsis}
-.panel{padding:15px;border:1px solid var(--line);border-radius:11px;background:linear-gradient(160deg,#0d182a,var(--panel));min-width:0}
+.panel{padding:15px;border:1px solid var(--line);border-radius:11px;background:linear-gradient(160deg,#0d182a,var(--panel));min-width:0;box-sizing:border-box}
 .quick-panel{margin-bottom:12px;padding:10px 12px}
 .quick-panel .panel-header{margin-bottom:8px}.quick-panel .panel-header p{display:none}
 .panel-header{display:flex;align-items:flex-start;justify-content:space-between;gap:14px;margin-bottom:12px}.panel-header h2{margin:0;color:#fff;font-size:16px}
@@ -1493,14 +1532,14 @@ button,input,a{font:inherit}button{color:inherit}a{color:inherit;text-decoration
 .stack{display:grid;gap:12px}
 .search{width:min(220px,100%);min-height:32px;padding:6px 9px;border:1px solid var(--line2);border-radius:8px;background:var(--deep);color:#fff;font-size:11px;outline:none}
 .search::placeholder{color:var(--subtle)}.search:focus{border-color:var(--accent);box-shadow:0 0 0 3px #38bdf81a}
-.table-wrap{overflow-x:auto;border:1px solid var(--line);border-radius:9px}table{width:100%;border-collapse:collapse;table-layout:fixed}
+.table-wrap{overflow-x:auto;border:1px solid var(--line);border-radius:9px}table{width:100%;border-collapse:collapse;table-layout:fixed}.access-table,.ports-table{table-layout:auto}
 th,td{padding:8px 9px;border-bottom:1px solid var(--line);text-align:left;font-size:11px;overflow-wrap:anywhere}th{background:var(--deep);color:var(--muted);font-size:8px;letter-spacing:.05em;text-transform:uppercase}
 th:first-child,td:first-child{width:12%}th:nth-child(2),td:nth-child(2){width:22%}th:nth-child(4),td:nth-child(4){width:18%}th:last-child,td:last-child{width:25%}
 tr:last-child td{border-bottom:0}tbody tr{background:#02061766}tbody tr:hover{background:#0f172ab8}
 .type-badge{display:inline-flex;padding:3px 6px;border:1px solid #38bdf838;border-radius:999px;background:#0e74901f;color:#bae6fd;font-size:9px;font-weight:700}
 .family-badge{display:inline-flex;padding:3px 7px;border:1px solid var(--line2);border-radius:999px;background:#111827;color:#cbd5e1;font-size:9px;font-weight:700}
-.strong{color:#fff;font-weight:700}.row-actions{display:flex;align-items:center;gap:4px;white-space:nowrap}
-.text-action{padding:4px 6px;border:1px solid var(--line2);border-radius:6px;background:#101827;color:#cfeeff;cursor:pointer;font-size:9px;font-weight:700}.text-action:hover,.text-action:focus{border-color:var(--accent);outline:none}.text-action.remove{color:#fecaca}.text-action.remove:hover,.text-action.remove:focus{border-color:var(--danger)}
+.strong{color:#fff;font-weight:700}.row-actions{display:flex;align-items:center;justify-content:flex-end;gap:6px;white-space:nowrap}
+.text-action{display:inline-flex;align-items:center;justify-content:center;flex:0 0 auto;min-width:max-content;padding:4px 8px;border:1px solid var(--line2);border-radius:6px;background:#101827;color:#cfeeff;cursor:pointer;font-size:9px;font-weight:700;white-space:nowrap}.text-action:hover,.text-action:focus{border-color:var(--accent);outline:none}.text-action.remove{color:#fecaca}.text-action.remove:hover,.text-action.remove:focus{border-color:var(--danger)}
 .validation{display:flex;gap:10px;min-height:0;padding:11px;border:1px solid #22c55e4d;border-radius:9px;background:linear-gradient(135deg,#14532d38,#07170e)}
 .validation.error{border-color:#ef44444d;background:linear-gradient(135deg,#7f1d1d38,#170707)}.validation.pending{border-color:#33465f;background:linear-gradient(135deg,#172236,#080d18)}
 .validation-icon{display:inline-flex;align-items:center;justify-content:center;flex:0 0 25px;width:25px;height:25px;border-radius:50%;background:#14532d;color:#bbf7d0;font-size:11px;font-weight:800}
@@ -1526,12 +1565,50 @@ tr:last-child td{border-bottom:0}tbody tr{background:#02061766}tbody tr:hover{ba
 .modal-header h2{margin:0;color:#fff;font-size:19px}.modal-header p{margin:5px 0 0;color:var(--muted);font-size:12px;line-height:1.45}
 .modal-close{padding:7px 9px;border:1px solid var(--line2);border-radius:8px;background:var(--deep);color:#cbd5e1;cursor:pointer}.modal-close:hover,.modal-close:focus{border-color:var(--accent);outline:none}
 .modal-body{padding:20px}.modal-form{display:grid;gap:14px}.form-row{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.modal.step-modal{width:min(585px,calc(100vw - 28px));border-color:#284465;box-shadow:0 28px 80px #020617d0}
+.modal.step-modal .modal-header{padding:18px 20px 12px;background:linear-gradient(180deg,#0d1b31,#0b1424)}
+.modal.step-modal .modal-body{padding:14px 20px 16px}
+.modal-header-badge{display:flex;flex-direction:column;align-items:flex-end;gap:8px;min-width:146px;padding-top:2px}
+.modal-header-badge .mini-pill{display:inline-flex;align-items:center;gap:6px;padding:7px 12px;border:1px solid #1f6a58;border-radius:999px;background:#071f1a;color:#86efac;font-size:10px;font-weight:700;white-space:nowrap}
+.modal-header-badge .mini-pill::before{content:"";display:block;width:7px;height:7px;border-radius:50%;background:#22c55e;box-shadow:0 0 0 4px #16a34a1f}
+.modal-header-badge .mini-pill.danger{border-color:#7f1d1d;background:#2b1010;color:#fecaca}
+.modal-header-badge .mini-pill.danger::before{background:#ef4444;box-shadow:0 0 0 4px #ef44441f}
+.auto-validate{display:flex;align-items:center;gap:10px;padding:8px 12px;border:1px solid #223453;border-radius:12px;background:#08111e;color:#cbd5e1;cursor:pointer}
+.auto-validate input{position:absolute;opacity:0;pointer-events:none}
+.auto-switch{position:relative;flex:0 0 auto;width:38px;height:22px;margin-top:1px;border:1px solid #33465f;border-radius:999px;background:#1b2a3f;box-shadow:inset 0 0 0 1px #0b1424}
+.auto-switch::after{content:"";position:absolute;top:2px;left:2px;width:16px;height:16px;border-radius:50%;background:#e2e8f0;box-shadow:0 1px 4px #0006;transition:transform .18s ease,background .18s ease}
+.auto-validate input:checked + .auto-switch{border-color:#168cff;background:#168cff}
+.auto-validate input:checked + .auto-switch::after{transform:translateX(16px);background:#fff}
+.auto-copy strong{display:block;color:#fff;font-size:12px}
+.auto-copy small{display:block;margin-top:3px;color:#9fb0c4;font-size:10px;line-height:1.35}
+.step-help{display:block;color:var(--subtle);font-size:11px;line-height:1.45}
+.review-box{padding:11px 12px 12px;border:1px solid #223453;border-radius:12px;background:#07111e}
+.review-box.is-hidden{display:none}
+.review-top{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.review-head{display:flex;align-items:center;gap:10px;min-width:0;flex:1}
+.review-head > div{display:flex;flex-direction:column;justify-content:center;gap:0}
+.review-icon{display:grid;place-items:center;width:28px;height:28px;border-radius:9px;background:#0a3b68;color:#38bdf8;box-shadow:inset 0 0 0 1px #14527f;flex:0 0 auto}
+.review-icon svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.review-head strong{display:block;margin:0;color:#fff;font-size:12px;line-height:1.05}
+.review-kicker{display:block;margin-top:1px;color:#93c5fd;font-size:10px;line-height:1.05}
+.review-inline{display:flex;flex-wrap:nowrap;align-items:center;justify-content:flex-end;gap:7px;color:#cbd5e1;font-size:11px;line-height:1.05;white-space:nowrap;flex:0 0 auto;min-width:max-content;align-self:center}
+.review-inline span{display:inline-flex;align-items:center;gap:4px;white-space:nowrap}
+.review-inline span+span::before{content:"•";margin-right:2px;color:#5b6f86}
+.review-inline strong{display:inline;margin:0;color:#fff}
+.review-note{margin:6px 0 0;color:#9fb0c4;font-size:10px;line-height:1.35}
+.step-error{display:none;padding:10px 12px;border:1px solid #b91c1c;border-radius:10px;background:#3a1010;color:#fecaca;font-size:11px;line-height:1.45}
+.step-error.show{display:block}
+.modal-actions.step-actions{display:flex;justify-content:flex-end;gap:9px;padding-top:4px}
+.modal-actions.step-actions .button{min-width:112px}
+.modal-actions.step-actions .button.secondary{border-color:#2b3b54;background:#0f172a;color:#dbeafe}
+.modal-actions.step-actions .button.primary{background:linear-gradient(180deg,#2563eb,#1d4ed8);border-color:#3b82f6}
+.modal-actions.step-actions .button.primary:hover,.modal-actions.step-actions .button.primary:focus{background:linear-gradient(180deg,#3b82f6,#2563eb)}
 .field label{display:block;margin-bottom:6px;color:#cbd5e1;font-size:12px;font-weight:700}.field input,.field select{width:100%;min-height:40px;padding:9px 11px;border:1px solid var(--line2);border-radius:9px;background:var(--deep);color:#fff;outline:none}
 .field input:focus,.field select:focus{border-color:var(--accent);box-shadow:0 0 0 3px #38bdf81a}.field-help{display:block;margin-top:5px;color:var(--subtle);font-size:11px}
 .button.small{min-height:30px;padding:6px 9px;font-size:10px}
 .modal-warning{padding:11px 12px;border:1px solid #ef44444d;border-radius:9px;background:#7f1d1d38;color:#fecaca;font-size:12px;line-height:1.45}
 .modal-actions{display:flex;justify-content:flex-end;gap:9px;padding-top:4px}.button{min-height:39px;padding:9px 13px;border:1px solid var(--line2);border-radius:9px;background:#172236;color:#e5edf7;font-weight:700;cursor:pointer}.button:hover,.button:focus{border-color:var(--accent);outline:none}.button.primary{border-color:#0369a1;background:#0369a1;color:#fff}.button.danger{border-color:#991b1b;background:#7f1d1d;color:#fff}
-.ui-toast{position:fixed;right:20px;bottom:20px;z-index:20;max-width:min(380px,calc(100vw - 40px));padding:12px 14px;border:1px solid var(--line2);border-radius:11px;background:#111827;color:#cbd5e1;box-shadow:0 18px 45px #0006;font-size:13px}
+.ui-toast{position:fixed;right:20px;top:20px;z-index:20;max-width:min(380px,calc(100vw - 40px));padding:12px 14px;border:1px solid var(--line2);border-radius:11px;background:#111827;color:#cbd5e1;box-shadow:0 18px 45px #0006;font-size:13px}
 .ui-toast.success{border-color:#22c55e4d;background:#14532d52;color:#bbf7d0}
 .ui-toast.error{border-color:#ef44444d;background:#7f1d1d52;color:#fecaca}
 .ui-toast[hidden],.empty-row[hidden]{display:none}.empty-row td{padding:22px 14px;color:var(--muted);text-align:center}
@@ -1584,16 +1661,17 @@ body{background:#080d18}
 .quick-action:has(.icon-backup) strong{grid-column:2;grid-row:1;align-self:end;text-align:left}
 .quick-action:has(.icon-backup) small{grid-column:2;grid-row:2;align-self:start;text-align:left}
 .quick-icon.blue{color:#1797ff}.quick-icon.orange{color:#f59e0b}.quick-icon.purple{color:#9b7cff}.quick-icon.green{color:#16d982}
-.main-layout{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:13px;align-items:start}.main-layout>.access-card{grid-column:1}.main-layout>.admin-ports-card{grid-column:2}.main-layout>.public-ports-card{grid-column:1}.main-layout>.side-status{grid-column:2;display:grid;grid-template-columns:minmax(0,.72fr) minmax(0,1.28fr);gap:13px;align-items:stretch}
+.main-layout{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:13px;align-items:stretch;justify-items:stretch;align-content:start}.main-layout>.access-card{grid-column:1}.main-layout>.admin-ports-card{grid-column:2}.main-layout>.public-ports-card{grid-column:1}.main-layout>.side-status{grid-column:2;display:grid;grid-template-columns:minmax(0,.72fr) minmax(0,1.28fr);gap:13px;align-items:stretch;justify-items:stretch}
+.main-layout>.access-card,.main-layout>.admin-ports-card,.main-layout>.public-ports-card,.side-status>.panel{display:flex;flex-direction:column;min-height:0;width:100%;height:100%;margin:0;justify-self:stretch;align-self:stretch;box-sizing:border-box}
+.main-layout>.access-card,.main-layout>.admin-ports-card,.main-layout>.public-ports-card{overflow:hidden}
 .access-card{padding:14px}.access-card .panel-header{align-items:center}.access-card .header-actions{flex-wrap:nowrap}.access-search{width:min(250px,100%)}.access-table tbody[data-family-section]+tbody[data-family-section] tr:first-child td{border-top:1px solid #25344a}
-.access-card{padding:16px}.access-card .panel-header{margin-bottom:14px}.access-card .panel-header h2{font-size:16px}.access-card .panel-header p{font-size:10px}.access-search-wrap{position:relative;width:min(250px,100%)}.access-search-wrap svg{position:absolute;left:10px;top:50%;width:15px;height:15px;transform:translateY(-50%);fill:none;stroke:#94a3b8;stroke-width:1.8;stroke-linecap:round}.access-search{width:100%;min-height:34px;padding-left:32px;background:#091321}.access-card .table-wrap{border:0;border-radius:0}.access-table thead{border-bottom:1px solid #213047}.access-table th{padding:8px 6px;background:transparent;color:#8493a8}.access-table td{padding:9px 6px}.access-table tbody tr{background:transparent}.access-table tbody tr:hover{background:#0d192b}.access-card .type-badge{border-color:#075eaa;background:#073a6b;color:#38bdf8}.access-card .text-action{display:inline-flex;align-items:center;gap:5px;padding:4px 8px;border-color:#075eaa;background:transparent;color:#2196f3}.access-card .text-action.remove{border-color:#7f1d1d;color:#ef4444}.access-card .text-action svg{width:11px;height:11px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}.access-footer{display:flex;align-items:center;justify-content:space-between;gap:12px;padding-top:10px;color:#8190a5;font-size:10px}.access-pagination{display:flex;align-items:center;gap:5px}.page-chip{display:grid;place-items:center;min-width:28px;height:28px;padding:0 8px;border:1px solid #263852;border-radius:6px;background:#0a1423;color:#8fa0b6}.page-chip.current{border-color:#168cff;background:#168cff;color:#fff;box-shadow:0 0 12px #168cff3d}.page-chip[disabled]{opacity:.55}
-.admin-ports-card{padding:16px}.admin-ports-card .panel-header{margin-bottom:14px}.admin-ports-card .panel-header h2{font-size:16px}.admin-ports-card .panel-header p{font-size:10px}.admin-ports-card .table-wrap{border:0;border-radius:0}.admin-ports-card .ports-table thead{border-bottom:1px solid #213047}.admin-ports-card .ports-table th{padding:8px 6px;background:transparent;color:#8493a8}.admin-ports-card .ports-table td{padding:9px 6px}.admin-ports-card .ports-table tbody tr{background:transparent}.admin-ports-card .ports-table tbody tr:hover{background:#0d192b}.admin-ports-card .type-badge{border-color:#075eaa;background:#073a6b;color:#38bdf8}.admin-ports-card .text-action{display:inline-flex;align-items:center;gap:5px;padding:4px 8px;border-color:#075eaa;background:transparent;color:#2196f3}.admin-ports-card .text-action.remove{border-color:#7f1d1d;color:#ef4444}.admin-ports-card .text-action svg{width:11px;height:11px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
-.public-ports-card{padding:16px}.public-ports-card .panel-header{margin-bottom:14px}.public-ports-card .panel-header h2{font-size:16px}.public-ports-card .panel-header p{font-size:10px}.public-ports-card .table-wrap{border:0;border-radius:0}.public-ports-card .ports-table thead{border-bottom:1px solid #213047}.public-ports-card .ports-table th{padding:8px 6px;background:transparent;color:#8493a8}.public-ports-card .ports-table td{padding:9px 6px}.public-ports-card .ports-table tbody tr{background:transparent}.public-ports-card .ports-table tbody tr:hover{background:#0d192b}.public-ports-card .type-badge{border-color:#6d4bb8;background:#2f2150;color:#c4b5fd}.public-ports-card .text-action{display:inline-flex;align-items:center;gap:5px;padding:4px 8px;border-color:#075eaa;background:transparent;color:#2196f3}.public-ports-card .text-action.remove{border-color:#7f1d1d;color:#ef4444}.public-ports-card .text-action svg{width:11px;height:11px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.access-card{padding:16px}.access-card .panel-header{margin-bottom:14px}.access-card .panel-header h2{font-size:16px}.access-card .panel-header p{font-size:10px}.access-search-wrap{position:relative;width:min(250px,100%)}.access-search-wrap svg{position:absolute;left:10px;top:50%;width:15px;height:15px;transform:translateY(-50%);fill:none;stroke:#94a3b8;stroke-width:1.8;stroke-linecap:round}.access-search{width:100%;min-height:34px;padding-left:32px;background:#091321}.access-card .table-wrap{border:0;border-radius:0;flex:1 1 auto;min-height:0}.access-table thead{border-bottom:1px solid #213047}.access-table th{padding:8px 6px;background:transparent;color:#8493a8}.access-table td{padding:9px 6px}.access-table tbody tr{background:transparent}.access-table tbody tr:hover{background:#0d192b}.access-card .type-badge{border-color:#075eaa;background:#073a6b;color:#38bdf8}.access-card .text-action{display:inline-flex;align-items:center;gap:5px;padding:4px 8px;border-color:#075eaa;background:transparent;color:#2196f3}.access-card .text-action.remove{border-color:#7f1d1d;color:#ef4444}.access-card .text-action svg{width:11px;height:11px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}.access-footer{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:auto;padding-top:10px;color:#8190a5;font-size:10px}.access-pagination{display:flex;align-items:center;gap:5px}.page-chip{display:grid;place-items:center;min-width:28px;height:28px;padding:0 8px;border:1px solid #263852;border-radius:6px;background:#0a1423;color:#8fa0b6}.page-chip.current{border-color:#168cff;background:#168cff;color:#fff;box-shadow:0 0 12px #168cff3d}.page-chip[disabled]{opacity:.55}
+.admin-ports-card{padding:16px}.admin-ports-card .panel-header{margin-bottom:14px}.admin-ports-card .panel-header h2{font-size:16px}.admin-ports-card .panel-header p{font-size:10px}.admin-ports-card .table-wrap{border:0;border-radius:0;flex:1 1 auto;min-height:0}.admin-ports-card .ports-table thead{border-bottom:1px solid #213047}.admin-ports-card .ports-table th{padding:8px 6px;background:transparent;color:#8493a8}.admin-ports-card .ports-table td{padding:9px 6px}.admin-ports-card .ports-table tbody tr{background:transparent}.admin-ports-card .ports-table tbody tr:hover{background:#0d192b}.admin-ports-card .type-badge{border-color:#075eaa;background:#073a6b;color:#38bdf8}.admin-ports-card .text-action{display:inline-flex;align-items:center;gap:5px;padding:4px 8px;border-color:#075eaa;background:transparent;color:#2196f3}.admin-ports-card .text-action.remove{border-color:#7f1d1d;color:#ef4444}.admin-ports-card .text-action svg{width:11px;height:11px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.public-ports-card{padding:16px}.public-ports-card .panel-header{margin-bottom:14px}.public-ports-card .panel-header h2{font-size:16px}.public-ports-card .panel-header p{font-size:10px}.public-ports-card .table-wrap{border:0;border-radius:0;flex:1 1 auto;min-height:0}.public-ports-card .ports-table thead{border-bottom:1px solid #213047}.public-ports-card .ports-table th{padding:8px 6px;background:transparent;color:#8493a8}.public-ports-card .ports-table td{padding:9px 6px}.public-ports-card .ports-table tbody tr{background:transparent}.public-ports-card .ports-table tbody tr:hover{background:#0d192b}.public-ports-card .type-badge{border-color:#6d4bb8;background:#2f2150;color:#c4b5fd}.public-ports-card .text-action{display:inline-flex;align-items:center;gap:5px;padding:4px 8px;border-color:#075eaa;background:transparent;color:#2196f3}.public-ports-card .text-action.remove{border-color:#7f1d1d;color:#ef4444}.public-ports-card .text-action svg{width:11px;height:11px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
 .audit-card{padding:16px}.audit-card .panel-header{margin-bottom:10px}.audit-card .panel-header h2{font-size:16px}.audit-card .panel-header p{font-size:10px}.audit-card .audit-list{gap:0}.audit-card .audit-item{grid-template-columns:28px minmax(0,1fr) auto;gap:9px;align-items:center;padding:8px 0}.audit-avatar{display:grid;place-items:center;width:24px;height:24px;border-radius:50%;background:#064e3b;color:#22e68d}.audit-avatar svg{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}.audit-card .audit-user{display:inline;font-size:10px}.audit-card .audit-action{margin-top:2px;color:#cbd5e1;font-size:9px;line-height:1.35}.audit-card .audit-kind{display:none}.audit-card .audit-time{font-size:9px}.audit-card .secondary-button{justify-content:flex-start;width:max-content;margin-top:12px;border-color:#075eaa;background:transparent;color:#2196f3}
 .validation-card{padding:16px}.validation-card .panel-header{margin-bottom:10px}.validation-card .panel-header h2{font-size:16px}.validation-card .panel-header p{font-size:10px}.validation-card .validation{display:block;height:auto;min-height:150px;padding:16px;text-align:center}.validation-card .validation-icon{width:32px;height:32px;margin:0 auto 10px;font-size:15px}.validation-card .validation strong{margin-bottom:14px;font-size:13px}.validation-meta{display:grid;gap:11px}.validation-meta span{font-size:9px}.validation-meta em{display:block;margin-top:3px;color:#e5edf7;font-size:10px}.validation-card .validation.error .validation-icon{background:#7f1d1d}.validation-card .validation.pending .validation-icon{background:#1e293b}
-.table-wrap{max-width:100%;overflow-x:hidden}.access-table th:first-child,.access-table td:first-child{width:60px}.access-table th:nth-child(2),.access-table td:nth-child(2){width:145px}.access-table th:nth-child(3),.access-table td:nth-child(3){width:auto}.access-table th:nth-child(4),.access-table td:nth-child(4){width:105px;white-space:nowrap}.access-table th:last-child,.access-table td:last-child{width:126px;white-space:nowrap}
-.ports-table th:first-child,.ports-table td:first-child{width:50px}.ports-table th:nth-child(2),.ports-table td:nth-child(2){width:78px}.ports-table th:nth-child(3),.ports-table td:nth-child(3){width:88px}.ports-table th:nth-child(4),.ports-table td:nth-child(4){width:auto}.ports-table th:last-child,.ports-table td:last-child{width:126px;white-space:nowrap}.access-table .row-actions,.ports-table .row-actions{width:max-content;max-width:none;gap:3px}.access-table .text-action,.ports-table .text-action{flex:0 0 auto;gap:3px;min-width:0;padding:4px 5px;font-size:8px;white-space:nowrap}.access-table .text-action svg,.ports-table .text-action svg{flex:0 0 auto;width:10px;height:10px}.access-table th:last-child,.access-table td:last-child,.ports-table th:last-child,.ports-table td:last-child{padding-left:4px;padding-right:0;overflow:visible}
-.cell-description{overflow:hidden;white-space:nowrap;text-overflow:ellipsis}.audit-action{display:-webkit-box;overflow:hidden;-webkit-line-clamp:2;-webkit-box-orient:vertical}.audit-list .audit-item:nth-child(n+5){display:none}
+.table-wrap{overflow-x:hidden}.access-table,.ports-table{table-layout:fixed}.access-table th:first-child,.access-table td:first-child{width:10%}.access-table th:nth-child(2),.access-table td:nth-child(2){width:23%}.access-table th:nth-child(3),.access-table td:nth-child(3){width:27%}.access-table th:nth-child(4),.access-table td:nth-child(4){width:20%}.access-table th:last-child,.access-table td:last-child{width:26%;min-width:210px}.ports-table th:first-child,.ports-table td:first-child{width:10%}.ports-table th:nth-child(2),.ports-table td:nth-child(2){width:14%}.ports-table th:nth-child(3),.ports-table td:nth-child(3){width:18%}.ports-table th:nth-child(4),.ports-table td:nth-child(4){width:auto;min-width:180px}.ports-table th:last-child,.ports-table td:last-child{width:24%;min-width:190px}
+.access-table th,.ports-table th{white-space:normal;line-height:1.15;word-break:keep-all}.access-table td,.ports-table td{vertical-align:middle}.access-table td:nth-child(2){white-space:nowrap;word-break:normal;overflow-wrap:normal}.cell-description{display:flex;align-items:center;width:100%;max-width:100%;min-width:0;min-height:100%;overflow:hidden!important;white-space:normal!important;text-overflow:clip!important;word-break:break-word!important;overflow-wrap:anywhere!important;line-height:1.25}.audit-action{display:-webkit-box;overflow:hidden;-webkit-line-clamp:2;-webkit-box-orient:vertical}.audit-list .audit-item:nth-child(n+5){display:none}
 .status-grid{display:none}.compact-status.panel{height:100%;padding:13px}.compact-status .panel-header{margin-bottom:9px}.compact-status .panel-header h2{font-size:13px}.compact-status .panel-header p{display:block;font-size:9px}.compact-status .validation{height:calc(100% - 42px);padding:10px}.compact-status .validation span{font-size:9px}.compact-status .application-summary{display:none}
 .application-details{margin-top:8px}.application-details>summary{cursor:pointer;color:#93c5fd;font-size:9px;font-weight:700}
 @media(max-width:1320px){.quick-grid{grid-template-columns:repeat(4,minmax(0,1fr))}.main-layout{grid-template-columns:1fr}.main-layout>.access-card,.main-layout>.admin-ports-card,.main-layout>.public-ports-card,.main-layout>.side-status{grid-column:1}.main-layout>.side-status{grid-template-columns:repeat(2,minmax(0,1fr))}}
@@ -1692,14 +1770,14 @@ body{background:#080d18}
                 </div>
             </header>
             <div class="table-wrap"><table class="access-table">
-                    <thead><tr><th>Tipo</th><th>IP/Rede</th><th>Descrição</th><th>Criado em</th><th>Ações</th></tr></thead>
+                    <thead><tr><th>Tipo</th><th>IP/Rede</th><th>Descrição</th><th>Data de criação</th><th>Ações</th></tr></thead>
                     <tbody id="acl-ipv4-rows" data-family-section>
                         <?php foreach ($aclIpv4 as $access): ?>
-                            <?php $createdAt = (new DateTimeImmutable($access['criado_em']))->format('d/m/Y H:i'); ?>
+                            <?php $createdAtDate = firewall_timestamp_para_datetime($access['criado_em']); $createdAt = $createdAtDate?->format('d/m/Y H:i') ?? ''; ?>
                             <tr data-admin-search="<?= htmlspecialchars(strtolower($access['tipo'] . ' ' . $access['rede'] . ' ' . $access['descricao'] . ' ' . $createdAt), ENT_QUOTES, 'UTF-8') ?>">
                                 <td><span class="type-badge"><?= htmlspecialchars($access['tipo']) ?></span></td>
                                 <td class="strong"><?= htmlspecialchars($access['rede']) ?></td>
-                                <td class="cell-description" title="<?= htmlspecialchars($access['descricao'], ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars($access['descricao']) ?></td>
+                                <td><span class="cell-description" title="<?= htmlspecialchars($access['descricao'], ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars($access['descricao']) ?></span></td>
                                 <td><?= htmlspecialchars($createdAt) ?></td>
                                 <td><div class="row-actions">
                                     <button class="text-action" type="button" data-open-dialog="edit-ip-modal" data-record-id="<?= (int) $access['id'] ?>" data-record-family="<?= htmlspecialchars($access['tipo'], ENT_QUOTES, 'UTF-8') ?>" data-record-value="<?= htmlspecialchars($access['rede'], ENT_QUOTES, 'UTF-8') ?>" data-record-description="<?= htmlspecialchars($access['descricao'], ENT_QUOTES, 'UTF-8') ?>"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m4 20 4.5-1 10-10a2.1 2.1 0 0 0-3-3l-10 10zM14 7l3 3"/></svg>Editar</button>
@@ -1710,11 +1788,11 @@ body{background:#080d18}
                     </tbody>
                     <tbody id="acl-ipv6-rows" data-family-section>
                         <?php foreach ($aclIpv6 as $access): ?>
-                            <?php $createdAt = (new DateTimeImmutable($access['criado_em']))->format('d/m/Y H:i'); ?>
+                            <?php $createdAtDate = firewall_timestamp_para_datetime($access['criado_em']); $createdAt = $createdAtDate?->format('d/m/Y H:i') ?? ''; ?>
                             <tr data-admin-search="<?= htmlspecialchars(strtolower($access['tipo'] . ' ' . $access['rede'] . ' ' . $access['descricao'] . ' ' . $createdAt), ENT_QUOTES, 'UTF-8') ?>">
                                 <td><span class="type-badge"><?= htmlspecialchars($access['tipo']) ?></span></td>
                                 <td class="strong"><?= htmlspecialchars($access['rede']) ?></td>
-                                <td class="cell-description" title="<?= htmlspecialchars($access['descricao'], ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars($access['descricao']) ?></td>
+                                <td><span class="cell-description" title="<?= htmlspecialchars($access['descricao'], ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars($access['descricao']) ?></span></td>
                                 <td><?= htmlspecialchars($createdAt) ?></td>
                                 <td><div class="row-actions">
                                     <button class="text-action" type="button" data-open-dialog="edit-ip-modal" data-record-id="<?= (int) $access['id'] ?>" data-record-family="<?= htmlspecialchars($access['tipo'], ENT_QUOTES, 'UTF-8') ?>" data-record-value="<?= htmlspecialchars($access['rede'], ENT_QUOTES, 'UTF-8') ?>" data-record-description="<?= htmlspecialchars($access['descricao'], ENT_QUOTES, 'UTF-8') ?>"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m4 20 4.5-1 10-10a2.1 2.1 0 0 0-3-3l-10 10zM14 7l3 3"/></svg>Editar</button>
@@ -1749,7 +1827,7 @@ body{background:#080d18}
                                 <td class="strong"><?= (int) $port['porta'] ?></td>
                                 <td><span class="type-badge"><?= htmlspecialchars($port['protocolo']) ?></span></td>
                                 <td><?= htmlspecialchars($port['servico']) ?></td>
-                                <td class="cell-description" title="<?= htmlspecialchars($port['descricao'], ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars($port['descricao']) ?></td>
+                                <td><span class="cell-description" title="<?= htmlspecialchars($port['descricao'], ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars($port['descricao']) ?></span></td>
                                 <td><div class="row-actions">
                                     <button class="text-action" type="button" data-open-dialog="edit-port-modal" data-record-id="<?= (int) $port['id'] ?>" data-record-scope="admin" data-record-port="<?= (int) $port['porta'] ?>" data-record-protocol="<?= htmlspecialchars($port['protocolo'], ENT_QUOTES, 'UTF-8') ?>" data-record-service="<?= htmlspecialchars($port['servico'], ENT_QUOTES, 'UTF-8') ?>" data-record-description="<?= htmlspecialchars($port['descricao'], ENT_QUOTES, 'UTF-8') ?>"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m4 20 4.5-1 10-10a2.1 2.1 0 0 0-3-3l-10 10zM14 7l3 3"/></svg>Editar</button>
                                     <button class="text-action remove" type="button" data-open-dialog="remove-port-modal" data-record-id="<?= (int) $port['id'] ?>" data-record-scope="administrativa" data-record-value="<?= (int) $port['porta'] ?>"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M7 7l1 13h8l1-13M10 11v5M14 11v5"/></svg>Remover</button>
@@ -1781,7 +1859,7 @@ body{background:#080d18}
                                 <td class="strong"><?= (int) $port['porta'] ?></td>
                                 <td><span class="type-badge"><?= htmlspecialchars($port['protocolo']) ?></span></td>
                                 <td><?= htmlspecialchars($port['servico']) ?></td>
-                                <td class="cell-description" title="<?= htmlspecialchars($port['descricao'], ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars($port['descricao']) ?></td>
+                                <td><span class="cell-description" title="<?= htmlspecialchars($port['descricao'], ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars($port['descricao']) ?></span></td>
                                 <td><div class="row-actions">
                                     <button class="text-action" type="button" data-open-dialog="edit-port-modal" data-record-id="<?= (int) $port['id'] ?>" data-record-scope="publica" data-record-port="<?= (int) $port['porta'] ?>" data-record-protocol="<?= htmlspecialchars($port['protocolo'], ENT_QUOTES, 'UTF-8') ?>" data-record-service="<?= htmlspecialchars($port['servico'], ENT_QUOTES, 'UTF-8') ?>" data-record-description="<?= htmlspecialchars($port['descricao'], ENT_QUOTES, 'UTF-8') ?>"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m4 20 4.5-1 10-10a2.1 2.1 0 0 0-3-3l-10 10zM14 7l3 3"/></svg>Editar</button>
                                     <button class="text-action remove" type="button" data-open-dialog="remove-port-modal" data-record-id="<?= (int) $port['id'] ?>" data-record-scope="pública" data-record-value="<?= (int) $port['porta'] ?>"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M7 7l1 13h8l1-13M10 11v5M14 11v5"/></svg>Remover</button>
@@ -1812,7 +1890,7 @@ body{background:#080d18}
             $dataValidacao = null;
             if (!empty($ultimaValidacao['data_hora'])) {
                 try {
-                    $dataValidacao = new DateTimeImmutable((string) $ultimaValidacao['data_hora']);
+                    $dataValidacao = firewall_timestamp_para_datetime((string) $ultimaValidacao['data_hora']);
                 } catch (Throwable) {
                     $dataValidacao = null;
                 }
@@ -1850,7 +1928,7 @@ body{background:#080d18}
             <header class="panel-header"><div><h2>Auditoria Recente</h2><p>Últimas alterações.</p></div></header>
             <div class="audit-list">
                 <?php foreach ($recentAudit as $event): ?>
-                    <?php $eventTime = (new DateTimeImmutable($event['criado_em']))->format('d/m H:i'); ?>
+                    <?php $eventTimeDate = firewall_timestamp_para_datetime($event['criado_em']); $eventTime = $eventTimeDate?->format('d/m H:i') ?? ''; ?>
                     <div class="audit-item">
                         <span class="audit-avatar" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="3"/><path d="M6 20a6 6 0 0 1 12 0"/></svg></span>
                         <div>
@@ -1909,40 +1987,109 @@ body{background:#080d18}
         </div>
     </dialog>
 
-    <dialog class="modal" id="add-ip-modal">
-        <header class="modal-header"><div><h2>Adicionar ACL</h2><p>Autorizar um endereço ou rede para acesso administrativo.</p></div><button class="modal-close" type="button" data-close-dialog>Fechar</button></header>
+    <dialog class="modal step-modal" id="add-ip-modal">
+        <header class="modal-header">
+            <div>
+                <h2>Adicionar acesso administrativo</h2>
+                <p>Autorize um endereço IP ou rede para acesso administrativo.</p>
+            </div>
+            <div class="modal-header-badge">
+                <button class="modal-close" type="button" data-close-dialog>Fechar</button>
+                <span class="mini-pill">Acesso administrativo</span>
+            </div>
+        </header>
         <div class="modal-body">
-            <form method="POST" class="modal-form">
+            <form method="POST" class="modal-form" data-add-ip-form>
                 <?= csrf_field() ?>
                 <input type="hidden" name="acao" value="adicionar_ip">
+                <input type="hidden" name="familia" data-step-family value="IPv4">
+                <div class="step-error" data-step-error></div>
+
                 <div class="form-row">
                     <div class="field">
-                        <label for="add-ip-family">Família</label>
-                        <select id="add-ip-family" name="familia" required data-modal-family-select>
-                            <option value="">Selecione</option>
+                        <label for="add-ip-family-visual">Família</label>
+                        <select id="add-ip-family-visual" data-step-family-select required>
                             <option value="IPv4">IPv4</option>
                             <option value="IPv6">IPv6</option>
                         </select>
                     </div>
                     <div class="field">
                         <label for="add-ip-description">Descrição</label>
-                        <input id="add-ip-description" name="descricao" maxlength="120" placeholder="Acesso da equipe técnica">
+                        <input id="add-ip-description" name="descricao" maxlength="120" placeholder="Ex.: Acesso da equipe técnica">
                     </div>
                 </div>
-                <div class="field"><label for="add-ip-network">IP ou rede</label><input id="add-ip-network" name="rede" maxlength="80" placeholder="192.0.2.10 ou 2001:db8::/64" required><span class="field-help">IPv4, IPv6 ou rede com prefixo CIDR.</span></div>
-                <div class="modal-actions"><button class="button" type="button" data-close-dialog>Cancelar</button><button class="button primary" type="submit">Adicionar ACL</button></div>
+
+                <div class="field">
+                    <label for="add-ip-network">IP ou rede</label>
+                    <input id="add-ip-network" name="rede" maxlength="80" placeholder="Ex.: 192.0.2.10 ou 192.0.2.0/24" required>
+                    <span class="field-help">Informe um endereço IP específico ou uma rede CIDR.</span>
+                </div>
+
+                <label class="auto-validate">
+                    <input type="checkbox" data-step-auto-validate checked>
+                    <span class="auto-switch" aria-hidden="true"></span>
+                    <span class="auto-copy">
+                        <strong>Validar formato automaticamente</strong>
+                        <small>Verifica o formato do IP ou rede ao digitar.</small>
+                    </span>
+                </label>
+
+                <div class="review-box is-hidden" data-step-review-box>
+                    <div class="review-top">
+                        <div class="review-head">
+                            <span class="review-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 2.8 20 6v5.8c0 4.9-3.1 8.5-8 10.4-4.9-1.9-8-5.5-8-10.4V6z"/><path d="m12 6 5 2v3.8c0 3.3-2 5.8-5 7-3-1.2-5-3.7-5-7V8z"/></svg></span>
+                            <div>
+                                <strong>Revisão da ACL</strong>
+                                <span class="review-kicker">Acesso administrativo</span>
+                            </div>
+                        </div>
+                        <div class="review-inline">
+                            <span>Família: <strong data-step-review-family>IPv4</strong></span>
+                            <span>Alvo: <strong data-step-review-network>—</strong></span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="modal-actions step-actions">
+                    <button class="button secondary" type="button" data-close-dialog>Cancelar</button>
+                    <button class="button primary" type="submit">Adicionar ACL</button>
+                </div>
             </form>
         </div>
     </dialog>
 
-    <dialog class="modal" id="edit-ip-modal">
-        <header class="modal-header"><div><h2>Editar ACL</h2><p>Atualizar o endereço, rede ou descrição do acesso.</p></div><button class="modal-close" type="button" data-close-dialog>Fechar</button></header>
+    <dialog class="modal step-modal" id="edit-ip-modal">
+        <header class="modal-header">
+            <div>
+                <h2>Editar ACL</h2>
+                <p>Atualizar o endereço, rede ou descrição do acesso.</p>
+            </div>
+            <div class="modal-header-badge">
+                <button class="modal-close" type="button" data-close-dialog>Fechar</button>
+                <span class="mini-pill">Acesso administrativo</span>
+            </div>
+        </header>
         <div class="modal-body">
             <form method="POST" class="modal-form">
                 <?= csrf_field() ?>
                 <input type="hidden" name="acao" value="editar_ip">
                 <input type="hidden" name="id" data-modal-id>
                 <input type="hidden" name="familia" data-modal-family>
+                <div class="review-box is-hidden" data-admin-port-review-box>
+                    <div class="review-top">
+                        <div class="review-head">
+                            <span class="review-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 2.8 20 6v5.8c0 4.9-3.1 8.5-8 10.4-4.9-1.9-8-5.5-8-10.4V6z"/><path d="m12 6 5 2v3.8c0 3.3-2 5.8-5 7-3-1.2-5-3.7-5-7V8z"/></svg></span>
+                            <div>
+                                <strong>Revisão da ACL</strong>
+                                <span class="review-kicker">Acesso administrativo</span>
+                            </div>
+                        </div>
+                        <div class="review-inline">
+                            <span>Família: <strong data-edit-review-family>IPv4</strong></span>
+                            <span>Alvo: <strong data-edit-review-value>—</strong></span>
+                        </div>
+                    </div>
+                </div>
                 <div class="field">
                     <label>Família</label>
                     <span class="family-badge" data-modal-family-label>IPv4</span>
@@ -1955,56 +2102,134 @@ body{background:#080d18}
     </dialog>
 
     <dialog class="modal" id="remove-ip-modal">
-        <header class="modal-header"><div><h2>Remover ACL</h2><p>Esta ação remove o acesso apenas dos dados do painel.</p></div><button class="modal-close" type="button" data-close-dialog>Fechar</button></header>
+        <header class="modal-header">
+            <div>
+                <h2>Remover ACL</h2>
+                <p>Remova o acesso registrado no painel, sem alterar as regras aplicadas.</p>
+            </div>
+            <div class="modal-header-badge">
+                <button class="modal-close" type="button" data-close-dialog>Fechar</button>
+                <span class="mini-pill danger">Remoção de ACL</span>
+            </div>
+        </header>
         <div class="modal-body">
             <form method="POST" class="modal-form">
                 <?= csrf_field() ?>
                 <input type="hidden" name="acao" value="remover_ip">
                 <input type="hidden" name="id" data-modal-id>
-                <div class="field">
-                    <label>Família</label>
-                    <span class="family-badge" data-modal-family-label>IPv4</span>
+                <div class="review-box is-hidden" data-admin-port-review-box>
+                    <div class="review-top">
+                        <div class="review-head">
+                            <span class="review-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 2.8 20 6v5.8c0 4.9-3.1 8.5-8 10.4-4.9-1.9-8-5.5-8-10.4V6z"/><path d="m12 6 5 2v3.8c0 3.3-2 5.8-5 7-3-1.2-5-3.7-5-7V8z"/></svg></span>
+                            <div>
+                                <strong>Revisão da ACL</strong>
+                                <span class="review-kicker">Acesso administrativo</span>
+                            </div>
+                        </div>
+                        <div class="review-inline">
+                            <span>Família: <strong data-modal-family-label>IPv4</strong></span>
+                            <span>Alvo: <strong data-confirmation-label></strong></span>
+                        </div>
+                    </div>
                 </div>
-                <div class="modal-warning">Para confirmar, digite exatamente <strong data-confirmation-label></strong>.</div>
+                <div class="modal-warning">Para confirmar, digite exatamente o endereço acima.</div>
                 <div class="field"><label for="remove-ip-confirmation">Confirmação</label><input id="remove-ip-confirmation" name="confirmacao" autocomplete="off" data-confirmation-input required></div>
                 <div class="modal-actions"><button class="button" type="button" data-close-dialog>Cancelar</button><button class="button danger" type="submit">Remover ACL</button></div>
             </form>
         </div>
     </dialog>
 
-    <?php foreach ([
-        ['add-admin-port-modal', 'adicionar_porta_admin', 'Adicionar Porta Administrativa', 'Cadastrar uma porta restrita aos IPs autorizados.'],
-        ['add-public-port-modal', 'adicionar_porta_publica', 'Adicionar Porta Pública', 'Cadastrar uma porta disponível para acesso externo.'],
-    ] as [$modalId, $actionName, $title, $subtitle]): ?>
-        <dialog class="modal" id="<?= htmlspecialchars($modalId) ?>">
-            <header class="modal-header"><div><h2><?= htmlspecialchars($title) ?></h2><p><?= htmlspecialchars($subtitle) ?></p></div><button class="modal-close" type="button" data-close-dialog>Fechar</button></header>
-            <div class="modal-body">
-                <form method="POST" class="modal-form">
-                    <?= csrf_field() ?>
-                    <input type="hidden" name="acao" value="<?= htmlspecialchars($actionName) ?>">
-                    <div class="form-row">
-                        <div class="field"><label>Porta</label><input type="number" name="porta" min="1" max="65535" inputmode="numeric" required></div>
-                        <div class="field"><label>Protocolo</label><select name="protocolo" required><option value="TCP">TCP</option><option value="UDP">UDP</option><option value="TCP/UDP">TCP/UDP</option></select></div>
-                    </div>
-                    <div class="field"><label>Serviço</label><input name="servico" maxlength="40" placeholder="Ex.: HTTPS" required></div>
-                    <div class="field"><label>Descrição</label><input name="descricao" maxlength="120" placeholder="Finalidade da porta"></div>
-                    <div class="modal-actions"><button class="button" type="button" data-close-dialog>Cancelar</button><button class="button primary" type="submit">Adicionar porta</button></div>
-                </form>
+    <dialog class="modal step-modal" id="add-admin-port-modal">
+        <header class="modal-header">
+            <div>
+                <h2>Adicionar Porta Administrativa</h2>
+                <p>Cadastrar uma porta restrita aos IPs autorizados.</p>
             </div>
-        </dialog>
-    <?php endforeach; ?>
+            <div class="modal-header-badge">
+                <button class="modal-close" type="button" data-close-dialog>Fechar</button>
+                <span class="mini-pill">Porta administrativa</span>
+            </div>
+        </header>
+        <div class="modal-body">
+            <form method="POST" class="modal-form" data-admin-port-form>
+                <?= csrf_field() ?>
+                <input type="hidden" name="acao" value="adicionar_porta_admin">
+                <div class="review-box">
+                    <div class="review-top">
+                        <div class="review-head">
+                            <span class="review-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 2.8 20 6v5.8c0 4.9-3.1 8.5-8 10.4-4.9-1.9-8-5.5-8-10.4V6z"/><path d="m12 6 5 2v3.8c0 3.3-2 5.8-5 7-3-1.2-5-3.7-5-7V8z"/></svg></span>
+                            <div>
+                                <strong>Revisão da porta</strong>
+                                <span class="review-kicker">Acesso administrativo</span>
+                            </div>
+                        </div>
+                        <div class="review-inline">
+                            <span>Porta: <strong data-admin-port-review-port>—</strong></span>
+                            <span>Protocolo: <strong data-admin-port-review-protocol>—</strong></span>
+                            <span>Serviço: <strong data-admin-port-review-service>—</strong></span>
+                        </div>
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="field"><label for="admin-port-porta">Porta</label><input id="admin-port-porta" type="number" name="porta" min="1" max="65535" inputmode="numeric" data-admin-port-input-port required></div>
+                    <div class="field"><label for="admin-port-protocolo">Protocolo</label><select id="admin-port-protocolo" name="protocolo" data-admin-port-input-protocol required><option value="TCP">TCP</option><option value="UDP">UDP</option><option value="TCP/UDP">TCP/UDP</option></select></div>
+                </div>
+                <div class="field"><label for="admin-port-servico">Serviço</label><input id="admin-port-servico" name="servico" maxlength="40" placeholder="Ex.: HTTPS" data-admin-port-input-service required></div>
+                <div class="field"><label for="admin-port-descricao">Descrição</label><input id="admin-port-descricao" name="descricao" maxlength="120" placeholder="Finalidade da porta" data-admin-port-input-description></div>
+                <div class="modal-actions step-actions"><button class="button secondary" type="button" data-close-dialog>Cancelar</button><button class="button primary" type="submit">Adicionar porta</button></div>
+            </form>
+        </div>
+    </dialog>
 
-    <dialog class="modal" id="edit-port-modal">
-        <header class="modal-header"><div><h2>Editar Porta</h2><p>Atualizar a porta cadastrada no painel.</p></div><button class="modal-close" type="button" data-close-dialog>Fechar</button></header>
+    <dialog class="modal" id="add-public-port-modal">
+        <header class="modal-header"><div><h2>Adicionar Porta Pública</h2><p>Cadastrar uma porta disponível para acesso externo.</p></div><button class="modal-close" type="button" data-close-dialog>Fechar</button></header>
+        <div class="modal-body">
+            <form method="POST" class="modal-form">
+                <?= csrf_field() ?>
+                <input type="hidden" name="acao" value="adicionar_porta_publica">
+                <div class="form-row">
+                    <div class="field"><label>Porta</label><input type="number" name="porta" min="1" max="65535" inputmode="numeric" required></div>
+                    <div class="field"><label>Protocolo</label><select name="protocolo" required><option value="TCP">TCP</option><option value="UDP">UDP</option><option value="TCP/UDP">TCP/UDP</option></select></div>
+                </div>
+                <div class="field"><label>Serviço</label><input name="servico" maxlength="40" placeholder="Ex.: HTTPS" required></div>
+                <div class="field"><label>Descrição</label><input name="descricao" maxlength="120" placeholder="Finalidade da porta"></div>
+                <div class="modal-actions"><button class="button" type="button" data-close-dialog>Cancelar</button><button class="button primary" type="submit">Adicionar porta</button></div>
+            </form>
+        </div>
+    </dialog>
+
+    <dialog class="modal step-modal" id="edit-port-modal">
+        <header class="modal-header">
+            <div>
+                <h2>Editar Porta</h2>
+                <p>Atualizar a porta cadastrada no painel.</p>
+            </div>
+            <div class="modal-header-badge">
+                <button class="modal-close" type="button" data-close-dialog>Fechar</button>
+                <span class="mini-pill">Porta administrativa</span>
+            </div>
+        </header>
         <div class="modal-body">
             <form method="POST" class="modal-form">
                 <?= csrf_field() ?>
                 <input type="hidden" name="acao" value="editar_porta">
                 <input type="hidden" name="id" data-modal-id>
                 <input type="hidden" name="escopo" data-modal-scope>
-                <div class="field">
-                    <label>Escopo</label>
-                    <span class="family-badge" data-modal-scope-label>Admin</span>
+                <div class="review-box">
+                    <div class="review-top">
+                        <div class="review-head">
+                            <span class="review-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 2.8 20 6v5.8c0 4.9-3.1 8.5-8 10.4-4.9-1.9-8-5.5-8-10.4V6z"/><path d="m12 6 5 2v3.8c0 3.3-2 5.8-5 7-3-1.2-5-3.7-5-7V8z"/></svg></span>
+                            <div>
+                                <strong>Revisão da porta</strong>
+                                <span class="review-kicker">Acesso administrativo</span>
+                            </div>
+                        </div>
+                        <div class="review-inline">
+                            <span>Porta: <strong data-edit-port-review-port>—</strong></span>
+                            <span>Protocolo: <strong data-edit-port-review-protocol>—</strong></span>
+                            <span>Serviço: <strong data-edit-port-review-service>—</strong></span>
+                        </div>
+                    </div>
                 </div>
                 <div class="form-row">
                     <div class="field"><label>Porta</label><input type="number" name="porta" min="1" max="65535" inputmode="numeric" data-modal-port required></div>
@@ -2012,7 +2237,7 @@ body{background:#080d18}
                 </div>
                 <div class="field"><label>Serviço</label><input name="servico" maxlength="40" data-modal-service required></div>
                 <div class="field"><label>Descrição</label><input name="descricao" maxlength="120" data-modal-description></div>
-                <div class="modal-actions"><button class="button" type="button" data-close-dialog>Cancelar</button><button class="button primary" type="submit">Salvar alterações</button></div>
+                <div class="modal-actions step-actions"><button class="button secondary" type="button" data-close-dialog>Cancelar</button><button class="button primary" type="submit">Salvar alterações</button></div>
             </form>
         </div>
     </dialog>
@@ -2075,8 +2300,10 @@ document.querySelectorAll('[data-open-dialog]').forEach(button=>button.addEventL
     if(!dialog)return;
     const idField=dialog.querySelector('[data-modal-id]');
     const familyField=dialog.querySelector('[data-modal-family]');
-    const familySelect=dialog.querySelector('[data-modal-family-select]');
+    const familySelect=dialog.querySelector('[data-modal-family-select], [data-step-family-select]');
     const familyLabel=dialog.querySelector('[data-modal-family-label]');
+    const editReviewFamily=dialog.querySelector('[data-edit-review-family]');
+    const editReviewValue=dialog.querySelector('[data-edit-review-value]');
     const scopeField=dialog.querySelector('[data-modal-scope]');
     const scopeLabel=dialog.querySelector('[data-modal-scope-label]');
     const valueField=dialog.querySelector('[data-modal-value]');
@@ -2084,31 +2311,203 @@ document.querySelectorAll('[data-open-dialog]').forEach(button=>button.addEventL
     const portField=dialog.querySelector('[data-modal-port]');
     const protocolField=dialog.querySelector('[data-modal-protocol]');
     const serviceField=dialog.querySelector('[data-modal-service]');
+    const editPortReviewPort=dialog.querySelector('[data-edit-port-review-port]');
+    const editPortReviewProtocol=dialog.querySelector('[data-edit-port-review-protocol]');
+    const editPortReviewService=dialog.querySelector('[data-edit-port-review-service]');
     const confirmationLabel=dialog.querySelector('[data-confirmation-label]');
     const confirmationInput=dialog.querySelector('[data-confirmation-input]');
     const portScopeLabel=dialog.querySelector('[data-port-scope]');
+    const stepPanels=dialog.querySelectorAll('[data-step-panel]');
+    const stepIndicators=dialog.querySelectorAll('[data-step-indicator]');
+    const stepError=dialog.querySelector('[data-step-error]');
+    const stepBack=dialog.querySelector('[data-step-back]');
+    const stepNext=dialog.querySelector('[data-step-next]');
+    const stepSubmit=dialog.querySelector('[data-step-submit]');
+    const familyHidden=dialog.querySelector('[data-step-family]');
+    const reviewFamily=dialog.querySelector('[data-step-review-family]');
+    const reviewNetwork=dialog.querySelector('[data-step-review-network]');
+    const reviewDescription=dialog.querySelector('[data-step-review-description]');
+    const networkField=dialog.querySelector('[name="rede"]');
+    const isStepModal=Boolean(stepPanels.length&&stepNext&&stepSubmit&&familyHidden&&reviewFamily&&reviewNetwork&&reviewDescription&&networkField);
+    const setStep=(step)=>{
+        stepPanels.forEach(panel=>panel.classList.toggle('active',panel.dataset.stepPanel===String(step)));
+        stepIndicators.forEach(indicator=>{
+            const index=Number(indicator.dataset.stepIndicator||'0');
+            indicator.classList.toggle('active',index===step);
+            indicator.classList.toggle('done',index<step);
+        });
+        if(stepBack)stepBack.hidden=step===1;
+        if(stepNext)stepNext.hidden=step===3;
+        if(stepSubmit)stepSubmit.hidden=step!==3;
+    };
+    const clearStepError=()=>{
+        if(!stepError)return;
+        stepError.textContent='';
+        stepError.classList.remove('show');
+    };
+    const showStepError=(message)=>{
+        if(!stepError)return;
+        stepError.textContent=message;
+        stepError.classList.add('show');
+    };
+    const visualFamilyLabel=()=>{
+        const visual=familySelect?.value||'IPv4';
+        return visual==='CIDR' ? 'Rede CIDR' : visual;
+    };
+    const inferBackendFamily=()=>{
+        const selected=familySelect?.value||'IPv4';
+        if(selected==='IPv6')return 'IPv6';
+        if(selected==='CIDR'){
+            return String(networkField?.value||'').includes(':') ? 'IPv6' : 'IPv4';
+        }
+        return 'IPv4';
+    };
+    const syncFamilyField=()=>{
+        if(familyHidden)familyHidden.value=inferBackendFamily();
+    };
+    const syncReview=()=>{
+        if(reviewFamily)reviewFamily.textContent=visualFamilyLabel();
+        if(reviewNetwork)reviewNetwork.textContent=(networkField?.value||'').trim()||'—';
+        if(reviewDescription){
+            const descriptionValue=(descriptionField?.value||'').trim();
+            reviewDescription.textContent=descriptionValue||'Sem descrição';
+        }
+    };
+    const clearAddIpModal=()=>{
+        if(!isStepModal)return;
+        setStep(1);
+        clearStepError();
+        if(familySelect)familySelect.value='IPv4';
+        if(familyHidden)familyHidden.value='IPv4';
+        if(networkField)networkField.value='';
+        if(descriptionField)descriptionField.value='';
+        syncReview();
+    };
+    const addIpModal=dialog.id==='add-ip-modal';
 
     if(idField)idField.value=button.dataset.recordId||'';
     const family=button.dataset.defaultFamily||button.dataset.recordFamily||'';
     if(familyField)familyField.value=family;
-    if(familySelect)familySelect.value=button.dataset.defaultFamily||'';
+    if(familySelect&&button.dataset.defaultFamily)familySelect.value=button.dataset.defaultFamily;
     if(familyLabel)familyLabel.textContent=family||'Não informado';
+    if(editReviewFamily)editReviewFamily.textContent=family||'Não informado';
     if(scopeField)scopeField.value=button.dataset.recordScope||'';
     if(scopeLabel)scopeLabel.textContent=button.dataset.recordScope||'';
     if(valueField)valueField.value=button.dataset.recordValue||'';
+    if(editReviewValue)editReviewValue.textContent=button.dataset.recordValue||'—';
+    if(dialog.id==='edit-ip-modal' && valueField && editReviewValue){
+        valueField.oninput=()=>{editReviewValue.textContent=valueField.value.trim()||'—';};
+        editReviewValue.textContent=(valueField.value||button.dataset.recordValue||'').trim()||'—';
+    }
     if(descriptionField)descriptionField.value=button.dataset.recordDescription||'';
     if(portField)portField.value=button.dataset.recordPort||button.dataset.recordValue||'';
     if(protocolField)protocolField.value=button.dataset.recordProtocol||'TCP';
     if(serviceField)serviceField.value=button.dataset.recordService||'';
+    if(editPortReviewPort)editPortReviewPort.textContent=(portField?.value||button.dataset.recordPort||button.dataset.recordValue||'').trim()||'—';
+    if(editPortReviewProtocol)editPortReviewProtocol.textContent=(protocolField?.value||button.dataset.recordProtocol||'').trim()||'—';
+    if(editPortReviewService)editPortReviewService.textContent=(serviceField?.value||button.dataset.recordService||'').trim()||'—';
+    if(dialog.id==='edit-port-modal' && portField && protocolField && serviceField){
+        const syncEditPortReview=()=>{
+            if(editPortReviewPort)editPortReviewPort.textContent=(portField.value||'').trim()||'—';
+            if(editPortReviewProtocol)editPortReviewProtocol.textContent=(protocolField.value||'').trim()||'—';
+            if(editPortReviewService)editPortReviewService.textContent=(serviceField.value||'').trim()||'—';
+        };
+        portField.oninput=syncEditPortReview;
+        protocolField.onchange=syncEditPortReview;
+        serviceField.oninput=syncEditPortReview;
+        syncEditPortReview();
+    }
     if(confirmationLabel)confirmationLabel.textContent=button.dataset.recordValue||button.dataset.recordPort||'';
     if(confirmationInput)confirmationInput.value='';
     if(portScopeLabel)portScopeLabel.textContent=button.dataset.recordScope||'';
+    if(addIpModal){
+        clearAddIpModal();
+    }
     dialog.showModal();
 }));
 document.querySelectorAll('[data-close-dialog]').forEach(button=>button.addEventListener('click',()=>button.closest('dialog')?.close()));
 document.querySelectorAll('dialog').forEach(dialog=>dialog.addEventListener('click',event=>{
     if(event.target===dialog)dialog.close();
 }));
+const addIpModal=document.getElementById('add-ip-modal');
+if(addIpModal){
+    const familySelect=addIpModal.querySelector('[data-step-family-select]');
+    const familyHidden=addIpModal.querySelector('[data-step-family]');
+    const descriptionField=addIpModal.querySelector('#add-ip-description');
+    const networkField=addIpModal.querySelector('#add-ip-network');
+    const autoValidate=addIpModal.querySelector('[data-step-auto-validate]');
+    const reviewFamily=addIpModal.querySelector('[data-step-review-family]');
+    const reviewNetwork=addIpModal.querySelector('[data-step-review-network]');
+    const reviewDescription=addIpModal.querySelector('[data-step-review-description]');
+    const reviewBox=addIpModal.querySelector('[data-step-review-box]');
+    const syncFamily=()=>{
+        const selected=familySelect?.value||'IPv4';
+        const detectedFamily=(networkField?.value||'').includes(':') ? 'IPv6' : 'IPv4';
+        if(familyHidden)familyHidden.value=selected==='IPv6' ? 'IPv6' : 'IPv4';
+    };
+    const syncReview=()=>{
+        const selected=familySelect?.value||'IPv4';
+        const networkValue=(networkField?.value||'').trim();
+        const hasReviewData=networkValue.length>0;
+        if(reviewBox)reviewBox.classList.toggle('is-hidden',!hasReviewData);
+        if(reviewFamily)reviewFamily.textContent=selected;
+        if(reviewNetwork)reviewNetwork.textContent=hasReviewData ? networkValue : '—';
+        if(reviewDescription)reviewDescription.textContent=(descriptionField?.value||'').trim()||'Sem descrição';
+    };
+    const syncAll=()=>{
+        syncFamily();
+        syncReview();
+    };
+    const resetModal=()=>{
+        if(familySelect)familySelect.value='IPv4';
+        if(familyHidden)familyHidden.value='IPv4';
+        if(descriptionField)descriptionField.value='';
+        if(networkField)networkField.value='';
+        if(autoValidate)autoValidate.checked=true;
+        syncAll();
+    };
+    addIpModal.addEventListener('close',resetModal);
+    familySelect?.addEventListener('change',syncAll);
+    networkField?.addEventListener('input',syncAll);
+    descriptionField?.addEventListener('input',syncAll);
+    autoValidate?.addEventListener('change',syncAll);
+    addIpModal.querySelector('form')?.addEventListener('submit',()=>{
+        syncAll();
+    });
+    syncAll();
+}
+const addAdminPortModal=document.getElementById('add-admin-port-modal');
+if(addAdminPortModal){
+    const portField=addAdminPortModal.querySelector('[data-admin-port-input-port]');
+    const protocolField=addAdminPortModal.querySelector('[data-admin-port-input-protocol]');
+    const serviceField=addAdminPortModal.querySelector('[data-admin-port-input-service]');
+    const reviewPort=addAdminPortModal.querySelector('[data-admin-port-review-port]');
+    const reviewProtocol=addAdminPortModal.querySelector('[data-admin-port-review-protocol]');
+    const reviewService=addAdminPortModal.querySelector('[data-admin-port-review-service]');
+    const reviewBox=addAdminPortModal.querySelector('[data-admin-port-review-box]');
+    const syncPortReview=()=>{
+        const porta=(portField?.value||'').trim();
+        const protocolo=((protocolField?.value||'').trim()||'');
+        const servico=(serviceField?.value||'').trim();
+        const hasData=porta.length>0||servico.length>0;
+        if(reviewBox)reviewBox.classList.toggle('is-hidden',!hasData);
+        if(reviewPort)reviewPort.textContent=porta||'—';
+        if(reviewProtocol)reviewProtocol.textContent=protocolo||'—';
+        if(reviewService)reviewService.textContent=servico||'—';
+    };
+    const resetPortModal=()=>{
+        if(portField)portField.value='';
+        if(protocolField)protocolField.value='TCP';
+        if(serviceField)serviceField.value='';
+        syncPortReview();
+    };
+    addAdminPortModal.addEventListener('close',resetPortModal);
+    portField?.addEventListener('input',syncPortReview);
+    protocolField?.addEventListener('change',syncPortReview);
+    serviceField?.addEventListener('input',syncPortReview);
+    addAdminPortModal.querySelector('form')?.addEventListener('submit',syncPortReview);
+    syncPortReview();
+}
 const menuToggle=document.querySelector('.menu-toggle');
 const sidebar=document.querySelector('.sidebar');
 const menuOverlay=document.querySelector('.menu-overlay');

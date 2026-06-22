@@ -2,6 +2,18 @@
 
 Historico de alteracoes do Painel DNS Trevizam Network.
 
+## [2.3.22] - 2026-06-22
+
+### Padronização visual dos modais do Firewall
+
+- Ajustados os modais de adicionar, editar e remover ACL/Porta para seguir o
+  mesmo padrão visual.
+- Incluídos blocos de revisão com atualização dinâmica dos campos digitados.
+- Ocultadas revisões vazias até haver dados úteis preenchidos.
+- Mantida integralmente a lógica funcional do firewall.
+- Handoff disponível em
+  `HANDOFF_PADRONIZACAO_MODAIS_FIREWALL_2026-06-22.md`.
+
 ## [2.3.21] - 2026-06-22
 
 ### Fechamento do layout operacional do Firewall
