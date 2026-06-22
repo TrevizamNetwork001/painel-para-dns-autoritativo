@@ -2,6 +2,16 @@
 
 Historico de alteracoes do Painel DNS Trevizam Network.
 
+## [2.3.17] - 2026-06-22
+
+### Layout exclusivo do botão Backup
+
+- Ajustado somente o botão Backup em Ações rápidas.
+- Ícone fixado à esquerda e título/descrição posicionados à direita.
+- Os demais atalhos não foram alterados.
+- Handoff disponível em
+  `HANDOFF_LAYOUT_BACKUP_FIREWALL_2026-06-22.md`.
+
 ## [2.3.16] - 2026-06-22
 
 ### Alinhamento do ícone Backup
