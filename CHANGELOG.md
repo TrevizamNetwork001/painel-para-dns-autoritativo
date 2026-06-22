@@ -2,6 +2,24 @@
 
 Historico de alteracoes do Painel DNS Trevizam Network.
 
+## [2.3.13] - 2026-06-22
+
+### Portas Públicas, Validação e Auditoria alinhadas à referência
+
+- Aplicado ao card Portas Públicas o mesmo padrão visual dos demais cards.
+- Removidos o badge e o botão duplicado do cabeçalho.
+- Ajustados tabela, protocolo roxo e ações Editar/Remover com ícones.
+- Adicionado rodapé com total de portas e paginação visual.
+- Auditoria Recente ajustada com avatares verdes, linhas compactas, horários
+  alinhados e botão de histórico no padrão azul.
+- Última Validação ajustada com painel de estado, data e tempo decorrido.
+- Handoff disponível em
+  `HANDOFF_PORTAS_PUBLICAS_FIREWALL_2026-06-22.md`.
+- Handoff da auditoria disponível em
+  `HANDOFF_AUDITORIA_RECENTE_FIREWALL_2026-06-22.md`.
+- Handoff da validação disponível em
+  `HANDOFF_ULTIMA_VALIDACAO_FIREWALL_2026-06-22.md`.
+
 ## [2.3.12] - 2026-06-22
 
 ### Portas Administrativas alinhadas à referência

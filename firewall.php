@@ -1544,6 +1544,9 @@ body{background:#080d18}
 .access-card{padding:14px}.access-card .panel-header{align-items:center}.access-card .header-actions{flex-wrap:nowrap}.access-search{width:min(250px,100%)}.access-table tbody[data-family-section]+tbody[data-family-section] tr:first-child td{border-top:1px solid #25344a}
 .access-card{padding:16px}.access-card .panel-header{margin-bottom:14px}.access-card .panel-header h2{font-size:16px}.access-card .panel-header p{font-size:10px}.access-search-wrap{position:relative;width:min(250px,100%)}.access-search-wrap svg{position:absolute;left:10px;top:50%;width:15px;height:15px;transform:translateY(-50%);fill:none;stroke:#94a3b8;stroke-width:1.8;stroke-linecap:round}.access-search{width:100%;min-height:34px;padding-left:32px;background:#091321}.access-card .table-wrap{border:0;border-radius:0}.access-table thead{border-bottom:1px solid #213047}.access-table th{padding:8px 6px;background:transparent;color:#8493a8}.access-table td{padding:9px 6px}.access-table tbody tr{background:transparent}.access-table tbody tr:hover{background:#0d192b}.access-card .type-badge{border-color:#075eaa;background:#073a6b;color:#38bdf8}.access-card .text-action{display:inline-flex;align-items:center;gap:5px;padding:4px 8px;border-color:#075eaa;background:transparent;color:#2196f3}.access-card .text-action.remove{border-color:#7f1d1d;color:#ef4444}.access-card .text-action svg{width:11px;height:11px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}.access-footer{display:flex;align-items:center;justify-content:space-between;gap:12px;padding-top:10px;color:#8190a5;font-size:10px}.access-pagination{display:flex;align-items:center;gap:5px}.page-chip{display:grid;place-items:center;min-width:28px;height:28px;padding:0 8px;border:1px solid #263852;border-radius:6px;background:#0a1423;color:#8fa0b6}.page-chip.current{border-color:#168cff;background:#168cff;color:#fff;box-shadow:0 0 12px #168cff3d}.page-chip[disabled]{opacity:.55}
 .admin-ports-card{padding:16px}.admin-ports-card .panel-header{margin-bottom:14px}.admin-ports-card .panel-header h2{font-size:16px}.admin-ports-card .panel-header p{font-size:10px}.admin-ports-card .table-wrap{border:0;border-radius:0}.admin-ports-card .ports-table thead{border-bottom:1px solid #213047}.admin-ports-card .ports-table th{padding:8px 6px;background:transparent;color:#8493a8}.admin-ports-card .ports-table td{padding:9px 6px}.admin-ports-card .ports-table tbody tr{background:transparent}.admin-ports-card .ports-table tbody tr:hover{background:#0d192b}.admin-ports-card .type-badge{border-color:#075eaa;background:#073a6b;color:#38bdf8}.admin-ports-card .text-action{display:inline-flex;align-items:center;gap:5px;padding:4px 8px;border-color:#075eaa;background:transparent;color:#2196f3}.admin-ports-card .text-action.remove{border-color:#7f1d1d;color:#ef4444}.admin-ports-card .text-action svg{width:11px;height:11px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.public-ports-card{padding:16px}.public-ports-card .panel-header{margin-bottom:14px}.public-ports-card .panel-header h2{font-size:16px}.public-ports-card .panel-header p{font-size:10px}.public-ports-card .table-wrap{border:0;border-radius:0}.public-ports-card .ports-table thead{border-bottom:1px solid #213047}.public-ports-card .ports-table th{padding:8px 6px;background:transparent;color:#8493a8}.public-ports-card .ports-table td{padding:9px 6px}.public-ports-card .ports-table tbody tr{background:transparent}.public-ports-card .ports-table tbody tr:hover{background:#0d192b}.public-ports-card .type-badge{border-color:#6d4bb8;background:#2f2150;color:#c4b5fd}.public-ports-card .text-action{display:inline-flex;align-items:center;gap:5px;padding:4px 8px;border-color:#075eaa;background:transparent;color:#2196f3}.public-ports-card .text-action.remove{border-color:#7f1d1d;color:#ef4444}.public-ports-card .text-action svg{width:11px;height:11px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.audit-card{padding:16px}.audit-card .panel-header{margin-bottom:10px}.audit-card .panel-header h2{font-size:16px}.audit-card .panel-header p{font-size:10px}.audit-card .audit-list{gap:0}.audit-card .audit-item{grid-template-columns:28px minmax(0,1fr) auto;gap:9px;align-items:center;padding:8px 0}.audit-avatar{display:grid;place-items:center;width:24px;height:24px;border-radius:50%;background:#064e3b;color:#22e68d}.audit-avatar svg{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}.audit-card .audit-user{display:inline;font-size:10px}.audit-card .audit-action{margin-top:2px;color:#cbd5e1;font-size:9px;line-height:1.35}.audit-card .audit-kind{display:none}.audit-card .audit-time{font-size:9px}.audit-card .secondary-button{justify-content:flex-start;width:max-content;margin-top:12px;border-color:#075eaa;background:transparent;color:#2196f3}
+.validation-card{padding:16px}.validation-card .panel-header{margin-bottom:10px}.validation-card .panel-header h2{font-size:16px}.validation-card .panel-header p{font-size:10px}.validation-card .validation{display:block;height:auto;min-height:150px;padding:16px;text-align:center}.validation-card .validation-icon{width:32px;height:32px;margin:0 auto 10px;font-size:15px}.validation-card .validation strong{margin-bottom:14px;font-size:13px}.validation-meta{display:grid;gap:11px}.validation-meta span{font-size:9px}.validation-meta em{display:block;margin-top:3px;color:#e5edf7;font-size:10px}.validation-card .validation.error .validation-icon{background:#7f1d1d}.validation-card .validation.pending .validation-icon{background:#1e293b}
 .table-wrap{overflow-x:hidden}.access-table th:first-child,.access-table td:first-child{width:11%}.access-table th:nth-child(2),.access-table td:nth-child(2){width:25%}.access-table th:nth-child(3),.access-table td:nth-child(3){width:auto}.access-table th:nth-child(4),.access-table td:nth-child(4){width:18%}.access-table th:last-child,.access-table td:last-child{width:22%}
 .ports-table th:first-child,.ports-table td:first-child{width:11%}.ports-table th:nth-child(2),.ports-table td:nth-child(2){width:16%}.ports-table th:nth-child(3),.ports-table td:nth-child(3){width:19%}.ports-table th:nth-child(4),.ports-table td:nth-child(4){width:auto}.ports-table th:last-child,.ports-table td:last-child{width:24%}
 .cell-description{overflow:hidden;white-space:nowrap;text-overflow:ellipsis}.audit-action{display:-webkit-box;overflow:hidden;-webkit-line-clamp:2;-webkit-box-orient:vertical}.audit-list .audit-item:nth-child(n+5){display:none}
@@ -1725,10 +1728,6 @@ body{background:#080d18}
         <section class="panel public-ports-card">
                 <header class="panel-header">
                     <div><h2>Portas Públicas</h2><p>Disponíveis para acesso externo.</p></div>
-                    <div class="header-actions">
-                        <span class="family-badge">Pública</span>
-                        <button class="button small" type="button" data-open-dialog="add-public-port-modal">Adicionar porta</button>
-                    </div>
                 </header>
                 <div class="table-wrap"><table class="ports-table">
                     <thead><tr><th>Porta</th><th>Protocolo</th><th>Serviço</th><th>Descrição</th><th>Ações</th></tr></thead>
@@ -1740,19 +1739,26 @@ body{background:#080d18}
                                 <td><?= htmlspecialchars($port['servico']) ?></td>
                                 <td class="cell-description" title="<?= htmlspecialchars($port['descricao'], ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars($port['descricao']) ?></td>
                                 <td><div class="row-actions">
-                                    <button class="text-action" type="button" data-open-dialog="edit-port-modal" data-record-id="<?= (int) $port['id'] ?>" data-record-scope="publica" data-record-port="<?= (int) $port['porta'] ?>" data-record-protocol="<?= htmlspecialchars($port['protocolo'], ENT_QUOTES, 'UTF-8') ?>" data-record-service="<?= htmlspecialchars($port['servico'], ENT_QUOTES, 'UTF-8') ?>" data-record-description="<?= htmlspecialchars($port['descricao'], ENT_QUOTES, 'UTF-8') ?>">Editar</button>
-                                    <button class="text-action remove" type="button" data-open-dialog="remove-port-modal" data-record-id="<?= (int) $port['id'] ?>" data-record-scope="pública" data-record-value="<?= (int) $port['porta'] ?>">Remover</button>
+                                    <button class="text-action" type="button" data-open-dialog="edit-port-modal" data-record-id="<?= (int) $port['id'] ?>" data-record-scope="publica" data-record-port="<?= (int) $port['porta'] ?>" data-record-protocol="<?= htmlspecialchars($port['protocolo'], ENT_QUOTES, 'UTF-8') ?>" data-record-service="<?= htmlspecialchars($port['servico'], ENT_QUOTES, 'UTF-8') ?>" data-record-description="<?= htmlspecialchars($port['descricao'], ENT_QUOTES, 'UTF-8') ?>"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m4 20 4.5-1 10-10a2.1 2.1 0 0 0-3-3l-10 10zM14 7l3 3"/></svg>Editar</button>
+                                    <button class="text-action remove" type="button" data-open-dialog="remove-port-modal" data-record-id="<?= (int) $port['id'] ?>" data-record-scope="pública" data-record-value="<?= (int) $port['porta'] ?>"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M7 7l1 13h8l1-13M10 11v5M14 11v5"/></svg>Remover</button>
                                 </div></td>
                             </tr>
                         <?php endforeach; ?>
                         <?php if (!$publicPorts): ?><tr><td class="empty-state" colspan="5">Nenhuma porta pública cadastrada.</td></tr><?php endif; ?>
                     </tbody>
                 </table></div>
-                <div class="record-count"><?= count($publicPorts) ?> <?= count($publicPorts) === 1 ? 'porta pública' : 'portas públicas' ?></div>
+                <footer class="access-footer">
+                    <span>Mostrando <?= count($publicPorts) > 0 ? '1 a ' . count($publicPorts) : '0' ?> de <?= count($publicPorts) ?> portas</span>
+                    <nav class="access-pagination" aria-label="Paginação das portas públicas">
+                        <button class="page-chip" type="button" disabled aria-label="Página anterior">‹</button>
+                        <span class="page-chip current" aria-current="page">1</span>
+                        <button class="page-chip" type="button" disabled aria-label="Próxima página">›</button>
+                    </nav>
+                </footer>
         </section>
 
         <div class="side-status">
-        <section class="panel compact-status">
+        <section class="panel compact-status validation-card">
             <header class="panel-header"><div><h2>Última Validação</h2><p>Resultado da verificação mais recente.</p></div></header>
             <?php
             $statusValidacao = $ultimaValidacao['status'] ?? 'NÃO VALIDADO';
@@ -1767,33 +1773,45 @@ body{background:#080d18}
                     $dataValidacao = null;
                 }
             }
+            $tempoValidacao = 'Não informado';
+            if ($dataValidacao !== null) {
+                $segundosValidacao = max(0, time() - $dataValidacao->getTimestamp());
+                if ($segundosValidacao < 60) {
+                    $tempoValidacao = 'Agora';
+                } elseif ($segundosValidacao < 3600) {
+                    $minutosValidacao = intdiv($segundosValidacao, 60);
+                    $tempoValidacao = $minutosValidacao . ($minutosValidacao === 1 ? ' minuto atrás' : ' minutos atrás');
+                } elseif ($segundosValidacao < 86400) {
+                    $horasValidacao = intdiv($segundosValidacao, 3600);
+                    $tempoValidacao = $horasValidacao . ($horasValidacao === 1 ? ' hora atrás' : ' horas atrás');
+                } else {
+                    $diasValidacao = intdiv($segundosValidacao, 86400);
+                    $tempoValidacao = $diasValidacao . ($diasValidacao === 1 ? ' dia atrás' : ' dias atrás');
+                }
+            }
             ?>
-            <div class="validation<?= $classeValidacao ?>"><span class="validation-icon" aria-hidden="true"><?= $iconeValidacao ?></span><div>
+            <div class="validation<?= $classeValidacao ?>"><span class="validation-icon" aria-hidden="true"><?= $iconeValidacao ?></span>
                 <strong><?= htmlspecialchars($tituloValidacao) ?></strong>
                 <?php if ($ultimaValidacao !== null): ?>
-                    <span>Data/hora: <time<?= $dataValidacao ? ' datetime="' . htmlspecialchars($dataValidacao->format(DATE_ATOM), ENT_QUOTES, 'UTF-8') . '"' : '' ?>><?= htmlspecialchars($dataValidacao ? $dataValidacao->format('d/m/Y H:i:s') : 'Não informada') ?></time></span>
-                    <span>Usuário: <em><?= htmlspecialchars((string) ($ultimaValidacao['usuario'] ?? 'desconhecido')) ?></em></span>
-                    <span><?= htmlspecialchars((string) ($ultimaValidacao['resumo'] ?? 'Sem resumo disponível.')) ?></span>
-                    <details class="technical-output"><summary>Ver saída técnica</summary><pre><?= htmlspecialchars((string) ($ultimaValidacao['saida'] ?? 'Sem saída técnica.')) ?></pre></details>
+                    <div class="validation-meta">
+                        <span>Última validação:<em><time<?= $dataValidacao ? ' datetime="' . htmlspecialchars($dataValidacao->format(DATE_ATOM), ENT_QUOTES, 'UTF-8') . '"' : '' ?>><?= htmlspecialchars($dataValidacao ? $dataValidacao->format('d/m/Y H:i') : 'Não informada') ?></time></em></span>
+                        <span>Tempo desde a validação:<em><?= htmlspecialchars($tempoValidacao) ?></em></span>
+                    </div>
                 <?php else: ?>
-                    <span>Use “Validar configuração” para checar a sintaxe da prévia.</span>
-                    <span>Nenhuma regra será aplicada nesta fase.</span>
+                    <div class="validation-meta"><span>Última validação:<em>Não realizada</em></span></div>
                 <?php endif; ?>
-            </div></div>
+            </div>
         </section>
-        <section class="panel compact-status">
+        <section class="panel compact-status audit-card">
             <header class="panel-header"><div><h2>Auditoria Recente</h2><p>Últimas alterações.</p></div></header>
             <div class="audit-list">
                 <?php foreach ($recentAudit as $event): ?>
                     <?php $eventTime = (new DateTimeImmutable($event['criado_em']))->format('d/m H:i'); ?>
                     <div class="audit-item">
+                        <span class="audit-avatar" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="3"/><path d="M6 20a6 6 0 0 1 12 0"/></svg></span>
                         <div>
                             <span class="audit-user"><?= htmlspecialchars($event['usuario']) ?></span>
-                            <span class="audit-kind"><?= htmlspecialchars((string) ($event['tipo_registro'] ?? 'FIREWALL')) ?></span>
-                        </div>
-                        <div>
                             <div class="audit-action"><?= htmlspecialchars($event['mensagem'] ?: $event['acao']) ?></div>
-                            <div class="audit-kind"><?= htmlspecialchars((string) ($event['nome_registro'] ?? '')) ?></div>
                         </div>
                         <span class="audit-time"><?= htmlspecialchars($eventTime) ?></span>
                     </div>
