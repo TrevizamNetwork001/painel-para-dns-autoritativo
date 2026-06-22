@@ -2,6 +2,17 @@
 
 Historico de alteracoes do Painel DNS Trevizam Network.
 
+## [2.3.7] - 2026-06-22
+
+### Ícones dos cards de resumo do Firewall
+
+- Adicionados ícones SVG aos cards IPv4 Liberados, IPv6 Liberados, Portas
+  Admin, Portas Públicas e Firewall.
+- Reproduzidas as cores e os fundos visuais da imagem `esse.png`.
+- Preservadas as contagens, os estados e toda a lógica operacional existente.
+- Handoff disponível em
+  `HANDOFF_ICONES_CARDS_RESUMO_FIREWALL_2026-06-22.md`.
+
 ## [2.3.6] - 2026-06-22
 
 ### Ícones das ações rápidas do Firewall

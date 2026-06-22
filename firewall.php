@@ -1374,11 +1374,11 @@ $ipv4Count = count($aclIpv4);
 $ipv6Count = count($aclIpv6);
 $backupDisponivel = firewall_backup_valido($ultimoBackup);
 $summary = [
-    ['◉', 'IPv4 Liberados', (string) $ipv4Count, 'Redes e endereços', false],
-    ['⬡', 'IPv6 Liberados', (string) $ipv6Count, 'Redes e endereços', false],
-    ['⌁', 'Portas Admin', (string) count($adminPorts), 'Acesso restrito', false],
-    ['⇄', 'Portas Públicas', (string) count($publicPorts), 'Acesso externo', false],
-    ['✓', 'Aplicação', $ultimaAplicacao['status'] ?? 'Nunca aplicado', $backupDisponivel ? 'Rollback disponível' : 'Sem backup disponível', ($ultimaAplicacao['status'] ?? '') === 'APLICADO'],
+    ['shield', 'blue', 'IPv4 Liberados', (string) $ipv4Count, 'Redes e endereços', false],
+    ['shield', 'green', 'IPv6 Liberados', (string) $ipv6Count, 'Redes e endereços', false],
+    ['lock', 'orange', 'Portas Admin', (string) count($adminPorts), 'Acesso restrito', false],
+    ['globe', 'purple', 'Portas Públicas', (string) count($publicPorts), 'Acesso externo', false],
+    ['firewall', 'green', 'Aplicação', $ultimaAplicacao['status'] ?? 'Nunca aplicado', $backupDisponivel ? 'Rollback disponível' : 'Sem backup disponível', ($ultimaAplicacao['status'] ?? '') === 'APLICADO'],
 ];
 $quickActions = [
     ['plus', 'blue', 'Adicionar IP', 'Autorizar endereço', 'add-ip-modal'],
@@ -1400,6 +1400,17 @@ function firewall_icone_acao_rapida(string $icone): string
         'check' => '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="m8 12 2.5 2.5L16 9"/></svg>',
         'apply' => '<svg viewBox="0 0 24 24"><path d="M20 11a8 8 0 1 1-2.34-5.66L20 7.68"/><path d="M20 3v4.68h-4.68"/></svg>',
         'logs' => '<svg viewBox="0 0 24 24"><path d="M6 3h9l4 4v14H6z"/><path d="M14 3v5h5M9 12h7M9 16h7"/></svg>',
+        default => '',
+    };
+}
+
+function firewall_icone_resumo(string $icone): string
+{
+    return match ($icone) {
+        'shield' => '<svg viewBox="0 0 24 24"><path d="M12 3 5 6v5c0 4.6 2.9 8.4 7 10 4.1-1.6 7-5.4 7-10V6z"/><path d="M12 7v10"/></svg>',
+        'lock' => '<svg viewBox="0 0 24 24"><rect x="5" y="10" width="14" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3M12 14v3"/></svg>',
+        'globe' => '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a15 15 0 0 1 0 18M12 3a15 15 0 0 0 0 18"/></svg>',
+        'firewall' => '<svg viewBox="0 0 24 24"><path d="M12 3 5 6v5c0 4.6 2.9 8.4 7 10 4.1-1.6 7-5.4 7-10V6z"/><path d="M9 14.5c0-1.6 1.2-2.4 2-3.4.5-.6.8-1.3.8-2.1 1.5 1 3.2 2.5 3.2 4.7A3 3 0 0 1 12 17a3 3 0 0 1-3-2.5Z"/></svg>',
         default => '',
     };
 }
@@ -1521,7 +1532,7 @@ body{background:#080d18}
 /* Ajuste final conforme a estrutura da referência esse.png */
 .sidebar{display:flex;flex-direction:column}.sidebar-user{margin-top:auto;padding:14px 9px 4px;border-top:1px solid #172236}.sidebar-user strong{display:block;color:#e2e8f0;font-size:11px}.sidebar-user span{display:block;margin-top:3px;color:#53647b;font-size:9px}.sidebar-version{padding:8px 9px 0;color:#3f4f65;font-size:8px}
 .page-header-right{display:flex;align-items:flex-end;flex-direction:column;gap:10px}.breadcrumb{color:#64748b;font-size:10px}.breadcrumb strong{color:#a8b7ca}
-.summary-card{min-height:82px;padding-top:13px}.summary-icon{top:13px}.summary-value.status{font-size:14px}
+.summary-card{min-height:82px;padding-top:13px}.summary-icon{top:13px;width:34px;height:34px;border:0;font-size:0}.summary-icon svg{width:25px;height:25px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}.summary-icon.blue{background:#063b6d;color:#1797ff}.summary-icon.green{background:#064e3b;color:#22e68d}.summary-icon.orange{background:#4a2b09;color:#f59e0b}.summary-icon.purple{background:#31205c;color:#a78bfa}.summary-value.status{font-size:14px}
 .quick-panel{display:block;padding:12px}.quick-panel .panel-header{margin-bottom:10px}.quick-panel .panel-header p{display:block;font-size:9px}.quick-grid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:7px}.quick-grid>:nth-child(4){display:block}
 .quick-action{display:grid;grid-template-columns:32px minmax(0,1fr);grid-template-rows:auto auto;width:100%;min-height:58px;padding:8px 10px}.quick-action .quick-icon{grid-row:1/3;align-self:center;font-size:20px;text-align:center}.quick-action strong{align-self:end;font-size:10px}.quick-action small{display:block;align-self:start;margin:2px 0 0;color:#64748b;font-size:8px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .quick-grid .inline-form,.quick-grid .quick-action.validate{width:100%}
@@ -1571,9 +1582,9 @@ body{background:#080d18}
     </header>
 
     <section class="summary-grid" aria-label="Resumo do Firewall">
-        <?php foreach ($summary as [$icon, $label, $value, $detail, $status]): ?>
+        <?php foreach ($summary as [$icon, $iconTone, $label, $value, $detail, $status]): ?>
             <article class="summary-card">
-                <span class="summary-icon<?= $status ? ' status' : '' ?>" aria-hidden="true"><?= htmlspecialchars($icon) ?></span>
+                <span class="summary-icon <?= htmlspecialchars($iconTone) ?>" aria-hidden="true"><?= firewall_icone_resumo($icon) ?></span>
                 <span class="summary-label"><?= htmlspecialchars($label === 'Aplicação' ? 'Firewall' : $label) ?></span>
                 <span class="summary-value<?= $status ? ' status' : '' ?>"><?= htmlspecialchars($value) ?></span>
                 <span class="summary-detail"><?= htmlspecialchars($detail) ?></span>
