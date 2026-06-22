@@ -2,6 +2,18 @@
 
 Historico de alteracoes do Painel DNS Trevizam Network.
 
+## [2.3.8] - 2026-06-22
+
+### Status Ativo/Off no card Firewall
+
+- Removida do card Firewall a informação sobre disponibilidade de backup.
+- O card agora apresenta `Ativo` quando a última aplicação foi concluída e
+  `Off` nos demais estados.
+- Adicionadas descrições operacionais `Configuração em uso` e
+  `Firewall desativado`.
+- Handoff disponível em
+  `HANDOFF_STATUS_CARD_FIREWALL_2026-06-22.md`.
+
 ## [2.3.7] - 2026-06-22
 
 ### Ícones dos cards de resumo do Firewall
