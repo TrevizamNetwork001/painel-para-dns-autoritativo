@@ -1381,14 +1381,28 @@ $summary = [
     ['✓', 'Aplicação', $ultimaAplicacao['status'] ?? 'Nunca aplicado', $backupDisponivel ? 'Rollback disponível' : 'Sem backup disponível', ($ultimaAplicacao['status'] ?? '') === 'APLICADO'],
 ];
 $quickActions = [
-    ['+', 'Adicionar IP', 'Autorizar endereço', 'add-ip-modal'],
-    ['🔒', 'Porta Admin', 'Adicionar restrição', 'add-admin-port-modal'],
-    ['🌐', 'Porta Pública', 'Liberar serviço', 'add-public-port-modal'],
-    ['↶', 'Rollback', $backupDisponivel ? 'Reverter última aplicação' : 'Sem backup disponível', $backupDisponivel ? 'rollback-firewall-modal' : 'disabled-action'],
-    ['✓', 'Validar', 'Checar sintaxe nftables', 'validate-firewall'],
-    ['↻', 'Aplicar', 'Alterar regras reais', 'apply-firewall-modal'],
-    ['≡', 'Ver Logs', 'Consultar eventos', null],
+    ['plus', 'blue', 'Adicionar IP', 'Autorizar endereço', 'add-ip-modal'],
+    ['lock', 'orange', 'Porta Admin', 'Adicionar restrição', 'add-admin-port-modal'],
+    ['globe', 'purple', 'Porta Pública', 'Liberar serviço', 'add-public-port-modal'],
+    ['backup', 'blue', 'Rollback', $backupDisponivel ? 'Reverter última aplicação' : 'Sem backup disponível', $backupDisponivel ? 'rollback-firewall-modal' : 'disabled-action'],
+    ['check', 'green', 'Validar', 'Checar sintaxe nftables', 'validate-firewall'],
+    ['apply', 'green', 'Aplicar', 'Alterar regras reais', 'apply-firewall-modal'],
+    ['logs', 'blue', 'Ver Logs', 'Consultar eventos', null],
 ];
+
+function firewall_icone_acao_rapida(string $icone): string
+{
+    return match ($icone) {
+        'plus' => '<svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>',
+        'lock' => '<svg viewBox="0 0 24 24"><rect x="5" y="10" width="14" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3M12 14v3"/></svg>',
+        'globe' => '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a15 15 0 0 1 0 18M12 3a15 15 0 0 0 0 18"/></svg>',
+        'backup' => '<svg viewBox="0 0 24 24"><path d="M5 3h12l3 3v15H4V4a1 1 0 0 1 1-1Z"/><path d="M8 3v6h8V3M8 21v-7h8v7"/></svg>',
+        'check' => '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="m8 12 2.5 2.5L16 9"/></svg>',
+        'apply' => '<svg viewBox="0 0 24 24"><path d="M20 11a8 8 0 1 1-2.34-5.66L20 7.68"/><path d="M20 3v4.68h-4.68"/></svg>',
+        'logs' => '<svg viewBox="0 0 24 24"><path d="M6 3h9l4 4v14H6z"/><path d="M14 3v5h5M9 12h7M9 16h7"/></svg>',
+        default => '',
+    };
+}
 ?>
 <!DOCTYPE html>
 <html lang="pt-BR">
@@ -1510,6 +1524,10 @@ body{background:#080d18}
 .summary-card{min-height:82px;padding-top:13px}.summary-icon{top:13px}.summary-value.status{font-size:14px}
 .quick-panel{display:block;padding:12px}.quick-panel .panel-header{margin-bottom:10px}.quick-panel .panel-header p{display:block;font-size:9px}.quick-grid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:7px}.quick-grid>:nth-child(4){display:block}
 .quick-action{display:grid;grid-template-columns:32px minmax(0,1fr);grid-template-rows:auto auto;width:100%;min-height:58px;padding:8px 10px}.quick-action .quick-icon{grid-row:1/3;align-self:center;font-size:20px;text-align:center}.quick-action strong{align-self:end;font-size:10px}.quick-action small{display:block;align-self:start;margin:2px 0 0;color:#64748b;font-size:8px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.quick-grid .inline-form,.quick-grid .quick-action.validate{width:100%}
+.quick-icon{display:grid;place-items:center;width:30px;height:30px;border-radius:9px;background:color-mix(in srgb,currentColor 12%,transparent)}
+.quick-icon svg{width:23px;height:23px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.quick-icon.blue{color:#1797ff}.quick-icon.orange{color:#f59e0b}.quick-icon.purple{color:#9b7cff}.quick-icon.green{color:#16d982}
 .main-layout{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:13px;align-items:start}.main-layout>.access-card{grid-column:1}.main-layout>.admin-ports-card{grid-column:2}.main-layout>.public-ports-card{grid-column:1}.main-layout>.side-status{grid-column:2;display:grid;grid-template-columns:minmax(0,.72fr) minmax(0,1.28fr);gap:13px;align-items:stretch}
 .access-card{padding:14px}.access-card .panel-header{align-items:center}.access-card .header-actions{flex-wrap:nowrap}.access-search{width:min(250px,100%)}.access-table tbody[data-family-section]+tbody[data-family-section] tr:first-child td{border-top:1px solid #25344a}
 .table-wrap{overflow-x:hidden}.access-table th:first-child,.access-table td:first-child{width:11%}.access-table th:nth-child(2),.access-table td:nth-child(2){width:25%}.access-table th:nth-child(3),.access-table td:nth-child(3){width:auto}.access-table th:nth-child(4),.access-table td:nth-child(4){width:18%}.access-table th:last-child,.access-table td:last-child{width:22%}
@@ -1566,10 +1584,10 @@ body{background:#080d18}
     <section class="panel quick-panel">
         <header class="panel-header"><div><h2>Ações rápidas</h2><p>Atalhos para as operações mais utilizadas.</p></div></header>
         <div class="quick-grid">
-            <?php foreach ($quickActions as [$icon, $label, $detail, $modalId]): ?>
+            <?php foreach ($quickActions as [$icon, $iconTone, $label, $detail, $modalId]): ?>
                 <?php if ($modalId === 'disabled-action'): ?>
                     <button class="quick-action" type="button" disabled>
-                        <span class="quick-icon" aria-hidden="true"><?= htmlspecialchars($icon) ?></span>
+                        <span class="quick-icon <?= htmlspecialchars($iconTone) ?>" aria-hidden="true"><?= firewall_icone_acao_rapida($icon) ?></span>
                         <strong><?= htmlspecialchars($label === 'Rollback' ? 'Backup' : $label) ?></strong>
                         <small><?= htmlspecialchars($label === 'Rollback' ? ($backupDisponivel ? 'Cópia disponível' : 'Sem cópia disponível') : $detail) ?></small>
                     </button>
@@ -1580,7 +1598,7 @@ body{background:#080d18}
                         <?= csrf_field() ?>
                         <input type="hidden" name="acao" value="validar_configuracao">
                         <button class="quick-action validate" type="submit">
-                            <span class="quick-icon" aria-hidden="true"><?= htmlspecialchars($icon) ?></span>
+                            <span class="quick-icon <?= htmlspecialchars($iconTone) ?>" aria-hidden="true"><?= firewall_icone_acao_rapida($icon) ?></span>
                             <strong><?= htmlspecialchars($label === 'Rollback' ? 'Backup' : $label) ?></strong>
                             <small><?= htmlspecialchars($detail) ?></small>
                         </button>
@@ -1593,7 +1611,7 @@ body{background:#080d18}
                     <?= $modalId !== null
                         ? 'data-open-dialog="' . htmlspecialchars($modalId, ENT_QUOTES, 'UTF-8') . '"'
                         : 'data-future-action="' . htmlspecialchars($label, ENT_QUOTES, 'UTF-8') . '"' ?>>
-                    <span class="quick-icon" aria-hidden="true"><?= htmlspecialchars($icon) ?></span>
+                    <span class="quick-icon <?= htmlspecialchars($iconTone) ?>" aria-hidden="true"><?= firewall_icone_acao_rapida($icon) ?></span>
                     <strong><?= htmlspecialchars($label === 'Rollback' ? 'Backup' : $label) ?></strong>
                     <small><?= htmlspecialchars($label === 'Aplicar' ? 'Validar + backup' : $detail) ?></small>
                 </button>
