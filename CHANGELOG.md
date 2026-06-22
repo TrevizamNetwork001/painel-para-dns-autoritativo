@@ -2,6 +2,16 @@
 
 Historico de alteracoes do Painel DNS Trevizam Network.
 
+## [2.3.16] - 2026-06-22
+
+### Alinhamento do ícone Backup
+
+- Corrigida a posição óptica do ícone Backup em Ações rápidas.
+- Ajustados alinhamento vertical e dimensões do SVG em relação ao título e ao
+  subtítulo do botão.
+- Handoff disponível em
+  `HANDOFF_ALINHAMENTO_ICONE_BACKUP_FIREWALL_2026-06-22.md`.
+
 ## [2.3.15] - 2026-06-22
 
 ### Ícones superiores fiéis à referência
