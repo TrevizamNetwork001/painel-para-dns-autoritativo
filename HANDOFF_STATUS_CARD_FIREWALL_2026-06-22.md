@@ -8,10 +8,10 @@ O card superior Firewall deixou de exibir informações de backup e agora mostra
 o estado operacional:
 
 - `Ativo`: última aplicação registrada com status `APLICADO`.
-- `Off`: nenhum estado aplicado ou último estado diferente de `APLICADO`.
+- `Inativo`: nenhum estado aplicado ou último estado diferente de `APLICADO`.
 
-O texto auxiliar passa a ser `Configuração em uso` ou `Firewall desativado`.
-Quando estiver Off, o ícone utiliza destaque vermelho.
+O texto auxiliar passa a ser `Configuração em uso` ou `Firewall inativo`.
+Quando estiver Inativo, o ícone utiliza destaque vermelho.
 
 ## Escopo preservado
 
