@@ -2,6 +2,19 @@
 
 Historico de alteracoes do Painel DNS Trevizam Network.
 
+## [2.3.18] - 2026-06-22
+
+### Ajuste final de alinhamento das tabelas
+
+- Redistribuídas as colunas das tabelas de portas para ampliar Ações.
+- Compactados somente os botões Editar/Remover das tabelas de portas.
+- Eliminados corte lateral e overflow horizontal desnecessário no desktop.
+- Mantido truncamento da coluna Descrição.
+- Alterado o cabeçalho `Data de criação` para `Criado em`.
+- Nenhuma lógica ou operação do firewall foi alterada.
+- Handoff disponível em
+  `HANDOFF_AJUSTE_FINAL_TABELAS_FIREWALL_2026-06-22.md`.
+
 ## [2.3.17] - 2026-06-22
 
 ### Layout exclusivo do botão Backup
