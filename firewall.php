@@ -1578,8 +1578,11 @@ body{background:#080d18}
 .quick-grid .inline-form,.quick-grid .quick-action.validate{width:100%}
 .quick-icon{display:grid;place-items:center;width:30px;height:30px;border-radius:9px;background:color-mix(in srgb,currentColor 12%,transparent)}
 .quick-icon svg{width:23px;height:23px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
-.quick-icon.icon-backup{align-self:center;transform:translateY(-1px)}
-.quick-icon.icon-backup svg{display:block;width:22px;height:22px}
+.quick-action:has(.icon-backup){display:grid;grid-template-columns:32px minmax(0,1fr);grid-template-rows:auto auto;column-gap:9px}
+.quick-action:has(.icon-backup) .icon-backup{grid-column:1;grid-row:1/3;align-self:center;justify-self:center;transform:none}
+.quick-action:has(.icon-backup) .icon-backup svg{display:block;width:22px;height:22px}
+.quick-action:has(.icon-backup) strong{grid-column:2;grid-row:1;align-self:end;text-align:left}
+.quick-action:has(.icon-backup) small{grid-column:2;grid-row:2;align-self:start;text-align:left}
 .quick-icon.blue{color:#1797ff}.quick-icon.orange{color:#f59e0b}.quick-icon.purple{color:#9b7cff}.quick-icon.green{color:#16d982}
 .main-layout{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:13px;align-items:start}.main-layout>.access-card{grid-column:1}.main-layout>.admin-ports-card{grid-column:2}.main-layout>.public-ports-card{grid-column:1}.main-layout>.side-status{grid-column:2;display:grid;grid-template-columns:minmax(0,.72fr) minmax(0,1.28fr);gap:13px;align-items:stretch}
 .access-card{padding:14px}.access-card .panel-header{align-items:center}.access-card .header-actions{flex-wrap:nowrap}.access-search{width:min(250px,100%)}.access-table tbody[data-family-section]+tbody[data-family-section] tr:first-child td{border-top:1px solid #25344a}
