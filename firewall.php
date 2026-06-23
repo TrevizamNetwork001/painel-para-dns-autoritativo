@@ -1474,7 +1474,7 @@ $summary = [
     ['shield-v6', 'green', 'IPv6 Liberados', (string) $ipv6Count, 'Redes e endereços', false],
     ['lock', 'orange', 'Portas Admin', (string) count($adminPorts), 'Acesso restrito', false],
     ['globe', 'purple', 'Portas Públicas', (string) count($publicPorts), 'Acesso externo', false],
-    ['firewall', 'green', 'Firewall', $firewallAtivo ? 'Ativo' : 'Inativo', $firewallAtivo ? 'Configuração em uso' : 'Firewall inativo', $firewallAtivo],
+    ['firewall', $firewallAtivo ? 'green' : 'off', 'Firewall', $firewallAtivo ? 'Ativo' : 'Inativo', $firewallAtivo ? 'Configuração em uso' : 'Firewall inativo', $firewallAtivo],
 ];
 $quickActions = [
     ['plus', 'blue', 'Adicionar IP', 'Autorizar endereço', 'add-ip-modal'],
@@ -1535,6 +1535,7 @@ button,input,a{font:inherit}button{color:inherit}a{color:inherit;text-decoration
 .summary-label{display:block;color:var(--muted);font-size:9px;letter-spacing:.04em;text-transform:uppercase}
 .summary-value{display:block;margin-top:4px;color:var(--accent);font-size:18px;font-weight:800;line-height:1.1}.summary-value.status{color:var(--ok);font-size:15px}
 .summary-detail{display:block;margin-top:3px;overflow:hidden;color:var(--subtle);font-size:9px;white-space:nowrap;text-overflow:ellipsis}
+.summary-card.firewall-inactive .summary-value,.summary-card.firewall-inactive .summary-detail{color:#f87171}
 .panel{padding:15px;border:1px solid var(--line);border-radius:11px;background:linear-gradient(160deg,#0d182a,var(--panel));min-width:0;box-sizing:border-box}
 .quick-panel{margin-bottom:12px;padding:10px 12px}
 .quick-panel .panel-header{margin-bottom:8px}.quick-panel .panel-header p{display:none}
@@ -1554,7 +1555,10 @@ button,input,a{font:inherit}button{color:inherit}a{color:inherit;text-decoration
 th,td{padding:8px 9px;border-bottom:1px solid var(--line);text-align:left;font-size:11px;overflow-wrap:anywhere}th{background:var(--deep);color:var(--muted);font-size:8px;letter-spacing:.05em;text-transform:uppercase}
 th:first-child,td:first-child{width:12%}th:nth-child(2),td:nth-child(2){width:22%}th:nth-child(4),td:nth-child(4){width:18%}th:last-child,td:last-child{width:25%}
 tr:last-child td{border-bottom:0}tbody tr{background:#02061766}tbody tr:hover{background:#0f172ab8}
-.type-badge{display:inline-flex;padding:3px 6px;border:1px solid #38bdf838;border-radius:999px;background:#0e74901f;color:#bae6fd;font-size:9px;font-weight:700}
+.type-badge{display:inline-flex;padding:3px 6px;border:1px solid #38bdf838;border-radius:999px;background:#0e74901f;color:#bae6fd;font-size:9px;font-weight:700;transition:background .16s ease,border-color .16s ease,color .16s ease,box-shadow .16s ease}
+.access-card .type-badge:hover{border-color:#38bdf8;background:#38bdf824;color:#e0f7ff;box-shadow:0 0 14px #38bdf852}
+.admin-ports-card .type-badge:hover{border-color:#38bdf8;background:#38bdf824;color:#e0f7ff;box-shadow:0 0 14px #38bdf852}
+.public-ports-card .type-badge:hover{border-color:#a78bfa;background:#a78bfa24;color:#f3e8ff;box-shadow:0 0 14px #a78bfa52}
 .family-badge{display:inline-flex;padding:3px 7px;border:1px solid var(--line2);border-radius:999px;background:#111827;color:#cbd5e1;font-size:9px;font-weight:700}
 .strong{color:#fff;font-weight:700}.row-actions{display:flex;align-items:center;justify-content:flex-end;gap:6px;white-space:nowrap}
 .text-action{display:inline-flex;align-items:center;justify-content:center;flex:0 0 auto;min-width:max-content;padding:4px 8px;border:1px solid var(--line2);border-radius:6px;background:#101827;color:#cfeeff;cursor:pointer;font-size:9px;font-weight:700;white-space:nowrap}.text-action:hover,.text-action:focus{border-color:var(--accent);outline:none}.text-action.remove{color:#fecaca}.text-action.remove:hover,.text-action.remove:focus{border-color:var(--danger)}
@@ -1621,6 +1625,25 @@ tr:last-child td{border-bottom:0}tbody tr{background:#02061766}tbody tr:hover{ba
 .modal-actions.step-actions .button.secondary{border-color:#2b3b54;background:#0f172a;color:#dbeafe}
 .modal-actions.step-actions .button.primary{background:linear-gradient(180deg,#2563eb,#1d4ed8);border-color:#3b82f6}
 .modal-actions.step-actions .button.primary:hover,.modal-actions.step-actions .button.primary:focus{background:linear-gradient(180deg,#3b82f6,#2563eb)}
+.modal.access-modal{width:min(920px,calc(100vw - 28px));border-color:#284465;background:radial-gradient(circle at 15% 0,#0e355233,transparent 30%),linear-gradient(160deg,#0d182a,#08111e);box-shadow:0 32px 90px #020617e6}
+.access-modal .modal-header{align-items:flex-start;padding:20px 22px 17px;background:linear-gradient(180deg,#0d1b31,#0b1424)}
+.access-modal .modal-header h2{font-size:20px}.access-modal .modal-header p{max-width:580px;color:#9fb0c4}
+.access-modal .modal-close{display:grid;place-items:center;flex:0 0 34px;width:34px;height:34px;padding:0;border-radius:9px;font-size:20px;line-height:1}
+.access-modal .modal-body{padding:18px 22px 20px}.access-modal .modal-form{gap:16px}
+.access-modal-grid{display:grid;grid-template-columns:minmax(0,1.08fr) minmax(300px,.92fr);gap:18px;align-items:start}
+.access-modal-fields,.access-modal-aside{display:grid;gap:13px;min-width:0}
+.access-modal .field{min-width:0}.access-modal .field label{color:#e2e8f0;font-size:11px}.access-modal .field input,.access-modal .field select{min-height:42px;border-color:#2b3b54;background:#07111e}
+.access-modal .field-help{color:#8193a8;font-size:10px;line-height:1.4}
+.access-modal .field.has-error input,.access-modal .field.has-error select{border-color:#ef4444;background:#2a0d14;box-shadow:0 0 0 3px #ef444424}.access-modal .field.has-error label{color:#fecaca}.access-field-error{display:none;margin-top:6px;color:#fca5a5;font-size:10px;font-weight:700;line-height:1.4}.access-field-error.show{display:block}
+.access-modal .auto-validate{padding:10px 12px;border-color:#223b59;background:#071523}
+.access-side-card{padding:13px 14px;border:1px solid #20334c;border-radius:12px;background:#07111e}
+.access-side-title{display:flex;align-items:center;gap:8px;margin:0 0 11px;color:#f4fbff;font-size:12px;font-weight:800}
+.access-side-title svg{width:17px;height:17px;fill:none;stroke:#38bdf8;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.access-example-list{display:grid;gap:8px}.access-example{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:8px 9px;border:1px solid #172a42;border-radius:9px;background:#091727}.access-example span{color:#8fa3b8;font-size:10px}.access-example code{color:#bae6fd;font:700 10px/1.3 Consolas,Monaco,monospace;text-align:right}
+.access-security-note{display:grid;grid-template-columns:30px minmax(0,1fr);gap:10px;padding:12px 13px;border:1px solid #16653480;border-radius:12px;background:#052e205c}.access-security-icon{display:grid;place-items:center;width:30px;height:30px;border-radius:9px;background:#14532d80;color:#86efac}.access-security-icon svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}.access-security-note strong{display:block;color:#dcfce7;font-size:11px}.access-security-note p{margin:4px 0 0;color:#9fd6b5;font-size:10px;line-height:1.45}
+.access-summary{display:grid;gap:8px}.access-summary-row{display:grid;grid-template-columns:78px minmax(0,1fr);gap:10px;align-items:start;padding-bottom:7px;border-bottom:1px solid #17283d}.access-summary-row:last-of-type{padding-bottom:0;border-bottom:0}.access-summary-row span{color:#718399;font-size:10px}.access-summary-row strong{overflow-wrap:anywhere;color:#e2e8f0;font-size:10px;text-align:right}.access-summary-note{margin:10px 0 0;color:#7f91a6;font-size:9px;line-height:1.4}
+.access-modal-actions{display:flex;justify-content:flex-end;gap:9px;padding-top:2px}.access-modal-actions .button{min-width:122px}.access-modal-actions .button.primary{background:linear-gradient(180deg,#2563eb,#1d4ed8);border-color:#3b82f6}
+.access-context{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:11px 12px;border:1px solid #20334c;border-radius:11px;background:#07111e}.access-context span{color:#8193a8;font-size:10px}.access-context strong{color:#e2e8f0;font-size:11px}.access-danger-note{display:grid;grid-template-columns:30px minmax(0,1fr);gap:10px;padding:12px 13px;border:1px solid #7f1d1d99;border-radius:12px;background:#2b101080}.access-danger-icon{display:grid;place-items:center;width:30px;height:30px;border-radius:9px;background:#7f1d1d80;color:#fecaca}.access-danger-icon svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}.access-danger-note strong{display:block;color:#fee2e2;font-size:11px}.access-danger-note p{margin:4px 0 0;color:#fecaca;font-size:10px;line-height:1.45}.access-modal-actions .button.danger{border-color:#dc2626;background:linear-gradient(180deg,#dc2626,#991b1b)}
 .field label{display:block;margin-bottom:6px;color:#cbd5e1;font-size:12px;font-weight:700}.field input,.field select{width:100%;min-height:40px;padding:9px 11px;border:1px solid var(--line2);border-radius:9px;background:var(--deep);color:#fff;outline:none}
 .field input:focus,.field select:focus{border-color:var(--accent);box-shadow:0 0 0 3px #38bdf81a}.field-help{display:block;margin-top:5px;color:var(--subtle);font-size:11px}
 .button.small{min-height:30px;padding:6px 9px;font-size:10px}
@@ -1706,6 +1729,7 @@ body{background:#080d18}
 .application-details{margin-top:8px}.application-details>summary{cursor:pointer;color:#93c5fd;font-size:9px;font-weight:700}
 @media(max-width:1320px){.quick-grid{grid-template-columns:repeat(4,minmax(0,1fr))}.main-layout{grid-template-columns:1fr}.main-layout>.access-card,.main-layout>.admin-ports-card,.main-layout>.public-ports-card,.main-layout>.side-status{grid-column:1}.main-layout>.side-status{grid-template-columns:1fr}}
 @media(max-width:900px){.fw-apply-status-layout,.fw-connections-grid,.fw-protocol-layout{grid-template-columns:1fr}.fw-apply-details,.fw-block-separator{padding-left:0;padding-top:14px;border-left:0;border-top:1px solid rgba(148,163,184,.14)}.fw-origin-row{grid-template-columns:minmax(100px,1fr) 28px minmax(80px,1fr) 38px}.fw-history-item{grid-template-columns:44px minmax(0,1fr)}.fw-history-time{grid-column:2}}
+@media(max-width:760px){.access-modal-grid{grid-template-columns:1fr}.access-modal .modal-body{padding:15px}.access-modal-actions{display:grid;grid-template-columns:1fr}.access-modal-actions .button{width:100%}}
 @media(max-width:860px){.page-header-right{align-items:flex-end;flex-direction:column}.breadcrumb{display:none}.quick-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.main-layout>.side-status{grid-template-columns:1fr}.access-card .header-actions{align-items:stretch;flex-direction:column}.table-wrap{overflow-x:auto}.access-table,.ports-table{min-width:620px}.quick-action small{display:none}}
 </style>
 </head>
@@ -1725,7 +1749,7 @@ body{background:#080d18}
 
     <section class="summary-grid" aria-label="Resumo do Firewall">
         <?php foreach ($summary as [$icon, $iconTone, $label, $value, $detail, $status]): ?>
-            <article class="summary-card">
+            <article class="summary-card<?= $label === 'Firewall' && !$status ? ' firewall-inactive' : '' ?>">
                 <span class="summary-icon <?= htmlspecialchars($iconTone) ?>" aria-hidden="true"><?= firewall_icone_resumo($icon) ?></span>
                 <span class="summary-label"><?= htmlspecialchars($label) ?></span>
                 <span class="summary-value<?= $status ? ' status' : '' ?>"><?= htmlspecialchars($value) ?></span>
@@ -2140,16 +2164,13 @@ body{background:#080d18}
         </div>
     </dialog>
 
-    <dialog class="modal step-modal" id="add-ip-modal">
+    <dialog class="modal access-modal" id="add-ip-modal">
         <header class="modal-header">
             <div>
                 <h2>Adicionar acesso administrativo</h2>
-                <p>Autorize um endereço IP ou rede para acesso administrativo.</p>
+                <p>Autorize um IP ou rede confiável para acessar portas administrativas.</p>
             </div>
-            <div class="modal-header-badge">
-                <button class="modal-close" type="button" data-close-dialog>Fechar</button>
-                <span class="mini-pill">Acesso administrativo</span>
-            </div>
+            <button class="modal-close" type="button" data-close-dialog aria-label="Fechar">×</button>
         </header>
         <div class="modal-body">
             <form method="POST" class="modal-form" data-add-ip-form>
@@ -2158,69 +2179,93 @@ body{background:#080d18}
                 <input type="hidden" name="familia" data-step-family value="IPv4">
                 <div class="step-error" data-step-error></div>
 
-                <div class="form-row">
-                    <div class="field">
-                        <label for="add-ip-family-visual">Família</label>
-                        <select id="add-ip-family-visual" data-step-family-select required>
-                            <option value="IPv4">IPv4</option>
-                            <option value="IPv6">IPv6</option>
-                        </select>
+                <div class="access-modal-grid">
+                    <div class="access-modal-fields">
+                        <div class="field">
+                            <label for="add-ip-family-visual">Família</label>
+                            <select id="add-ip-family-visual" data-step-family-select required>
+                                <option value="IPv4">IPv4</option>
+                                <option value="IPv6">IPv6</option>
+                            </select>
+                            <span class="field-help">Selecione o protocolo IP.</span>
+                        </div>
+
+                        <div class="field">
+                            <label for="add-ip-description">Descrição</label>
+                            <input id="add-ip-description" name="descricao" maxlength="120" placeholder="Ex.: Acesso da equipe técnica">
+                            <span class="field-help">Identifique o propósito deste acesso.</span>
+                        </div>
+
+                        <div class="field">
+                            <label for="add-ip-network">IP ou rede</label>
+                            <input id="add-ip-network" name="rede" maxlength="80" placeholder="Ex.: 192.0.2.10 ou 192.0.2.0/24" required>
+                            <span class="field-help">Informe um IP específico ou uma rede autorizada.</span>
+                            <span class="access-field-error" data-ip-field-error role="alert"></span>
+                        </div>
+
+                        <label class="auto-validate">
+                            <input type="checkbox" data-step-auto-validate checked>
+                            <span class="auto-switch" aria-hidden="true"></span>
+                            <span class="auto-copy">
+                                <strong>Validar formato automaticamente</strong>
+                                <small>Verifica o formato do IP ou rede ao digitar.</small>
+                            </span>
+                        </label>
                     </div>
-                    <div class="field">
-                        <label for="add-ip-description">Descrição</label>
-                        <input id="add-ip-description" name="descricao" maxlength="120" placeholder="Ex.: Acesso da equipe técnica">
-                    </div>
-                </div>
 
-                <div class="field">
-                    <label for="add-ip-network">IP ou rede</label>
-                    <input id="add-ip-network" name="rede" maxlength="80" placeholder="Ex.: 192.0.2.10 ou 192.0.2.0/24" required>
-                    <span class="field-help">Informe um endereço IP específico ou uma rede CIDR.</span>
-                </div>
-
-                <label class="auto-validate">
-                    <input type="checkbox" data-step-auto-validate checked>
-                    <span class="auto-switch" aria-hidden="true"></span>
-                    <span class="auto-copy">
-                        <strong>Validar formato automaticamente</strong>
-                        <small>Verifica o formato do IP ou rede ao digitar.</small>
-                    </span>
-                </label>
-
-                <div class="review-box is-hidden" data-step-review-box>
-                    <div class="review-top">
-                        <div class="review-head">
-                            <span class="review-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 2.8 20 6v5.8c0 4.9-3.1 8.5-8 10.4-4.9-1.9-8-5.5-8-10.4V6z"/><path d="m12 6 5 2v3.8c0 3.3-2 5.8-5 7-3-1.2-5-3.7-5-7V8z"/></svg></span>
-                            <div>
-                                <strong>Revisão da ACL</strong>
-                                <span class="review-kicker">Acesso administrativo</span>
+                    <aside class="access-modal-aside">
+                        <section class="access-side-card">
+                            <h3 class="access-side-title">
+                                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h10"/></svg>
+                                Exemplos rápidos
+                            </h3>
+                            <div class="access-example-list">
+                                <div class="access-example"><span>Host único</span><code>192.0.2.10</code></div>
+                                <div class="access-example"><span>Rede local</span><code>192.0.2.0/24</code></div>
+                                <div class="access-example"><span>IPv6</span><code>2001:db8::10 ou 2001:db8::/64</code></div>
                             </div>
-                        </div>
-                        <div class="review-inline">
-                            <span>Família: <strong data-step-review-family>IPv4</strong></span>
-                            <span>Alvo: <strong data-step-review-network>—</strong></span>
-                        </div>
-                    </div>
+                        </section>
+
+                        <section class="access-security-note">
+                            <span class="access-security-icon" aria-hidden="true">
+                                <svg viewBox="0 0 24 24"><path d="M12 2.8 20 6v5.8c0 4.9-3.1 8.5-8 10.4-4.9-1.9-8-5.5-8-10.4V6z"/><path d="m9.2 12.1 1.9 1.9 3.8-4"/></svg>
+                            </span>
+                            <div>
+                                <strong>Somente adicione origens confiáveis</strong>
+                                <p>Acesso administrativo concede controle sobre o firewall. Verifique sempre a origem antes de permitir.</p>
+                            </div>
+                        </section>
+
+                        <section class="access-side-card" data-step-review-box>
+                            <h3 class="access-side-title">
+                                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h14v16H5zM8 8h8M8 12h8M8 16h5"/></svg>
+                                Resumo da configuração
+                            </h3>
+                            <div class="access-summary">
+                                <div class="access-summary-row"><span>Tipo</span><strong>Acesso administrativo</strong></div>
+                                <div class="access-summary-row"><span>Alvo</span><strong data-step-review-network>—</strong></div>
+                                <div class="access-summary-row"><span>Escopo</span><strong>Administrativo</strong></div>
+                            </div>
+                            <p class="access-summary-note">Revise os dados antes de salvar.</p>
+                        </section>
+                    </aside>
                 </div>
 
-                <div class="modal-actions step-actions">
+                <div class="access-modal-actions">
                     <button class="button secondary" type="button" data-close-dialog>Cancelar</button>
-                    <button class="button primary" type="submit">Adicionar ACL</button>
+                    <button class="button primary" type="submit">Adicionar acesso</button>
                 </div>
             </form>
         </div>
     </dialog>
 
-    <dialog class="modal step-modal" id="edit-ip-modal">
+    <dialog class="modal access-modal" id="edit-ip-modal">
         <header class="modal-header">
             <div>
-                <h2>Editar ACL</h2>
-                <p>Atualizar o endereço, rede ou descrição do acesso.</p>
+                <h2>Editar acesso administrativo</h2>
+                <p>Atualize o IP, a rede ou a descrição deste acesso autorizado.</p>
             </div>
-            <div class="modal-header-badge">
-                <button class="modal-close" type="button" data-close-dialog>Fechar</button>
-                <span class="mini-pill">Acesso administrativo</span>
-            </div>
+            <button class="modal-close" type="button" data-close-dialog aria-label="Fechar">×</button>
         </header>
         <div class="modal-body">
             <form method="POST" class="modal-form">
@@ -2228,164 +2273,230 @@ body{background:#080d18}
                 <input type="hidden" name="acao" value="editar_ip">
                 <input type="hidden" name="id" data-modal-id>
                 <input type="hidden" name="familia" data-modal-family>
-                <div class="review-box is-hidden" data-admin-port-review-box>
-                    <div class="review-top">
-                        <div class="review-head">
-                            <span class="review-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 2.8 20 6v5.8c0 4.9-3.1 8.5-8 10.4-4.9-1.9-8-5.5-8-10.4V6z"/><path d="m12 6 5 2v3.8c0 3.3-2 5.8-5 7-3-1.2-5-3.7-5-7V8z"/></svg></span>
-                            <div>
-                                <strong>Revisão da ACL</strong>
-                                <span class="review-kicker">Acesso administrativo</span>
-                            </div>
+
+                <div class="access-modal-grid">
+                    <div class="access-modal-fields">
+                        <div class="access-context">
+                            <span>Família do acesso</span>
+                            <strong data-modal-family-label>IPv4</strong>
                         </div>
-                        <div class="review-inline">
-                            <span>Família: <strong data-edit-review-family>IPv4</strong></span>
-                            <span>Alvo: <strong data-edit-review-value>—</strong></span>
+
+                        <div class="field">
+                            <label for="edit-ip-network">IP ou rede</label>
+                            <input id="edit-ip-network" name="rede" maxlength="80" data-modal-value required>
+                            <span class="field-help">Informe um IP específico ou uma rede autorizada.</span>
+                        </div>
+
+                        <div class="field">
+                            <label for="edit-ip-description">Descrição</label>
+                            <input id="edit-ip-description" name="descricao" maxlength="120" data-modal-description>
+                            <span class="field-help">Identifique o propósito deste acesso.</span>
                         </div>
                     </div>
+
+                    <aside class="access-modal-aside">
+                        <section class="access-side-card">
+                            <h3 class="access-side-title">
+                                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h10"/></svg>
+                                Exemplos rápidos
+                            </h3>
+                            <div class="access-example-list">
+                                <div class="access-example"><span>Host único</span><code>192.0.2.10</code></div>
+                                <div class="access-example"><span>Rede local</span><code>192.0.2.0/24</code></div>
+                                <div class="access-example"><span>IPv6</span><code>2001:db8::10 ou 2001:db8::/64</code></div>
+                            </div>
+                        </section>
+
+                        <section class="access-security-note">
+                            <span class="access-security-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 2.8 20 6v5.8c0 4.9-3.1 8.5-8 10.4-4.9-1.9-8-5.5-8-10.4V6z"/><path d="m9.2 12.1 1.9 1.9 3.8-4"/></svg></span>
+                            <div><strong>Mantenha somente origens confiáveis</strong><p>Revise o endereço antes de salvar a alteração.</p></div>
+                        </section>
+
+                        <section class="access-side-card">
+                            <h3 class="access-side-title">
+                                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h14v16H5zM8 8h8M8 12h8M8 16h5"/></svg>
+                                Resumo da configuração
+                            </h3>
+                            <div class="access-summary">
+                                <div class="access-summary-row"><span>Tipo</span><strong>Acesso administrativo</strong></div>
+                                <div class="access-summary-row"><span>Família</span><strong data-edit-review-family>IPv4</strong></div>
+                                <div class="access-summary-row"><span>Alvo</span><strong data-edit-review-value>—</strong></div>
+                            </div>
+                            <p class="access-summary-note">Revise os dados antes de salvar.</p>
+                        </section>
+                    </aside>
                 </div>
-                <div class="field">
-                    <label>Família</label>
-                    <span class="family-badge" data-modal-family-label>IPv4</span>
-                </div>
-                <div class="field"><label for="edit-ip-network">IP ou rede</label><input id="edit-ip-network" name="rede" maxlength="80" data-modal-value required></div>
-                <div class="field"><label for="edit-ip-description">Descrição</label><input id="edit-ip-description" name="descricao" maxlength="120" data-modal-description></div>
-                <div class="modal-actions"><button class="button" type="button" data-close-dialog>Cancelar</button><button class="button primary" type="submit">Salvar alterações</button></div>
+
+                <div class="access-modal-actions"><button class="button secondary" type="button" data-close-dialog>Cancelar</button><button class="button primary" type="submit">Salvar alterações</button></div>
             </form>
         </div>
     </dialog>
 
-    <dialog class="modal" id="remove-ip-modal">
+    <dialog class="modal access-modal" id="remove-ip-modal">
         <header class="modal-header">
             <div>
-                <h2>Remover ACL</h2>
-                <p>Remova o acesso registrado no painel, sem alterar as regras aplicadas.</p>
+                <h2>Remover acesso administrativo</h2>
+                <p>Remova este acesso registrado no painel sem alterar regras já aplicadas.</p>
             </div>
-            <div class="modal-header-badge">
-                <button class="modal-close" type="button" data-close-dialog>Fechar</button>
-                <span class="mini-pill danger">Remoção de ACL</span>
-            </div>
+            <button class="modal-close" type="button" data-close-dialog aria-label="Fechar">×</button>
         </header>
         <div class="modal-body">
             <form method="POST" class="modal-form">
                 <?= csrf_field() ?>
                 <input type="hidden" name="acao" value="remover_ip">
                 <input type="hidden" name="id" data-modal-id>
-                <div class="review-box is-hidden" data-admin-port-review-box>
-                    <div class="review-top">
-                        <div class="review-head">
-                            <span class="review-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 2.8 20 6v5.8c0 4.9-3.1 8.5-8 10.4-4.9-1.9-8-5.5-8-10.4V6z"/><path d="m12 6 5 2v3.8c0 3.3-2 5.8-5 7-3-1.2-5-3.7-5-7V8z"/></svg></span>
+
+                <div class="access-modal-grid">
+                    <div class="access-modal-fields">
+                        <div class="access-danger-note">
+                            <span class="access-danger-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 3 2.8 20h18.4zM12 9v4M12 16.5h.01"/></svg></span>
                             <div>
-                                <strong>Revisão da ACL</strong>
-                                <span class="review-kicker">Acesso administrativo</span>
+                                <strong>Confirme a remoção deste acesso</strong>
+                                <p>Digite exatamente o IP ou rede exibido no resumo para continuar.</p>
                             </div>
                         </div>
-                        <div class="review-inline">
-                            <span>Família: <strong data-modal-family-label>IPv4</strong></span>
-                            <span>Alvo: <strong data-confirmation-label></strong></span>
+
+                        <div class="field">
+                            <label for="remove-ip-confirmation">Confirmação</label>
+                            <input id="remove-ip-confirmation" name="confirmacao" autocomplete="off" data-confirmation-input required>
+                            <span class="field-help">A remoção altera somente o cadastro do painel.</span>
                         </div>
                     </div>
+
+                    <aside class="access-modal-aside">
+                        <section class="access-side-card">
+                            <h3 class="access-side-title">
+                                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h14v16H5zM8 8h8M8 12h8M8 16h5"/></svg>
+                                Resumo do acesso
+                            </h3>
+                            <div class="access-summary">
+                                <div class="access-summary-row"><span>Tipo</span><strong>Acesso administrativo</strong></div>
+                                <div class="access-summary-row"><span>Família</span><strong data-modal-family-label>IPv4</strong></div>
+                                <div class="access-summary-row"><span>Alvo</span><strong data-confirmation-label>—</strong></div>
+                                <div class="access-summary-row"><span>Escopo</span><strong>Administrativo</strong></div>
+                            </div>
+                            <p class="access-summary-note">Esta operação exige confirmação textual.</p>
+                        </section>
+
+                        <section class="access-security-note">
+                            <span class="access-security-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 2.8 20 6v5.8c0 4.9-3.1 8.5-8 10.4-4.9-1.9-8-5.5-8-10.4V6z"/></svg></span>
+                            <div><strong>As regras aplicadas não serão alteradas agora</strong><p>A remoção afeta o cadastro do painel e seguirá o fluxo existente.</p></div>
+                        </section>
+                    </aside>
                 </div>
-                <div class="modal-warning">Para confirmar, digite exatamente o endereço acima.</div>
-                <div class="field"><label for="remove-ip-confirmation">Confirmação</label><input id="remove-ip-confirmation" name="confirmacao" autocomplete="off" data-confirmation-input required></div>
-                <div class="modal-actions"><button class="button" type="button" data-close-dialog>Cancelar</button><button class="button danger" type="submit">Remover ACL</button></div>
+
+                <div class="access-modal-actions"><button class="button secondary" type="button" data-close-dialog>Cancelar</button><button class="button danger" type="submit">Remover acesso</button></div>
             </form>
         </div>
     </dialog>
 
-    <dialog class="modal step-modal" id="add-admin-port-modal">
+    <dialog class="modal access-modal" id="add-admin-port-modal">
         <header class="modal-header">
             <div>
-                <h2>Adicionar Porta Administrativa</h2>
-                <p>Cadastrar uma porta restrita aos IPs autorizados.</p>
+                <h2>Adicionar porta administrativa</h2>
+                <p>Cadastre uma porta acessível somente pelas origens administrativas autorizadas.</p>
             </div>
-            <div class="modal-header-badge">
-                <button class="modal-close" type="button" data-close-dialog>Fechar</button>
-                <span class="mini-pill">Porta administrativa</span>
-            </div>
+            <button class="modal-close" type="button" data-close-dialog aria-label="Fechar">×</button>
         </header>
         <div class="modal-body">
             <form method="POST" class="modal-form" data-admin-port-form>
                 <?= csrf_field() ?>
                 <input type="hidden" name="acao" value="adicionar_porta_admin">
-                <div class="review-box">
-                    <div class="review-top">
-                        <div class="review-head">
-                            <span class="review-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 2.8 20 6v5.8c0 4.9-3.1 8.5-8 10.4-4.9-1.9-8-5.5-8-10.4V6z"/><path d="m12 6 5 2v3.8c0 3.3-2 5.8-5 7-3-1.2-5-3.7-5-7V8z"/></svg></span>
-                            <div>
-                                <strong>Revisão da porta</strong>
-                                <span class="review-kicker">Acesso administrativo</span>
-                            </div>
+
+                <div class="access-modal-grid">
+                    <div class="access-modal-fields">
+                        <div class="form-row">
+                            <div class="field"><label for="admin-port-porta">Porta</label><input id="admin-port-porta" type="number" name="porta" min="1" max="65535" inputmode="numeric" data-admin-port-input-port required><span class="field-help">Informe uma porta entre 1 e 65535.</span></div>
+                            <div class="field"><label for="admin-port-protocolo">Protocolo</label><select id="admin-port-protocolo" name="protocolo" data-admin-port-input-protocol required><option value="TCP">TCP</option><option value="UDP">UDP</option><option value="TCP/UDP">TCP/UDP</option></select><span class="field-help">Selecione o protocolo utilizado.</span></div>
                         </div>
-                        <div class="review-inline">
-                            <span>Porta: <strong data-admin-port-review-port>—</strong></span>
-                            <span>Protocolo: <strong data-admin-port-review-protocol>—</strong></span>
-                            <span>Serviço: <strong data-admin-port-review-service>—</strong></span>
-                        </div>
+                        <div class="field"><label for="admin-port-servico">Serviço</label><input id="admin-port-servico" name="servico" maxlength="40" placeholder="Ex.: SSH" data-admin-port-input-service required><span class="field-help">Identifique o serviço associado à porta.</span></div>
+                        <div class="field"><label for="admin-port-descricao">Descrição</label><input id="admin-port-descricao" name="descricao" maxlength="120" placeholder="Finalidade da porta" data-admin-port-input-description><span class="field-help">Descreva por que este acesso é necessário.</span></div>
                     </div>
+
+                    <aside class="access-modal-aside">
+                        <section class="access-side-card">
+                            <h3 class="access-side-title"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h10"/></svg>Exemplos rápidos</h3>
+                            <div class="access-example-list">
+                                <div class="access-example"><span>SSH</span><code>22 / TCP</code></div>
+                                <div class="access-example"><span>DNS</span><code>53 / TCP/UDP</code></div>
+                                <div class="access-example"><span>HTTPS</span><code>443 / TCP</code></div>
+                            </div>
+                        </section>
+                        <section class="access-security-note"><span class="access-security-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 2.8 20 6v5.8c0 4.9-3.1 8.5-8 10.4-4.9-1.9-8-5.5-8-10.4V6z"/><path d="m9.2 12.1 1.9 1.9 3.8-4"/></svg></span><div><strong>Restrita às origens autorizadas</strong><p>Esta porta ficará vinculada ao acesso administrativo configurado no painel.</p></div></section>
+                        <section class="access-side-card" data-admin-port-review-box>
+                            <h3 class="access-side-title"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h14v16H5zM8 8h8M8 12h8M8 16h5"/></svg>Resumo da configuração</h3>
+                            <div class="access-summary">
+                                <div class="access-summary-row"><span>Porta</span><strong data-admin-port-review-port>—</strong></div>
+                                <div class="access-summary-row"><span>Protocolo</span><strong data-admin-port-review-protocol>TCP</strong></div>
+                                <div class="access-summary-row"><span>Serviço</span><strong data-admin-port-review-service>—</strong></div>
+                                <div class="access-summary-row"><span>Escopo</span><strong>Administrativo</strong></div>
+                            </div>
+                            <p class="access-summary-note">Revise os dados antes de salvar.</p>
+                        </section>
+                    </aside>
                 </div>
-                <div class="form-row">
-                    <div class="field"><label for="admin-port-porta">Porta</label><input id="admin-port-porta" type="number" name="porta" min="1" max="65535" inputmode="numeric" data-admin-port-input-port required></div>
-                    <div class="field"><label for="admin-port-protocolo">Protocolo</label><select id="admin-port-protocolo" name="protocolo" data-admin-port-input-protocol required><option value="TCP">TCP</option><option value="UDP">UDP</option><option value="TCP/UDP">TCP/UDP</option></select></div>
-                </div>
-                <div class="field"><label for="admin-port-servico">Serviço</label><input id="admin-port-servico" name="servico" maxlength="40" placeholder="Ex.: HTTPS" data-admin-port-input-service required></div>
-                <div class="field"><label for="admin-port-descricao">Descrição</label><input id="admin-port-descricao" name="descricao" maxlength="120" placeholder="Finalidade da porta" data-admin-port-input-description></div>
-                <div class="modal-actions step-actions"><button class="button secondary" type="button" data-close-dialog>Cancelar</button><button class="button primary" type="submit">Adicionar porta</button></div>
+                <div class="access-modal-actions"><button class="button secondary" type="button" data-close-dialog>Cancelar</button><button class="button primary" type="submit">Adicionar porta</button></div>
             </form>
         </div>
     </dialog>
 
-    <dialog class="modal step-modal" id="add-public-port-modal">
+    <dialog class="modal access-modal" id="add-public-port-modal">
         <header class="modal-header">
             <div>
-                <h2>Adicionar Porta Pública</h2>
-                <p>Cadastrar uma porta disponível para acesso externo.</p>
+                <h2>Adicionar porta pública</h2>
+                <p>Cadastre uma porta que ficará disponível para acesso externo.</p>
             </div>
-            <div class="modal-header-badge">
-                <button class="modal-close" type="button" data-close-dialog>Fechar</button>
-                <span class="mini-pill">Porta pública</span>
-            </div>
+            <button class="modal-close" type="button" data-close-dialog aria-label="Fechar">×</button>
         </header>
         <div class="modal-body">
             <form method="POST" class="modal-form" data-public-port-form>
                 <?= csrf_field() ?>
                 <input type="hidden" name="acao" value="adicionar_porta_publica">
-                <div class="review-box is-hidden" data-public-port-review-box>
-                    <div class="review-top">
-                        <div class="review-head">
-                            <span class="review-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 2.8 20 6v5.8c0 4.9-3.1 8.5-8 10.4-4.9-1.9-8-5.5-8-10.4V6z"/><path d="m12 6 5 2v3.8c0 3.3-2 5.8-5 7-3-1.2-5-3.7-5-7V8z"/></svg></span>
-                            <div>
-                                <strong>Revisão da porta</strong>
-                                <span class="review-kicker">Acesso externo</span>
-                            </div>
+
+                <div class="access-modal-grid">
+                    <div class="access-modal-fields">
+                        <div class="form-row">
+                            <div class="field"><label for="public-port-porta">Porta</label><input id="public-port-porta" type="number" name="porta" min="1" max="65535" inputmode="numeric" data-public-port-input-port required><span class="field-help">Informe uma porta entre 1 e 65535.</span></div>
+                            <div class="field"><label for="public-port-protocolo">Protocolo</label><select id="public-port-protocolo" name="protocolo" data-public-port-input-protocol required><option value="TCP">TCP</option><option value="UDP">UDP</option><option value="TCP/UDP">TCP/UDP</option></select><span class="field-help">Selecione o protocolo utilizado.</span></div>
                         </div>
-                        <div class="review-inline">
-                            <span>Porta: <strong data-public-port-review-port>—</strong></span>
-                            <span>Protocolo: <strong data-public-port-review-protocol>—</strong></span>
-                            <span>Serviço: <strong data-public-port-review-service>—</strong></span>
-                        </div>
+                        <div class="field"><label for="public-port-servico">Serviço</label><input id="public-port-servico" name="servico" maxlength="40" placeholder="Ex.: HTTPS" data-public-port-input-service required><span class="field-help">Identifique o serviço exposto externamente.</span></div>
+                        <div class="field"><label for="public-port-descricao">Descrição</label><input id="public-port-descricao" name="descricao" maxlength="120" placeholder="Finalidade da porta" data-public-port-input-description><span class="field-help">Descreva por que esta exposição é necessária.</span></div>
                     </div>
+
+                    <aside class="access-modal-aside">
+                        <section class="access-side-card">
+                            <h3 class="access-side-title"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h10"/></svg>Exemplos rápidos</h3>
+                            <div class="access-example-list">
+                                <div class="access-example"><span>HTTP</span><code>80 / TCP</code></div>
+                                <div class="access-example"><span>HTTPS</span><code>443 / TCP</code></div>
+                                <div class="access-example"><span>DNS</span><code>53 / TCP/UDP</code></div>
+                            </div>
+                        </section>
+                        <section class="access-danger-note"><span class="access-danger-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 3 2.8 20h18.4zM12 9v4M12 16.5h.01"/></svg></span><div><strong>Acesso disponível externamente</strong><p>Revise a necessidade da exposição antes de cadastrar a porta.</p></div></section>
+                        <section class="access-side-card" data-public-port-review-box>
+                            <h3 class="access-side-title"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h14v16H5zM8 8h8M8 12h8M8 16h5"/></svg>Resumo da configuração</h3>
+                            <div class="access-summary">
+                                <div class="access-summary-row"><span>Porta</span><strong data-public-port-review-port>—</strong></div>
+                                <div class="access-summary-row"><span>Protocolo</span><strong data-public-port-review-protocol>TCP</strong></div>
+                                <div class="access-summary-row"><span>Serviço</span><strong data-public-port-review-service>—</strong></div>
+                                <div class="access-summary-row"><span>Escopo</span><strong>Público</strong></div>
+                            </div>
+                            <p class="access-summary-note">Revise os dados antes de salvar.</p>
+                        </section>
+                    </aside>
                 </div>
-                <div class="form-row">
-                    <div class="field"><label for="public-port-porta">Porta</label><input id="public-port-porta" type="number" name="porta" min="1" max="65535" inputmode="numeric" data-public-port-input-port required></div>
-                    <div class="field"><label for="public-port-protocolo">Protocolo</label><select id="public-port-protocolo" name="protocolo" data-public-port-input-protocol required><option value="TCP">TCP</option><option value="UDP">UDP</option><option value="TCP/UDP">TCP/UDP</option></select></div>
-                </div>
-                <div class="field"><label for="public-port-servico">Serviço</label><input id="public-port-servico" name="servico" maxlength="40" placeholder="Ex.: HTTPS" data-public-port-input-service required></div>
-                <div class="field"><label for="public-port-descricao">Descrição</label><input id="public-port-descricao" name="descricao" maxlength="120" placeholder="Finalidade da porta" data-public-port-input-description></div>
-                <div class="modal-actions step-actions"><button class="button secondary" type="button" data-close-dialog>Cancelar</button><button class="button primary" type="submit">Adicionar porta</button></div>
+                <div class="access-modal-actions"><button class="button secondary" type="button" data-close-dialog>Cancelar</button><button class="button primary" type="submit">Adicionar porta</button></div>
             </form>
         </div>
     </dialog>
 
-    <dialog class="modal step-modal" id="edit-port-modal">
+    <dialog class="modal access-modal" id="edit-port-modal">
         <header class="modal-header">
             <div>
-                <h2>Editar Porta</h2>
-                <p>Atualizar a porta cadastrada no painel.</p>
+                <h2>Editar porta</h2>
+                <p>Atualize a porta, o protocolo, o serviço ou a descrição cadastrada.</p>
             </div>
-            <div class="modal-header-badge">
-                <button class="modal-close" type="button" data-close-dialog>Fechar</button>
-                <span class="mini-pill">Porta administrativa</span>
-            </div>
+            <button class="modal-close" type="button" data-close-dialog aria-label="Fechar">×</button>
         </header>
         <div class="modal-body">
             <form method="POST" class="modal-form">
@@ -2393,67 +2504,70 @@ body{background:#080d18}
                 <input type="hidden" name="acao" value="editar_porta">
                 <input type="hidden" name="id" data-modal-id>
                 <input type="hidden" name="escopo" data-modal-scope>
-                <div class="review-box">
-                    <div class="review-top">
-                        <div class="review-head">
-                            <span class="review-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 2.8 20 6v5.8c0 4.9-3.1 8.5-8 10.4-4.9-1.9-8-5.5-8-10.4V6z"/><path d="m12 6 5 2v3.8c0 3.3-2 5.8-5 7-3-1.2-5-3.7-5-7V8z"/></svg></span>
-                            <div>
-                                <strong>Revisão da porta</strong>
-                                <span class="review-kicker">Acesso administrativo</span>
-                            </div>
+
+                <div class="access-modal-grid">
+                    <div class="access-modal-fields">
+                        <div class="access-context"><span>Escopo da porta</span><strong data-modal-scope-label>—</strong></div>
+                        <div class="form-row">
+                            <div class="field"><label>Porta</label><input type="number" name="porta" min="1" max="65535" inputmode="numeric" data-modal-port required><span class="field-help">Informe uma porta entre 1 e 65535.</span></div>
+                            <div class="field"><label>Protocolo</label><select name="protocolo" data-modal-protocol required><option value="TCP">TCP</option><option value="UDP">UDP</option><option value="TCP/UDP">TCP/UDP</option></select><span class="field-help">Selecione o protocolo utilizado.</span></div>
                         </div>
-                        <div class="review-inline">
-                            <span>Porta: <strong data-edit-port-review-port>—</strong></span>
-                            <span>Protocolo: <strong data-edit-port-review-protocol>—</strong></span>
-                            <span>Serviço: <strong data-edit-port-review-service>—</strong></span>
-                        </div>
+                        <div class="field"><label>Serviço</label><input name="servico" maxlength="40" data-modal-service required><span class="field-help">Identifique o serviço associado.</span></div>
+                        <div class="field"><label>Descrição</label><input name="descricao" maxlength="120" data-modal-description><span class="field-help">Descreva a finalidade da porta.</span></div>
                     </div>
+
+                    <aside class="access-modal-aside">
+                        <section class="access-security-note"><span class="access-security-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 2.8 20 6v5.8c0 4.9-3.1 8.5-8 10.4-4.9-1.9-8-5.5-8-10.4V6z"/><path d="m9.2 12.1 1.9 1.9 3.8-4"/></svg></span><div><strong>Revise o escopo antes de salvar</strong><p>O mesmo formulário atende portas administrativas e públicas.</p></div></section>
+                        <section class="access-side-card">
+                            <h3 class="access-side-title"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h14v16H5zM8 8h8M8 12h8M8 16h5"/></svg>Resumo da configuração</h3>
+                            <div class="access-summary">
+                                <div class="access-summary-row"><span>Porta</span><strong data-edit-port-review-port>—</strong></div>
+                                <div class="access-summary-row"><span>Protocolo</span><strong data-edit-port-review-protocol>—</strong></div>
+                                <div class="access-summary-row"><span>Serviço</span><strong data-edit-port-review-service>—</strong></div>
+                                <div class="access-summary-row"><span>Escopo</span><strong data-modal-scope-label>—</strong></div>
+                            </div>
+                            <p class="access-summary-note">Revise os dados antes de salvar.</p>
+                        </section>
+                    </aside>
                 </div>
-                <div class="form-row">
-                    <div class="field"><label>Porta</label><input type="number" name="porta" min="1" max="65535" inputmode="numeric" data-modal-port required></div>
-                    <div class="field"><label>Protocolo</label><select name="protocolo" data-modal-protocol required><option value="TCP">TCP</option><option value="UDP">UDP</option><option value="TCP/UDP">TCP/UDP</option></select></div>
-                </div>
-                <div class="field"><label>Serviço</label><input name="servico" maxlength="40" data-modal-service required></div>
-                <div class="field"><label>Descrição</label><input name="descricao" maxlength="120" data-modal-description></div>
-                <div class="modal-actions step-actions"><button class="button secondary" type="button" data-close-dialog>Cancelar</button><button class="button primary" type="submit">Salvar alterações</button></div>
+                <div class="access-modal-actions"><button class="button secondary" type="button" data-close-dialog>Cancelar</button><button class="button primary" type="submit">Salvar alterações</button></div>
             </form>
         </div>
     </dialog>
 
-    <dialog class="modal step-modal" id="remove-port-modal">
+    <dialog class="modal access-modal" id="remove-port-modal">
         <header class="modal-header">
             <div>
-                <h2>Remover Porta</h2>
-                <p>Remover a porta registrada no painel, sem alterar a política aplicada.</p>
+                <h2>Remover porta</h2>
+                <p>Remova a porta registrada no painel sem alterar a política já aplicada.</p>
             </div>
-            <div class="modal-header-badge">
-                <button class="modal-close" type="button" data-close-dialog>Fechar</button>
-                <span class="mini-pill danger">Remoção de porta</span>
-            </div>
+            <button class="modal-close" type="button" data-close-dialog aria-label="Fechar">×</button>
         </header>
         <div class="modal-body">
             <form method="POST" class="modal-form">
                 <?= csrf_field() ?>
                 <input type="hidden" name="acao" value="remover_porta">
                 <input type="hidden" name="id" data-modal-id>
-                <div class="review-box">
-                    <div class="review-top">
-                        <div class="review-head">
-                            <span class="review-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 2.8 20 6v5.8c0 4.9-3.1 8.5-8 10.4-4.9-1.9-8-5.5-8-10.4V6z"/><path d="m12 6 5 2v3.8c0 3.3-2 5.8-5 7-3-1.2-5-3.7-5-7V8z"/></svg></span>
-                            <div>
-                                <strong>Revisão da porta</strong>
-                                <span class="review-kicker">Acesso administrativo</span>
-                            </div>
-                        </div>
-                        <div class="review-inline">
-                            <span>Porta: <strong data-confirmation-label></strong></span>
-                            <span>Escopo: <strong data-port-scope></strong></span>
-                        </div>
+
+                <div class="access-modal-grid">
+                    <div class="access-modal-fields">
+                        <div class="access-danger-note"><span class="access-danger-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 3 2.8 20h18.4zM12 9v4M12 16.5h.01"/></svg></span><div><strong>Confirme a remoção desta porta</strong><p>Digite exatamente o número exibido no resumo para continuar.</p></div></div>
+                        <div class="field"><label for="remove-port-confirmation">Confirmação</label><input id="remove-port-confirmation" name="confirmacao" inputmode="numeric" autocomplete="off" data-confirmation-input required><span class="field-help">A remoção altera somente o cadastro do painel.</span></div>
                     </div>
+
+                    <aside class="access-modal-aside">
+                        <section class="access-side-card">
+                            <h3 class="access-side-title"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h14v16H5zM8 8h8M8 12h8M8 16h5"/></svg>Resumo da porta</h3>
+                            <div class="access-summary">
+                                <div class="access-summary-row"><span>Porta</span><strong data-confirmation-label>—</strong></div>
+                                <div class="access-summary-row"><span>Escopo</span><strong data-port-scope>—</strong></div>
+                            </div>
+                            <p class="access-summary-note">Esta operação exige confirmação textual.</p>
+                        </section>
+                        <section class="access-security-note"><span class="access-security-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 2.8 20 6v5.8c0 4.9-3.1 8.5-8 10.4-4.9-1.9-8-5.5-8-10.4V6z"/></svg></span><div><strong>As regras aplicadas não serão alteradas agora</strong><p>A remoção seguirá o fluxo funcional existente do painel.</p></div></section>
+                    </aside>
                 </div>
-                <div class="modal-warning">Para confirmar, digite exatamente a porta acima.</div>
-                <div class="field"><label for="remove-port-confirmation">Confirmação</label><input id="remove-port-confirmation" name="confirmacao" inputmode="numeric" autocomplete="off" data-confirmation-input required></div>
-                <div class="modal-actions step-actions"><button class="button secondary" type="button" data-close-dialog>Cancelar</button><button class="button danger" type="submit">Remover porta</button></div>
+                <div class="access-modal-actions"><button class="button secondary" type="button" data-close-dialog>Cancelar</button><button class="button danger" type="submit">Remover porta</button></div>
             </form>
         </div>
     </dialog>
@@ -2534,7 +2648,7 @@ document.querySelectorAll('[data-open-dialog]').forEach(button=>button.addEventL
     const editReviewFamily=dialog.querySelector('[data-edit-review-family]');
     const editReviewValue=dialog.querySelector('[data-edit-review-value]');
     const scopeField=dialog.querySelector('[data-modal-scope]');
-    const scopeLabel=dialog.querySelector('[data-modal-scope-label]');
+    const scopeLabels=dialog.querySelectorAll('[data-modal-scope-label]');
     const valueField=dialog.querySelector('[data-modal-value]');
     const descriptionField=dialog.querySelector('[data-modal-description]');
     const portField=dialog.querySelector('[data-modal-port]');
@@ -2579,23 +2693,15 @@ document.querySelectorAll('[data-open-dialog]').forEach(button=>button.addEventL
         stepError.textContent=message;
         stepError.classList.add('show');
     };
-    const visualFamilyLabel=()=>{
-        const visual=familySelect?.value||'IPv4';
-        return visual==='CIDR' ? 'Rede CIDR' : visual;
-    };
     const inferBackendFamily=()=>{
         const selected=familySelect?.value||'IPv4';
-        if(selected==='IPv6')return 'IPv6';
-        if(selected==='CIDR'){
-            return String(networkField?.value||'').includes(':') ? 'IPv6' : 'IPv4';
-        }
-        return 'IPv4';
+        return selected==='IPv6' ? 'IPv6' : 'IPv4';
     };
     const syncFamilyField=()=>{
         if(familyHidden)familyHidden.value=inferBackendFamily();
     };
     const syncReview=()=>{
-        if(reviewFamily)reviewFamily.textContent=visualFamilyLabel();
+        if(reviewFamily)reviewFamily.textContent=inferBackendFamily();
         if(reviewNetwork)reviewNetwork.textContent=(networkField?.value||'').trim()||'—';
         if(reviewDescription){
             const descriptionValue=(descriptionField?.value||'').trim();
@@ -2621,7 +2727,9 @@ document.querySelectorAll('[data-open-dialog]').forEach(button=>button.addEventL
     if(familyLabel)familyLabel.textContent=family||'Não informado';
     if(editReviewFamily)editReviewFamily.textContent=family||'Não informado';
     if(scopeField)scopeField.value=button.dataset.recordScope||'';
-    if(scopeLabel)scopeLabel.textContent=button.dataset.recordScope||'';
+    const scopeValue=button.dataset.recordScope||'';
+    const scopeText=scopeValue==='admin' ? 'Administrativo' : (scopeValue==='publica' ? 'Público' : scopeValue);
+    scopeLabels.forEach(label=>{label.textContent=scopeText||'—';});
     if(valueField)valueField.value=button.dataset.recordValue||'';
     if(editReviewValue)editReviewValue.textContent=button.dataset.recordValue||'—';
     if(dialog.id==='edit-ip-modal' && valueField && editReviewValue){
@@ -2668,19 +2776,77 @@ if(addIpModal){
     const reviewFamily=addIpModal.querySelector('[data-step-review-family]');
     const reviewNetwork=addIpModal.querySelector('[data-step-review-network]');
     const reviewDescription=addIpModal.querySelector('[data-step-review-description]');
-    const reviewBox=addIpModal.querySelector('[data-step-review-box]');
+    const networkFieldWrap=networkField?.closest('.field');
+    const networkError=addIpModal.querySelector('[data-ip-field-error]');
+    const clearNetworkError=()=>{
+        networkFieldWrap?.classList.remove('has-error');
+        networkField?.removeAttribute('aria-invalid');
+        if(networkError){
+            networkError.textContent='';
+            networkError.classList.remove('show');
+        }
+    };
+    const showNetworkError=message=>{
+        networkFieldWrap?.classList.add('has-error');
+        networkField?.setAttribute('aria-invalid','true');
+        if(networkError){
+            networkError.textContent=message;
+            networkError.classList.add('show');
+        }
+    };
+    const validIpv4=value=>{
+        const parts=value.split('/');
+        if(parts.length>2)return false;
+        const octets=parts[0].split('.');
+        if(octets.length!==4||octets.some(part=>!/^\d{1,3}$/.test(part)||Number(part)>255))return false;
+        return parts.length===1||(/^\d{1,2}$/.test(parts[1])&&Number(parts[1])<=32);
+    };
+    const validIpv6=value=>{
+        const parts=value.split('/');
+        const address=parts[0];
+        if(parts.length>2||!address.includes(':')||!/^[0-9a-f:]+$/i.test(address)||address.includes(':::'))return false;
+        const compressed=address.includes('::');
+        if(compressed&&address.indexOf('::')!==address.lastIndexOf('::'))return false;
+        if(!compressed&&(address.startsWith(':')||address.endsWith(':')))return false;
+        const groups=address.split(':').filter(Boolean);
+        if(groups.some(group=>!/^[0-9a-f]{1,4}$/i.test(group)))return false;
+        if(compressed ? groups.length>=8 : groups.length!==8)return false;
+        return parts.length===1||(/^\d{1,3}$/.test(parts[1])&&Number(parts[1])<=128);
+    };
+    const validateNetwork=()=>{
+        const selected=familySelect?.value||'IPv4';
+        const value=(networkField?.value||'').trim();
+        if(value===''){
+            clearNetworkError();
+            return true;
+        }
+        if(selected==='IPv6'&&!value.includes(':')){
+            showNetworkError('O valor informado é IPv4. Selecione IPv4 ou informe um endereço IPv6.');
+            return false;
+        }
+        if(selected==='IPv4'&&value.includes(':')){
+            showNetworkError('O valor informado é IPv6. Selecione IPv6 ou informe um endereço IPv4.');
+            return false;
+        }
+        if(autoValidate?.checked){
+            const valid=selected==='IPv6' ? validIpv6(value) : validIpv4(value);
+            if(!valid){
+                showNetworkError(selected==='IPv6' ? 'Informe um IPv6 ou rede IPv6 válida.' : 'Informe um IPv4 ou rede IPv4 válida.');
+                return false;
+            }
+        }
+        clearNetworkError();
+        return true;
+    };
     const syncFamily=()=>{
         const selected=familySelect?.value||'IPv4';
-        const detectedFamily=(networkField?.value||'').includes(':') ? 'IPv6' : 'IPv4';
         if(familyHidden)familyHidden.value=selected==='IPv6' ? 'IPv6' : 'IPv4';
     };
     const syncReview=()=>{
         const selected=familySelect?.value||'IPv4';
         const networkValue=(networkField?.value||'').trim();
-        const hasReviewData=networkValue.length>0;
-        if(reviewBox)reviewBox.classList.toggle('is-hidden',!hasReviewData);
         if(reviewFamily)reviewFamily.textContent=selected;
-        if(reviewNetwork)reviewNetwork.textContent=hasReviewData ? networkValue : '—';
+        if(reviewNetwork)reviewNetwork.textContent=networkValue||'—';
         if(reviewDescription)reviewDescription.textContent=(descriptionField?.value||'').trim()||'Sem descrição';
     };
     const syncAll=()=>{
@@ -2693,15 +2859,29 @@ if(addIpModal){
         if(descriptionField)descriptionField.value='';
         if(networkField)networkField.value='';
         if(autoValidate)autoValidate.checked=true;
+        clearNetworkError();
         syncAll();
     };
     addIpModal.addEventListener('close',resetModal);
-    familySelect?.addEventListener('change',syncAll);
-    networkField?.addEventListener('input',syncAll);
-    descriptionField?.addEventListener('input',syncAll);
-    autoValidate?.addEventListener('change',syncAll);
-    addIpModal.querySelector('form')?.addEventListener('submit',()=>{
+    familySelect?.addEventListener('change',()=>{
         syncAll();
+        clearNetworkError();
+    });
+    networkField?.addEventListener('input',()=>{
+        syncAll();
+        clearNetworkError();
+    });
+    descriptionField?.addEventListener('input',syncAll);
+    autoValidate?.addEventListener('change',()=>{
+        syncAll();
+        clearNetworkError();
+    });
+    addIpModal.querySelector('form')?.addEventListener('submit',event=>{
+        syncAll();
+        if(!validateNetwork()){
+            event.preventDefault();
+            networkField?.focus();
+        }
     });
     syncAll();
 }
@@ -2719,7 +2899,7 @@ if(addAdminPortModal){
         const protocolo=((protocolField?.value||'').trim()||'');
         const servico=(serviceField?.value||'').trim();
         const hasData=porta.length>0||servico.length>0;
-        if(reviewBox)reviewBox.classList.toggle('is-hidden',!hasData);
+        if(reviewBox)reviewBox.classList.remove('is-hidden');
         if(reviewPort)reviewPort.textContent=porta||'—';
         if(reviewProtocol)reviewProtocol.textContent=protocolo||'—';
         if(reviewService)reviewService.textContent=servico||'—';
@@ -2751,7 +2931,7 @@ if(addPublicPortModal){
         const protocolo=(protocolField?.value||'').trim();
         const servico=(serviceField?.value||'').trim();
         const hasData=porta.length>0||servico.length>0;
-        if(reviewBox)reviewBox.classList.toggle('is-hidden',!hasData);
+        if(reviewBox)reviewBox.classList.remove('is-hidden');
         if(reviewPort)reviewPort.textContent=porta||'—';
         if(reviewProtocol)reviewProtocol.textContent=protocolo||'—';
         if(reviewService)reviewService.textContent=servico||'—';

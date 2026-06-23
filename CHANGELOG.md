@@ -2,6 +2,16 @@
 
 Historico de alteracoes do Painel DNS Trevizam Network.
 
+## [2.3.25] - 2026-06-23
+
+### Modal de acesso administrativo do Firewall
+
+- Melhorado o visual do modal de acesso administrativo no Firewall.
+- Adotado layout em duas colunas com exemplos, aviso de segurança e resumo.
+- Padronizados os modais de adicionar, editar e remover portas.
+- Removido o termo técnico CIDR da interface.
+- Preservada a lógica funcional e as validações existentes.
+
 ## [2.3.24] - 2026-06-23
 
 ### Fechamento do ajuste visual do Firewall
