@@ -231,349 +231,1154 @@ function zone_estado_explicacao(string $estado): string
     };
 }
 
+function zone_estado_tone(string $estado): string
+{
+    return match ($estado) {
+        'ok' => 'state-ok',
+        'missing_on_slave' => 'state-missing',
+        'serial_mismatch' => 'state-serial',
+        'extra_on_slave' => 'state-extra',
+        'extra_on_slave_ignored' => 'state-ignored',
+        'master_serial_unknown', 'slave_serial_unknown' => 'state-soa',
+        'collection_failed' => 'state-fail',
+        default => 'state-neutral',
+    };
+}
+
+$kpiOk = (int) ($resumoClassificacao['OK'] ?? 0);
+$kpiAusentes = (int) ($resumoClassificacao['AUSENTE_NO_SLAVE'] ?? 0);
+$kpiSerialDiferente = (int) ($resumoClassificacao['SERIAL_DIFERENTE'] ?? 0);
+$kpiExtras = (int) ($resumoClassificacao['EXTRA_NO_SLAVE'] ?? 0);
+$kpiFalhasColeta = (int) ($resumoClassificacao['FALHA_COLETA'] ?? 0);
+$kpiSoaIndisponivel = (int) ($resumoClassificacao['SOA_MASTER_INDISPONIVEL'] ?? 0) + (int) ($resumoClassificacao['SOA_SLAVE_INDISPONIVEL'] ?? 0);
+
+$ultimaColetaTs = null;
+foreach ($statusServidores as $server) {
+    $checkedAt = trim((string) ($server['checked_at'] ?? ''));
+    if ($checkedAt === '') {
+        continue;
+    }
+
+    try {
+        $dt = new DateTimeImmutable($checkedAt, new DateTimeZone('UTC'));
+        $ts = $dt->getTimestamp();
+        if ($ultimaColetaTs === null || $ts > $ultimaColetaTs) {
+            $ultimaColetaTs = $ts;
+        }
+    } catch (Throwable $e) {
+        continue;
+    }
+}
+
+$ultimaColetaTexto = $ultimaColetaTs !== null
+    ? (new DateTimeImmutable('@' . $ultimaColetaTs))
+        ->setTimezone(new DateTimeZone('America/Sao_Paulo'))
+        ->format('d/m/Y H:i:s')
+    : 'agora';
+
+$inventarioBrutoTotal = count($inventario);
+
 ?>
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Inventario de Zonas DNS</title>
+<title>Inventario DNS</title>
 <style>
-*{box-sizing:border-box}body{margin:0;font-family:Arial,sans-serif;background:#0f172a;color:#e2e8f0}.container{max-width:1280px;margin:36px auto;padding:0 20px}a{color:#38bdf8;text-decoration:none}h1,h2{margin-top:0}.lead,.meta{color:#94a3b8}.grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px}.card{background:#020617;border:1px solid #1e293b;border-radius:8px;padding:20px;margin-bottom:18px}.stat{min-height:132px}.value{font-size:30px;font-weight:bold;color:#38bdf8;margin:10px 0}.badge{display:inline-block;border-radius:999px;padding:5px 9px;font-size:12px;font-weight:bold;background:#1e293b}.ok{color:#4ade80}.warn{color:#facc15}.error{color:#f87171}.message{padding:12px;border-radius:8px;margin-bottom:18px}.message.error{background:#7f1d1d;color:#fecaca}.message.success{background:#14532d;color:#bbf7d0}button{width:auto;padding:10px 14px;border:1px solid #2563eb;border-radius:8px;background:#2563eb;color:#fff;font:inherit;cursor:pointer}.toolbar{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap}.notice{border-color:#854d0e;background:#1c1917}.table-wrap{overflow:auto;border:1px solid #1e293b;border-radius:8px}table{width:100%;border-collapse:collapse;min-width:900px}th,td{padding:11px 12px;border-bottom:1px solid #1e293b;text-align:left;font-size:13px;vertical-align:top}th{color:#94a3b8;text-transform:uppercase;font-size:11px;background:#071226}tr:last-child td{border-bottom:0}.result{white-space:pre-wrap;overflow-wrap:anywhere;background:#071226;border:1px solid #334155;border-radius:8px;padding:12px;color:#cbd5e1;margin-top:10px;max-height:220px;overflow:auto}.tabs{display:flex;gap:8px;margin-bottom:12px}.tab{border:1px solid #334155;background:#0f172a;color:#cbd5e1;border-radius:8px;padding:8px 10px}.search{width:100%;padding:10px;margin:0 0 12px;background:#0f172a;border:1px solid #334155;border-radius:8px;color:#fff}.muted{color:#64748b}.sync-form{display:flex;gap:10px;align-items:end;flex-wrap:wrap}.sync-form label{display:block;color:#94a3b8;font-size:13px;margin-bottom:5px}.sync-form input,.dialog textarea{padding:10px;border:1px solid #334155;border-radius:8px;background:#0f172a;color:#fff}.dialog textarea{width:100%;min-height:82px;resize:vertical}.inline-form{display:inline}.action-row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.small-button{padding:7px 10px;font-size:12px}.muted-button{background:#334155;border-color:#475569}.class-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}.class-item{background:#071226;border:1px solid #1e293b;border-radius:8px;padding:14px}.class-item strong{display:block;font-size:22px;color:#38bdf8;margin-top:6px}.extra-list{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}.zone-list{margin:8px 0 0;padding-left:18px}.zone-list li{margin:5px 0}.blocked{border-color:#7f1d1d;background:#190b0b}.blocked .badge{background:#7f1d1d;color:#fecaca}.ignored{border-color:#166534;background:#06130b}.dialog{width:min(680px,calc(100vw - 28px));border:1px solid #334155;border-radius:8px;background:#020617;color:#e2e8f0;padding:20px}.dialog::backdrop{background:#020617cc}.dialog-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin:14px 0}.dialog-field{background:#071226;border:1px solid #1e293b;border-radius:8px;padding:10px}.dialog-field span{display:block;color:#94a3b8;font-size:11px;text-transform:uppercase;margin-bottom:5px}.dialog-actions{display:flex;justify-content:flex-end;gap:8px;flex-wrap:wrap;margin-top:14px}@media(max-width:900px){.class-grid,.extra-list,.dialog-grid{grid-template-columns:1fr}}@media(max-width:900px){.grid{grid-template-columns:1fr}.toolbar{align-items:flex-start}table{min-width:820px}}
+*{box-sizing:border-box}
+:root{
+    --bg:#07111f;
+    --panel:#0f1c2c;
+    --panel-2:#111d2d;
+    --panel-3:#0a1624;
+    --line:#22344f;
+    --line-2:#2d4365;
+    --text:#e5eefb;
+    --muted:#9fb1c9;
+    --subtle:#7f91a6;
+    --blue:#2f81f7;
+    --blue-soft:#2f81f72a;
+    --green:#22c55e;
+    --green-soft:#22c55e24;
+    --amber:#f59e0b;
+    --amber-soft:#f59e0b24;
+    --purple:#8b5cf6;
+    --purple-soft:#8b5cf624;
+    --red:#ef4444;
+    --red-soft:#ef444424;
+}
+body{
+    margin:0;
+    background:
+        radial-gradient(circle at top left, rgba(47,129,247,.14), transparent 24%),
+        radial-gradient(circle at top right, rgba(139,92,246,.10), transparent 22%),
+        linear-gradient(180deg, #07111f 0%, #050b14 100%);
+    color:var(--text);
+    font-family:Arial,sans-serif;
+}
+a{color:#7cc7ff;text-decoration:none}
+button,input,textarea,select{font:inherit}
+.muted{color:var(--subtle)}
+.zones-page{width:100%;max-width:1440px;margin:0 auto;padding:24px 22px 32px}
+.zones-hero{
+    display:flex;
+    justify-content:space-between;
+    gap:18px;
+    align-items:flex-start;
+    margin-bottom:16px;
+    padding:18px 20px;
+    border:1px solid var(--line);
+    border-radius:18px;
+    background:linear-gradient(180deg, rgba(15,28,44,.98), rgba(9,18,28,.98));
+    box-shadow:0 22px 50px rgba(0,0,0,.28), inset 0 1px 0 rgba(255,255,255,.03);
+}
+.zones-hero-copy{min-width:0}
+.zones-kicker{
+    margin:0 0 5px;
+    color:#9cc4ff;
+    font-size:11px;
+    font-weight:800;
+    letter-spacing:.12em;
+    text-transform:uppercase;
+}
+.zones-hero h1{
+    margin:0;
+    color:#f4f9ff;
+    font-size:31px;
+    line-height:1.05;
+}
+.zones-lead{
+    margin:7px 0 0;
+    color:var(--muted);
+    font-size:13px;
+    line-height:1.45;
+}
+.zones-badges{
+    display:flex;
+    flex-wrap:wrap;
+    gap:8px;
+    margin-top:12px;
+}
+.zone-badge{
+    display:inline-flex;
+    align-items:center;
+    gap:7px;
+    min-height:32px;
+    padding:7px 11px;
+    border:1px solid var(--line-2);
+    border-radius:999px;
+    background:rgba(8,17,30,.78);
+    color:#dbeafe;
+    font-size:12px;
+    font-weight:700;
+    white-space:nowrap;
+}
+.zone-badge strong{color:#fff}
+.zone-badge.ok{border-color:rgba(34,197,94,.28);background:rgba(8,30,16,.72);color:#c8f7d6}
+.zone-badge.warn{border-color:rgba(245,158,11,.28);background:rgba(34,23,6,.74);color:#f9e4a1}
+.zone-badge.info{border-color:rgba(47,129,247,.34);background:rgba(8,20,39,.78);color:#d9ecff}
+.zone-badge.danger{border-color:rgba(239,68,68,.34);background:rgba(42,10,15,.78);color:#ffb0b0}
+.zones-hero-actions{
+    display:flex;
+    flex-direction:column;
+    align-items:flex-end;
+    gap:10px;
+    flex:0 0 auto;
+}
+.zones-action-row{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}
+.zones-button,
+.button,
+.small-button,
+.muted-button{
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    min-height:36px;
+    padding:8px 12px;
+    border:1px solid var(--line-2);
+    border-radius:10px;
+    background:#172236;
+    color:#e5edf7;
+    cursor:pointer;
+    transition:border-color .16s ease, background .16s ease, transform .16s ease, box-shadow .16s ease;
+}
+.zones-button:hover,
+.zones-button:focus,
+.button:hover,
+.button:focus,
+.small-button:hover,
+.small-button:focus,
+.muted-button:hover,
+.muted-button:focus{
+    outline:none;
+    border-color:#4ea1ff;
+    background:#102033;
+    box-shadow:0 0 0 3px rgba(47,129,247,.12);
+}
+.zones-button.primary,
+.button.primary{border-color:#2f81f7;background:linear-gradient(180deg,#2f81f7,#1d4ed8);color:#fff}
+.zones-button.primary:hover,
+.zones-button.primary:focus,
+.button.primary:hover,
+.button.primary:focus{background:linear-gradient(180deg,#4c93ff,#2f81f7)}
+.zones-button.ghost,
+.muted-button{background:#0f172a;color:#dbeafe}
+.zones-button.ghost:disabled,
+.zones-button:disabled,
+.small-button:disabled,
+.muted-button:disabled{opacity:.45;cursor:not-allowed;box-shadow:none}
+.zones-message{
+    padding:12px 14px;
+    border-radius:12px;
+    margin:0 0 14px;
+    border:1px solid var(--line);
+    background:rgba(15,28,44,.78);
+    color:#dbeafe;
+}
+.zones-message.success{border-color:rgba(34,197,94,.28);background:rgba(8,30,16,.72);color:#c8f7d6}
+.zones-message.error{border-color:rgba(239,68,68,.28);background:rgba(42,10,15,.72);color:#ffb0b0}
+.zones-sync{
+    margin:0 0 16px;
+    padding:16px 18px;
+    border:1px solid rgba(245,158,11,.24);
+    border-radius:16px;
+    background:linear-gradient(180deg, rgba(34,23,6,.82), rgba(12,18,27,.92));
+}
+.zones-sync .zones-card-head{margin-bottom:12px}
+.zones-sync .zones-card-title{color:#fdf2c5}
+.zones-sync .zones-card-subtitle{color:#d3b87a}
+.zones-sync-form{display:flex;align-items:end;gap:10px;flex-wrap:wrap}
+.zones-sync-form label{display:block;margin-bottom:5px;color:#cbd5e1;font-size:12px;font-weight:700}
+.zones-sync-form input{
+    min-width:220px;
+    min-height:40px;
+    padding:10px 11px;
+    border:1px solid var(--line-2);
+    border-radius:10px;
+    background:#08111e;
+    color:#fff;
+}
+.zones-kpis{
+    display:grid;
+    grid-template-columns:repeat(5,minmax(0,1fr));
+    gap:12px;
+    margin:0 0 14px;
+}
+.zones-kpi{
+    position:relative;
+    min-height:114px;
+    padding:15px 15px 14px;
+    border:1px solid var(--line);
+    border-radius:16px;
+    background:linear-gradient(180deg, rgba(15,28,44,.96), rgba(10,18,28,.98));
+    box-shadow:inset 0 1px 0 rgba(255,255,255,.03);
+}
+.zones-kpi-title{
+    display:block;
+    color:#a8bfd8;
+    font-size:11px;
+    font-weight:800;
+    letter-spacing:.06em;
+    text-transform:uppercase;
+}
+.zones-kpi-value{
+    display:block;
+    margin-top:6px;
+    color:#f4fbff;
+    font-size:30px;
+    font-weight:900;
+    line-height:1.05;
+}
+.zones-kpi-desc{
+    display:block;
+    margin-top:6px;
+    color:var(--subtle);
+    font-size:12px;
+    font-weight:500;
+    line-height:1.35;
+}
+.zones-kpi.ok{box-shadow:0 0 0 1px rgba(34,197,94,.08) inset}
+.zones-kpi.ok .zones-kpi-value{color:#8ef0b5}
+.zones-kpi.missing .zones-kpi-value{color:#f8d66b}
+.zones-kpi.serial .zones-kpi-value{color:#c4b5fd}
+.zones-kpi.extra .zones-kpi-value{color:#c084fc}
+.zones-kpi.fail .zones-kpi-value{color:#ff9494}
+.zones-soa-note{
+    margin:0 0 14px;
+    padding:11px 13px;
+    border:1px solid rgba(47,129,247,.22);
+    border-radius:12px;
+    background:rgba(8,20,39,.72);
+    color:#cfe3ff;
+    font-size:12px;
+    line-height:1.45;
+}
+.zones-card{
+    padding:16px;
+    border:1px solid var(--line);
+    border-radius:18px;
+    background:linear-gradient(180deg, rgba(15,28,44,.96), rgba(9,18,28,.98));
+    box-shadow:0 18px 40px rgba(0,0,0,.18), inset 0 1px 0 rgba(255,255,255,.03);
+}
+.zones-card + .zones-card{margin-top:14px}
+.zones-card-head{
+    display:flex;
+    align-items:flex-start;
+    justify-content:space-between;
+    gap:14px;
+    margin-bottom:14px;
+}
+.zones-card-title{
+    margin:0;
+    color:#f4fbff;
+    font-size:18px;
+    font-weight:900;
+    line-height:1.15;
+}
+.zones-card-subtitle{
+    margin:5px 0 0;
+    color:var(--muted);
+    font-size:12px;
+    line-height:1.4;
+}
+.zones-highlight{
+    border-color:rgba(139,92,246,.24);
+    background:
+        radial-gradient(circle at 15% 0%, rgba(139,92,246,.12), transparent 24%),
+        linear-gradient(180deg, rgba(15,28,44,.98), rgba(8,16,26,.98));
+    margin-bottom:14px;
+}
+.zones-highlight-grid{
+    display:grid;
+    grid-template-columns:repeat(2,minmax(0,1fr));
+    gap:12px;
+}
+.zones-extra-group{
+    padding:14px;
+    border:1px solid rgba(139,92,246,.18);
+    border-radius:14px;
+    background:rgba(7,14,24,.72);
+}
+.zones-extra-head{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:12px;
+    margin-bottom:12px;
+}
+.zones-extra-name{
+    color:#f6f3ff;
+    font-size:14px;
+    font-weight:900;
+}
+.zones-extra-count{
+    display:inline-flex;
+    align-items:center;
+    gap:6px;
+    padding:5px 9px;
+    border-radius:999px;
+    border:1px solid rgba(139,92,246,.24);
+    background:rgba(139,92,246,.12);
+    color:#e9ddff;
+    font-size:11px;
+    font-weight:800;
+    white-space:nowrap;
+}
+.zones-extra-list{display:grid;gap:10px}
+.zones-extra-item{
+    display:flex;
+    align-items:flex-start;
+    justify-content:space-between;
+    gap:12px;
+    padding:10px 11px;
+    border:1px solid rgba(148,163,184,.12);
+    border-radius:12px;
+    background:rgba(2,10,18,.55);
+}
+.zones-extra-main{min-width:0}
+.zones-extra-zone{display:block;color:#f4fbff;font-size:13px;font-weight:800}
+.zones-extra-meta{display:block;margin-top:4px;color:var(--subtle);font-size:11px;line-height:1.35}
+.zones-extra-actions{display:flex;align-items:center;gap:8px;flex:0 0 auto;flex-wrap:wrap;justify-content:flex-end}
+.zones-mini-button{
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    min-height:30px;
+    padding:6px 10px;
+    border:1px solid var(--line-2);
+    border-radius:9px;
+    background:#0f172a;
+    color:#dbeafe;
+    font-size:11px;
+    font-weight:700;
+    cursor:pointer;
+}
+.zones-mini-button:hover,
+.zones-mini-button:focus{outline:none;border-color:#4ea1ff;background:#102033}
+.zones-mini-button.ghost{color:#97aac4}
+.zones-mini-button:disabled{opacity:.45;cursor:not-allowed}
+.zones-layout{
+    display:grid;
+    grid-template-columns:minmax(300px,.86fr) minmax(0,1.4fr);
+    gap:14px;
+    align-items:start;
+    margin-bottom:14px;
+}
+.zones-filters .zones-card-head{margin-bottom:12px}
+.zones-filter-search{
+    width:100%;
+    min-height:42px;
+    padding:10px 12px;
+    border:1px solid var(--line-2);
+    border-radius:12px;
+    background:#08111e;
+    color:#fff;
+    margin:0 0 12px;
+}
+.zones-filter-search::placeholder{color:#6b7d95}
+.zones-filter-list{display:flex;flex-wrap:wrap;gap:8px}
+.zones-filter-chip{
+    border:1px solid var(--line-2);
+    background:#0f172a;
+    color:#dbeafe;
+    border-radius:999px;
+    min-height:32px;
+    padding:7px 11px;
+    cursor:pointer;
+    font-size:12px;
+    font-weight:700;
+}
+.zones-filter-chip.is-active{
+    border-color:#4ea1ff;
+    background:rgba(47,129,247,.18);
+    color:#f4fbff;
+    box-shadow:0 0 0 3px rgba(47,129,247,.10);
+}
+.zones-filter-note{margin-top:12px;color:var(--subtle);font-size:11px;line-height:1.45}
+.zones-table-wrap{
+    border:1px solid rgba(148,163,184,.14);
+    border-radius:14px;
+    overflow:auto;
+}
+table{
+    width:100%;
+    border-collapse:collapse;
+    min-width:980px;
+}
+th,td{
+    padding:11px 12px;
+    border-bottom:1px solid rgba(148,163,184,.12);
+    text-align:left;
+    font-size:12px;
+    vertical-align:top;
+}
+th{
+    background:#08111e;
+    color:#a8bfd8;
+    font-size:10px;
+    letter-spacing:.05em;
+    text-transform:uppercase;
+    white-space:nowrap;
+}
+tr:nth-child(odd) td{background:rgba(2,10,18,.28)}
+tr:hover td{background:rgba(47,129,247,.06)}
+.zones-row-hidden{display:none}
+.zones-status{
+    display:inline-flex;
+    align-items:center;
+    gap:6px;
+    min-height:26px;
+    padding:5px 9px;
+    border-radius:999px;
+    border:1px solid transparent;
+    font-size:11px;
+    font-weight:800;
+    white-space:nowrap;
+}
+.state-ok{border-color:rgba(34,197,94,.28);background:rgba(8,30,16,.72);color:#bbf7d0}
+.state-missing{border-color:rgba(245,158,11,.30);background:rgba(34,23,6,.72);color:#fde68a}
+.state-serial{border-color:rgba(139,92,246,.30);background:rgba(29,12,52,.72);color:#ddd6fe}
+.state-extra{border-color:rgba(139,92,246,.30);background:rgba(30,10,48,.72);color:#e9d5ff}
+.state-soa{border-color:rgba(100,116,139,.34);background:rgba(15,23,42,.78);color:#cbd5e1}
+.state-fail{border-color:rgba(239,68,68,.34);background:rgba(59,13,19,.78);color:#fecaca}
+.state-ignored{border-color:rgba(96,165,250,.26);background:rgba(8,20,39,.72);color:#dbeafe}
+.state-neutral{border-color:rgba(148,163,184,.24);background:rgba(15,23,42,.78);color:#dbeafe}
+.action-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap;white-space:nowrap}
+.inline-form{display:inline;margin:0}
+.small-button{padding:7px 10px;font-size:12px}
+.table-note{margin-top:12px;color:var(--subtle);font-size:11px;line-height:1.45}
+.zones-audit .zones-card-head{margin-bottom:12px}
+.zones-audit-table .zones-table-wrap{min-width:0}
+.zones-empty{padding:16px 14px;color:var(--subtle);text-align:center}
+.zones-raw details{border:1px solid rgba(148,163,184,.14);border-radius:14px;background:rgba(8,17,30,.65);overflow:hidden}
+.zones-raw summary{
+    list-style:none;
+    padding:14px 16px;
+    cursor:pointer;
+    color:#f4fbff;
+    font-weight:800;
+}
+.zones-raw summary::-webkit-details-marker{display:none}
+.zones-raw-content{padding:0 16px 16px}
+.result{
+    white-space:pre-wrap;
+    overflow-wrap:anywhere;
+    background:#071226;
+    border:1px solid rgba(148,163,184,.14);
+    border-radius:12px;
+    padding:12px;
+    color:#cbd5e1;
+    margin-top:10px;
+    max-height:220px;
+    overflow:auto;
+}
+.dialog{
+    width:min(720px,calc(100vw - 28px));
+    border:1px solid var(--line-2);
+    border-radius:18px;
+    background:
+        radial-gradient(circle at top left, rgba(47,129,247,.10), transparent 20%),
+        linear-gradient(180deg, rgba(15,28,44,.99), rgba(7,14,22,.99));
+    color:var(--text);
+    padding:0;
+    box-shadow:0 30px 90px rgba(0,0,0,.55);
+}
+.dialog::backdrop{background:rgba(2,8,18,.82);backdrop-filter:blur(4px)}
+.dialog-shell{padding:20px}
+.dialog-header{
+    display:flex;
+    justify-content:space-between;
+    gap:14px;
+    align-items:flex-start;
+    padding:20px 20px 16px;
+    border-bottom:1px solid rgba(148,163,184,.14);
+}
+.dialog-title{margin:0;color:#f4fbff;font-size:20px;font-weight:900}
+.dialog-subtitle{margin:5px 0 0;color:var(--muted);font-size:12px;line-height:1.45}
+.dialog-close{
+    width:36px;
+    height:36px;
+    border:1px solid rgba(148,163,184,.24);
+    border-radius:10px;
+    background:#0f172a;
+    color:#dbeafe;
+    cursor:pointer;
+    font-size:20px;
+    line-height:1;
+}
+.dialog-close:hover,.dialog-close:focus{outline:none;border-color:#4ea1ff;background:#102033}
+.dialog-grid{
+    display:grid;
+    grid-template-columns:repeat(2,minmax(0,1fr));
+    gap:12px;
+    padding:18px 20px 0;
+}
+.dialog-field{
+    background:rgba(8,17,30,.78);
+    border:1px solid rgba(148,163,184,.12);
+    border-radius:12px;
+    padding:11px 12px;
+}
+.dialog-field span{
+    display:block;
+    color:#8ea6c2;
+    font-size:11px;
+    text-transform:uppercase;
+    letter-spacing:.05em;
+    margin-bottom:6px;
+}
+.dialog-field strong{display:block;color:#f4fbff;font-size:13px;word-break:break-word}
+.dialog-body{padding:16px 20px 20px}
+.dialog-body p{margin:0;color:#d7e6f8;line-height:1.5}
+.dialog-body .meta{color:var(--muted)}
+.dialog-body .dialog-note{margin-top:10px;color:#8ea6c2;font-size:12px}
+.dialog-actions{display:flex;justify-content:flex-end;gap:8px;flex-wrap:wrap;margin-top:14px}
+.dialog-form{display:grid;gap:12px}
+.dialog textarea{
+    width:100%;
+    min-height:82px;
+    resize:vertical;
+    padding:10px;
+    border:1px solid var(--line-2);
+    border-radius:10px;
+    background:#08111e;
+    color:#fff;
+}
+.dialog .zones-mini-button{min-height:36px}
+.dialog-foot{
+    display:flex;
+    justify-content:flex-end;
+    gap:8px;
+    padding:0 20px 20px;
+}
+@media(max-width:1180px){
+    .zones-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}
+    .zones-layout{grid-template-columns:1fr}
+    .zones-highlight-grid{grid-template-columns:1fr}
+}
+@media(max-width:820px){
+    .zones-page{padding:18px 14px 24px}
+    .zones-hero{flex-direction:column}
+    .zones-hero-actions{align-items:stretch;width:100%}
+    .zones-action-row{justify-content:flex-start}
+    .zones-kpis{grid-template-columns:1fr}
+    .zones-card-head{display:block}
+    .zones-table-wrap{overflow-x:auto}
+    table{min-width:820px}
+    .dialog-grid{grid-template-columns:1fr}
+}
 </style>
 </head>
-<body>
-<main class="container">
-<p><a href="dashboard.php">← Voltar ao painel</a></p>
-<div class="toolbar">
-<div>
-<h1>Inventario de Zonas DNS</h1>
-<p class="lead">V3.5: inspecao por zona e extras legitimas/ignoradas. Remocao automatica continua bloqueada.</p>
-</div>
-<form method="POST">
-<?= csrf_field() ?>
-<input type="hidden" name="acao" value="atualizar_inventario">
-<button type="submit">Atualizar inventario</button>
-</form>
-</div>
+<body class="zones-dashboard">
+<main class="zones-page">
+<header class="zones-hero">
+    <div class="zones-hero-copy">
+        <p class="zones-kicker">Inventário DNS</p>
+        <h1>Inventário DNS</h1>
+        <p class="zones-lead">Comparação entre NS1, NS2 e NS03</p>
+        <div class="zones-badges">
+            <span class="zone-badge ok">Produção</span>
+            <span class="zone-badge danger">Remoção automática: <strong>BLOQUEADA</strong></span>
+            <span class="zone-badge info">Última coleta: <strong><?= htmlspecialchars($ultimaColetaTexto) ?></strong></span>
+        </div>
+    </div>
+    <div class="zones-hero-actions">
+        <div class="zones-action-row">
+            <a class="zones-button ghost" href="auditoria.php">Auditoria completa</a>
+            <form method="POST" class="inline-form">
+                <?= csrf_field() ?>
+                <input type="hidden" name="acao" value="atualizar_inventario">
+                <button type="submit" class="zones-button primary">Atualizar inventário</button>
+            </form>
+        </div>
+    </div>
+</header>
 
-<?php if ($zonasAusentes): ?>
-<section class="card notice">
-<h2>Sincronizar zonas ausentes</h2>
-<p class="lead"><?= count($zonasAusentes) ?> zonas ausentes em slaves. Esta acao cria blocos slave e executa reinventario; remocao continua bloqueada.</p>
-<form method="POST" class="sync-form" onsubmit="return confirm('Criar todas as zonas ausentes nos slaves?');">
-<?= csrf_field() ?>
-<input type="hidden" name="acao" value="sync_todas_ausentes">
-<label>IP master NS1</label>
-<input name="master_ip" value="<?= htmlspecialchars($masterIpPadrao) ?>" placeholder="45.162.196.242" required>
-<button type="submit">Sincronizar todas ausentes</button>
-</form>
-</section>
+<?php if ($erro): ?>
+    <div class="zones-message error"><?= htmlspecialchars($erro) ?></div>
+<?php endif; ?>
+<?php if ($sucesso): ?>
+    <div class="zones-message success"><?= htmlspecialchars($sucesso) ?></div>
+<?php endif; ?>
+<?php if ($resultadoSync): ?>
+    <section class="zones-card">
+        <div class="zones-card-head">
+            <div>
+                <h2 class="zones-card-title">Resultado da sincronização</h2>
+                <p class="zones-card-subtitle">Execução recente dos comandos de criação de zonas ausentes.</p>
+            </div>
+        </div>
+        <?php foreach (($resultadoSync['resultados'] ?? []) as $resultado): ?>
+            <p class="zones-card-subtitle"><?= htmlspecialchars((string) $resultado['servidor']) ?> · <?= htmlspecialchars((string) $resultado['zona']) ?> · <?= !empty($resultado['ok']) ? 'OK' : 'Falha' ?> · <?= (int) ($resultado['duracao_ms'] ?? 0) ?> ms</p>
+            <div class="result"><?= htmlspecialchars((string) ($resultado['saida'] ?? '')) ?></div>
+        <?php endforeach; ?>
+    </section>
 <?php endif; ?>
 
-<section class="card">
-<div class="toolbar">
-<h2>Classificacao das divergencias</h2>
-<span class="meta">Governanca antes de qualquer reconciliacao destrutiva</span>
-</div>
-<div class="class-grid">
-<?php foreach ($resumoClassificacao as $codigo => $total): ?>
-<div class="class-item">
-<span class="badge <?= $total > 0 && !in_array($codigo, ['OK', 'EXTRA_IGNORADA'], true) ? 'warn' : 'ok' ?>"><?= htmlspecialchars($codigo) ?></span>
-<strong><?= (int) $total ?></strong>
-</div>
-<?php endforeach; ?>
-</div>
+<?php if ($zonasAusentes): ?>
+    <section class="zones-sync">
+        <div class="zones-card-head">
+            <div>
+                <h2 class="zones-card-title">Sincronizar zonas ausentes</h2>
+                <p class="zones-card-subtitle"><?= count($zonasAusentes) ?> zonas ausentes em slaves. Esta ação cria blocos slave e executa o reinventário. Remoção continua bloqueada.</p>
+            </div>
+        </div>
+        <form method="POST" class="zones-sync-form" onsubmit="return confirm('Criar todas as zonas ausentes nos slaves?');">
+            <?= csrf_field() ?>
+            <input type="hidden" name="acao" value="sync_todas_ausentes">
+            <div>
+                <label for="master-ip">IP master NS1</label>
+                <input id="master-ip" name="master_ip" value="<?= htmlspecialchars($masterIpPadrao) ?>" placeholder="45.162.196.242" required>
+            </div>
+            <button type="submit" class="zones-button primary">Sincronizar todas ausentes</button>
+        </form>
+    </section>
+<?php endif; ?>
+
+<section class="zones-kpis">
+    <article class="zones-kpi ok">
+        <span class="zones-kpi-title">Zonas OK</span>
+        <span class="zones-kpi-value"><?= (int) $kpiOk ?></span>
+        <span class="zones-kpi-desc">Zonas sincronizadas entre master e slaves.</span>
+    </article>
+    <article class="zones-kpi missing">
+        <span class="zones-kpi-title">Ausentes</span>
+        <span class="zones-kpi-value"><?= (int) $kpiAusentes ?></span>
+        <span class="zones-kpi-desc">Presentes no NS1, ausentes no slave.</span>
+    </article>
+    <article class="zones-kpi serial">
+        <span class="zones-kpi-title">Serial diferente</span>
+        <span class="zones-kpi-value"><?= (int) $kpiSerialDiferente ?></span>
+        <span class="zones-kpi-desc">Domínios com serial SOA divergente.</span>
+    </article>
+    <article class="zones-kpi extra">
+        <span class="zones-kpi-title">Zonas extras</span>
+        <span class="zones-kpi-value"><?= (int) $kpiExtras ?></span>
+        <span class="zones-kpi-desc">Encontradas em slaves e fora do master.</span>
+    </article>
+    <article class="zones-kpi fail">
+        <span class="zones-kpi-title">Falhas de coleta</span>
+        <span class="zones-kpi-value"><?= (int) $kpiFalhasColeta ?></span>
+        <span class="zones-kpi-desc">Servidores com coleta indisponível ou erro.</span>
+    </article>
 </section>
 
+<?php if ($kpiSoaIndisponivel > 0): ?>
+    <div class="zones-soa-note">
+        SOA indisponível: <strong><?= (int) $kpiSoaIndisponivel ?></strong>
+        <span class="muted">(
+            master <?= (int) ($resumoClassificacao['SOA_MASTER_INDISPONIVEL'] ?? 0) ?> /
+            slave <?= (int) ($resumoClassificacao['SOA_SLAVE_INDISPONIVEL'] ?? 0) ?>
+        )</span>
+    </div>
+<?php endif; ?>
+
 <?php if ($extrasPorServidor): ?>
-<section class="card blocked">
-<div class="toolbar">
-<h2>Zonas extras nos slaves</h2>
-<span class="badge">Remocao bloqueada</span>
-</div>
-<p class="lead">Estas zonas existem em slaves e nao existem no NS1. Elas podem ser legitimas; nenhuma remocao automatica sera executada nesta fase.</p>
-<div class="extra-list">
-<?php foreach ($extrasPorServidor as $grupo): ?>
-<article class="class-item">
-<span class="badge"><?= htmlspecialchars($grupo['server_nome']) ?></span>
-<strong><?= count($grupo['zonas']) ?></strong>
-<ul class="zone-list">
-<?php foreach ($grupo['zonas'] as $extra): ?>
-<li><?= htmlspecialchars($extra['zone_name']) ?> <span class="muted">SOA <?= htmlspecialchars((string) ($extra['slave_serial'] ?? 'indisponivel')) ?></span></li>
-<?php endforeach; ?>
-</ul>
-</article>
-<?php endforeach; ?>
-</div>
-</section>
+    <section class="zones-card zones-highlight">
+        <div class="zones-card-head">
+            <div>
+                <h2 class="zones-card-title">Zonas extras detectadas nos slaves</h2>
+                <p class="zones-card-subtitle">As zonas listadas existem em um slave, mas não foram encontradas no master. Podem ser legítimas, legadas ou resíduos antigos. Nenhuma remoção automática será realizada.</p>
+            </div>
+            <span class="zone-badge warn">Remoção bloqueada</span>
+        </div>
+        <div class="zones-highlight-grid">
+            <?php foreach ($extrasPorServidor as $grupo): ?>
+                <article class="zones-extra-group">
+                    <div class="zones-extra-head">
+                        <div class="zones-extra-name"><?= htmlspecialchars($grupo['server_nome']) ?></div>
+                        <div class="zones-extra-count"><?= count($grupo['zonas']) ?> zonas</div>
+                    </div>
+                    <div class="zones-extra-list">
+                        <?php foreach ($grupo['zonas'] as $extra): ?>
+                            <div class="zones-extra-item">
+                                <div class="zones-extra-main">
+                                    <span class="zones-extra-zone"><?= htmlspecialchars($extra['zone_name']) ?></span>
+                                    <span class="zones-extra-meta">Servidor: <?= htmlspecialchars($grupo['server_nome']) ?> · SOA <?= htmlspecialchars((string) ($extra['slave_serial'] ?? 'indisponivel')) ?></span>
+                                </div>
+                                <div class="zones-extra-actions">
+                                    <button
+                                        type="button"
+                                        class="zones-mini-button inspect-zone"
+                                        data-zone="<?= htmlspecialchars($extra['zone_name']) ?>"
+                                        data-server="<?= htmlspecialchars($grupo['server_nome']) ?>"
+                                        data-server-key="<?= htmlspecialchars($grupo['server_key']) ?>"
+                                        data-state="<?= htmlspecialchars('extra_on_slave') ?>"
+                                        data-state-label="<?= htmlspecialchars(zone_estado_label('extra_on_slave')) ?>"
+                                        data-detail="<?= htmlspecialchars((string) ($extra['detalhe'] ?? 'Zona extra detectada')) ?>"
+                                        data-explanation="<?= htmlspecialchars(zone_estado_explicacao('extra_on_slave')) ?>"
+                                        data-master="<?= htmlspecialchars((string) ($extra['master_serial'] ?? 'indisponivel')) ?>"
+                                        data-slave="<?= htmlspecialchars((string) ($extra['slave_serial'] ?? 'indisponivel')) ?>"
+                                        data-note="<?= htmlspecialchars((string) ($extra['ignore_note'] ?? '')) ?>">
+                                        Inspecionar
+                                    </button>
+                                    <button type="button" class="zones-mini-button ghost" disabled>Marcar legítima</button>
+                                </div>
+                            </div>
+                        <?php endforeach; ?>
+                    </div>
+                </article>
+            <?php endforeach; ?>
+        </div>
+    </section>
 <?php endif; ?>
 
 <?php if ($extrasIgnoradasPorServidor): ?>
-<section class="card ignored">
-<div class="toolbar">
-<h2>Extras ignoradas</h2>
-<span class="badge ok">Legitimas</span>
-</div>
-<p class="lead">Estas zonas extras foram marcadas como legitimas e ficam separadas dos alertas acionaveis.</p>
-<div class="extra-list">
-<?php foreach ($extrasIgnoradasPorServidor as $grupo): ?>
-<article class="class-item">
-<span class="badge"><?= htmlspecialchars($grupo['server_nome']) ?></span>
-<strong><?= count($grupo['zonas']) ?></strong>
-<ul class="zone-list">
-<?php foreach ($grupo['zonas'] as $extra): ?>
-<li><?= htmlspecialchars($extra['zone_name']) ?> <span class="muted">SOA <?= htmlspecialchars((string) ($extra['slave_serial'] ?? 'indisponivel')) ?></span><?php if (!empty($extra['ignore_note'])): ?><br><span class="muted"><?= htmlspecialchars((string) $extra['ignore_note']) ?></span><?php endif; ?></li>
-<?php endforeach; ?>
-</ul>
-</article>
-<?php endforeach; ?>
-</div>
-</section>
+    <section class="zones-card">
+        <div class="zones-card-head">
+            <div>
+                <h2 class="zones-card-title">Extras ignoradas</h2>
+                <p class="zones-card-subtitle">Itens separados dos alertas acionáveis, mantidos apenas para referência visual e auditoria.</p>
+            </div>
+        </div>
+        <div class="zones-highlight-grid">
+            <?php foreach ($extrasIgnoradasPorServidor as $grupo): ?>
+                <article class="zones-extra-group" style="border-color:rgba(96,165,250,.16);">
+                    <div class="zones-extra-head">
+                        <div class="zones-extra-name"><?= htmlspecialchars($grupo['server_nome']) ?></div>
+                        <div class="zones-extra-count"><?= count($grupo['zonas']) ?> zonas</div>
+                    </div>
+                    <div class="zones-extra-list">
+                        <?php foreach ($grupo['zonas'] as $extra): ?>
+                            <div class="zones-extra-item">
+                                <div class="zones-extra-main">
+                                    <span class="zones-extra-zone"><?= htmlspecialchars($extra['zone_name']) ?></span>
+                                    <span class="zones-extra-meta">
+                                        SOA <?= htmlspecialchars((string) ($extra['slave_serial'] ?? 'indisponivel')) ?>
+                                        <?php if (!empty($extra['ignore_note'])): ?> · <?= htmlspecialchars((string) $extra['ignore_note']) ?><?php endif; ?>
+                                    </span>
+                                </div>
+                                <div class="zones-extra-actions">
+                                    <button
+                                        type="button"
+                                        class="zones-mini-button inspect-zone"
+                                        data-zone="<?= htmlspecialchars($extra['zone_name']) ?>"
+                                        data-server="<?= htmlspecialchars($grupo['server_nome']) ?>"
+                                        data-server-key="<?= htmlspecialchars($grupo['server_key']) ?>"
+                                        data-state="<?= htmlspecialchars('extra_on_slave_ignored') ?>"
+                                        data-state-label="<?= htmlspecialchars(zone_estado_label('extra_on_slave_ignored')) ?>"
+                                        data-detail="<?= htmlspecialchars((string) ($extra['detalhe'] ?? 'Zona extra ignorada')) ?>"
+                                        data-explanation="<?= htmlspecialchars(zone_estado_explicacao('extra_on_slave_ignored')) ?>"
+                                        data-master="<?= htmlspecialchars((string) ($extra['master_serial'] ?? 'indisponivel')) ?>"
+                                        data-slave="<?= htmlspecialchars((string) ($extra['slave_serial'] ?? 'indisponivel')) ?>"
+                                        data-note="<?= htmlspecialchars((string) ($extra['ignore_note'] ?? '')) ?>">
+                                        Inspecionar
+                                    </button>
+                                </div>
+                            </div>
+                        <?php endforeach; ?>
+                    </div>
+                </article>
+            <?php endforeach; ?>
+        </div>
+    </section>
 <?php endif; ?>
 
-<?php if ($falhasColeta): ?>
-<section class="card notice">
-<h2>Falhas de coleta</h2>
-<?php foreach ($falhasColeta as $server): ?>
-<p class="error"><?= htmlspecialchars($server['server_nome']) ?>: <?= htmlspecialchars((string) $server['last_error']) ?></p>
-<?php endforeach; ?>
-</section>
-<?php endif; ?>
+<section class="zones-layout">
+    <aside class="zones-card zones-filters">
+        <div class="zones-card-head">
+            <div>
+                <h2 class="zones-card-title">Filtros</h2>
+                <p class="zones-card-subtitle">Busca client-side por zona, servidor e estado.</p>
+            </div>
+        </div>
+        <input class="zones-filter-search" id="filtro-comparacao" type="text" placeholder="Pesquisar zona...">
+        <div class="zones-filter-list" id="zones-filter-list">
+            <button type="button" class="zones-filter-chip is-active" data-zone-filter="all">Todos</button>
+            <button type="button" class="zones-filter-chip" data-zone-filter="ok">OK</button>
+            <button type="button" class="zones-filter-chip" data-zone-filter="missing_on_slave">Ausentes</button>
+            <button type="button" class="zones-filter-chip" data-zone-filter="serial_mismatch">Serial diferente</button>
+            <button type="button" class="zones-filter-chip" data-zone-filter="extras">Extras</button>
+            <button type="button" class="zones-filter-chip" data-zone-filter="soa">SOA indisponível</button>
+            <button type="button" class="zones-filter-chip" data-zone-filter="collection_failed">Falha de coleta</button>
+        </div>
+        <p class="zones-filter-note">A tabela ao lado responde ao texto e ao status sem alterar nenhuma operação do DNS.</p>
+    </aside>
 
-<?php if ($erro): ?><div class="message error"><?= htmlspecialchars($erro) ?></div><?php endif; ?>
-<?php if ($sucesso): ?><div class="message success"><?= htmlspecialchars($sucesso) ?></div><?php endif; ?>
-<?php if ($resultadoSync): ?>
-<section class="card">
-<h2>Resultado da sincronizacao</h2>
-<?php foreach (($resultadoSync['resultados'] ?? []) as $resultado): ?>
-<p class="meta"><?= htmlspecialchars((string) $resultado['servidor']) ?> · <?= htmlspecialchars((string) $resultado['zona']) ?> · <?= !empty($resultado['ok']) ? 'OK' : 'Falha' ?> · <?= (int) ($resultado['duracao_ms'] ?? 0) ?> ms</p>
-<div class="result"><?= htmlspecialchars((string) ($resultado['saida'] ?? '')) ?></div>
-<?php endforeach; ?>
-</section>
-<?php endif; ?>
-
-<?php if (!$statusServidores): ?>
-<section class="card notice">
-<h2>Nenhum inventario carregado</h2>
-<p class="lead">Clique em atualizar inventario para descobrir NS1 e importar as zonas existentes dos slaves cadastrados.</p>
-</section>
-<?php endif; ?>
-
-<section class="grid">
-<?php foreach ($statusServidores as $server): ?>
-<article class="card stat">
-<span class="badge <?= $server['last_ok'] ? 'ok' : 'error' ?>"><?= $server['last_ok'] ? 'Online' : 'Falha' ?></span>
-<span class="badge"><?= htmlspecialchars(strtoupper($server['server_role'])) ?></span>
-<h2><?= htmlspecialchars($server['server_nome']) ?></h2>
-<div class="value"><?= (int) $server['total_zones'] ?></div>
-<p class="meta">Total de zonas · Atualizado em <?= htmlspecialchars(zones_data_sao_paulo($server['checked_at'] ?? null)) ?></p>
-<?php if (!$server['last_ok'] && $server['last_error']): ?><p class="error"><?= htmlspecialchars($server['last_error']) ?></p><?php endif; ?>
-</article>
-<?php endforeach; ?>
-<article class="card stat">
-<span class="badge <?= $divergencias ? 'warn' : 'ok' ?>">Comparacao</span>
-<h2>Divergencias</h2>
-<div class="value"><?= count($divergencias) ?></div>
-<p class="meta">Presenca de zona e serial SOA master/slave.</p>
-</article>
-</section>
-
-<?php if ($resultados): ?>
-<section class="card">
-<h2>Resultado da ultima atualizacao</h2>
-<p class="meta">NS1: <?= htmlspecialchars($resultados['local']['servidor'] ?? 'local') ?> · <?= !empty($resultados['local']['ok']) ? 'OK' : 'Falha' ?> · <?= (int) ($resultados['local']['zonas'] ?? 0) ?> zonas</p>
-<?php foreach ($resultados['remotos'] as $resultado): ?>
-<p class="meta"><?= htmlspecialchars((string) $resultado['servidor']) ?> · <?= !empty($resultado['ok']) ? 'OK' : 'Falha' ?> · <?= (int) ($resultado['zonas'] ?? 0) ?> zonas · <?= (int) ($resultado['duracao_ms'] ?? 0) ?> ms</p>
-<?php if (empty($resultado['ok'])): ?><div class="result"><?= htmlspecialchars((string) $resultado['saida']) ?></div><?php endif; ?>
-<?php endforeach; ?>
-</section>
-<?php endif; ?>
-
-<section class="card">
-<div class="toolbar">
-<h2>Comparacao NS1 x slaves</h2>
-<span class="meta"><?= count($comparacao) ?> verificacoes</span>
-</div>
-<input class="search" id="filtro-comparacao" type="text" placeholder="Pesquisar zona ou servidor...">
-<div class="table-wrap">
-<table id="tabela-comparacao">
-<thead><tr><th>Zona</th><th>Slave</th><th>Serial NS1</th><th>Serial slave</th><th>Estado</th><th>Detalhe</th><th>Acoes</th></tr></thead>
-<tbody>
-<?php if (!$comparacao): ?>
-<tr><td colspan="7" class="muted">Sem dados de comparacao. Atualize o inventario.</td></tr>
-<?php endif; ?>
-<?php foreach ($comparacao as $linha): ?>
-<tr>
-<td><?= htmlspecialchars($linha['zone_name']) ?></td>
-<td><?= htmlspecialchars($linha['server_nome']) ?></td>
-<td><?= htmlspecialchars((string) ($linha['master_serial'] ?? 'indisponivel')) ?></td>
-<td><?= htmlspecialchars((string) ($linha['slave_serial'] ?? 'indisponivel')) ?></td>
-<td class="<?= zone_estado_class($linha['estado']) ?>"><strong><?= htmlspecialchars(zone_estado_label($linha['estado'])) ?></strong></td>
-<td><?= htmlspecialchars($linha['detalhe']) ?></td>
-<td>
-<div class="action-row">
-<button type="button" class="small-button muted-button inspect-zone"
-    data-zone="<?= htmlspecialchars($linha['zone_name']) ?>"
-    data-server="<?= htmlspecialchars($linha['server_nome']) ?>"
-    data-server-key="<?= htmlspecialchars($linha['server_key']) ?>"
-    data-state="<?= htmlspecialchars($linha['estado']) ?>"
-    data-state-label="<?= htmlspecialchars(zone_estado_label($linha['estado'])) ?>"
-    data-detail="<?= htmlspecialchars($linha['detalhe']) ?>"
-    data-explanation="<?= htmlspecialchars(zone_estado_explicacao($linha['estado'])) ?>"
-    data-master="<?= htmlspecialchars((string) ($linha['master_serial'] ?? 'indisponivel')) ?>"
-    data-slave="<?= htmlspecialchars((string) ($linha['slave_serial'] ?? 'indisponivel')) ?>"
-    data-note="<?= htmlspecialchars((string) ($linha['ignore_note'] ?? '')) ?>">Inspecionar</button>
-<?php if ($linha['estado'] === 'missing_on_slave'): ?>
-<form method="POST" class="inline-form" onsubmit="return confirm('Criar zona slave <?= htmlspecialchars($linha['zone_name']) ?> em <?= htmlspecialchars($linha['server_nome']) ?>?');">
-<?= csrf_field() ?>
-<input type="hidden" name="acao" value="sync_zona_ausente">
-<input type="hidden" name="zona" value="<?= htmlspecialchars($linha['zone_name']) ?>">
-<input type="hidden" name="server_key" value="<?= htmlspecialchars($linha['server_key']) ?>">
-<input type="hidden" name="master_ip" value="<?= htmlspecialchars($masterIpPadrao) ?>">
-<button type="submit" class="small-button">Criar slave</button>
-</form>
-<?php endif; ?>
-</div>
-</td>
-</tr>
-<?php endforeach; ?>
-</tbody>
-</table>
-</div>
+    <section class="zones-card zones-map">
+        <div class="zones-card-head">
+            <div>
+                <h2 class="zones-card-title">Mapa de zonas</h2>
+                <p class="zones-card-subtitle">Comparação entre master e slaves com o estado operacional de cada linha.</p>
+            </div>
+            <span class="zone-badge info"><?= count($comparacao) ?> verificações</span>
+        </div>
+        <div class="zones-table-wrap">
+            <table id="tabela-comparacao">
+                <thead>
+                    <tr>
+                        <th>Zona</th>
+                        <th>Servidor</th>
+                        <th>Serial NS1</th>
+                        <th>Serial slave</th>
+                        <th>Status</th>
+                        <th>Ação</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <?php if (!$comparacao): ?>
+                        <tr>
+                            <td colspan="6" class="zones-empty">Sem dados de comparação. Atualize o inventário.</td>
+                        </tr>
+                    <?php endif; ?>
+                    <?php foreach ($comparacao as $linha): ?>
+                        <?php
+                            $estado = (string) $linha['estado'];
+                            $statusLabel = zone_estado_label($estado);
+                            $statusTone = zone_estado_tone($estado);
+                            $rowSearch = strtolower(trim(
+                                $linha['zone_name'] . ' ' .
+                                $linha['server_nome'] . ' ' .
+                                $statusLabel . ' ' .
+                                $linha['detalhe'] . ' ' .
+                                (string) ($linha['master_serial'] ?? '') . ' ' .
+                                (string) ($linha['slave_serial'] ?? '')
+                            ));
+                        ?>
+                        <tr data-zone-status="<?= htmlspecialchars($estado) ?>" data-zone-search="<?= htmlspecialchars($rowSearch) ?>">
+                            <td><?= htmlspecialchars($linha['zone_name']) ?></td>
+                            <td><?= htmlspecialchars($linha['server_nome']) ?></td>
+                            <td><?= htmlspecialchars((string) ($linha['master_serial'] ?? 'indisponivel')) ?></td>
+                            <td><?= htmlspecialchars((string) ($linha['slave_serial'] ?? 'indisponivel')) ?></td>
+                            <td><span class="zones-status <?= htmlspecialchars($statusTone) ?>"><?= htmlspecialchars($statusLabel) ?></span></td>
+                            <td>
+                                <div class="action-row">
+                                    <button
+                                        type="button"
+                                        class="small-button muted-button inspect-zone"
+                                        data-zone="<?= htmlspecialchars($linha['zone_name']) ?>"
+                                        data-server="<?= htmlspecialchars($linha['server_nome']) ?>"
+                                        data-server-key="<?= htmlspecialchars($linha['server_key']) ?>"
+                                        data-state="<?= htmlspecialchars($estado) ?>"
+                                        data-state-label="<?= htmlspecialchars($statusLabel) ?>"
+                                        data-detail="<?= htmlspecialchars($linha['detalhe']) ?>"
+                                        data-explanation="<?= htmlspecialchars(zone_estado_explicacao($estado)) ?>"
+                                        data-master="<?= htmlspecialchars((string) ($linha['master_serial'] ?? 'indisponivel')) ?>"
+                                        data-slave="<?= htmlspecialchars((string) ($linha['slave_serial'] ?? 'indisponivel')) ?>"
+                                        data-note="<?= htmlspecialchars((string) ($linha['ignore_note'] ?? '')) ?>">
+                                        Detalhes
+                                    </button>
+                                    <?php if ($estado === 'missing_on_slave'): ?>
+                                        <form method="POST" class="inline-form" onsubmit="return confirm('Criar zona slave <?= htmlspecialchars($linha['zone_name']) ?> em <?= htmlspecialchars($linha['server_nome']) ?>?');">
+                                            <?= csrf_field() ?>
+                                            <input type="hidden" name="acao" value="sync_zona_ausente">
+                                            <input type="hidden" name="zona" value="<?= htmlspecialchars($linha['zone_name']) ?>">
+                                            <input type="hidden" name="server_key" value="<?= htmlspecialchars($linha['server_key']) ?>">
+                                            <input type="hidden" name="master_ip" value="<?= htmlspecialchars($masterIpPadrao) ?>">
+                                            <button type="submit" class="small-button">Sincronizar</button>
+                                        </form>
+                                    <?php endif; ?>
+                                </div>
+                            </td>
+                        </tr>
+                    <?php endforeach; ?>
+                </tbody>
+            </table>
+        </div>
+        <p class="table-note">Ação de sincronização permanece somente para zonas ausentes. Nenhum botão de remoção foi adicionado.</p>
+    </section>
 </section>
 
-<section class="card">
-<div class="toolbar">
-<h2>Auditoria DNS recente</h2>
-<span class="meta"><?= count($eventosAuditoriaDns) ?> eventos</span>
-</div>
-<div class="table-wrap">
-<table>
-<thead><tr><th>Data</th><th>Acao</th><th>Zona</th><th>Servidor</th><th>Status</th><th>Mensagem</th></tr></thead>
-<tbody>
-<?php if (!$eventosAuditoriaDns): ?>
-<tr><td colspan="6" class="muted">Nenhum evento DNS auditado.</td></tr>
-<?php endif; ?>
-<?php foreach ($eventosAuditoriaDns as $evento): ?>
-<tr>
-<td><?= htmlspecialchars(zones_data_sao_paulo($evento['criado_em'] ?? null)) ?></td>
-<td><?= htmlspecialchars((string) $evento['acao']) ?></td>
-<td><?= htmlspecialchars((string) ($evento['dominio'] ?? '-')) ?></td>
-<td><?= htmlspecialchars((string) ($evento['nome_registro'] ?? '-')) ?></td>
-<td class="<?= ($evento['status'] ?? '') === 'OK' ? 'ok' : 'error' ?>"><?= htmlspecialchars((string) $evento['status']) ?></td>
-<td><?= htmlspecialchars((string) ($evento['mensagem'] ?? '-')) ?></td>
-</tr>
-<?php endforeach; ?>
-</tbody>
-</table>
-</div>
+<section class="zones-card zones-audit">
+    <div class="zones-card-head">
+        <div>
+            <h2 class="zones-card-title">Auditoria DNS recente</h2>
+            <p class="zones-card-subtitle">Eventos recentes gerados pelo inventário e pelas operações de comparação.</p>
+        </div>
+        <a class="zones-button ghost" href="auditoria.php">Ver todas</a>
+    </div>
+    <div class="zones-table-wrap zones-audit-table">
+        <table>
+            <thead>
+                <tr>
+                    <th>Data/Hora</th>
+                    <th>Usuário</th>
+                    <th>Evento</th>
+                    <th>Detalhes/Resultado</th>
+                </tr>
+            </thead>
+            <tbody>
+                <?php if (!$eventosAuditoriaDns): ?>
+                    <tr>
+                        <td colspan="4" class="zones-empty">Nenhum evento DNS auditado.</td>
+                    </tr>
+                <?php endif; ?>
+                <?php foreach ($eventosAuditoriaDns as $evento): ?>
+                    <tr>
+                        <td><?= htmlspecialchars(zones_data_sao_paulo($evento['criado_em'] ?? null)) ?></td>
+                        <td><?= htmlspecialchars((string) ($evento['usuario'] ?? '-')) ?></td>
+                        <td><?= htmlspecialchars((string) $evento['acao']) ?></td>
+                        <td><?= htmlspecialchars(trim((string) ($evento['mensagem'] ?? '-')) !== '' ? (string) $evento['mensagem'] : '-') ?></td>
+                    </tr>
+                <?php endforeach; ?>
+            </tbody>
+        </table>
+    </div>
 </section>
 
-<section class="card">
-<div class="toolbar">
-<h2>Inventario bruto</h2>
-<span class="meta"><?= count($inventario) ?> entradas</span>
-</div>
-<input class="search" id="filtro-inventario" type="text" placeholder="Pesquisar zona, servidor, arquivo ou master...">
-<div class="table-wrap">
-<table id="tabela-inventario">
-<thead><tr><th>Servidor</th><th>Papel</th><th>Zona</th><th>Tipo</th><th>Serial SOA</th><th>Arquivo</th><th>Masters</th><th>Status</th></tr></thead>
-<tbody>
-<?php if (!$inventario): ?>
-<tr><td colspan="8" class="muted">Inventario vazio.</td></tr>
-<?php endif; ?>
-<?php foreach ($inventario as $zona): ?>
-<tr>
-<td><?= htmlspecialchars($zona['server_nome']) ?></td>
-<td><?= htmlspecialchars(strtoupper($zona['server_role'])) ?></td>
-<td><?= htmlspecialchars($zona['zone_name']) ?></td>
-<td><?= htmlspecialchars($zona['zone_type']) ?></td>
-<td><?= htmlspecialchars((string) ($zona['serial'] ?? 'indisponivel')) ?></td>
-<td><?= htmlspecialchars((string) ($zona['file_path'] ?? '-')) ?></td>
-<td><?= htmlspecialchars((string) ($zona['masters'] ?? '-')) ?></td>
-<td class="<?= $zona['status'] === 'ok' ? 'ok' : 'warn' ?>"><?= htmlspecialchars($zona['status']) ?></td>
-</tr>
-<?php endforeach; ?>
-</tbody>
-</table>
-</div>
+<section class="zones-card zones-raw">
+    <details open>
+        <summary>Inventário bruto</summary>
+        <div class="zones-raw-content">
+            <p class="zones-card-subtitle"><?= (int) $inventarioBrutoTotal ?> entradas reais carregadas do inventário atual.</p>
+            <input class="zones-filter-search" id="filtro-inventario" type="text" placeholder="Pesquisar zona, servidor, arquivo ou master...">
+            <div class="zones-table-wrap">
+                <table id="tabela-inventario">
+                    <thead>
+                        <tr>
+                            <th>Servidor</th>
+                            <th>Papel</th>
+                            <th>Zona</th>
+                            <th>Tipo</th>
+                            <th>Serial SOA</th>
+                            <th>Arquivo</th>
+                            <th>Masters</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php if (!$inventario): ?>
+                            <tr>
+                                <td colspan="8" class="zones-empty">Inventário vazio.</td>
+                            </tr>
+                        <?php endif; ?>
+                        <?php foreach ($inventario as $zona): ?>
+                            <tr>
+                                <td><?= htmlspecialchars($zona['server_nome']) ?></td>
+                                <td><?= htmlspecialchars(strtoupper($zona['server_role'])) ?></td>
+                                <td><?= htmlspecialchars($zona['zone_name']) ?></td>
+                                <td><?= htmlspecialchars($zona['zone_type']) ?></td>
+                                <td><?= htmlspecialchars((string) ($zona['serial'] ?? 'indisponivel')) ?></td>
+                                <td><?= htmlspecialchars((string) ($zona['file_path'] ?? '-')) ?></td>
+                                <td><?= htmlspecialchars((string) ($zona['masters'] ?? '-')) ?></td>
+                                <td><span class="zones-status <?= $zona['status'] === 'ok' ? 'state-ok' : 'state-soa' ?>"><?= htmlspecialchars($zona['status']) ?></span></td>
+                            </tr>
+                        <?php endforeach; ?>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </details>
 </section>
 
 <dialog class="dialog" id="zone-dialog">
-<form method="dialog">
-<div class="toolbar">
-<h2 id="dialog-title">Inspecao da zona</h2>
-<button type="submit" class="small-button muted-button">Fechar</button>
-</div>
-</form>
-<div class="dialog-grid">
-<div class="dialog-field"><span>Zona</span><strong id="dialog-zone"></strong></div>
-<div class="dialog-field"><span>Slave</span><strong id="dialog-server"></strong></div>
-<div class="dialog-field"><span>Serial NS1</span><strong id="dialog-master"></strong></div>
-<div class="dialog-field"><span>Serial slave</span><strong id="dialog-slave"></strong></div>
-<div class="dialog-field"><span>Estado</span><strong id="dialog-state"></strong></div>
-<div class="dialog-field"><span>Detalhe</span><strong id="dialog-detail"></strong></div>
-</div>
-<p class="lead" id="dialog-explanation"></p>
-<p class="meta" id="dialog-note-wrap">Nota: <span id="dialog-note"></span></p>
-<form method="POST" id="ignore-form">
-<?= csrf_field() ?>
-<input type="hidden" name="acao" value="ignorar_extra">
-<input type="hidden" name="zona" id="ignore-zone">
-<input type="hidden" name="server_key" id="ignore-server-key">
-<label class="meta" for="ignore-note">Nota opcional</label>
-<textarea name="nota" id="ignore-note" maxlength="500" placeholder="Ex.: zona legada mantida somente neste slave"></textarea>
-<div class="dialog-actions"><button type="submit">Marcar como legitima</button></div>
-</form>
-<form method="POST" id="restore-form">
-<?= csrf_field() ?>
-<input type="hidden" name="acao" value="restaurar_extra">
-<input type="hidden" name="zona" id="restore-zone">
-<input type="hidden" name="server_key" id="restore-server-key">
-<div class="dialog-actions"><button type="submit" class="muted-button">Restaurar alerta</button></div>
-</form>
+    <div class="dialog-header">
+        <div>
+            <h2 class="dialog-title" id="dialog-title">Inspeção da zona</h2>
+            <p class="dialog-subtitle">Detalhes operacionais da comparação sem executar nenhuma mudança.</p>
+        </div>
+        <button type="button" class="dialog-close" id="dialog-close" aria-label="Fechar">×</button>
+    </div>
+    <div class="dialog-grid">
+        <div class="dialog-field"><span>Zona</span><strong id="dialog-zone"></strong></div>
+        <div class="dialog-field"><span>Servidor</span><strong id="dialog-server"></strong></div>
+        <div class="dialog-field"><span>Serial NS1</span><strong id="dialog-master"></strong></div>
+        <div class="dialog-field"><span>Serial slave</span><strong id="dialog-slave"></strong></div>
+        <div class="dialog-field"><span>Status</span><strong id="dialog-state"></strong></div>
+        <div class="dialog-field"><span>Detalhe</span><strong id="dialog-detail"></strong></div>
+    </div>
+    <div class="dialog-body">
+        <p id="dialog-explanation"></p>
+        <p class="dialog-note" id="dialog-note-wrap">Nota: <span id="dialog-note"></span></p>
+    </div>
+    <div class="dialog-shell">
+        <form method="POST" id="ignore-form" class="dialog-form">
+            <?= csrf_field() ?>
+            <input type="hidden" name="acao" value="ignorar_extra">
+            <input type="hidden" name="zona" id="ignore-zone">
+            <input type="hidden" name="server_key" id="ignore-server-key">
+            <label class="zones-card-subtitle" for="ignore-note">Nota opcional</label>
+            <textarea name="nota" id="ignore-note" maxlength="500" placeholder="Ex.: zona legada mantida somente neste slave"></textarea>
+            <div class="dialog-actions">
+                <button type="submit" class="zones-button primary">Marcar como legítima</button>
+            </div>
+        </form>
+        <form method="POST" id="restore-form" class="dialog-form" style="margin-top:12px;">
+            <?= csrf_field() ?>
+            <input type="hidden" name="acao" value="restaurar_extra">
+            <input type="hidden" name="zona" id="restore-zone">
+            <input type="hidden" name="server_key" id="restore-server-key">
+            <div class="dialog-actions">
+                <button type="submit" class="zones-button ghost">Restaurar alerta</button>
+            </div>
+        </form>
+    </div>
 </dialog>
 </main>
 <script>
 function bindFilter(inputId, tableId){
-    const input=document.getElementById(inputId), table=document.getElementById(tableId);
-    if(!input||!table)return;
-    input.addEventListener('input',()=>{
-        const q=input.value.toLowerCase();
-        table.querySelectorAll('tbody tr').forEach(row=>{
-            row.style.display=row.innerText.toLowerCase().includes(q)?'':'none';
+    const input = document.getElementById(inputId);
+    const table = document.getElementById(tableId);
+    if(!input || !table) return;
+    input.addEventListener('input', () => {
+        const q = input.value.toLowerCase().trim();
+        table.querySelectorAll('tbody tr').forEach(row => {
+            if (row.querySelector('.zones-empty')) return;
+            const text = (row.dataset.zoneSearch || row.innerText).toLowerCase();
+            row.style.display = text.includes(q) ? '' : 'none';
         });
     });
 }
-bindFilter('filtro-comparacao','tabela-comparacao');
+
 bindFilter('filtro-inventario','tabela-inventario');
 
-const zoneDialog=document.getElementById('zone-dialog');
-const ignoreForm=document.getElementById('ignore-form');
-const restoreForm=document.getElementById('restore-form');
-function setText(id,value){const el=document.getElementById(id);if(el)el.textContent=value||'-';}
-document.querySelectorAll('.inspect-zone').forEach(button=>{
-    button.addEventListener('click',()=>{
-        const d=button.dataset;
-        setText('dialog-zone',d.zone);
-        setText('dialog-server',d.server);
-        setText('dialog-master',d.master);
-        setText('dialog-slave',d.slave);
-        setText('dialog-state',d.stateLabel);
-        setText('dialog-detail',d.detail);
-        setText('dialog-explanation',d.explanation);
-        setText('dialog-note',d.note);
-        document.getElementById('dialog-note-wrap').style.display=d.note?'':'none';
-        document.getElementById('ignore-zone').value=d.zone;
-        document.getElementById('ignore-server-key').value=d.serverKey;
-        document.getElementById('ignore-note').value=d.note||'';
-        document.getElementById('restore-zone').value=d.zone;
-        document.getElementById('restore-server-key').value=d.serverKey;
-        ignoreForm.style.display=d.state==='extra_on_slave'?'':'none';
-        restoreForm.style.display=d.state==='extra_on_slave_ignored'?'':'none';
-        if(typeof zoneDialog.showModal==='function')zoneDialog.showModal();
+const comparisonTable = document.getElementById('tabela-comparacao');
+const comparisonSearch = document.getElementById('filtro-comparacao');
+const filterButtons = document.querySelectorAll('[data-zone-filter]');
+let activeFilter = 'all';
+
+function matchesZoneFilter(status) {
+    if (activeFilter === 'all') return true;
+    if (activeFilter === 'extras') return status === 'extra_on_slave' || status === 'extra_on_slave_ignored';
+    if (activeFilter === 'soa') return status === 'master_serial_unknown' || status === 'slave_serial_unknown';
+    if (activeFilter === 'collection_failed') return status === 'collection_failed';
+    return status === activeFilter;
+}
+
+function applyComparisonFilter() {
+    if (!comparisonTable || !comparisonSearch) return;
+    const q = comparisonSearch.value.toLowerCase().trim();
+    comparisonTable.querySelectorAll('tbody tr').forEach(row => {
+        if (row.querySelector('.zones-empty')) return;
+        const status = row.dataset.zoneStatus || '';
+        const text = (row.dataset.zoneSearch || row.innerText).toLowerCase();
+        row.style.display = matchesZoneFilter(status) && text.includes(q) ? '' : 'none';
     });
+}
+
+if (comparisonSearch) {
+    comparisonSearch.addEventListener('input', applyComparisonFilter);
+}
+
+filterButtons.forEach(button => {
+    button.addEventListener('click', () => {
+        activeFilter = button.dataset.zoneFilter || 'all';
+        filterButtons.forEach(item => item.classList.toggle('is-active', item === button));
+        applyComparisonFilter();
+    });
+});
+
+applyComparisonFilter();
+
+const zoneDialog = document.getElementById('zone-dialog');
+const ignoreForm = document.getElementById('ignore-form');
+const restoreForm = document.getElementById('restore-form');
+const dialogClose = document.getElementById('dialog-close');
+
+function setText(id, value){
+    const el = document.getElementById(id);
+    if(el) el.textContent = value || '-';
+}
+
+document.querySelectorAll('.inspect-zone').forEach(button => {
+    button.addEventListener('click', () => {
+        const d = button.dataset;
+        setText('dialog-zone', d.zone);
+        setText('dialog-server', d.server);
+        setText('dialog-master', d.master);
+        setText('dialog-slave', d.slave);
+        setText('dialog-state', d.stateLabel);
+        setText('dialog-detail', d.detail);
+        setText('dialog-explanation', d.explanation);
+        setText('dialog-note', d.note);
+        const noteWrap = document.getElementById('dialog-note-wrap');
+        if (noteWrap) {
+            noteWrap.style.display = d.note ? '' : 'none';
+        }
+        document.getElementById('ignore-zone').value = d.zone || '';
+        document.getElementById('ignore-server-key').value = d.serverKey || '';
+        document.getElementById('ignore-note').value = d.note || '';
+        document.getElementById('restore-zone').value = d.zone || '';
+        document.getElementById('restore-server-key').value = d.serverKey || '';
+        ignoreForm.style.display = d.state === 'extra_on_slave' ? '' : 'none';
+        restoreForm.style.display = d.state === 'extra_on_slave_ignored' ? '' : 'none';
+        if (typeof zoneDialog.showModal === 'function') {
+            zoneDialog.showModal();
+        }
+    });
+});
+
+function closeDialog(){
+    if (zoneDialog.open) {
+        zoneDialog.close();
+    }
+}
+
+if (dialogClose) {
+    dialogClose.addEventListener('click', closeDialog);
+}
+
+zoneDialog?.addEventListener('click', event => {
+    const rect = zoneDialog.getBoundingClientRect();
+    const outside = event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom;
+    if (outside) closeDialog();
+});
+
+document.addEventListener('keydown', event => {
+    if (event.key === 'Escape' && zoneDialog.open) {
+        closeDialog();
+    }
 });
 </script>
 <?php require_once __DIR__ . '/includes/session-timeout.php'; ?>
