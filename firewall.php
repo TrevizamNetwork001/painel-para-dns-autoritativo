@@ -1532,13 +1532,15 @@ button,input,a{font:inherit}button{color:inherit}a{color:inherit;text-decoration
 .summary-card{position:relative;min-height:68px;padding:10px 10px 9px 45px;border:1px solid var(--line);border-radius:10px;background:linear-gradient(145deg,#0f192a,var(--deep))}
 .summary-icon{position:absolute;left:10px;top:10px;display:grid;place-items:center;width:27px;height:27px;border:1px solid #38bdf838;border-radius:8px;background:#0c4a6e33;color:#7dd3fc;font-size:13px;font-weight:800}
 .summary-icon.status{border-color:#22c55e42;background:#14532d52;color:#86efac}
-.summary-label{display:block;color:var(--muted);font-size:9px;letter-spacing:.04em;text-transform:uppercase}
-.summary-value{display:block;margin-top:4px;color:var(--accent);font-size:18px;font-weight:800;line-height:1.1}.summary-value.status{color:var(--ok);font-size:15px}
-.summary-detail{display:block;margin-top:3px;overflow:hidden;color:var(--subtle);font-size:9px;white-space:nowrap;text-overflow:ellipsis}
+.summary-label,.firewall-stat-title{display:block;color:var(--muted);font-size:11px;font-weight:800;letter-spacing:.04em;text-transform:uppercase}
+.summary-value,.firewall-stat-value{display:block;margin-top:4px;color:var(--accent);font-size:26px;font-weight:900;line-height:1.05}.summary-value.status{color:var(--ok);font-size:26px}
+.summary-detail,.firewall-stat-desc{display:block;margin-top:4px;overflow:hidden;color:var(--subtle);font-size:12px;font-weight:500;line-height:1.25;white-space:nowrap;text-overflow:ellipsis}
 .summary-card.firewall-inactive .summary-value,.summary-card.firewall-inactive .summary-detail{color:#f87171}
 .panel{padding:15px;border:1px solid var(--line);border-radius:11px;background:linear-gradient(160deg,#0d182a,var(--panel));min-width:0;box-sizing:border-box}
 .quick-panel{margin-bottom:12px;padding:10px 12px}
 .quick-panel .panel-header{margin-bottom:8px}.quick-panel .panel-header p{display:none}
+.quick-panel-title{display:block;color:var(--muted);font-size:11px;font-weight:800;letter-spacing:.04em;text-transform:uppercase}
+.quick-panel-desc{display:block;margin-top:4px;color:var(--subtle);font-size:12px;font-weight:500;line-height:1.25}
 .panel-header{display:flex;align-items:flex-start;justify-content:space-between;gap:14px;margin-bottom:12px}.panel-header h2{margin:0;color:#fff;font-size:16px}
 .panel-header p{margin:3px 0 0;color:var(--muted);font-size:11px;line-height:1.4}
 .panel-header .header-actions{display:flex;align-items:center;justify-content:flex-end;gap:7px;flex-wrap:wrap}
@@ -1682,9 +1684,9 @@ body{background:#080d18}
 
 /* Ajuste final conforme a estrutura da referência esse.png */
 .page-header-right{display:flex;align-items:flex-end;flex-direction:column;gap:10px}.breadcrumb{color:#64748b;font-size:10px}.breadcrumb strong{color:#a8b7ca}
-.summary-card{min-height:82px;padding:13px 10px 9px 59px}.summary-icon{top:13px;width:40px;height:40px;border:0;font-size:0}.summary-icon svg{width:31px;height:31px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}.summary-icon .icon-fill{fill:currentColor;fill-opacity:.13;stroke:none}.summary-icon.blue{background:#063b6d;color:#1797ff}.summary-icon.green{background:#064e3b;color:#22e68d}.summary-icon.orange{background:#4a2b09;color:#f59e0b}.summary-icon.purple{background:#31205c;color:#a78bfa}.summary-icon.off{background:#2b1720;color:#f87171}.summary-value.status{font-size:14px}
-.quick-panel{display:block;padding:12px}.quick-panel .panel-header{margin-bottom:10px}.quick-panel .panel-header p{display:block;font-size:9px}.quick-grid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:7px}.quick-grid>:nth-child(4){display:block}
-.quick-action{display:grid;grid-template-columns:32px minmax(0,1fr);grid-template-rows:auto auto;width:100%;min-height:58px;padding:8px 10px}.quick-action .quick-icon{grid-row:1/3;align-self:center;font-size:20px;text-align:center}.quick-action strong{align-self:end;font-size:10px}.quick-action small{display:block;align-self:start;margin:2px 0 0;color:#64748b;font-size:8px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.summary-card{min-height:92px;padding:13px 10px 10px 59px}.summary-icon{top:13px;width:40px;height:40px;border:0;font-size:0}.summary-icon svg{width:31px;height:31px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}.summary-icon .icon-fill{fill:currentColor;fill-opacity:.13;stroke:none}.summary-icon.blue{background:#063b6d;color:#1797ff}.summary-icon.green{background:#064e3b;color:#22e68d}.summary-icon.orange{background:#4a2b09;color:#f59e0b}.summary-icon.purple{background:#31205c;color:#a78bfa}.summary-icon.off{background:#2b1720;color:#f87171}.summary-value.status{font-size:26px}
+.quick-panel{display:block;padding:12px}.quick-panel .panel-header{margin-bottom:10px}.quick-panel .panel-header h2{margin:0;color:#fff;font-size:11px;font-weight:800;letter-spacing:.04em;text-transform:uppercase}.quick-panel .panel-header p{display:block;margin-top:4px;color:#7f91a6;font-size:11px;font-weight:500;line-height:1.25}.quick-grid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:7px}.quick-grid>:nth-child(4){display:block}
+.quick-action{display:grid;grid-template-columns:32px minmax(0,1fr);grid-template-rows:auto auto;width:100%;min-height:58px;padding:8px 10px}.quick-action .quick-icon{grid-row:1/3;align-self:center;font-size:20px;text-align:center}.quick-action strong{align-self:end;font-size:10px;font-weight:800;color:#f4fbff;letter-spacing:.03em;text-transform:uppercase}.quick-action small{display:block;align-self:start;margin:2px 0 0;color:#7f91a6;font-size:8px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .quick-grid .inline-form,.quick-grid .quick-action.validate{width:100%}
 .quick-icon{display:grid;place-items:center;width:30px;height:30px;border-radius:9px;background:color-mix(in srgb,currentColor 12%,transparent)}
 .quick-icon svg{width:23px;height:23px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
@@ -1751,15 +1753,15 @@ body{background:#080d18}
         <?php foreach ($summary as [$icon, $iconTone, $label, $value, $detail, $status]): ?>
             <article class="summary-card<?= $label === 'Firewall' && !$status ? ' firewall-inactive' : '' ?>">
                 <span class="summary-icon <?= htmlspecialchars($iconTone) ?>" aria-hidden="true"><?= firewall_icone_resumo($icon) ?></span>
-                <span class="summary-label"><?= htmlspecialchars($label) ?></span>
-                <span class="summary-value<?= $status ? ' status' : '' ?>"><?= htmlspecialchars($value) ?></span>
-                <span class="summary-detail"><?= htmlspecialchars($detail) ?></span>
+                <span class="summary-label firewall-stat-title"><?= htmlspecialchars($label) ?></span>
+                <span class="summary-value firewall-stat-value<?= $status ? ' status' : '' ?>"><?= htmlspecialchars($value) ?></span>
+                <span class="summary-detail firewall-stat-desc"><?= htmlspecialchars($detail) ?></span>
             </article>
         <?php endforeach; ?>
     </section>
 
     <section class="panel quick-panel">
-        <header class="panel-header"><div><h2>Ações rápidas</h2><p>Atalhos para as operações mais utilizadas.</p></div></header>
+        <header class="panel-header"><div><h2 class="quick-panel-title">Ações rápidas</h2><p class="quick-panel-desc">Atalhos para as operações mais utilizadas.</p></div></header>
         <div class="quick-grid">
             <?php foreach ($quickActions as [$icon, $iconTone, $label, $detail, $modalId]): ?>
                 <?php if ($modalId === 'disabled-action'): ?>
