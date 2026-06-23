@@ -2,6 +2,26 @@
 
 Historico de alteracoes do Painel DNS Trevizam Network.
 
+## [2.3.24] - 2026-06-23
+
+### Fechamento do ajuste visual do Firewall
+
+- Ajustado o visual final do módulo Firewall.
+- Reorganizados cards, tabelas, ações rápidas e modais.
+- Melhorado o modal de acesso administrativo.
+- Adicionados os botões “Ver histórico de aplicações” e “Ver detalhes”.
+- Removida a prévia técnica de regras nftables da tela principal.
+- Preservada integralmente a lógica funcional da V1.6.
+
+## [2.3.23] - 2026-06-22
+
+### Substituição do card de auditoria do Firewall
+
+- Removida a seção de Auditoria Recente do painel principal.
+- Adicionado um card operacional de Resumo de conexões (24h).
+- Incluída visualização de origens bloqueadas e distribuição por protocolo.
+- Mantido o restante do layout do Firewall sem alterações funcionais.
+
 ## [2.3.22] - 2026-06-22
 
 ### Padronização visual dos modais do Firewall

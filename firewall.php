@@ -1400,6 +1400,7 @@ $aclIpv6 = [];
 $adminPorts = [];
 $publicPorts = [];
 $recentAudit = [];
+$blockedOrigins = [];
 $firewallLoadWarning = null;
 $ultimaValidacao = null;
 $ultimaAplicacao = null;
@@ -1429,14 +1430,19 @@ try {
         $aplicacaoBloqueios[] = $e->getMessage();
     }
 
-    $auditStmt = $pdo->query("
-        SELECT usuario, acao, tipo_registro, nome_registro, status, mensagem, criado_em
+    $blockedStmt = $pdo->query("
+        SELECT ip, COUNT(*) AS total
         FROM audit_logs
         WHERE acao LIKE 'FIREWALL_%'
-        ORDER BY id DESC
+          AND status = 'ERROR'
+          AND criado_em >= datetime('now', '-24 hours')
+          AND ip IS NOT NULL
+          AND trim(ip) <> ''
+        GROUP BY ip
+        ORDER BY total DESC, ip ASC
         LIMIT 4
     ");
-    $recentAudit = $auditStmt->fetchAll(PDO::FETCH_ASSOC);
+    $blockedOrigins = $blockedStmt->fetchAll(PDO::FETCH_ASSOC);
 } catch (PDOException $e) {
     error_log('Firewall - leitura indisponivel: ' . $e->getMessage());
     $firewallLoadWarning = 'Os dados do firewall estao temporariamente indisponiveis. A pagina abriu em modo seguro.';
@@ -1449,6 +1455,18 @@ if ($firewallLoadWarning !== null && $toastMensagemInicial === '') {
 
 $ipv4Count = count($aclIpv4);
 $ipv6Count = count($aclIpv6);
+$protocolTotals = ['TCP' => 0, 'UDP' => 0, 'TCP/UDP' => 0];
+foreach (array_merge($adminPorts, $publicPorts) as $portaRegistro) {
+    $protocoloPorta = strtoupper((string) ($portaRegistro['protocolo'] ?? ''));
+    if (isset($protocolTotals[$protocoloPorta])) {
+        $protocolTotals[$protocoloPorta]++;
+    }
+}
+$protocolTotal = array_sum($protocolTotals);
+$blockedOriginTotal = array_sum(array_map(
+    static fn(array $origin): int => max(0, (int) ($origin['total'] ?? 0)),
+    $blockedOrigins
+));
 $backupDisponivel = firewall_backup_valido($ultimoBackup);
 $firewallAtivo = ($ultimaAplicacao['status'] ?? '') === 'APLICADO';
 $summary = [
@@ -1618,14 +1636,7 @@ tr:last-child td{border-bottom:0}tbody tr{background:#02061766}tbody tr:hover{ba
 
 /* Alinhamento visual com o mockup operacional */
 body{background:#080d18}
-.menu-toggle{display:none;position:fixed;top:12px;left:12px;z-index:40;min-height:36px;padding:8px 11px;border:1px solid var(--line2);border-radius:8px;background:#0b1424;color:#e5edf7;cursor:pointer}
-.menu-overlay{display:none}
-.sidebar{position:fixed;inset:0 auto 0 0;z-index:30;width:220px;padding:18px 14px;background:#050a13;border-right:1px solid #1e293b;overflow-y:auto}
-.sidebar-brand{display:flex;align-items:center;gap:10px;padding:4px 8px 20px;color:#f8fafc}.sidebar-brand-copy strong{display:block;font-size:16px;font-weight:800}.sidebar-brand-copy small{display:block;margin-top:2px;color:#94a3b8;font-size:10px;font-weight:400}.sidebar-brand-mark{display:grid;place-items:center;width:38px;height:38px;border:1px solid #0e7490;border-radius:10px;background:#0c4a6e55;color:#38bdf8;font-size:18px;font-weight:800}
-.sidebar a{display:flex;align-items:center;gap:10px;min-height:38px;margin:2px 0;padding:8px 10px;border-radius:8px;color:#94a3b8;font-size:12px;font-weight:700;transition:.15s}
-.sidebar a:hover,.sidebar a:focus{background:#111c2e;color:#e2e8f0;outline:none}.sidebar a.active{background:#0c4a6e4d;color:#7dd3fc;border:1px solid #0e749066}
-.sidebar-spacer{height:12px;border-bottom:1px solid #172236;margin:4px 8px 8px}
-.page{width:auto;max-width:none;margin:0 0 0 220px;padding:20px 24px 30px}
+.page{width:100%;max-width:none;margin:0;padding:20px 24px 30px}
 .page-header{align-items:center;margin-bottom:14px;padding-bottom:14px;border-bottom:1px solid #172236}.page-header h1{font-size:25px}.page-header p{font-size:12px}
 .summary-grid{gap:9px;margin-bottom:13px}.summary-card{background:#0b1424;border-color:#1a2940}.summary-icon{background:#071b2e}
 .quick-panel{display:flex;align-items:center;gap:14px;padding:10px 12px}.quick-panel .panel-header{flex:0 0 auto;margin:0}.quick-panel .panel-header h2{font-size:12px;color:#a8b7ca}.quick-grid{flex:1}.quick-grid>:nth-child(4){display:none}
@@ -1644,10 +1655,9 @@ body{background:#080d18}
 .status-grid .application-summary{display:flex;flex-wrap:wrap}.status-grid .application-summary span{flex:1 1 42%}
 .audit-item{grid-template-columns:72px minmax(0,1fr) auto;gap:7px}.audit-kind{font-size:8px}.audit-action{font-size:10px;line-height:1.35}.audit-time{font-size:9px}
 @media(max-width:1260px){.content-grid{grid-template-columns:1fr}.access-stack{grid-row:auto}.ports-stack{grid-template-columns:repeat(2,minmax(0,1fr))}.status-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.status-grid>.panel:last-child{grid-column:1/-1}}
-@media(max-width:860px){.menu-toggle{display:block}.sidebar{transform:translateX(-100%);transition:transform .2s;width:min(260px,86vw)}.sidebar.open{transform:translateX(0)}.menu-overlay.open{display:block;position:fixed;inset:0;z-index:20;background:#020617b8}.page{margin-left:0;padding:64px 14px 24px}.ports-stack{grid-template-columns:1fr}.status-grid{grid-template-columns:1fr}.status-grid>.panel:last-child{grid-column:auto}.quick-panel{display:block}.quick-panel .panel-header{margin-bottom:8px}}
+@media(max-width:860px){.page{padding:20px 14px 24px}.ports-stack{grid-template-columns:1fr}.status-grid{grid-template-columns:1fr}.status-grid>.panel:last-child{grid-column:auto}.quick-panel{display:block}.quick-panel .panel-header{margin-bottom:8px}}
 
 /* Ajuste final conforme a estrutura da referência esse.png */
-.sidebar{display:flex;flex-direction:column}.sidebar-user{margin-top:auto;padding:14px 9px 4px;border-top:1px solid #172236}.sidebar-user strong{display:block;color:#e2e8f0;font-size:11px}.sidebar-user span{display:block;margin-top:3px;color:#53647b;font-size:9px}.sidebar-version{padding:8px 9px 0;color:#3f4f65;font-size:8px}
 .page-header-right{display:flex;align-items:flex-end;flex-direction:column;gap:10px}.breadcrumb{color:#64748b;font-size:10px}.breadcrumb strong{color:#a8b7ca}
 .summary-card{min-height:82px;padding:13px 10px 9px 59px}.summary-icon{top:13px;width:40px;height:40px;border:0;font-size:0}.summary-icon svg{width:31px;height:31px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}.summary-icon .icon-fill{fill:currentColor;fill-opacity:.13;stroke:none}.summary-icon.blue{background:#063b6d;color:#1797ff}.summary-icon.green{background:#064e3b;color:#22e68d}.summary-icon.orange{background:#4a2b09;color:#f59e0b}.summary-icon.purple{background:#31205c;color:#a78bfa}.summary-icon.off{background:#2b1720;color:#f87171}.summary-value.status{font-size:14px}
 .quick-panel{display:block;padding:12px}.quick-panel .panel-header{margin-bottom:10px}.quick-panel .panel-header p{display:block;font-size:9px}.quick-grid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:7px}.quick-grid>:nth-child(4){display:block}
@@ -1661,42 +1671,45 @@ body{background:#080d18}
 .quick-action:has(.icon-backup) strong{grid-column:2;grid-row:1;align-self:end;text-align:left}
 .quick-action:has(.icon-backup) small{grid-column:2;grid-row:2;align-self:start;text-align:left}
 .quick-icon.blue{color:#1797ff}.quick-icon.orange{color:#f59e0b}.quick-icon.purple{color:#9b7cff}.quick-icon.green{color:#16d982}
-.main-layout{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:13px;align-items:stretch;justify-items:stretch;align-content:start}.main-layout>.access-card{grid-column:1}.main-layout>.admin-ports-card{grid-column:2}.main-layout>.public-ports-card{grid-column:1}.main-layout>.side-status{grid-column:2;display:grid;grid-template-columns:minmax(0,.72fr) minmax(0,1.28fr);gap:13px;align-items:stretch;justify-items:stretch}
+.main-layout{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:13px;align-items:stretch;justify-items:stretch;align-content:start}.main-layout>.access-card{grid-column:1}.main-layout>.admin-ports-card{grid-column:2}.main-layout>.public-ports-card{grid-column:1}.main-layout>.side-status{grid-column:2;display:grid;grid-template-columns:1fr;gap:13px;align-items:stretch;justify-items:stretch}
 .main-layout>.access-card,.main-layout>.admin-ports-card,.main-layout>.public-ports-card,.side-status>.panel{display:flex;flex-direction:column;min-height:0;width:100%;height:100%;margin:0;justify-self:stretch;align-self:stretch;box-sizing:border-box}
 .main-layout>.access-card,.main-layout>.admin-ports-card,.main-layout>.public-ports-card{overflow:hidden}
 .access-card{padding:14px}.access-card .panel-header{align-items:center}.access-card .header-actions{flex-wrap:nowrap}.access-search{width:min(250px,100%)}.access-table tbody[data-family-section]+tbody[data-family-section] tr:first-child td{border-top:1px solid #25344a}
 .access-card{padding:16px}.access-card .panel-header{margin-bottom:14px}.access-card .panel-header h2{font-size:16px}.access-card .panel-header p{font-size:10px}.access-search-wrap{position:relative;width:min(250px,100%)}.access-search-wrap svg{position:absolute;left:10px;top:50%;width:15px;height:15px;transform:translateY(-50%);fill:none;stroke:#94a3b8;stroke-width:1.8;stroke-linecap:round}.access-search{width:100%;min-height:34px;padding-left:32px;background:#091321}.access-card .table-wrap{border:0;border-radius:0;flex:1 1 auto;min-height:0}.access-table thead{border-bottom:1px solid #213047}.access-table th{padding:8px 6px;background:transparent;color:#8493a8}.access-table td{padding:9px 6px}.access-table tbody tr{background:transparent}.access-table tbody tr:hover{background:#0d192b}.access-card .type-badge{border-color:#075eaa;background:#073a6b;color:#38bdf8}.access-card .text-action{display:inline-flex;align-items:center;gap:5px;padding:4px 8px;border-color:#075eaa;background:transparent;color:#2196f3}.access-card .text-action.remove{border-color:#7f1d1d;color:#ef4444}.access-card .text-action svg{width:11px;height:11px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}.access-footer{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:auto;padding-top:10px;color:#8190a5;font-size:10px}.access-pagination{display:flex;align-items:center;gap:5px}.page-chip{display:grid;place-items:center;min-width:28px;height:28px;padding:0 8px;border:1px solid #263852;border-radius:6px;background:#0a1423;color:#8fa0b6}.page-chip.current{border-color:#168cff;background:#168cff;color:#fff;box-shadow:0 0 12px #168cff3d}.page-chip[disabled]{opacity:.55}
 .admin-ports-card{padding:16px}.admin-ports-card .panel-header{margin-bottom:14px}.admin-ports-card .panel-header h2{font-size:16px}.admin-ports-card .panel-header p{font-size:10px}.admin-ports-card .table-wrap{border:0;border-radius:0;flex:1 1 auto;min-height:0}.admin-ports-card .ports-table thead{border-bottom:1px solid #213047}.admin-ports-card .ports-table th{padding:8px 6px;background:transparent;color:#8493a8}.admin-ports-card .ports-table td{padding:9px 6px}.admin-ports-card .ports-table tbody tr{background:transparent}.admin-ports-card .ports-table tbody tr:hover{background:#0d192b}.admin-ports-card .type-badge{border-color:#075eaa;background:#073a6b;color:#38bdf8}.admin-ports-card .text-action{display:inline-flex;align-items:center;gap:5px;padding:4px 8px;border-color:#075eaa;background:transparent;color:#2196f3}.admin-ports-card .text-action.remove{border-color:#7f1d1d;color:#ef4444}.admin-ports-card .text-action svg{width:11px;height:11px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
 .public-ports-card{padding:16px}.public-ports-card .panel-header{margin-bottom:14px}.public-ports-card .panel-header h2{font-size:16px}.public-ports-card .panel-header p{font-size:10px}.public-ports-card .table-wrap{border:0;border-radius:0;flex:1 1 auto;min-height:0}.public-ports-card .ports-table thead{border-bottom:1px solid #213047}.public-ports-card .ports-table th{padding:8px 6px;background:transparent;color:#8493a8}.public-ports-card .ports-table td{padding:9px 6px}.public-ports-card .ports-table tbody tr{background:transparent}.public-ports-card .ports-table tbody tr:hover{background:#0d192b}.public-ports-card .type-badge{border-color:#6d4bb8;background:#2f2150;color:#c4b5fd}.public-ports-card .text-action{display:inline-flex;align-items:center;gap:5px;padding:4px 8px;border-color:#075eaa;background:transparent;color:#2196f3}.public-ports-card .text-action.remove{border-color:#7f1d1d;color:#ef4444}.public-ports-card .text-action svg{width:11px;height:11px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
-.audit-card{padding:16px}.audit-card .panel-header{margin-bottom:10px}.audit-card .panel-header h2{font-size:16px}.audit-card .panel-header p{font-size:10px}.audit-card .audit-list{gap:0}.audit-card .audit-item{grid-template-columns:28px minmax(0,1fr) auto;gap:9px;align-items:center;padding:8px 0}.audit-avatar{display:grid;place-items:center;width:24px;height:24px;border-radius:50%;background:#064e3b;color:#22e68d}.audit-avatar svg{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}.audit-card .audit-user{display:inline;font-size:10px}.audit-card .audit-action{margin-top:2px;color:#cbd5e1;font-size:9px;line-height:1.35}.audit-card .audit-kind{display:none}.audit-card .audit-time{font-size:9px}.audit-card .secondary-button{justify-content:flex-start;width:max-content;margin-top:12px;border-color:#075eaa;background:transparent;color:#2196f3}
-.validation-card{padding:16px}.validation-card .panel-header{margin-bottom:10px}.validation-card .panel-header h2{font-size:16px}.validation-card .panel-header p{font-size:10px}.validation-card .validation{display:block;height:auto;min-height:150px;padding:16px;text-align:center}.validation-card .validation-icon{width:32px;height:32px;margin:0 auto 10px;font-size:15px}.validation-card .validation strong{margin-bottom:14px;font-size:13px}.validation-meta{display:grid;gap:11px}.validation-meta span{font-size:9px}.validation-meta em{display:block;margin-top:3px;color:#e5edf7;font-size:10px}.validation-card .validation.error .validation-icon{background:#7f1d1d}.validation-card .validation.pending .validation-icon{background:#1e293b}
+.connections-card{padding:16px}.connections-card .panel-header{margin-bottom:10px;align-items:center}.connections-card .panel-header h2{font-size:16px}.connections-card .panel-header p{font-size:10px}.connections-layout{display:grid;grid-template-columns:minmax(0,1.05fr) minmax(190px,.95fr);gap:12px;align-items:stretch}.connections-left,.connections-right{display:flex;flex-direction:column;gap:10px;min-width:0}.connections-title{color:#cbd5e1;font-size:10px;font-weight:700;letter-spacing:.03em;text-transform:uppercase}.connections-list{display:grid;gap:8px}.connections-row{display:grid;grid-template-columns:minmax(0,1fr) minmax(88px,1.4fr) auto;gap:8px;align-items:center}.connections-ip{overflow:hidden;color:#e2e8f0;font-size:10px;white-space:nowrap;text-overflow:ellipsis}.connections-bar{position:relative;height:7px;border-radius:999px;background:#0b1726;overflow:hidden}.connections-bar i{display:block;height:100%;border-radius:inherit;background:linear-gradient(90deg,#2563eb,#ef4444)}.connections-count{color:#8fa0b6;font-size:10px;font-weight:700}.connections-chart{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;min-height:0;height:100%}.connections-donut{position:relative;display:grid;place-items:center;width:118px;height:118px;border-radius:50%;background:conic-gradient(#ef4444 0 var(--donut-a),#2563eb var(--donut-a) var(--donut-b),#0f172a var(--donut-b) 360deg);box-shadow:inset 0 0 0 1px #19304a}.connections-donut::after{content:"";position:absolute;inset:14px;border-radius:50%;background:#08111e;box-shadow:inset 0 0 0 1px #19304a}.connections-donut-inner{position:relative;z-index:1;display:grid;place-items:center;text-align:center}.connections-donut-inner span{display:block;color:#93c5fd;font-size:9px;font-weight:700;letter-spacing:.03em;text-transform:uppercase}.connections-donut-inner strong{display:block;margin-top:2px;color:#fff;font-size:20px;line-height:1}.connections-legend{display:grid;gap:6px;width:100%}.connections-legend span{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:6px 8px;border:1px solid var(--line);border-radius:8px;background:#0a1423;color:#cbd5e1;font-size:10px}.legend-dot{display:inline-block;width:8px;height:8px;border-radius:50%}.legend-dot.tcp{background:#2563eb}.legend-dot.udp{background:#ef4444}.legend-dot.tcpudp{background:#a855f7}.connections-card .secondary-button{justify-content:flex-start;width:max-content;margin-top:0;border-color:#075eaa;background:transparent;color:#2196f3}
+.validation-card{padding:16px}.validation-card .panel-header{margin-bottom:10px}.validation-card .panel-header h2{font-size:16px}.validation-card .panel-header p{font-size:10px}.validation-card .validation{display:grid;justify-items:center;gap:10px;height:auto;min-height:150px;padding:16px;text-align:center}
+.fw-status-mini,.validation-hero{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;width:100%;max-width:100%;margin:0;padding:16px 14px;border:1px solid #17304d;border-radius:12px;background:linear-gradient(135deg,#07111e 0%,#071821 100%);box-shadow:0 0 0 1px #0b1a2c inset,0 16px 30px rgba(2,6,23,.35)}
+.fw-status-mini{position:relative;overflow:hidden}
+.fw-status-mini::before{content:"";position:absolute;inset:-1px;border-radius:inherit;background:radial-gradient(circle at 50% 20%,rgba(34,230,141,.18),transparent 42%),linear-gradient(180deg,rgba(34,230,141,.08),transparent 58%);pointer-events:none}
+.fw-status-mini.is-success{border-color:#1f6a58}.fw-status-mini.is-success .fw-status-icon{color:#22e68d;box-shadow:0 0 0 1px #0f5b3d inset,0 0 26px rgba(34,230,141,.22)}
+.fw-status-mini.is-error{border-color:#7f1d1d}.fw-status-mini.is-error .fw-status-icon{color:#f87171;box-shadow:0 0 0 1px #7f1d1d inset,0 0 26px rgba(248,113,113,.18)}
+.fw-status-mini.is-warning{border-color:#92400e}.fw-status-mini.is-warning .fw-status-icon{color:#f59e0b;box-shadow:0 0 0 1px #92400e inset,0 0 26px rgba(245,158,11,.18)}
+.fw-status-icon{display:grid;place-items:center;flex:0 0 auto;width:64px;height:64px;border-radius:999px;background:#07111e}
+.fw-status-icon svg{width:38px;height:38px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.fw-status-text{display:grid;justify-items:center;gap:2px;min-width:0;text-align:center}
+.fw-status-title{color:#e2f8ea;font-size:15px;font-weight:700;line-height:1.05}
+.fw-status-subtitle{color:#9fd6b5;font-size:10px;font-weight:700;letter-spacing:.03em;text-transform:uppercase}
+.fw-status-date{color:#cbd5e1;font-size:10px;font-style:normal;line-height:1.2}
+.fw-status-mini.is-error .fw-status-title{color:#fee2e2}.fw-status-mini.is-error .fw-status-subtitle{color:#fecaca}.fw-status-mini.is-warning .fw-status-title{color:#ffedd5}.fw-status-mini.is-warning .fw-status-subtitle{color:#fde68a}
+.fw-panel-card{position:relative;padding:18px 20px;border:1px solid rgba(56,189,248,.18);border-radius:14px;background:radial-gradient(circle at 18% 20%,rgba(14,165,233,.08),transparent 34%),linear-gradient(180deg,rgba(8,28,48,.92),rgba(4,16,30,.96));box-shadow:inset 0 0 0 1px rgba(255,255,255,.025),0 18px 40px rgba(0,0,0,.22)}
+.fw-card-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:14px}.fw-card-title{margin:0;color:#f4fbff;font-size:18px;font-weight:800;line-height:1.2}.fw-card-subtitle{margin:4px 0 0;color:#8fb3c7;font-size:12px;line-height:1.3}
+.fw-soft-button{appearance:none;border:1px solid rgba(14,165,233,.55);border-radius:9px;background:linear-gradient(180deg,rgba(8,47,73,.68),rgba(3,20,36,.88));color:#38bdf8;font-size:13px;font-weight:800;line-height:1;padding:9px 18px;cursor:pointer;box-shadow:inset 0 0 0 1px rgba(255,255,255,.025),0 0 18px rgba(14,165,233,.08);transition:border-color .16s ease,background .16s ease,transform .16s ease,box-shadow .16s ease}.fw-soft-button:hover,.fw-soft-button:focus{border-color:rgba(56,189,248,.85);background:linear-gradient(180deg,rgba(14,116,144,.72),rgba(3,31,52,.92));box-shadow:inset 0 0 0 1px rgba(255,255,255,.04),0 0 22px rgba(14,165,233,.18);outline:none;transform:translateY(-1px)}.fw-soft-button:active{transform:translateY(0)}.fw-soft-button.is-small{padding:7px 13px;font-size:12px;border-radius:8px}.fw-card-bottom-action{display:flex;justify-content:center;margin-top:16px}.fw-card-top-action{display:flex;align-items:center;justify-content:flex-end}
+.fw-apply-status-layout{display:grid;grid-template-columns:minmax(230px,1fr) 1.2fr;gap:18px;align-items:center}.fw-apply-main{display:flex;align-items:center;gap:18px;min-width:0}.fw-apply-icon{display:flex;align-items:center;justify-content:center;flex:0 0 92px;width:92px;height:92px;border-radius:999px;background:radial-gradient(circle,rgba(34,197,94,.18),rgba(34,197,94,.04) 60%,transparent 70%);box-shadow:0 0 0 1px rgba(34,197,94,.32),0 0 28px rgba(34,197,94,.3),inset 0 0 22px rgba(34,197,94,.12)}.fw-apply-icon svg{width:58px;height:58px;fill:none;stroke:#22c55e;stroke-width:1.75;stroke-linecap:round;stroke-linejoin:round;filter:drop-shadow(0 0 8px rgba(34,197,94,.55))}.fw-apply-icon.is-error{background:radial-gradient(circle,rgba(239,68,68,.18),rgba(239,68,68,.04) 60%,transparent 70%);box-shadow:0 0 0 1px rgba(239,68,68,.32),0 0 28px rgba(239,68,68,.24),inset 0 0 22px rgba(239,68,68,.12)}.fw-apply-icon.is-error svg{stroke:#ef4444}.fw-apply-icon.is-pending{background:radial-gradient(circle,rgba(245,158,11,.18),rgba(245,158,11,.04) 60%,transparent 70%);box-shadow:0 0 0 1px rgba(245,158,11,.32),0 0 28px rgba(245,158,11,.22),inset 0 0 22px rgba(245,158,11,.12)}.fw-apply-icon.is-pending svg{stroke:#f59e0b}.fw-apply-title{margin:0 0 8px;color:#f4fbff;font-size:22px;font-weight:900;line-height:1.1}.fw-apply-meta-label{margin:0;color:#8fb3c7;font-size:11px;text-transform:uppercase;letter-spacing:.04em}.fw-apply-meta-value{margin:2px 0 0;color:#f4fbff;font-size:13px;font-weight:800}.fw-apply-details{display:grid;gap:10px;padding-left:18px;border-left:1px solid rgba(148,163,184,.16)}.fw-apply-line{display:grid;grid-template-columns:24px minmax(0,1fr) auto;gap:8px;align-items:center;color:#c7d7e5;font-size:13px}.fw-apply-line-icon{color:#0ea5e9;width:18px;height:18px}.fw-apply-line strong{color:#f4fbff;font-weight:800}.fw-badge-success{display:inline-flex;align-items:center;gap:6px;padding:5px 10px;border:1px solid rgba(34,197,94,.38);border-radius:999px;background:rgba(34,197,94,.18);color:#dcfce7;font-size:12px;font-weight:800}.fw-badge-success.is-error{border-color:rgba(239,68,68,.38);background:rgba(239,68,68,.18);color:#fee2e2}.fw-badge-success.is-pending{border-color:rgba(245,158,11,.38);background:rgba(245,158,11,.18);color:#fef3c7}
+.fw-connections-grid{display:grid;grid-template-columns:1fr 1.1fr;gap:22px;align-items:stretch}.fw-block-title{margin:0 0 14px;color:#f4fbff;font-size:14px;font-weight:800}.fw-block-separator{padding-left:22px;border-left:1px solid rgba(148,163,184,.14)}.fw-origin-list{display:grid;gap:10px}.fw-origin-row{display:grid;grid-template-columns:minmax(100px,1fr) 28px minmax(90px,1fr) 38px;gap:8px;align-items:center;color:#e5f3ff;font-size:13px;font-weight:700}.fw-origin-bar{height:8px;border-radius:999px;overflow:hidden;background:rgba(148,163,184,.16)}.fw-origin-bar span{display:block;height:100%;border-radius:inherit;background:linear-gradient(90deg,#ef4444,#ff1717);box-shadow:0 0 12px rgba(239,68,68,.42)}.fw-protocol-layout{display:grid;grid-template-columns:160px 1fr;gap:18px;align-items:center}.fw-donut{display:grid;place-items:center;width:145px;height:145px;border-radius:999px;background:conic-gradient(#22c55e 0 var(--donut-a),#0ea5e9 var(--donut-a) var(--donut-b),#f97316 var(--donut-b) 100%);box-shadow:0 0 28px rgba(14,165,233,.15)}.fw-donut-inner{display:grid;place-items:center;width:86px;height:86px;border-radius:999px;background:#071827;color:#f4fbff;font-weight:900;text-align:center;line-height:1.1;box-shadow:inset 0 0 0 1px rgba(255,255,255,.05)}.fw-donut-inner span{display:block;color:#8fb3c7;font-size:12px;font-weight:800}.fw-protocol-list{display:grid;gap:13px}.fw-protocol-row{display:grid;grid-template-columns:18px minmax(0,1fr) auto;gap:10px;align-items:center;color:#dcecff;font-size:13px}.fw-protocol-dot{width:11px;height:11px;border-radius:3px}.fw-protocol-dot.green{background:#22c55e}.fw-protocol-dot.red{background:#ef4444}.fw-protocol-dot.blue{background:#0ea5e9}.fw-protocol-dot.orange{background:#f97316}.fw-protocol-row strong{color:#f8fbff;font-weight:900}
+.fw-modal-backdrop{position:fixed;inset:0;z-index:9000;display:none;align-items:center;justify-content:center;padding:24px;background:rgba(2,8,18,.76);backdrop-filter:blur(5px)}.fw-modal-backdrop.is-open{display:flex}.fw-modal-open{overflow:hidden}.fw-modal{width:min(780px,96vw);max-height:88vh;overflow:hidden;border:1px solid rgba(56,189,248,.24);border-radius:16px;background:radial-gradient(circle at 18% 0%,rgba(14,165,233,.1),transparent 30%),linear-gradient(180deg,rgba(8,28,48,.98),rgba(3,12,24,.98));box-shadow:0 24px 70px rgba(0,0,0,.55),inset 0 0 0 1px rgba(255,255,255,.035)}.fw-modal-header{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;padding:20px 22px 16px;border-bottom:1px solid rgba(148,163,184,.14)}.fw-modal-title{margin:0;color:#f4fbff;font-size:20px;font-weight:900}.fw-modal-subtitle{margin:5px 0 0;color:#8fb3c7;font-size:13px}.fw-modal-close{width:36px;height:36px;border:1px solid rgba(148,163,184,.28);border-radius:10px;background:rgba(15,23,42,.7);color:#dcecff;cursor:pointer;font-size:20px;line-height:1}.fw-modal-close:hover,.fw-modal-close:focus{border-color:rgba(56,189,248,.58);color:#fff;outline:none}.fw-modal-body{max-height:calc(88vh - 86px);padding:18px 22px 22px;overflow:auto}.fw-history-list{display:grid;gap:10px}.fw-history-item{display:grid;grid-template-columns:44px minmax(0,1fr) auto;gap:12px;align-items:center;padding:12px;border:1px solid rgba(148,163,184,.12);border-radius:12px;background:rgba(2,18,32,.48)}.fw-history-icon{display:grid;place-items:center;width:36px;height:36px;border:1px solid rgba(34,197,94,.25);border-radius:999px;background:rgba(34,197,94,.12);color:#22c55e}.fw-history-icon.is-error{border-color:rgba(239,68,68,.25);background:rgba(239,68,68,.12);color:#ef4444}.fw-history-title{color:#f4fbff;font-weight:800;font-size:13px}.fw-history-desc{margin-top:3px;color:#9cb8ca;font-size:12px}.fw-history-time{color:#8fb3c7;font-size:12px;white-space:nowrap}
 .table-wrap{overflow-x:hidden}.access-table,.ports-table{table-layout:fixed}.access-table th:first-child,.access-table td:first-child{width:10%}.access-table th:nth-child(2),.access-table td:nth-child(2){width:23%}.access-table th:nth-child(3),.access-table td:nth-child(3){width:27%}.access-table th:nth-child(4),.access-table td:nth-child(4){width:20%}.access-table th:last-child,.access-table td:last-child{width:82px;min-width:82px}.ports-table th:first-child,.ports-table td:first-child{width:10%}.ports-table th:nth-child(2),.ports-table td:nth-child(2){width:14%}.ports-table th:nth-child(3),.ports-table td:nth-child(3){width:18%}.ports-table th:nth-child(4),.ports-table td:nth-child(4){width:auto;min-width:180px}.ports-table th:last-child,.ports-table td:last-child{width:82px;min-width:82px}
 .access-table th:last-child,.ports-table th:last-child{text-align:right;white-space:nowrap}.row-actions{gap:5px}.access-card .text-action,.admin-ports-card .text-action,.public-ports-card .text-action{width:32px;height:32px;min-width:32px;padding:0;border-color:#2563eb;border-radius:8px;background:#2563eb;color:#fff}.access-card .text-action:hover,.access-card .text-action:focus,.admin-ports-card .text-action:hover,.admin-ports-card .text-action:focus,.public-ports-card .text-action:hover,.public-ports-card .text-action:focus{border-color:#3b82f6;background:#3b82f6;color:#fff;outline:none}.access-card .text-action.remove,.admin-ports-card .text-action.remove,.public-ports-card .text-action.remove{border-color:#dc2626;background:#dc2626;color:#fff}.access-card .text-action.remove:hover,.access-card .text-action.remove:focus,.admin-ports-card .text-action.remove:hover,.admin-ports-card .text-action.remove:focus,.public-ports-card .text-action.remove:hover,.public-ports-card .text-action.remove:focus{border-color:#ef4444;background:#ef4444;color:#fff}.access-card .text-action:focus-visible,.admin-ports-card .text-action:focus-visible,.public-ports-card .text-action:focus-visible{box-shadow:0 0 0 3px #93c5fd66}.access-card .text-action svg,.admin-ports-card .text-action svg,.public-ports-card .text-action svg{width:15px;height:15px}
 .access-table th,.ports-table th{white-space:normal;line-height:1.15;word-break:keep-all}.access-table td,.ports-table td{vertical-align:middle}.access-table td:nth-child(2){white-space:nowrap;word-break:normal;overflow-wrap:normal}.cell-description{display:flex;align-items:center;width:100%;max-width:100%;min-width:0;min-height:100%;overflow:hidden!important;white-space:normal!important;text-overflow:clip!important;word-break:break-word!important;overflow-wrap:anywhere!important;line-height:1.25}.audit-action{display:-webkit-box;overflow:hidden;-webkit-line-clamp:2;-webkit-box-orient:vertical}.audit-list .audit-item:nth-child(n+5){display:none}
 .status-grid{display:none}.compact-status.panel{height:100%;padding:13px}.compact-status .panel-header{margin-bottom:9px}.compact-status .panel-header h2{font-size:13px}.compact-status .panel-header p{display:block;font-size:9px}.compact-status .validation{height:calc(100% - 42px);padding:10px}.compact-status .validation span{font-size:9px}.compact-status .application-summary{display:none}
 .application-details{margin-top:8px}.application-details>summary{cursor:pointer;color:#93c5fd;font-size:9px;font-weight:700}
-@media(max-width:1320px){.quick-grid{grid-template-columns:repeat(4,minmax(0,1fr))}.main-layout{grid-template-columns:1fr}.main-layout>.access-card,.main-layout>.admin-ports-card,.main-layout>.public-ports-card,.main-layout>.side-status{grid-column:1}.main-layout>.side-status{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:1320px){.quick-grid{grid-template-columns:repeat(4,minmax(0,1fr))}.main-layout{grid-template-columns:1fr}.main-layout>.access-card,.main-layout>.admin-ports-card,.main-layout>.public-ports-card,.main-layout>.side-status{grid-column:1}.main-layout>.side-status{grid-template-columns:1fr}}
+@media(max-width:900px){.fw-apply-status-layout,.fw-connections-grid,.fw-protocol-layout{grid-template-columns:1fr}.fw-apply-details,.fw-block-separator{padding-left:0;padding-top:14px;border-left:0;border-top:1px solid rgba(148,163,184,.14)}.fw-origin-row{grid-template-columns:minmax(100px,1fr) 28px minmax(80px,1fr) 38px}.fw-history-item{grid-template-columns:44px minmax(0,1fr)}.fw-history-time{grid-column:2}}
 @media(max-width:860px){.page-header-right{align-items:flex-end;flex-direction:column}.breadcrumb{display:none}.quick-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.main-layout>.side-status{grid-template-columns:1fr}.access-card .header-actions{align-items:stretch;flex-direction:column}.table-wrap{overflow-x:auto}.access-table,.ports-table{min-width:620px}.quick-action small{display:none}}
 </style>
 </head>
 <body>
-<button class="menu-toggle" type="button" aria-controls="firewall-sidebar" aria-expanded="false">☰ Menu</button>
-<div class="menu-overlay" aria-hidden="true"></div>
-<nav class="sidebar" id="firewall-sidebar" aria-label="Navegação principal">
-    <div class="sidebar-brand"><span class="sidebar-brand-mark" aria-hidden="true">◈</span><span class="sidebar-brand-copy"><strong>Painel DNS</strong><small>Servidores</small></span></div>
-    <a href="dashboard.php">⌂ Dashboard</a>
-    <a href="zones.php">▣ Inventário DNS</a>
-    <a href="domains.php">◎ Domínios</a>
-    <a href="auditoria.php">▤ Auditoria</a>
-    <a class="active" href="firewall.php" aria-current="page">🔥 Firewall</a>
-    <a href="dns-servers.php">▰ Servidores</a>
-    <?php if (function_exists('usuario_eh_administrador') && usuario_eh_administrador()): ?><a href="usuarios.php">♧ Usuários</a><?php endif; ?>
-    <a href="security.php">⚙ Configurações</a>
-    <a href="logs.php">▤ Logs do Sistema</a>
-    <div class="sidebar-spacer"></div>
-    <div class="sidebar-user"><strong><?= htmlspecialchars((string) ($_SESSION['usuario'] ?? 'admin')) ?></strong><span><?= htmlspecialchars((string) ($_SESSION['perfil'] ?? 'Administrador')) ?></span></div>
-    <div class="sidebar-version">Versão 1.0.0</div>
-</nav>
 <main class="page">
     <header class="page-header">
         <div>
@@ -1880,69 +1893,208 @@ body{background:#080d18}
                 </footer>
         </section>
 
+        <?php
+        $statusValidacao = $ultimaValidacao['status'] ?? 'NÃO VALIDADO';
+        $tituloValidacao = $statusValidacao === 'OK' ? 'Configuração válida' : ($statusValidacao === 'ERRO' ? 'Erro na validação' : 'Configuração não validada');
+        $dataValidacao = firewall_timestamp_para_datetime((string) ($ultimaValidacao['data_hora'] ?? ''));
+        $dataAplicacao = firewall_timestamp_para_datetime((string) ($ultimaAplicacao['data_hora'] ?? ''));
+        $dataBackup = firewall_timestamp_para_datetime((string) ($ultimoBackup['data_hora'] ?? ''));
+        $statusAplicacao = (string) ($ultimaAplicacao['status'] ?? 'NÃO APLICADO');
+        $validacaoPrevia = (string) ($ultimaAplicacao['validacao_previa'] ?? $statusValidacao);
+        $aplicacaoSucesso = $statusAplicacao === 'APLICADO';
+        $aplicacaoErro = $statusAplicacao === 'ERRO';
+        $tempoDesdeAplicacao = 'Não informado';
+        if ($dataAplicacao !== null) {
+            $segundosAplicacao = max(0, time() - $dataAplicacao->getTimestamp());
+            if ($segundosAplicacao < 60) {
+                $tempoDesdeAplicacao = 'Agora';
+            } elseif ($segundosAplicacao < 3600) {
+                $tempoDesdeAplicacao = intdiv($segundosAplicacao, 60) . ' min';
+            } elseif ($segundosAplicacao < 86400) {
+                $tempoDesdeAplicacao = intdiv($segundosAplicacao, 3600) . ' h';
+            } else {
+                $tempoDesdeAplicacao = intdiv($segundosAplicacao, 86400) . ' d';
+            }
+        }
+        $donutTcp = $protocolTotal > 0 ? (int) round(($protocolTotals['TCP'] / $protocolTotal) * 100) : 0;
+        $donutUdp = $protocolTotal > 0 ? (int) round((($protocolTotals['TCP'] + $protocolTotals['UDP']) / $protocolTotal) * 100) : 0;
+        ?>
         <div class="side-status">
-        <section class="panel compact-status validation-card">
-            <header class="panel-header"><div><h2>Última Validação</h2><p>Resultado da verificação mais recente.</p></div></header>
-            <?php
-            $statusValidacao = $ultimaValidacao['status'] ?? 'NÃO VALIDADO';
-            $classeValidacao = $statusValidacao === 'OK' ? '' : ($statusValidacao === 'ERRO' ? ' error' : ' pending');
-            $iconeValidacao = $statusValidacao === 'OK' ? '✓' : ($statusValidacao === 'ERRO' ? '!' : '–');
-            $tituloValidacao = $statusValidacao === 'OK' ? 'Configuração válida' : ($statusValidacao === 'ERRO' ? 'Erro na validação' : 'Configuração não validada');
-            $dataValidacao = null;
-            if (!empty($ultimaValidacao['data_hora'])) {
-                try {
-                    $dataValidacao = firewall_timestamp_para_datetime((string) $ultimaValidacao['data_hora']);
-                } catch (Throwable) {
-                    $dataValidacao = null;
-                }
-            }
-            $tempoValidacao = 'Não informado';
-            if ($dataValidacao !== null) {
-                $segundosValidacao = max(0, time() - $dataValidacao->getTimestamp());
-                if ($segundosValidacao < 60) {
-                    $tempoValidacao = 'Agora';
-                } elseif ($segundosValidacao < 3600) {
-                    $minutosValidacao = intdiv($segundosValidacao, 60);
-                    $tempoValidacao = $minutosValidacao . ($minutosValidacao === 1 ? ' minuto atrás' : ' minutos atrás');
-                } elseif ($segundosValidacao < 86400) {
-                    $horasValidacao = intdiv($segundosValidacao, 3600);
-                    $tempoValidacao = $horasValidacao . ($horasValidacao === 1 ? ' hora atrás' : ' horas atrás');
-                } else {
-                    $diasValidacao = intdiv($segundosValidacao, 86400);
-                    $tempoValidacao = $diasValidacao . ($diasValidacao === 1 ? ' dia atrás' : ' dias atrás');
-                }
-            }
-            ?>
-            <div class="validation<?= $classeValidacao ?>"><span class="validation-icon" aria-hidden="true"><?= $iconeValidacao ?></span>
-                <strong><?= htmlspecialchars($tituloValidacao) ?></strong>
-                <?php if ($ultimaValidacao !== null): ?>
-                    <div class="validation-meta">
-                        <span>Última validação:<em><time<?= $dataValidacao ? ' datetime="' . htmlspecialchars($dataValidacao->format(DATE_ATOM), ENT_QUOTES, 'UTF-8') . '"' : '' ?>><?= htmlspecialchars($dataValidacao ? $dataValidacao->format('d/m/Y H:i') : 'Não informada') ?></time></em></span>
-                        <span>Tempo desde a validação:<em><?= htmlspecialchars($tempoValidacao) ?></em></span>
+            <section class="fw-panel-card">
+                <div class="fw-card-head">
+                    <div>
+                        <h3 class="fw-card-title">Última validação e aplicação</h3>
+                        <p class="fw-card-subtitle">Estado operacional registrado pelo painel.</p>
                     </div>
-                <?php else: ?>
-                    <div class="validation-meta"><span>Última validação:<em>Não realizada</em></span></div>
-                <?php endif; ?>
-            </div>
-        </section>
-        <section class="panel compact-status audit-card">
-            <header class="panel-header"><div><h2>Auditoria Recente</h2><p>Últimas alterações.</p></div></header>
-            <div class="audit-list">
-                <?php foreach ($recentAudit as $event): ?>
-                    <?php $eventTimeDate = firewall_timestamp_para_datetime($event['criado_em']); $eventTime = $eventTimeDate?->format('d/m H:i') ?? ''; ?>
-                    <div class="audit-item">
-                        <span class="audit-avatar" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="3"/><path d="M6 20a6 6 0 0 1 12 0"/></svg></span>
-                        <div>
-                            <span class="audit-user"><?= htmlspecialchars($event['usuario']) ?></span>
-                            <div class="audit-action"><?= htmlspecialchars($event['mensagem'] ?: $event['acao']) ?></div>
+                </div>
+
+                <div class="fw-apply-status-layout">
+                    <div class="fw-apply-main">
+                        <div class="fw-apply-icon<?= $statusValidacao === 'ERRO' ? ' is-error' : ($statusValidacao === 'OK' ? '' : ' is-pending') ?>" aria-hidden="true">
+                            <svg viewBox="0 0 24 24">
+                                <path d="M12 2.5 4.5 5.8v5.7c0 4.7 3.1 9.1 7.5 10 4.4-.9 7.5-5.3 7.5-10V5.8z"></path>
+                                <?php if ($statusValidacao === 'OK'): ?><path d="m8.5 12.2 2.2 2.2 4.8-5"></path><?php elseif ($statusValidacao === 'ERRO'): ?><path d="M12 8v5M12 16.5h.01"></path><?php else: ?><path d="M9 12h6"></path><?php endif; ?>
+                            </svg>
                         </div>
-                        <span class="audit-time"><?= htmlspecialchars($eventTime) ?></span>
+                        <div>
+                            <h4 class="fw-apply-title"><?= htmlspecialchars($tituloValidacao) ?></h4>
+                            <p class="fw-apply-meta-label">Última verificação</p>
+                            <p class="fw-apply-meta-value"><?= htmlspecialchars($dataValidacao ? $dataValidacao->format('d/m/Y H:i:s') : 'Não informada') ?></p>
+                        </div>
                     </div>
-                <?php endforeach; ?>
-                <?php if (!$recentAudit): ?><div class="empty-state">Nenhuma alteração registrada.</div><?php endif; ?>
+
+                    <div class="fw-apply-details">
+                        <div class="fw-apply-line">
+                            <span class="fw-apply-line-icon">☑</span>
+                            <span>Validação pré-aplicação</span>
+                            <span class="fw-badge-success<?= $validacaoPrevia === 'ERRO' ? ' is-error' : ($validacaoPrevia === 'OK' ? '' : ' is-pending') ?>"><?= $validacaoPrevia === 'OK' ? '✓ Sucesso' : htmlspecialchars($validacaoPrevia) ?></span>
+                        </div>
+                        <div class="fw-apply-line">
+                            <span class="fw-apply-line-icon">▣</span>
+                            <span>Aplicado em</span>
+                            <strong><?= htmlspecialchars($dataAplicacao ? $dataAplicacao->format('d/m/Y H:i:s') : 'Não aplicado') ?></strong>
+                        </div>
+                        <div class="fw-apply-line">
+                            <span class="fw-apply-line-icon">↻</span>
+                            <span>Backup para rollback</span>
+                            <strong><?= $backupDisponivel ? 'Disponível' : 'Indisponível' ?></strong>
+                        </div>
+                        <div class="fw-apply-line">
+                            <span class="fw-apply-line-icon">⏱</span>
+                            <span>Tempo desde a aplicação</span>
+                            <strong><?= htmlspecialchars($tempoDesdeAplicacao) ?></strong>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="fw-card-bottom-action">
+                    <button type="button" class="fw-soft-button js-fw-open-modal" data-fw-modal-target="fw-application-history-modal">Ver histórico de aplicações</button>
+                </div>
+            </section>
+
+            <section class="fw-panel-card">
+                <div class="fw-card-head">
+                    <div>
+                        <h3 class="fw-card-title">Resumo de conexões (24h)</h3>
+                        <p class="fw-card-subtitle">Origens bloqueadas e distribuição das portas cadastradas.</p>
+                    </div>
+                    <div class="fw-card-top-action">
+                        <button type="button" class="fw-soft-button is-small js-fw-open-modal" data-fw-modal-target="fw-connection-details-modal">Ver detalhes</button>
+                    </div>
+                </div>
+
+                <div class="fw-connections-grid">
+                    <div>
+                        <h4 class="fw-block-title">Top origens bloqueadas</h4>
+                        <div class="fw-origin-list">
+                            <?php foreach ($blockedOrigins as $origin): ?>
+                                <?php $originCount = max(0, (int) ($origin['total'] ?? 0)); $originPercent = $blockedOriginTotal > 0 ? (int) round(($originCount / $blockedOriginTotal) * 100) : 0; ?>
+                                <div class="fw-origin-row">
+                                    <span><?= htmlspecialchars((string) ($origin['ip'] ?? '—')) ?></span>
+                                    <span><?= $originCount ?></span>
+                                    <div class="fw-origin-bar"><span style="width: <?= $originPercent ?>%"></span></div>
+                                    <strong><?= $originPercent ?>%</strong>
+                                </div>
+                            <?php endforeach; ?>
+                            <?php if (!$blockedOrigins): ?><div class="empty-state">Nenhuma origem bloqueada nas últimas 24h.</div><?php endif; ?>
+                        </div>
+                    </div>
+
+                    <div class="fw-block-separator">
+                        <h4 class="fw-block-title">Protocolos cadastrados</h4>
+                        <div class="fw-protocol-layout">
+                            <div class="fw-donut" style="--donut-a: <?= $donutTcp ?>%; --donut-b: <?= $donutUdp ?>%;" aria-hidden="true">
+                                <div class="fw-donut-inner"><div><span>Total</span><?= (int) $protocolTotal ?></div></div>
+                            </div>
+                            <div class="fw-protocol-list">
+                                <div class="fw-protocol-row"><span class="fw-protocol-dot green"></span><span>TCP</span><strong><?= (int) $protocolTotals['TCP'] ?></strong></div>
+                                <div class="fw-protocol-row"><span class="fw-protocol-dot blue"></span><span>UDP</span><strong><?= (int) $protocolTotals['UDP'] ?></strong></div>
+                                <div class="fw-protocol-row"><span class="fw-protocol-dot orange"></span><span>TCP/UDP</span><strong><?= (int) $protocolTotals['TCP/UDP'] ?></strong></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </div>
+    </div>
+
+    <div class="fw-modal-backdrop" id="fw-application-history-modal" aria-hidden="true">
+        <div class="fw-modal" role="dialog" aria-modal="true" aria-labelledby="fw-application-history-title">
+            <div class="fw-modal-header">
+                <div>
+                    <h3 class="fw-modal-title" id="fw-application-history-title">Histórico de aplicações</h3>
+                    <p class="fw-modal-subtitle">Últimos estados de validação, aplicação e backup já registrados pelo painel.</p>
+                </div>
+                <button type="button" class="fw-modal-close js-fw-close-modal" aria-label="Fechar">×</button>
             </div>
-            <a class="secondary-button" href="auditoria.php">Ver histórico completo</a>
-        </section>
+            <div class="fw-modal-body">
+                <div class="fw-history-list">
+                    <div class="fw-history-item">
+                        <div class="fw-history-icon<?= $aplicacaoErro ? ' is-error' : '' ?>"><?= $aplicacaoSucesso ? '✓' : ($aplicacaoErro ? '!' : '–') ?></div>
+                        <div>
+                            <div class="fw-history-title"><?= $aplicacaoSucesso ? 'Aplicação concluída com sucesso' : ($aplicacaoErro ? 'Aplicação com erro' : 'Nenhuma aplicação registrada') ?></div>
+                            <div class="fw-history-desc"><?= htmlspecialchars((string) ($ultimaAplicacao['resumo'] ?? 'O painel ainda não possui resultado de aplicação para exibir.')) ?></div>
+                        </div>
+                        <div class="fw-history-time"><?= htmlspecialchars($dataAplicacao ? $dataAplicacao->format('d/m/Y H:i:s') : 'Sem data') ?></div>
+                    </div>
+                    <div class="fw-history-item">
+                        <div class="fw-history-icon<?= $statusValidacao === 'ERRO' ? ' is-error' : '' ?>"><?= $statusValidacao === 'OK' ? '✓' : ($statusValidacao === 'ERRO' ? '!' : '–') ?></div>
+                        <div>
+                            <div class="fw-history-title"><?= htmlspecialchars($tituloValidacao) ?></div>
+                            <div class="fw-history-desc">Resultado da última verificação de configuração disponível na página.</div>
+                        </div>
+                        <div class="fw-history-time"><?= htmlspecialchars($dataValidacao ? $dataValidacao->format('d/m/Y H:i:s') : 'Sem data') ?></div>
+                    </div>
+                    <div class="fw-history-item">
+                        <div class="fw-history-icon"><?= $backupDisponivel ? '↻' : '–' ?></div>
+                        <div>
+                            <div class="fw-history-title"><?= $backupDisponivel ? 'Rollback disponível' : 'Rollback indisponível' ?></div>
+                            <div class="fw-history-desc"><?= $backupDisponivel ? 'Backup preservado para reversão manual.' : 'Nenhum backup válido está disponível no momento.' ?></div>
+                        </div>
+                        <div class="fw-history-time"><?= htmlspecialchars($dataBackup ? $dataBackup->format('d/m/Y H:i:s') : 'Sem data') ?></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="fw-modal-backdrop" id="fw-connection-details-modal" aria-hidden="true">
+        <div class="fw-modal" role="dialog" aria-modal="true" aria-labelledby="fw-connection-details-title">
+            <div class="fw-modal-header">
+                <div>
+                    <h3 class="fw-modal-title" id="fw-connection-details-title">Detalhes de conexões</h3>
+                    <p class="fw-modal-subtitle">Detalhamento dos dados operacionais já apresentados no resumo.</p>
+                </div>
+                <button type="button" class="fw-modal-close js-fw-close-modal" aria-label="Fechar">×</button>
+            </div>
+            <div class="fw-modal-body">
+                <div class="fw-connections-grid">
+                    <div>
+                        <h4 class="fw-block-title">Origens bloqueadas</h4>
+                        <div class="fw-origin-list">
+                            <?php foreach ($blockedOrigins as $origin): ?>
+                                <?php $originCount = max(0, (int) ($origin['total'] ?? 0)); $originPercent = $blockedOriginTotal > 0 ? (int) round(($originCount / $blockedOriginTotal) * 100) : 0; ?>
+                                <div class="fw-origin-row">
+                                    <span><?= htmlspecialchars((string) ($origin['ip'] ?? '—')) ?></span>
+                                    <span><?= $originCount ?></span>
+                                    <div class="fw-origin-bar"><span style="width: <?= $originPercent ?>%"></span></div>
+                                    <strong><?= $originPercent ?>%</strong>
+                                </div>
+                            <?php endforeach; ?>
+                            <?php if (!$blockedOrigins): ?><div class="empty-state">Nenhuma origem bloqueada nas últimas 24h.</div><?php endif; ?>
+                        </div>
+                    </div>
+                    <div class="fw-block-separator">
+                        <h4 class="fw-block-title">Protocolos cadastrados</h4>
+                        <div class="fw-protocol-list">
+                            <div class="fw-protocol-row"><span class="fw-protocol-dot green"></span><span>TCP</span><strong><?= (int) $protocolTotals['TCP'] ?></strong></div>
+                            <div class="fw-protocol-row"><span class="fw-protocol-dot blue"></span><span>UDP</span><strong><?= (int) $protocolTotals['UDP'] ?></strong></div>
+                            <div class="fw-protocol-row"><span class="fw-protocol-dot orange"></span><span>TCP/UDP</span><strong><?= (int) $protocolTotals['TCP/UDP'] ?></strong></div>
+                        </div>
+                    </div>
+                </div>
+                <p style="margin:18px 0 0;color:#8fb3c7;font-size:12px">As métricas exibidas reutilizam somente os dados já disponíveis nesta página; nenhuma coleta ou regra adicional foi executada.</p>
+            </div>
         </div>
     </div>
 
@@ -2182,19 +2334,44 @@ body{background:#080d18}
         </div>
     </dialog>
 
-    <dialog class="modal" id="add-public-port-modal">
-        <header class="modal-header"><div><h2>Adicionar Porta Pública</h2><p>Cadastrar uma porta disponível para acesso externo.</p></div><button class="modal-close" type="button" data-close-dialog>Fechar</button></header>
+    <dialog class="modal step-modal" id="add-public-port-modal">
+        <header class="modal-header">
+            <div>
+                <h2>Adicionar Porta Pública</h2>
+                <p>Cadastrar uma porta disponível para acesso externo.</p>
+            </div>
+            <div class="modal-header-badge">
+                <button class="modal-close" type="button" data-close-dialog>Fechar</button>
+                <span class="mini-pill">Porta pública</span>
+            </div>
+        </header>
         <div class="modal-body">
-            <form method="POST" class="modal-form">
+            <form method="POST" class="modal-form" data-public-port-form>
                 <?= csrf_field() ?>
                 <input type="hidden" name="acao" value="adicionar_porta_publica">
-                <div class="form-row">
-                    <div class="field"><label>Porta</label><input type="number" name="porta" min="1" max="65535" inputmode="numeric" required></div>
-                    <div class="field"><label>Protocolo</label><select name="protocolo" required><option value="TCP">TCP</option><option value="UDP">UDP</option><option value="TCP/UDP">TCP/UDP</option></select></div>
+                <div class="review-box is-hidden" data-public-port-review-box>
+                    <div class="review-top">
+                        <div class="review-head">
+                            <span class="review-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 2.8 20 6v5.8c0 4.9-3.1 8.5-8 10.4-4.9-1.9-8-5.5-8-10.4V6z"/><path d="m12 6 5 2v3.8c0 3.3-2 5.8-5 7-3-1.2-5-3.7-5-7V8z"/></svg></span>
+                            <div>
+                                <strong>Revisão da porta</strong>
+                                <span class="review-kicker">Acesso externo</span>
+                            </div>
+                        </div>
+                        <div class="review-inline">
+                            <span>Porta: <strong data-public-port-review-port>—</strong></span>
+                            <span>Protocolo: <strong data-public-port-review-protocol>—</strong></span>
+                            <span>Serviço: <strong data-public-port-review-service>—</strong></span>
+                        </div>
+                    </div>
                 </div>
-                <div class="field"><label>Serviço</label><input name="servico" maxlength="40" placeholder="Ex.: HTTPS" required></div>
-                <div class="field"><label>Descrição</label><input name="descricao" maxlength="120" placeholder="Finalidade da porta"></div>
-                <div class="modal-actions"><button class="button" type="button" data-close-dialog>Cancelar</button><button class="button primary" type="submit">Adicionar porta</button></div>
+                <div class="form-row">
+                    <div class="field"><label for="public-port-porta">Porta</label><input id="public-port-porta" type="number" name="porta" min="1" max="65535" inputmode="numeric" data-public-port-input-port required></div>
+                    <div class="field"><label for="public-port-protocolo">Protocolo</label><select id="public-port-protocolo" name="protocolo" data-public-port-input-protocol required><option value="TCP">TCP</option><option value="UDP">UDP</option><option value="TCP/UDP">TCP/UDP</option></select></div>
+                </div>
+                <div class="field"><label for="public-port-servico">Serviço</label><input id="public-port-servico" name="servico" maxlength="40" placeholder="Ex.: HTTPS" data-public-port-input-service required></div>
+                <div class="field"><label for="public-port-descricao">Descrição</label><input id="public-port-descricao" name="descricao" maxlength="120" placeholder="Finalidade da porta" data-public-port-input-description></div>
+                <div class="modal-actions step-actions"><button class="button secondary" type="button" data-close-dialog>Cancelar</button><button class="button primary" type="submit">Adicionar porta</button></div>
             </form>
         </div>
     </dialog>
@@ -2243,16 +2420,40 @@ body{background:#080d18}
         </div>
     </dialog>
 
-    <dialog class="modal" id="remove-port-modal">
-        <header class="modal-header"><div><h2>Remover Porta</h2><p>Remover a porta <span data-port-scope></span> dos dados do painel.</p></div><button class="modal-close" type="button" data-close-dialog>Fechar</button></header>
+    <dialog class="modal step-modal" id="remove-port-modal">
+        <header class="modal-header">
+            <div>
+                <h2>Remover Porta</h2>
+                <p>Remover a porta registrada no painel, sem alterar a política aplicada.</p>
+            </div>
+            <div class="modal-header-badge">
+                <button class="modal-close" type="button" data-close-dialog>Fechar</button>
+                <span class="mini-pill danger">Remoção de porta</span>
+            </div>
+        </header>
         <div class="modal-body">
             <form method="POST" class="modal-form">
                 <?= csrf_field() ?>
                 <input type="hidden" name="acao" value="remover_porta">
                 <input type="hidden" name="id" data-modal-id>
-                <div class="modal-warning">Para confirmar, digite exatamente a porta <strong data-confirmation-label></strong>.</div>
+                <div class="review-box">
+                    <div class="review-top">
+                        <div class="review-head">
+                            <span class="review-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 2.8 20 6v5.8c0 4.9-3.1 8.5-8 10.4-4.9-1.9-8-5.5-8-10.4V6z"/><path d="m12 6 5 2v3.8c0 3.3-2 5.8-5 7-3-1.2-5-3.7-5-7V8z"/></svg></span>
+                            <div>
+                                <strong>Revisão da porta</strong>
+                                <span class="review-kicker">Acesso administrativo</span>
+                            </div>
+                        </div>
+                        <div class="review-inline">
+                            <span>Porta: <strong data-confirmation-label></strong></span>
+                            <span>Escopo: <strong data-port-scope></strong></span>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-warning">Para confirmar, digite exatamente a porta acima.</div>
                 <div class="field"><label for="remove-port-confirmation">Confirmação</label><input id="remove-port-confirmation" name="confirmacao" inputmode="numeric" autocomplete="off" data-confirmation-input required></div>
-                <div class="modal-actions"><button class="button" type="button" data-close-dialog>Cancelar</button><button class="button danger" type="submit">Remover porta</button></div>
+                <div class="modal-actions step-actions"><button class="button secondary" type="button" data-close-dialog>Cancelar</button><button class="button danger" type="submit">Remover porta</button></div>
             </form>
         </div>
     </dialog>
@@ -2296,6 +2497,33 @@ if(adminSearch){
     adminSearch.addEventListener('input',filterAdmin);
     filterAdmin();
 }
+const fwOpenButtons=document.querySelectorAll('.js-fw-open-modal');
+const fwCloseButtons=document.querySelectorAll('.js-fw-close-modal');
+const closeFwModal=modal=>{
+    if(!modal)return;
+    modal.classList.remove('is-open');
+    modal.setAttribute('aria-hidden','true');
+    if(!document.querySelector('.fw-modal-backdrop.is-open')){
+        document.body.classList.remove('fw-modal-open');
+    }
+};
+fwOpenButtons.forEach(button=>button.addEventListener('click',()=>{
+    const modal=document.getElementById(button.dataset.fwModalTarget||'');
+    if(!modal)return;
+    modal.classList.add('is-open');
+    modal.setAttribute('aria-hidden','false');
+    document.body.classList.add('fw-modal-open');
+    modal.querySelector('.js-fw-close-modal')?.focus();
+}));
+fwCloseButtons.forEach(button=>button.addEventListener('click',()=>closeFwModal(button.closest('.fw-modal-backdrop'))));
+document.querySelectorAll('.fw-modal-backdrop').forEach(backdrop=>backdrop.addEventListener('click',event=>{
+    if(event.target===backdrop)closeFwModal(backdrop);
+}));
+document.addEventListener('keydown',event=>{
+    if(event.key==='Escape'){
+        document.querySelectorAll('.fw-modal-backdrop.is-open').forEach(closeFwModal);
+    }
+});
 document.querySelectorAll('[data-open-dialog]').forEach(button=>button.addEventListener('click',()=>{
     const dialog=document.getElementById(button.dataset.openDialog);
     if(!dialog)return;
@@ -2509,22 +2737,38 @@ if(addAdminPortModal){
     addAdminPortModal.querySelector('form')?.addEventListener('submit',syncPortReview);
     syncPortReview();
 }
-const menuToggle=document.querySelector('.menu-toggle');
-const sidebar=document.querySelector('.sidebar');
-const menuOverlay=document.querySelector('.menu-overlay');
-const closeMenu=()=>{
-    sidebar?.classList.remove('open');
-    menuOverlay?.classList.remove('open');
-    menuToggle?.setAttribute('aria-expanded','false');
-};
-menuToggle?.addEventListener('click',()=>{
-    const open=!sidebar?.classList.contains('open');
-    sidebar?.classList.toggle('open',open);
-    menuOverlay?.classList.toggle('open',open);
-    menuToggle.setAttribute('aria-expanded',open?'true':'false');
-});
-menuOverlay?.addEventListener('click',closeMenu);
-sidebar?.querySelectorAll('a').forEach(link=>link.addEventListener('click',closeMenu));
+const addPublicPortModal=document.getElementById('add-public-port-modal');
+if(addPublicPortModal){
+    const portField=addPublicPortModal.querySelector('[data-public-port-input-port]');
+    const protocolField=addPublicPortModal.querySelector('[data-public-port-input-protocol]');
+    const serviceField=addPublicPortModal.querySelector('[data-public-port-input-service]');
+    const reviewPort=addPublicPortModal.querySelector('[data-public-port-review-port]');
+    const reviewProtocol=addPublicPortModal.querySelector('[data-public-port-review-protocol]');
+    const reviewService=addPublicPortModal.querySelector('[data-public-port-review-service]');
+    const reviewBox=addPublicPortModal.querySelector('[data-public-port-review-box]');
+    const syncPublicPortReview=()=>{
+        const porta=(portField?.value||'').trim();
+        const protocolo=(protocolField?.value||'').trim();
+        const servico=(serviceField?.value||'').trim();
+        const hasData=porta.length>0||servico.length>0;
+        if(reviewBox)reviewBox.classList.toggle('is-hidden',!hasData);
+        if(reviewPort)reviewPort.textContent=porta||'—';
+        if(reviewProtocol)reviewProtocol.textContent=protocolo||'—';
+        if(reviewService)reviewService.textContent=servico||'—';
+    };
+    const resetPublicPortModal=()=>{
+        if(portField)portField.value='';
+        if(protocolField)protocolField.value='TCP';
+        if(serviceField)serviceField.value='';
+        syncPublicPortReview();
+    };
+    addPublicPortModal.addEventListener('close',resetPublicPortModal);
+    portField?.addEventListener('input',syncPublicPortReview);
+    protocolField?.addEventListener('change',syncPublicPortReview);
+    serviceField?.addEventListener('input',syncPublicPortReview);
+    addPublicPortModal.querySelector('form')?.addEventListener('submit',syncPublicPortReview);
+    syncPublicPortReview();
+}
 const toast=document.getElementById('ui-toast');let toastTimer;
 if(toast&&!toast.hidden){
     toastTimer=setTimeout(()=>{toast.hidden=true},3200);
