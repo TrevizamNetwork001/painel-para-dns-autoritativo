@@ -2,6 +2,25 @@
 
 Historico de alteracoes do Painel DNS Trevizam Network.
 
+## [2.3.26] - 2026-06-24
+
+### Modelo visual DNS Manager em Servidores DNS
+
+- Reorganizada a página `dns-servers.php` no modelo visual DNS Manager.
+- Adicionada sidebar escura com busca, lista compacta de servidores, badges
+  operacionais e resumo lateral.
+- Refeito o cabeçalho do servidor selecionado com status, função, IP,
+  última verificação, botão de teste, atalho visual de sincronização e menu
+  Ações preservado.
+- Incluídos cards rápidos para SSH, agente remoto, BIND/named,
+  named-checkconf, AXFR e última verificação.
+- Adicionadas seções visuais de resumo, credenciais, agente remoto, zonas,
+  eventos recentes e avançado/zona de risco.
+- Mantidos CSRF, nomes das ações POST, modais, JavaScript existente,
+  auditoria, comandos remotos, inventário DNS e lógica operacional.
+- Handoff disponível em
+  `HANDOFF_DNS_SERVERS_UI_DNS_MANAGER_2026-06-24.md`.
+
 ## [2.3.25] - 2026-06-23
 
 ### Modal de acesso administrativo do Firewall
