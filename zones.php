@@ -1,10 +1,10 @@
 <?php
 
 require_once __DIR__ . '/config.php';
-require_once __DIR__ . '/includes/auth.php';
-require_once __DIR__ . '/includes/security.php';
-require_once __DIR__ . '/includes/audit.php';
-require_once __DIR__ . '/includes/dns_zones.php';
+require_once __DIR__ . '/app/Auth/auth.php';
+require_once __DIR__ . '/app/Support/security.php';
+require_once __DIR__ . '/app/Audit/audit.php';
+require_once __DIR__ . '/app/Dns/zones.php';
 
 $erro = '';
 $sucesso = $_SESSION['dns_zones_sucesso'] ?? '';
