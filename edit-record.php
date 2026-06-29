@@ -1,9 +1,9 @@
 <?php
 
 require "config.php";
-require "includes/auth.php";
-require "includes/security.php";
-require "includes/audit.php";
+require "app/Auth/auth.php";
+require "app/Support/security.php";
+require "app/Audit/audit.php";
 
 $zone = strtolower(trim($_GET['zone'] ?? $_POST['zone'] ?? ''));
 $oldHost = trim($_GET['host'] ?? $_POST['old_host'] ?? '');

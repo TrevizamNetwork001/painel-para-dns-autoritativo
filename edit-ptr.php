@@ -1,9 +1,9 @@
 <?php
 
 require "config.php";
-require "includes/auth.php";
-require "includes/security.php";
-require "includes/audit.php";
+require "app/Auth/auth.php";
+require "app/Support/security.php";
+require "app/Audit/audit.php";
 
 $zone = basename(trim($_GET['zone'] ?? $_POST['zone'] ?? ''));
 $ptr = trim($_GET['ptr'] ?? $_POST['ptr'] ?? '');
