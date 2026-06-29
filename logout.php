@@ -1,6 +1,6 @@
 <?php
 session_start();
-require_once __DIR__ . "/includes/audit.php";
+require_once __DIR__ . "/app/Audit/audit.php";
 
 $usuario = audit_usuario_atual();
 
