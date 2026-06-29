@@ -1,2 +1,2 @@
 <?php
-require_once __DIR__ . '/../fail2ban.php';
+require_once __DIR__ . '/../app/LegacyControllers/fail2ban.php';

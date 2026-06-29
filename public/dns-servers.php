@@ -1,2 +1,2 @@
 <?php
-require_once __DIR__ . '/../dns-servers.php';
+require_once __DIR__ . '/../app/LegacyControllers/dns-servers.php';

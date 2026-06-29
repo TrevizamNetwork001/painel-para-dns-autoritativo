@@ -1,2 +1,2 @@
 <?php
-require_once __DIR__ . '/../zones.php';
+require_once __DIR__ . '/../app/LegacyControllers/zones.php';

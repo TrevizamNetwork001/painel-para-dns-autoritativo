@@ -1,2 +1,2 @@
 <?php
-require_once __DIR__ . '/../usuarios.php';
+require_once __DIR__ . '/../app/LegacyControllers/usuarios.php';

@@ -1,2 +1,2 @@
 <?php
-require_once __DIR__ . '/../services.php';
+require_once __DIR__ . '/../app/LegacyControllers/services.php';
