@@ -438,6 +438,57 @@ button,input,textarea,select{font:inherit}
 }
 .zones-message.success{border-color:rgba(34,197,94,.28);background:rgba(8,30,16,.72);color:#c8f7d6}
 .zones-message.error{border-color:rgba(239,68,68,.28);background:rgba(42,10,15,.72);color:#ffb0b0}
+.zones-toast-wrap{
+    position:fixed;
+    top:18px;
+    right:18px;
+    z-index:9999;
+    width:min(420px,calc(100vw - 28px));
+    pointer-events:none;
+}
+.zones-toast{
+    pointer-events:auto;
+    display:flex;
+    align-items:flex-start;
+    justify-content:space-between;
+    gap:12px;
+    padding:12px 13px;
+    border-radius:14px;
+    border:1px solid rgba(47,129,247,.24);
+    background:linear-gradient(180deg, rgba(15,28,44,.98), rgba(8,17,30,.98));
+    box-shadow:0 18px 50px rgba(0,0,0,.35);
+}
+.zones-toast.success{border-color:rgba(34,197,94,.28)}
+.zones-toast.error{
+    border-color:rgba(245,158,11,.30);
+    background:linear-gradient(180deg, rgba(34,23,6,.98), rgba(8,17,30,.98));
+}
+.zones-toast.error strong{color:#fde68a}
+.zones-toast.error p{color:#f3d08a}
+.zones-toast strong{
+    display:block;
+    margin-bottom:3px;
+    color:#f4fbff;
+    font-size:13px;
+    font-weight:900;
+}
+.zones-toast p{
+    margin:0;
+    color:var(--muted);
+    font-size:12px;
+    line-height:1.4;
+}
+.zones-toast-close{
+    width:28px;
+    height:28px;
+    border:1px solid rgba(148,163,184,.22);
+    border-radius:9px;
+    background:#0f172a;
+    color:#dbeafe;
+    cursor:pointer;
+    flex:0 0 auto;
+}
+.zones-toast-close:hover,.zones-toast-close:focus{outline:none;border-color:#4ea1ff;background:#102033}
 .zones-sync{
     margin:0 0 16px;
     padding:16px 18px;
@@ -514,6 +565,17 @@ button,input,textarea,select{font:inherit}
     font-size:12px;
     line-height:1.45;
 }
+.zones-warning-note{
+    margin:0 0 14px;
+    padding:12px 13px;
+    border:1px solid rgba(245,158,11,.28);
+    border-radius:12px;
+    background:rgba(34,23,6,.78);
+    color:#fde68a;
+    font-size:12px;
+    line-height:1.45;
+}
+.zones-warning-note strong{color:#fff1b8}
 .zones-card{
     padding:16px;
     border:1px solid var(--line);
@@ -695,12 +757,20 @@ tr:hover td{background:rgba(47,129,247,.06)}
     font-size:11px;
     font-weight:800;
     white-space:nowrap;
+    transition:border-color .16s ease, background .16s ease, color .16s ease, box-shadow .16s ease, transform .16s ease;
+}
+.zones-status:hover{
+    transform:translateY(-1px);
+    box-shadow:0 0 0 3px rgba(47,129,247,.10);
 }
 .state-ok{border-color:rgba(34,197,94,.28);background:rgba(8,30,16,.72);color:#bbf7d0}
+.state-ok:hover{border-color:rgba(34,197,94,.55);background:rgba(10,46,24,.92);color:#dcfce7;box-shadow:0 0 0 3px rgba(34,197,94,.12),0 0 18px rgba(34,197,94,.18)}
 .state-missing{border-color:rgba(245,158,11,.30);background:rgba(34,23,6,.72);color:#fde68a}
 .state-serial{border-color:rgba(139,92,246,.30);background:rgba(29,12,52,.72);color:#ddd6fe}
 .state-extra{border-color:rgba(139,92,246,.30);background:rgba(30,10,48,.72);color:#e9d5ff}
-.state-soa{border-color:rgba(100,116,139,.34);background:rgba(15,23,42,.78);color:#cbd5e1}
+.state-extra:hover{border-color:rgba(139,92,246,.60);background:rgba(46,16,74,.92);color:#f5e9ff;box-shadow:0 0 0 3px rgba(139,92,246,.12),0 0 18px rgba(139,92,246,.18)}
+.state-soa{border-color:rgba(245,158,11,.30);background:rgba(34,23,6,.78);color:#fde68a}
+.state-soa:hover{border-color:rgba(245,158,11,.55);background:rgba(53,33,8,.92);color:#fff3bf;box-shadow:0 0 0 3px rgba(245,158,11,.12),0 0 18px rgba(245,158,11,.18)}
 .state-fail{border-color:rgba(239,68,68,.34);background:rgba(59,13,19,.78);color:#fecaca}
 .state-ignored{border-color:rgba(96,165,250,.26);background:rgba(8,20,39,.72);color:#dbeafe}
 .state-neutral{border-color:rgba(148,163,184,.24);background:rgba(15,23,42,.78);color:#dbeafe}
@@ -855,11 +925,27 @@ tr:hover td{background:rgba(47,129,247,.06)}
     </div>
 </header>
 
-<?php if ($erro): ?>
-    <div class="zones-message error"><?= htmlspecialchars($erro) ?></div>
-<?php endif; ?>
-<?php if ($sucesso): ?>
-    <div class="zones-message success"><?= htmlspecialchars($sucesso) ?></div>
+<?php if ($erro || $sucesso): ?>
+    <div class="zones-toast-wrap" id="zones-toast-wrap">
+        <?php if ($erro): ?>
+            <div class="zones-toast error" role="status" aria-live="polite">
+                <div>
+                    <strong>Falha</strong>
+                    <p><?= htmlspecialchars($erro) ?></p>
+                </div>
+                <button type="button" class="zones-toast-close" aria-label="Fechar aviso">×</button>
+            </div>
+        <?php endif; ?>
+        <?php if ($sucesso): ?>
+            <div class="zones-toast success" role="status" aria-live="polite">
+                <div>
+                    <strong>Inventário atualizado</strong>
+                    <p><?= htmlspecialchars($sucesso) ?></p>
+                </div>
+                <button type="button" class="zones-toast-close" aria-label="Fechar aviso">×</button>
+            </div>
+        <?php endif; ?>
+    </div>
 <?php endif; ?>
 <?php if ($resultadoSync): ?>
     <section class="zones-card">
@@ -931,6 +1017,13 @@ tr:hover td{background:rgba(47,129,247,.06)}
             master <?= (int) ($resumoClassificacao['SOA_MASTER_INDISPONIVEL'] ?? 0) ?> /
             slave <?= (int) ($resumoClassificacao['SOA_SLAVE_INDISPONIVEL'] ?? 0) ?>
         )</span>
+    </div>
+<?php endif; ?>
+<?php if ($kpiAusentes > 0 || $kpiSerialDiferente > 0 || $kpiFalhasColeta > 0): ?>
+    <div class="zones-warning-note">
+        Atenção no relatório: há <strong><?= (int) $kpiAusentes ?></strong> zona(s) ausente(s),
+        <strong><?= (int) $kpiSerialDiferente ?></strong> com serial diferente e
+        <strong><?= (int) $kpiFalhasColeta ?></strong> falha(s) de coleta. Esses itens ficam em amarelo/atenção para facilitar a leitura.
     </div>
 <?php endif; ?>
 
@@ -1212,7 +1305,7 @@ tr:hover td{background:rgba(47,129,247,.06)}
                                 <td><?= htmlspecialchars((string) ($zona['serial'] ?? 'indisponivel')) ?></td>
                                 <td><?= htmlspecialchars((string) ($zona['file_path'] ?? '-')) ?></td>
                                 <td><?= htmlspecialchars((string) ($zona['masters'] ?? '-')) ?></td>
-                                <td><span class="zones-status <?= $zona['status'] === 'ok' ? 'state-ok' : 'state-soa' ?>"><?= htmlspecialchars($zona['status']) ?></span></td>
+                                <td><span class="zones-status <?= $zona['status'] === 'ok' ? 'state-ok' : ($zona['status'] === 'sem_soa' ? 'state-soa' : 'state-neutral') ?>"><?= htmlspecialchars($zona['status']) ?></span></td>
                             </tr>
                         <?php endforeach; ?>
                     </tbody>
@@ -1379,6 +1472,31 @@ document.addEventListener('keydown', event => {
     if (event.key === 'Escape' && zoneDialog.open) {
         closeDialog();
     }
+});
+
+const toastWrap = document.getElementById('zones-toast-wrap');
+document.querySelectorAll('.zones-toast-close').forEach(button => {
+    button.addEventListener('click', () => {
+        const toast = button.closest('.zones-toast');
+        if (toast) {
+            toast.remove();
+        }
+        if (toastWrap && toastWrap.querySelectorAll('.zones-toast').length === 0) {
+            toastWrap.remove();
+        }
+    });
+});
+
+document.querySelectorAll('.zones-toast.success').forEach(toast => {
+    setTimeout(() => {
+        if (toast.isConnected) {
+            toast.remove();
+        }
+
+        if (toastWrap && toastWrap.querySelectorAll('.zones-toast').length === 0) {
+            toastWrap.remove();
+        }
+    }, 4000);
 });
 </script>
 <?php require_once __DIR__ . '/includes/session-timeout.php'; ?>
