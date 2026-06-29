@@ -891,13 +891,14 @@ button:hover{opacity:.95}
                         <label>Domínio DNS</label>
                         <input
                             name="new_domain"
+                            data-error-field="domain"
                             placeholder="exemplo.com.br"
                             value="<?= htmlspecialchars((string) $formData['new_domain'], ENT_QUOTES, 'UTF-8') ?>"
                             class="<?= isset($fieldErrors['domain']) ? 'input-error' : '' ?>"
                             <?= isset($fieldErrors['domain']) ? 'aria-invalid="true" aria-describedby="domain-error"' : '' ?>
                             required>
                         <?php if (isset($fieldErrors['domain'])): ?>
-                            <div id="domain-error" class="field-error"><?= htmlspecialchars($fieldErrors['domain']) ?></div>
+                            <div id="domain-error" class="field-error" data-error-message="domain"><?= htmlspecialchars($fieldErrors['domain']) ?></div>
                         <?php endif; ?>
                     </div>
                 </div>
@@ -909,25 +910,27 @@ button:hover{opacity:.95}
                             <label>IPv4 NS1</label>
                             <input
                                 name="ipv4"
+                                data-error-field="ns1_ipv4"
                                 placeholder="192.0.2.253"
                                 value="<?= htmlspecialchars((string) $formData['ipv4'], ENT_QUOTES, 'UTF-8') ?>"
                                 class="<?= isset($fieldErrors['ns1_ipv4']) ? 'input-error' : '' ?>"
                                 <?= isset($fieldErrors['ns1_ipv4']) ? 'aria-invalid="true" aria-describedby="ns1-ipv4-error"' : '' ?>
                                 required>
                             <?php if (isset($fieldErrors['ns1_ipv4'])): ?>
-                                <div id="ns1-ipv4-error" class="field-error"><?= htmlspecialchars($fieldErrors['ns1_ipv4']) ?></div>
+                                <div id="ns1-ipv4-error" class="field-error" data-error-message="ns1_ipv4"><?= htmlspecialchars($fieldErrors['ns1_ipv4']) ?></div>
                             <?php endif; ?>
                         </div>
                         <div class="field">
                             <label>IPv6 NS1</label>
                             <input
                                 name="ipv6"
+                                data-error-field="ns1_ipv6"
                                 placeholder="2001:db8:2000::242"
                                 value="<?= htmlspecialchars((string) $formData['ipv6'], ENT_QUOTES, 'UTF-8') ?>"
                                 class="<?= isset($fieldErrors['ns1_ipv6']) ? 'input-error' : '' ?>"
                                 <?= isset($fieldErrors['ns1_ipv6']) ? 'aria-invalid="true" aria-describedby="ns1-ipv6-error"' : '' ?>>
                             <?php if (isset($fieldErrors['ns1_ipv6'])): ?>
-                                <div id="ns1-ipv6-error" class="field-error"><?= htmlspecialchars($fieldErrors['ns1_ipv6']) ?></div>
+                                <div id="ns1-ipv6-error" class="field-error" data-error-message="ns1_ipv6"><?= htmlspecialchars($fieldErrors['ns1_ipv6']) ?></div>
                             <?php endif; ?>
                         </div>
                     </div>
@@ -940,24 +943,26 @@ button:hover{opacity:.95}
                             <label>IPv4 NS2</label>
                             <input
                                 name="ipv4_ns2"
+                                data-error-field="ns2_ipv4"
                                 placeholder="192.0.2.254"
                                 value="<?= htmlspecialchars((string) $formData['ipv4_ns2'], ENT_QUOTES, 'UTF-8') ?>"
                                 class="<?= isset($fieldErrors['ns2_ipv4']) ? 'input-error' : '' ?>"
                                 <?= isset($fieldErrors['ns2_ipv4']) ? 'aria-invalid="true" aria-describedby="ns2-ipv4-error"' : '' ?>>
                             <?php if (isset($fieldErrors['ns2_ipv4'])): ?>
-                                <div id="ns2-ipv4-error" class="field-error"><?= htmlspecialchars($fieldErrors['ns2_ipv4']) ?></div>
+                                <div id="ns2-ipv4-error" class="field-error" data-error-message="ns2_ipv4"><?= htmlspecialchars($fieldErrors['ns2_ipv4']) ?></div>
                             <?php endif; ?>
                         </div>
                         <div class="field">
                             <label>IPv6 NS2</label>
                             <input
                                 name="ipv6_ns2"
+                                data-error-field="ns2_ipv6"
                                 placeholder="2001:db8:2000::243"
                                 value="<?= htmlspecialchars((string) $formData['ipv6_ns2'], ENT_QUOTES, 'UTF-8') ?>"
                                 class="<?= isset($fieldErrors['ns2_ipv6']) ? 'input-error' : '' ?>"
                                 <?= isset($fieldErrors['ns2_ipv6']) ? 'aria-invalid="true" aria-describedby="ns2-ipv6-error"' : '' ?>>
                             <?php if (isset($fieldErrors['ns2_ipv6'])): ?>
-                                <div id="ns2-ipv6-error" class="field-error"><?= htmlspecialchars($fieldErrors['ns2_ipv6']) ?></div>
+                                <div id="ns2-ipv6-error" class="field-error" data-error-message="ns2_ipv6"><?= htmlspecialchars($fieldErrors['ns2_ipv6']) ?></div>
                             <?php endif; ?>
                         </div>
                     </div>
