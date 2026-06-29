@@ -1,0 +1,499 @@
+AUDITORIA READ-ONLY - PAINEL DNS AUTORITATIVO BIND9
+Data: 2026-06-29
+Raiz do projeto: /var/www/html/painel
+Modo de execucao: leitura e inventario; sem reload/restart do Bind; sem remocao de arquivos; sem commit.
+
+1. ESCOPO E VALIDACOES
+
+- Nao foram executados comandos named, rndc, systemctl reload/restart ou service reload/restart.
+- Nao foram removidos arquivos.
+- Nao foi feito commit.
+- Foram criados apenas artefatos de auditoria/snapshot:
+  - este relatorio TXT;
+  - pacote compactado seguro em /tmp, excluindo arquivos sensiveis.
+- A leitura de logs em /var/log/named e de /var/www/.ssh foi bloqueada por permissao; nao foi forçada com privilegios.
+
+2. DIRETORIO RAIZ
+
+- Diretório atual: /var/www/html/painel
+- Raiz Git: /var/www/html/painel
+- Branch atual: master
+
+3. ESTRUTURA ATUAL RELEVANTE
+
+Diretorios principais:
+- ./
+  - PHPs publicos diretamente no document root.
+  - documentacao e handoffs historicos.
+  - backups de arquivos PHP antigos.
+- includes/
+  - bibliotecas internas de autenticacao, seguranca, banco, auditoria, DNS servers e DNS zones.
+- scripts/
+  - scripts de instalacao e automacao DNS/firewall.
+- scripts/ns2/
+  - agente remoto para servidores slave DNS.
+- db/
+  - bancos SQLite e chave local de credenciais.
+
+Arquivos PHP publicos identificados:
+- acl.php
+- acl6.php
+- alterar-senha.php
+- auditoria.php
+- bind.php
+- dashboard.php
+- delete-ptr.php
+- delete-record.php
+- dns-servers.php
+- dns-zones.php
+- domains.php
+- edit-ptr.php
+- edit-record.php
+- edit-reverse-zone.php
+- edit-zone.php
+- fail2ban-bind.php
+- fail2ban.php
+- firewall.php
+- index.php
+- login.php
+- logout.php
+- logs.php
+- reverse-zones.php
+- security.php
+- servidores-dns.php
+- services.php
+- ssh.php
+- usuarios.php
+- zones.php
+
+Includes internos:
+- includes/audit.php
+- includes/auth.php
+- includes/db.php
+- includes/dns_servers.php
+- includes/dns_zones.php
+- includes/footer.php
+- includes/logs.php
+- includes/security.php
+- includes/session-timeout.php
+- includes/setup_db.php
+- includes/teste_audit.php
+- includes/users.php
+
+Scripts:
+- scripts/add-domain-full.sh
+- scripts/install-dns-painel.sh
+- scripts/painel-firewall-validar
+- scripts/ns2/dns-slave-add-zone.sh
+- scripts/ns2/dns-slave-check-transfer.sh
+- scripts/ns2/dns-slave-migrate-layout.sh
+- scripts/ns2/dns-slave-reload.sh
+- scripts/ns2/dns-slave-remove-zone.sh
+- scripts/ns2/dns-slave-status.sh
+- scripts/ns2/dns-sync-command.sh
+- scripts/ns2/dns-zone-inventory.sh
+- scripts/ns2/install-ns2-agent.sh
+- scripts/ns2/test-ns2-agent-final.sh
+- scripts/ns2/*.sudoers
+- scripts/ns2/named.conf.slaves
+- scripts/ns2/README.md
+
+Documentacao/handoffs existentes:
+- CHANGELOG.md
+- FUNCIONALIDADES.md
+- ROADMAP.md
+- RELEASE_V1.txt
+- diversos HANDOFF_*.md e HANDOFF_*.txt relacionados a firewall, dashboard, NS2, DNS sync e validacoes.
+
+Backups de codigo no projeto:
+- dns-servers.php.bak-before-final-ui-cleanup
+- dns-servers.php.bak-before-tabs-ui
+- dns-servers.php.bak-before-ui-dns-manager-model
+- dns-servers.php.bak-before-ui-refinement-round2
+- dns-servers.php.bak-v3-ui-final
+- domains.php.bkp
+- edit-reverse-zone.php.bkp2
+- index.backup
+- index.php.bak
+- index.php.bak2
+- zones.php.bak-v3-visual-dashboard
+
+4. ESTADO GIT
+
+Branch:
+- master
+
+Ultimos commits:
+- d237802 Aplicar visual DNS Manager em servidores DNS
+- dc8446f feat: melhora visual do inventario dns
+- 67aed26 style: ajusta acoes rapidas do firewall
+- 4e78689 style: padroniza modais do firewall
+- 2cc6154 style: finaliza ajuste visual do firewall
+- 0fa7b68 style: compacta acoes do firewall
+- c24356c style: ajusta modais do firewall
+- 7a7ecca style: ajusta layout operacional do firewall
+- 699a4c3 style: ajusta layout visual do firewall
+- 046e965 style: impede corte dos botoes das tabelas
+- 3db4f0d style: corrige alinhamento final das tabelas
+- b8aa216 style: posiciona icone do backup a esquerda
+
+Status antes da auditoria:
+- M db/dns_servers.secret
+- M db/painel_dns.sqlite
+- M dns-servers.php
+- M domains.php
+- M zones.php
+- ?? dns-servers.php.bak-before-ui-dns-manager-model
+- ?? dns-servers.php.bak-before-ui-refinement-round2
+- ?? ultima_validacao_resumo.png
+- ?? zones.php.bak-v3-visual-dashboard
+
+Arquivos rastreados:
+- 107 caminhos rastreados, incluindo PHPs publicos, includes, scripts, docs, db/painel_dns.sqlite, db/painel.sqlite, db/dns_servers.secret e backup SQLite.
+
+Arquivos nao rastreados antes desta auditoria:
+- dns-servers.php.bak-before-ui-dns-manager-model
+- dns-servers.php.bak-before-ui-refinement-round2
+- ultima_validacao_resumo.png
+- zones.php.bak-v3-visual-dashboard
+
+Arquivos ignorados:
+- Nenhum arquivo ignorado foi listado por git ls-files --ignored --others --exclude-standard.
+
+Tamanho:
+- Repositorio/worktree: 7.9M
+- Objetos Git soltos: 687 objetos, 4.59 MiB
+
+5. ARQUIVOS SENSIVEIS E EXCLUSOES
+
+Arquivos sensiveis que nao devem ir para Git publico nem handoff publico:
+- db/painel_dns.sqlite
+  - Banco SQLite real, 348160 bytes, owner nobody:nogroup, modo 664.
+  - Contem tabelas de usuarios, hashes de senha, auditoria, servidores DNS, inventario de zonas, governanca DNS e firewall.
+- db/painel_dns.sqlite.bak-20260615-110015
+  - Backup SQLite real, 36864 bytes, owner root:root, modo 664.
+- db/dns_servers.secret
+  - Chave local de criptografia de credenciais, 44 bytes, owner nobody:nogroup, modo 600.
+- db/painel.sqlite
+  - Arquivo SQLite vazio, mas deve permanecer fora de snapshots publicos por convencao.
+- /etc/bind/rndc.key
+  - Chave do Bind fora do projeto; nao foi copiada.
+- /var/www/.ssh/*
+  - Caminho citado no codigo para chave SSH e known_hosts; leitura bloqueada por permissao e nao foi forcada.
+
+Pontos de credencial em codigo:
+- includes/dns_servers.php define DNS_SERVER_SECRET_KEY em db/dns_servers.secret.
+- includes/dns_servers.php criptografa credenciais com AES-256-GCM e armazena payloads em colunas admin_secret, admin_sudo_secret e admin_key_secret.
+- dns-servers.php permite cadastrar/visualizar credenciais administrativas, senha SSH, senha sudo/root e chave SSH privada via painel.
+
+Arquivos .env:
+- Nenhum .env encontrado no escopo do projeto.
+
+Arquivos *key* no projeto:
+- Nenhum encontrado no escopo do projeto.
+
+6. BANCO DE DADOS
+
+Conexao:
+- includes/db.php aponta para db/painel_dns.sqlite via PDO SQLite.
+- db_leitura() tenta usar PDO::SQLITE_OPEN_READONLY quando disponivel.
+
+Schema identificado em db/painel_dns.sqlite:
+- audit_logs
+- usuarios
+- dns_servers
+- dns_zone_inventory
+- dns_zone_inventory_status
+- dns_zone_extra_ignores
+- dns_zone_governance
+- dns_server_governance
+- firewall_admin_access
+- firewall_ports
+- firewall_meta
+
+Observacao:
+- A tentativa inicial de sqlite3 db/painel_dns.sqlite .schema falhou com "attempt to write a readonly database".
+- A leitura foi refeita com URI file:db/painel_dns.sqlite?mode=ro&immutable=1 e funcionou sem escrita no banco.
+
+7. CONFIGURACOES BIND E ZONAS
+
+Caminhos referenciados pelo projeto:
+- config.php lista zonas forward em /var/cache/bind/master-aut/*.hosts.
+- scripts/add-domain-full.sh usa /etc/bind/named.conf.local, /var/cache/bind/master-aut e /var/cache/bind/master-rev.
+- scripts/ns2/* usa /etc/bind/named.conf.local, /var/cache/bind/slave-aut e /var/cache/bind/slave-rev para servidores slave.
+
+Configs Bind existentes no servidor:
+- /etc/bind/named.conf
+- /etc/bind/named.conf.local
+- /etc/bind/named.conf.options
+- /etc/bind/named.conf.options.bak-dns-panel-20260616202206
+- /etc/bind/named.conf.root-hints
+- /etc/bind/rndc.key
+
+Zonas forward reais encontradas fora do projeto:
+- /var/cache/bind/master-aut/zebratelecom.net.br.hosts
+- /var/cache/bind/master-aut/batatatelecom.com.br.hosts
+- /var/cache/bind/master-aut/gato.net.br.hosts
+- /var/cache/bind/master-aut/tiringa.com.br.hosts
+- /var/cache/bind/master-aut/conectanetwork.net.br.hosts
+- /var/cache/bind/master-aut/teste.com.br.hosts
+- /var/cache/bind/master-aut/teste-template.com.br.hosts
+- /var/cache/bind/master-aut/pizza.com.br.hosts
+
+Zonas reversas reais encontradas fora do projeto:
+- /var/cache/bind/master-rev/45.162.199.rev
+- /var/cache/bind/master-rev/198.50.0.rev
+- /var/cache/bind/master-rev/10.182.97.rev
+- /var/cache/bind/master-rev/192.168.29.rev
+- /var/cache/bind/master-rev/45.162.196.rev
+- /var/cache/bind/master-rev/192.168.11.rev
+- /var/cache/bind/master-rev/192.168.30.rev
+- /var/cache/bind/master-rev/45.162.197.rev
+- /var/cache/bind/master-rev/12.183.96.rev
+- /var/cache/bind/master-rev/198.50.3.rev
+- /var/cache/bind/master-rev/192.168.28.rev
+- /var/cache/bind/master-rev/198.50.2.rev
+- /var/cache/bind/master-rev/tiringa.com.br.rev6
+- /var/cache/bind/master-rev/pizza.com.br.rev6
+- /var/cache/bind/master-rev/10.60.0.rev
+- /var/cache/bind/master-rev/192.168.10.rev
+- /var/cache/bind/master-rev/teste.com.br.rev6
+- /var/cache/bind/master-rev/192.168.31.rev
+- /var/cache/bind/master-rev/45.162.198.rev
+- /var/cache/bind/master-rev/198.50.1.rev
+- /var/cache/bind/master-rev/10.182.96.rev
+- /var/cache/bind/master-rev/gato.net.br.rev6
+
+Logs:
+- Busca em /var/log por arquivos bind/named encontrou permissao negada em /var/log/named. Nao foi usado sudo.
+
+8. MAPA DOS ARQUIVOS PRINCIPAIS
+
+Entrada e auth:
+- index.php: redirecionamento/entrada autenticada.
+- login.php: login com CSRF.
+- logout.php: logout com auditoria.
+- alterar-senha.php: troca de senha.
+- usuarios.php: gestao de usuarios.
+- includes/auth.php: exige sessao/autenticacao.
+- includes/users.php: usuarios e hashes no SQLite.
+- includes/security.php: CSRF.
+- includes/session-timeout.php: timeout de sessao.
+
+DNS autoritativo:
+- config.php: sessao, timeout e listagem de dominios por arquivos .hosts em /var/cache/bind/master-aut.
+- domains.php: gestao de dominios forward e reverso.
+- dns-zones.php: gestao/visualizacao de zonas DNS.
+- reverse-zones.php: gestao de zonas reversas.
+- edit-zone.php, edit-record.php, delete-record.php: edicao/remocao de registros forward.
+- edit-reverse-zone.php, edit-ptr.php, delete-ptr.php: edicao/remocao de reversos/PTR.
+- zones.php: inventario/comparacao/sincronizacao de zonas entre master/slaves.
+- includes/dns_zones.php: schema e logica de inventario/comparacao/governanca.
+
+Servidores DNS/NS2:
+- dns-servers.php: UI principal de servidores, agentes e credenciais.
+- servidores-dns.php: wrapper para dns-servers.php.
+- includes/dns_servers.php: schema, cadastro, credenciais, SSH remoto e comandos.
+- scripts/ns2/*: agente remoto, inventario, status, add/remove zone, reload/reconfig e migracao de layout.
+
+Servicos e firewall:
+- dashboard.php: dashboard geral.
+- services.php: servicos do sistema.
+- bind.php, ssh.php, fail2ban.php, fail2ban-bind.php: telas especificas.
+- firewall.php, acl.php, acl6.php: gestao firewall/ACL.
+- auditoria.php, logs.php, includes/audit.php, includes/logs.php: auditoria/logs.
+
+9. DEPENDENCIAS INTERNAS
+
+Padrao geral:
+- PHPs publicos fazem require/require_once de config.php e/ou includes/auth.php.
+- Acoes POST usam includes/security.php para CSRF.
+- A auditoria passa por includes/audit.php e banco SQLite.
+- Funcoes de banco passam por includes/db.php.
+
+Dependencias centrais:
+- includes/audit.php -> includes/db.php
+- includes/auth.php -> includes/users.php
+- includes/users.php -> includes/db.php
+- includes/setup_db.php -> includes/db.php
+- includes/dns_servers.php -> includes/db.php
+- includes/dns_zones.php -> includes/db.php e includes/dns_servers.php
+- dashboard.php -> config.php, includes/auth.php, includes/db.php, includes/dns_zones.php, includes/dns_servers.php
+- zones.php -> config.php, includes/auth.php, includes/security.php, includes/audit.php, includes/dns_zones.php
+- dns-servers.php -> includes/auth.php, includes/security.php, includes/audit.php, includes/users.php, includes/dns_servers.php, includes/dns_zones.php
+
+10. RISCOS ENCONTRADOS
+
+- Arquivos sensiveis estao rastreados pelo Git:
+  - db/painel_dns.sqlite
+  - db/painel_dns.sqlite.bak-20260615-110015
+  - db/dns_servers.secret
+  - db/painel.sqlite
+- O banco real e a chave de credenciais aparecem como modificados no worktree.
+- O banco SQLite contem usuarios, hashes de senha, auditoria e credenciais criptografadas. Mesmo criptografadas, dependem de db/dns_servers.secret.
+- db/dns_servers.secret e o banco juntos permitem recuperacao das credenciais criptografadas pelo painel.
+- Varios PHPs publicos estao diretamente no document root, misturando UI, regra de negocio e operacao de sistema.
+- Backups de PHP estao no document root e podem ficar acessiveis via web se o servidor entregar arquivos sem extensao .php.
+- scripts/install-dns-painel.sh contem instalacao antiga com sudoers para rndc reload; deve ser revisado antes de reutilizacao.
+- scripts/ns2 contem comandos que executam rndc reconfig/reload em operacao normal. Nao foram executados nesta auditoria.
+- Permissoes heterogeneas em zonas reais (/var/cache/bind/master-aut e master-rev) entre root:root, root:nogroup e nobody:nogroup.
+- /etc/bind/rndc.key existe fora do projeto e deve permanecer fora de qualquer snapshot.
+- O pacote publico nao deve incluir zonas reais, bancos reais, chaves, .ssh, logs ou backups SQLite.
+
+11. SUGESTAO DE ESTRUTURA FUTURA BASEADA NO MODELO UNBOUND MANAGER
+
+Objetivo: separar public web, app, storage, scripts operacionais, configuracao e docs.
+
+Estrutura sugerida:
+- public/
+  - index.php
+  - assets/
+  - controllers finos ou rotas de entrada.
+- app/
+  - Auth/
+  - Dns/
+  - DnsServers/
+  - Firewall/
+  - Audit/
+  - Services/
+  - Support/
+- config/
+  - app.php
+  - dns.php
+  - bind.php
+  - paths.php
+  - sem secrets reais.
+- storage/
+  - database/
+  - logs/
+  - cache/
+  - secrets/
+  - fora do Git, com exemplos sanitizados.
+- scripts/
+  - local/
+  - ns2/
+  - sudoers/
+- docs/
+  - handoff/
+  - operations/
+  - migrations/
+- tests/
+  - unit/
+  - integration-readonly/
+
+Regras recomendadas:
+- Document root deve apontar apenas para public/.
+- Bancos, secrets, logs e backups devem ficar fora do document root.
+- Criar .gitignore bloqueando storage, db reais, *.sqlite, *.secret, .env, chaves privadas, logs e backups com dados.
+- Versionar apenas exemplos:
+  - .env.example
+  - config/*.example.php
+  - schema SQL/migrations
+  - fixtures sanitizadas.
+- Separar operacoes Bind em servicos com dry-run/validate/apply.
+- Toda operacao que chame rndc deve exigir confirmacao explicita, auditoria e validacao previa.
+
+12. PLANO SEGURO DE MIGRACAO EM FASES
+
+Fase 0 - congelamento e backup:
+- Nao alterar producao.
+- Gerar snapshot seguro sem dados sensiveis.
+- Fazer backup operacional separado e privado de banco, secrets, /etc/bind e /var/cache/bind.
+- Registrar hashes e permissoes dos arquivos sensiveis em documento privado.
+
+Fase 1 - higiene Git:
+- Remover do rastreamento Git os arquivos sensiveis em uma branch dedicada, sem apagar do disco.
+- Adicionar .gitignore para SQLite, secrets, logs, .env, chaves privadas e backups reais.
+- Criar db/schema.sql ou migrations a partir do schema, sem dados.
+- Criar exemplos sanitizados.
+
+Fase 2 - empacotamento da aplicacao:
+- Mover apenas documentacao e estrutura nova em branch.
+- Introduzir public/ como ponto de entrada.
+- Manter compatibilidade via wrappers temporarios se necessario.
+- Nao mudar logica de Bind nesta fase.
+
+Fase 3 - camada de dominio:
+- Extrair funcoes de includes/dns_servers.php e includes/dns_zones.php para app/DnsServers e app/Dns.
+- Criar adaptadores para SQLite e comandos shell.
+- Adicionar testes de parser, validacao de nomes de zona e comandos gerados.
+
+Fase 4 - storage e secrets:
+- Migrar banco e secret para storage/database e storage/secrets fora do webroot.
+- Criar configuracao de paths por ambiente.
+- Rodar migracao com janela controlada e rollback documentado.
+
+Fase 5 - operacoes Bind:
+- Implementar fluxo validate -> diff -> apply.
+- Validar named-checkconf/named-checkzone antes de qualquer apply.
+- Manter remocao automatica bloqueada por padrao.
+- Registrar auditoria completa de usuario, IP, comando, resultado e arquivos afetados.
+
+Fase 6 - hardening:
+- Revisar permissoes de arquivos de zona.
+- Revisar sudoers de www-data/dns-sync.
+- Remover backups publicos ou movelos para storage privado.
+- Revisar cabecalhos, sessao, CSRF, controle de acesso por perfil e logging.
+
+13. PACOTE SEGURO
+
+Politica usada para o pacote de analise:
+- Incluir codigo PHP, includes, scripts e documentacao.
+- Excluir .git.
+- Excluir .codex e .agents por serem metadados internos do ambiente de trabalho, nao parte do handoff publico.
+- Excluir bancos SQLite reais e backups SQLite.
+- Excluir db/*.secret.
+- Excluir qualquer .env.
+- Excluir chaves privadas comuns por padrao (*.pem, *.key, id_rsa, id_ed25519).
+- Nao incluir /etc/bind, /var/cache/bind, /var/log ou /var/www/.ssh.
+
+14. COMANDOS EXECUTADOS
+
+- pwd
+- git rev-parse --show-toplevel
+- git branch --show-current
+- git log --oneline -n 12
+- git status --short --branch
+- rg --files -uu
+- git ls-files
+- git ls-files --others --exclude-standard
+- git ls-files --ignored --others --exclude-standard
+- git count-objects -vH
+- du -sh .
+- find . -maxdepth 3 -path ./.git -prune -o -type f -printf '%p\t%s bytes\n'
+- rg -n "(require|include|require_once|include_once)" -g '*.php'
+- rg -n "(/etc/bind|/var/cache/bind|/var/lib/bind|named|rndc|zone|arpa|db\.|bind9|named\.conf)" -g '*.php' -g '*.sh' -g '*.md' -g '*.txt'
+- rg -n -i "(password|passwd|senha|secret|token|api[_-]?key|private key|BEGIN RSA|BEGIN OPENSSH|ssh-rsa|sqlite|\.env|credential|credencial)" -g '!db/*.sqlite' -g '!db/*.sqlite.*'
+- find . -maxdepth 4 -path ./.git -prune -o -type f -name '*.php' -printf '%p\n'
+- find . -maxdepth 4 -path ./.git -prune -o -type f -name '*.sh' -printf '%p\n'
+- find . -maxdepth 4 -path ./.git -prune -o -type f -name '*zone*' -printf '%p\n'
+- sed -n '1,120p' config.php
+- sed -n '1,160p' includes/db.php
+- sed -n '1,260p' includes/dns_servers.php
+- sed -n '1,220p' includes/dns_zones.php
+- file db/painel.sqlite db/painel_dns.sqlite db/painel_dns.sqlite.bak-20260615-110015 db/dns_servers.secret
+- sqlite3 db/painel_dns.sqlite .schema
+- sqlite3 'file:db/painel_dns.sqlite?mode=ro&immutable=1' .schema
+- find db -maxdepth 1 -type f -printf '%p\t%m\t%u:%g\t%s bytes\n'
+- find . -maxdepth 3 -path ./.git -prune -o -type f -name '.env*' -printf '%p\n'
+- find . -maxdepth 4 -path ./.git -prune -o -type f -name '*key*' -printf '%p\n'
+- find . -maxdepth 4 -path ./.git -prune -o -type f -name '*secret*' -printf '%p\t%m\t%s bytes\n'
+- find . -maxdepth 4 -path ./.git -prune -o -type f -name '*bak*' -printf '%p\t%s bytes\n'
+- find /etc/bind -maxdepth 3 -type f -printf '%p\t%m\t%u:%g\t%s bytes\n'
+- find /var/cache/bind -maxdepth 3 -type f -printf '%p\t%m\t%u:%g\t%s bytes\n'
+- find /var/log -maxdepth 3 -type f -name '*bind*' -printf '%p\t%m\t%u:%g\t%s bytes\n'
+- find /var/log -maxdepth 3 -type f -name '*named*' -printf '%p\t%m\t%u:%g\t%s bytes\n'
+- find /var/www/.ssh -maxdepth 2 -type f -printf '%p\t%m\t%u:%g\t%s bytes\n'
+- tar --exclude=./.git --exclude=./db/*.sqlite --exclude=./db/*.sqlite.* --exclude=./db/*.secret --exclude=./.env --exclude=./.env.* --exclude=./*.pem --exclude=./*.key --exclude=./id_rsa --exclude=./id_ed25519 -czf /tmp/painel_dns_audit_2026-06-29.tar.gz .
+- ls -lh /tmp/painel_dns_audit_2026-06-29.tar.gz
+- sha256sum /tmp/painel_dns_audit_2026-06-29.tar.gz
+- tar -tzf /tmp/painel_dns_audit_2026-06-29.tar.gz
+- git status --short --branch
+- tar --exclude=./.git --exclude=./.codex --exclude=./.agents --exclude=./db/*.sqlite --exclude=./db/*.sqlite.* --exclude=./db/*.secret --exclude=./.env --exclude=./.env.* --exclude=./*.pem --exclude=./*.key --exclude=./id_rsa --exclude=./id_ed25519 -czf /tmp/painel_dns_audit_2026-06-29.tar.gz .
+
+15. OBSERVACOES FINAIS
+
+- O projeto atual esta funcionalmente concentrado no document root.
+- O maior risco imediato e o versionamento de banco real e secret de credenciais.
+- A migracao deve comecar por higiene de Git e isolamento de storage, sem alterar operacoes Bind.
+- Nenhum arquivo de producao foi alterado pela auditoria alem da criacao deste relatorio de handoff.
