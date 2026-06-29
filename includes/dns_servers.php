@@ -6,7 +6,16 @@ const DNS_SERVER_SSH_KEY = '/var/www/.ssh/id_ed25519_dns_sync';
 const DNS_SERVER_KNOWN_HOSTS = '/var/www/.ssh/known_hosts';
 const DNS_SERVER_NS2_AGENT_DIR = '/var/www/html/painel/scripts/ns2';
 const DNS_SERVER_SYNC_USER = 'dns-sync';
-const DNS_SERVER_SECRET_KEY = __DIR__ . '/../db/dns_servers.secret';
+
+function dns_servers_secret_path(): string
+{
+    $storagePath = __DIR__ . '/../storage/secrets/dns_servers.secret';
+    if (is_file($storagePath) || is_dir(dirname($storagePath))) {
+        return $storagePath;
+    }
+
+    return __DIR__ . '/../db/dns_servers.secret';
+}
 
 function dns_servers_garantir_esquema(): void
 {
@@ -106,20 +115,21 @@ function dns_servers_listar(): array
 
 function dns_servers_credential_key(): string
 {
-    $dir = dirname(DNS_SERVER_SECRET_KEY);
+    $secretKeyFile = dns_servers_secret_path();
+    $dir = dirname($secretKeyFile);
     if (!is_dir($dir) && !mkdir($dir, 0700, true) && !is_dir($dir)) {
         throw new RuntimeException('Nao foi possivel criar diretorio da chave de credenciais.');
     }
 
-    if (!is_file(DNS_SERVER_SECRET_KEY)) {
+    if (!is_file($secretKeyFile)) {
         $key = random_bytes(32);
-        if (file_put_contents(DNS_SERVER_SECRET_KEY, base64_encode($key)) === false) {
+        if (file_put_contents($secretKeyFile, base64_encode($key)) === false) {
             throw new RuntimeException('Nao foi possivel gravar chave de credenciais.');
         }
-        @chmod(DNS_SERVER_SECRET_KEY, 0600);
+        @chmod($secretKeyFile, 0640);
     }
 
-    $raw = base64_decode(trim((string) file_get_contents(DNS_SERVER_SECRET_KEY)), true);
+    $raw = base64_decode(trim((string) file_get_contents($secretKeyFile)), true);
     if (!is_string($raw) || strlen($raw) !== 32) {
         throw new RuntimeException('Chave de credenciais invalida.');
     }
