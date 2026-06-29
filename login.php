@@ -1,8 +1,8 @@
 <?php
 session_start();
-require_once __DIR__ . "/includes/users.php";
-require_once __DIR__ . "/includes/security.php";
-require_once __DIR__ . "/includes/audit.php";
+require_once __DIR__ . "/app/Auth/users.php";
+require_once __DIR__ . "/app/Support/security.php";
+require_once __DIR__ . "/app/Audit/audit.php";
 
 $erro = null;
 
