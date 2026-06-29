@@ -1,0 +1,15 @@
+*.sqlite
+*.sqlite.*
+*.secret
+.env
+*.pem
+*.key
+id_rsa
+id_ed25519
+*.log
+*.bak
+*.backup
+db/*.sqlite
+db/*.sqlite.*
+db/*.secret
+ultima_validacao_resumo.png
