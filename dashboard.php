@@ -1,9 +1,9 @@
 <?php
 require "config.php";
-require "includes/auth.php";
-require_once __DIR__ . "/includes/db.php";
-require_once __DIR__ . "/includes/dns_zones.php";
-require_once __DIR__ . "/includes/dns_servers.php";
+require "app/Auth/auth.php";
+require_once __DIR__ . "/app/Support/db.php";
+require_once __DIR__ . "/app/Dns/zones.php";
+require_once __DIR__ . "/app/DnsServers/servers.php";
 
 function metricError(string $name, string $message): void { error_log("Dashboard - falha em {$name}: {$message}"); }
 function cpuSample(): ?array {
