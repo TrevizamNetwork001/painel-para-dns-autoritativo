@@ -9,12 +9,7 @@ const DNS_SERVER_SYNC_USER = 'dns-sync';
 
 function dns_servers_secret_path(): string
 {
-    $storagePath = __DIR__ . '/../storage/secrets/dns_servers.secret';
-    if (is_file($storagePath) || is_dir(dirname($storagePath))) {
-        return $storagePath;
-    }
-
-    return __DIR__ . '/../db/dns_servers.secret';
+    return __DIR__ . '/../storage/secrets/dns_servers.secret';
 }
 
 function dns_servers_garantir_esquema(): void
