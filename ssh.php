@@ -1,6 +1,6 @@
 <?php
 
-require_once __DIR__ . "/includes/auth.php";
+require_once __DIR__ . "/app/Auth/auth.php";
 
 $logs = shell_exec(
     "journalctl -u ssh --no-pager -n 50"
