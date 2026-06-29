@@ -1,9 +1,9 @@
 <?php
 
-require_once __DIR__ . '/includes/auth.php';
-require_once __DIR__ . '/includes/security.php';
-require_once __DIR__ . '/includes/audit.php';
-require_once __DIR__ . '/includes/users.php';
+require_once __DIR__ . '/app/Auth/auth.php';
+require_once __DIR__ . '/app/Auth/users.php';
+require_once __DIR__ . '/app/Support/security.php';
+require_once __DIR__ . '/app/Audit/audit.php';
 
 $erro = '';
 $usuarioAtual = usuario_por_id((int) $_SESSION['usuario_id']);
