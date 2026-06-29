@@ -1,2 +1,2 @@
 <?php
-require_once __DIR__ . '/../delete-record.php';
+require_once __DIR__ . '/../app/LegacyControllers/delete-record.php';

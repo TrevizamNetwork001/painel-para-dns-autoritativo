@@ -1,2 +1,2 @@
 <?php
-require_once __DIR__ . '/../ssh.php';
+require_once __DIR__ . '/../app/LegacyControllers/ssh.php';

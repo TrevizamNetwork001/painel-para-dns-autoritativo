@@ -1,2 +1,2 @@
 <?php
-require_once __DIR__ . '/../edit-record.php';
+require_once __DIR__ . '/../app/LegacyControllers/edit-record.php';
