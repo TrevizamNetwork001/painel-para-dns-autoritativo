@@ -1,10 +1,10 @@
 <?php
 
 require_once "config.php";
-require_once "includes/auth.php";
-require_once "includes/security.php";
-require_once "includes/audit.php";
-require_once "includes/db.php";
+require_once "app/Auth/auth.php";
+require_once "app/Support/security.php";
+require_once "app/Audit/audit.php";
+require_once "app/Support/db.php";
 
 $acoes = [
     'CHECK_BIND' => [

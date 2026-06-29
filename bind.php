@@ -1,6 +1,6 @@
 <?php
 
-require_once __DIR__ . "/includes/auth.php";
+require_once __DIR__ . "/app/Auth/auth.php";
 
 $logs = shell_exec(
     "tail -n 100 /var/log/named/named.log"

@@ -1,7 +1,7 @@
 <?php
 
-require_once __DIR__ . "/includes/auth.php";
-require "includes/security.php";
+require_once __DIR__ . "/app/Auth/auth.php";
+require "app/Support/security.php";
 
 $file = "/etc/nftables.d/acl6.conf";
 

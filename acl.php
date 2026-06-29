@@ -1,6 +1,6 @@
-<?php include 'includes/auth.php'; ?>
+<?php include 'app/Auth/auth.php'; ?>
 <?php
-require "includes/security.php";
+require "app/Support/security.php";
 
 $file = "/etc/nftables.d/acl4.conf";
 

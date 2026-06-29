@@ -1,7 +1,7 @@
 <?php
-require_once __DIR__ . '/includes/auth.php';
-require_once __DIR__ . '/includes/security.php';
-require_once __DIR__ . '/includes/audit.php';
+require_once __DIR__ . '/app/Auth/auth.php';
+require_once __DIR__ . '/app/Support/security.php';
+require_once __DIR__ . '/app/Audit/audit.php';
 
 if (!ini_get('date.timezone') || date_default_timezone_get() === 'UTC') {
     date_default_timezone_set('America/Sao_Paulo');
