@@ -23,6 +23,7 @@ O repositório ficou saneado ao final da reestruturacao, com as fases documentad
 
 ## Commits principais
 
+- `37cccf9` - remove duplicacao de includes dos controllers legados
 - `dc9f94a` - move caminhos de banco e secrets para storage
 - `30a8645` - valida storage ativo do painel bind
 - `f9c4b9d` - remove fallback legado de banco e secrets
@@ -39,6 +40,11 @@ O repositório ficou saneado ao final da reestruturacao, com as fases documentad
 - `git diff --check`
 - `git diff --cached --check`
 - validacao de rotas publicas com `php -S` local em `public/`
+
+## Validacao final pos-fix
+
+- o painel foi testado no navegador e abriu normalmente apos reload do Apache
+- nao houve novo `PHP Fatal error` apos o fix
 
 ## Rollback Apache
 
