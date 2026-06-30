@@ -9,7 +9,12 @@
 *.bkp
 *.backup
 *.save
+*.old
+*.tmp
 *.log
+.backup
+.save
+.log
 *.tar.gz
 *.zip
 id_rsa
@@ -23,6 +28,11 @@ storage/secrets/*
 storage/logs/*
 storage/backups/*
 storage/cache/*
+storage/database/
+storage/secrets/
+storage/logs/
+storage/backups/
+storage/cache/
 !storage/database/.gitkeep
 !storage/secrets/.gitkeep
 !storage/logs/.gitkeep
