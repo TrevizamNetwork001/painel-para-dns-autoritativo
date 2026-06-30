@@ -1,0 +1,5 @@
+storage/database/ export-ignore
+storage/secrets/ export-ignore
+storage/logs/ export-ignore
+storage/backups/ export-ignore
+storage/cache/ export-ignore
