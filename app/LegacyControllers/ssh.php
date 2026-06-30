@@ -1,6 +1,5 @@
 <?php
-
-require_once __DIR__ . "/app/Auth/auth.php";
+require_once dirname(__DIR__, 2) . "/app/Auth/auth.php";
 
 $logs = shell_exec(
     "journalctl -u ssh --no-pager -n 50"
@@ -156,6 +155,6 @@ setTimeout(() => {
 }, 5000);
 </script>
 
-<?php require __DIR__ . '/includes/footer.php'; ?>
+<?php require_once dirname(__DIR__, 2) . '/includes/footer.php'; ?>
 </body>
 </html>

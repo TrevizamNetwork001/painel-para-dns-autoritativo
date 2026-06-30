@@ -1,7 +1,7 @@
 <?php
-require_once __DIR__ . '/app/Auth/auth.php';
-require_once __DIR__ . '/app/Support/security.php';
-require_once __DIR__ . '/app/Audit/audit.php';
+require_once dirname(__DIR__, 2) . "/app/Auth/auth.php";
+require_once dirname(__DIR__, 2) . "/app/Support/security.php";
+require_once dirname(__DIR__, 2) . "/app/Audit/audit.php";
 
 if (!ini_get('date.timezone') || date_default_timezone_get() === 'UTC') {
     date_default_timezone_set('America/Sao_Paulo');
@@ -2574,7 +2574,7 @@ body{background:#080d18}
         </div>
     </dialog>
 
-    <?php require __DIR__ . '/includes/footer.php'; ?>
+    <?php require_once dirname(__DIR__, 2) . '/includes/footer.php'; ?>
 </main>
 <div class="ui-toast <?= htmlspecialchars($toastTipoInicial, ENT_QUOTES, 'UTF-8') ?>" id="ui-toast" role="status" aria-live="polite"<?= $toastMensagemInicial === '' ? ' hidden' : '' ?>><?= htmlspecialchars($toastMensagemInicial) ?></div>
 <script>

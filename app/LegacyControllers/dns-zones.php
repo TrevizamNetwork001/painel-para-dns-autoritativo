@@ -1,9 +1,8 @@
 <?php
-
-require "config.php";
-require "app/Auth/auth.php";
-require "app/Support/security.php";
-require "app/Audit/audit.php";
+require_once dirname(__DIR__, 2) . "/config.php";
+require_once dirname(__DIR__, 2) . "/app/Auth/auth.php";
+require_once dirname(__DIR__, 2) . "/app/Support/security.php";
+require_once dirname(__DIR__, 2) . "/app/Audit/audit.php";
 
 $confFile = '/etc/bind/named.conf.local';
 $forwardDirectory = '/var/cache/bind/master-aut';

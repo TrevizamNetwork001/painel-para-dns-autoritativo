@@ -1,6 +1,6 @@
 <?php
-require_once __DIR__ . '/includes/auth.php';
-require_once __DIR__ . '/includes/db.php';
+require_once dirname(__DIR__, 2) . "/includes/auth.php";
+require_once dirname(__DIR__, 2) . "/includes/db.php";
 
 function dominio_legivel_auditoria(?string $dominio): string
 {
@@ -349,6 +349,6 @@ th{background:#111827;}
     <a class="<?= $pagina >= $totalPaginas ? 'desativado' : '' ?>" href="auditoria.php?<?= htmlspecialchars(query_auditoria(['pagina' => min($totalPaginas, $pagina + 1), 'exportar' => null])) ?>">Próxima →</a>
 </div>
 
-<?php require __DIR__ . '/includes/footer.php'; ?>
+<?php require_once dirname(__DIR__, 2) . '/includes/footer.php'; ?>
 </body>
 </html>

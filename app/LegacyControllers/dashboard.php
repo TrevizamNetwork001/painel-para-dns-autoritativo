@@ -1,9 +1,9 @@
 <?php
-require "config.php";
-require "app/Auth/auth.php";
-require_once __DIR__ . "/app/Support/db.php";
-require_once __DIR__ . "/app/Dns/zones.php";
-require_once __DIR__ . "/app/DnsServers/servers.php";
+require_once dirname(__DIR__, 2) . "/config.php";
+require_once dirname(__DIR__, 2) . "/app/Auth/auth.php";
+require_once dirname(__DIR__, 2) . "/app/Support/db.php";
+require_once dirname(__DIR__, 2) . "/app/Dns/zones.php";
+require_once dirname(__DIR__, 2) . "/app/DnsServers/servers.php";
 
 function metricError(string $name, string $message): void { error_log("Dashboard - falha em {$name}: {$message}"); }
 function cpuSample(): ?array {
@@ -378,9 +378,9 @@ $uptimeValue = uptimeText();
 <div class="stat"><div class="label">Ações bloqueadas</div><div class="value"><?= $recentActivity['blocked_actions'] ?></div></div>
 <div class="stat"><div class="label">Falhas / rollback</div><div class="value"><?= $recentActivity['failures_rollbacks'] ?></div></div>
 </div></section>
-<?php require __DIR__ . '/includes/footer.php'; ?>
+<?php require_once dirname(__DIR__, 2) . '/includes/footer.php'; ?>
 </main>
-<?php require_once __DIR__ . '/includes/session-timeout.php'; ?>
+<?php require_once dirname(__DIR__, 2) . '/includes/session-timeout.php'; ?>
 <script>
 const button=document.querySelector('.menu-toggle'),menu=document.querySelector('.sidebar'),overlay=document.querySelector('.menu-overlay');
 function setMenu(open){menu.classList.toggle('open',open);overlay.classList.toggle('open',open);button.setAttribute('aria-expanded',open?'true':'false')}

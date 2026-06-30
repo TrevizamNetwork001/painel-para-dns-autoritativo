@@ -1,6 +1,5 @@
 <?php
-
-require_once __DIR__ . "/includes/auth.php";
+require_once dirname(__DIR__, 2) . "/includes/auth.php";
 
 $logs = shell_exec(
     "tail -n 100 /var/log/named/security.log"
@@ -66,6 +65,6 @@ a{
 
 </div>
 
-<?php require __DIR__ . '/includes/footer.php'; ?>
+<?php require_once dirname(__DIR__, 2) . '/includes/footer.php'; ?>
 </body>
 </html>

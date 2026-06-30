@@ -1,6 +1,5 @@
 <?php
-
-require_once __DIR__ . '/app/Auth/auth.php';
+require_once dirname(__DIR__, 2) . "/app/Auth/auth.php";
 
 header('Location: dashboard.php');
 exit;

@@ -1,9 +1,8 @@
 <?php
-
-require "config.php";
-require "app/Auth/auth.php";
-require "app/Support/security.php";
-require "app/Audit/audit.php";
+require_once dirname(__DIR__, 2) . "/config.php";
+require_once dirname(__DIR__, 2) . "/app/Auth/auth.php";
+require_once dirname(__DIR__, 2) . "/app/Support/security.php";
+require_once dirname(__DIR__, 2) . "/app/Audit/audit.php";
 
 $zone = strtolower(trim($_GET['zone'] ?? $_POST['zone'] ?? ''));
 $oldHost = trim($_GET['host'] ?? $_POST['old_host'] ?? '');
@@ -185,8 +184,8 @@ a{color:#38bdf8;text-decoration:none;}
 </div>
 </div>
 
-<?php require_once __DIR__ . '/includes/session-timeout.php'; ?>
-<?php require __DIR__ . '/includes/footer.php'; ?>
+<?php require_once dirname(__DIR__, 2) . '/includes/session-timeout.php'; ?>
+<?php require_once dirname(__DIR__, 2) . '/includes/footer.php'; ?>
 
 </body>
 </html>

@@ -1,6 +1,5 @@
 <?php
-
-require_once __DIR__ . "/app/Auth/auth.php";
+require_once dirname(__DIR__, 2) . "/app/Auth/auth.php";
 
 $logs = shell_exec(
     "tail -n 100 /var/log/named/named.log"
@@ -156,6 +155,6 @@ setTimeout(() => {
 }, 8000);
 </script>
 
-<?php require __DIR__ . '/includes/footer.php'; ?>
+<?php require_once dirname(__DIR__, 2) . '/includes/footer.php'; ?>
 </body>
 </html>

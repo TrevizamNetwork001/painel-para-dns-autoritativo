@@ -1,10 +1,9 @@
 <?php
-
-require_once __DIR__ . '/config.php';
-require_once __DIR__ . '/app/Auth/auth.php';
-require_once __DIR__ . '/app/Support/security.php';
-require_once __DIR__ . '/app/Audit/audit.php';
-require_once __DIR__ . '/app/Dns/zones.php';
+require_once dirname(__DIR__, 2) . "/config.php";
+require_once dirname(__DIR__, 2) . "/app/Auth/auth.php";
+require_once dirname(__DIR__, 2) . "/app/Support/security.php";
+require_once dirname(__DIR__, 2) . "/app/Audit/audit.php";
+require_once dirname(__DIR__, 2) . "/app/Dns/zones.php";
 
 $erro = '';
 $sucesso = $_SESSION['dns_zones_sucesso'] ?? '';
@@ -1499,7 +1498,7 @@ document.querySelectorAll('.zones-toast.success').forEach(toast => {
     }, 4000);
 });
 </script>
-<?php require_once __DIR__ . '/includes/session-timeout.php'; ?>
-<?php require __DIR__ . '/includes/footer.php'; ?>
+<?php require_once dirname(__DIR__, 2) . '/includes/session-timeout.php'; ?>
+<?php require_once dirname(__DIR__, 2) . '/includes/footer.php'; ?>
 </body>
 </html>

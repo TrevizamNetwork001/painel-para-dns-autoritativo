@@ -1,11 +1,10 @@
 <?php
-
-require_once __DIR__ . '/app/Auth/auth.php';
-require_once __DIR__ . '/app/Support/security.php';
-require_once __DIR__ . '/app/Audit/audit.php';
-require_once __DIR__ . '/app/Auth/users.php';
-require_once __DIR__ . '/app/DnsServers/servers.php';
-require_once __DIR__ . '/app/Dns/zones.php';
+require_once dirname(__DIR__, 2) . "/app/Auth/auth.php";
+require_once dirname(__DIR__, 2) . "/app/Support/security.php";
+require_once dirname(__DIR__, 2) . "/app/Audit/audit.php";
+require_once dirname(__DIR__, 2) . "/app/Auth/users.php";
+require_once dirname(__DIR__, 2) . "/app/DnsServers/servers.php";
+require_once dirname(__DIR__, 2) . "/app/Dns/zones.php";
 
 exigir_administrador();
 dns_servers_garantir_esquema();
@@ -680,4 +679,4 @@ function showAgentConfig(id){const config=document.getElementById(id);if(!config
 document.querySelectorAll('[data-toggle-agent-config]').forEach(button=>button.addEventListener('click',()=>{const id=button.dataset.toggleAgentConfig||'';const config=document.getElementById(id);if(!config)return;const willShow=config.hidden;config.hidden=!willShow;button.setAttribute('aria-expanded',willShow?'true':'false');if(willShow)setTimeout(()=>config.scrollIntoView({block:'nearest'}),0);}));
 document.querySelectorAll('[data-open-section]').forEach(button=>button.addEventListener('click',()=>{const id=button.dataset.openSection||'';if(document.getElementById(id)?.classList.contains('agent-config-summary'))showAgentConfig(id);}));
 document.querySelectorAll('[data-auto-dismiss-result]').forEach(result=>{const details=result.querySelector('details');let dismissTimer;const scheduleDismiss=()=>{clearTimeout(dismissTimer);if(details?.open)return;dismissTimer=setTimeout(()=>{if(details?.open)return;result.classList.add('is-dismissing');setTimeout(()=>result.remove(),300);},6000);};details?.addEventListener('toggle',()=>{if(details.open){clearTimeout(dismissTimer);result.classList.remove('is-dismissing');}else{scheduleDismiss();}});scheduleDismiss();});
-</script><?php require_once __DIR__ . '/includes/session-timeout.php'; ?></body></html>
+</script><?php require_once dirname(__DIR__, 2) . '/includes/session-timeout.php'; ?></body></html>

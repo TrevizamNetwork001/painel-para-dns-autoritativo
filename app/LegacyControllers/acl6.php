@@ -1,7 +1,6 @@
 <?php
-
-require_once __DIR__ . "/app/Auth/auth.php";
-require "app/Support/security.php";
+require_once dirname(__DIR__, 2) . "/app/Auth/auth.php";
+require_once dirname(__DIR__, 2) . "/app/Support/security.php";
 
 $file = "/etc/nftables.d/acl6.conf";
 
@@ -298,6 +297,6 @@ setTimeout(() => {
 }, 3000);
 </script>
 
-<?php require __DIR__ . '/includes/footer.php'; ?>
+<?php require_once dirname(__DIR__, 2) . '/includes/footer.php'; ?>
 </body>
 </html>

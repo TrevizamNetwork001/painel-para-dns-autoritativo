@@ -1,9 +1,8 @@
 <?php
-
-require "config.php";
-require "includes/auth.php";
-require "includes/security.php";
-require "includes/audit.php";
+require_once dirname(__DIR__, 2) . "/config.php";
+require_once dirname(__DIR__, 2) . "/includes/auth.php";
+require_once dirname(__DIR__, 2) . "/includes/security.php";
+require_once dirname(__DIR__, 2) . "/includes/audit.php";
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     http_response_code(405);
