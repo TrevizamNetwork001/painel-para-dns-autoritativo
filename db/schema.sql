@@ -12,7 +12,6 @@ CREATE TABLE audit_logs (
     mensagem TEXT,
     criado_em DATETIME DEFAULT CURRENT_TIMESTAMP
 );
-CREATE TABLE sqlite_sequence(name,seq);
 CREATE TABLE usuarios (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             usuario TEXT NOT NULL COLLATE NOCASE UNIQUE,
