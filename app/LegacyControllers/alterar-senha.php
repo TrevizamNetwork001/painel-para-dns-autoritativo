@@ -1,9 +1,8 @@
 <?php
-
-require_once __DIR__ . '/app/Auth/auth.php';
-require_once __DIR__ . '/app/Auth/users.php';
-require_once __DIR__ . '/app/Support/security.php';
-require_once __DIR__ . '/app/Audit/audit.php';
+require_once dirname(__DIR__, 2) . "/app/Auth/auth.php";
+require_once dirname(__DIR__, 2) . "/app/Auth/users.php";
+require_once dirname(__DIR__, 2) . "/app/Support/security.php";
+require_once dirname(__DIR__, 2) . "/app/Audit/audit.php";
 
 $erro = '';
 $usuarioAtual = usuario_por_id((int) $_SESSION['usuario_id']);
@@ -186,6 +185,6 @@ button:hover{filter:brightness(1.08)}
         </div>
     </section>
 </main>
-<?php require __DIR__ . '/includes/footer.php'; ?>
+<?php require_once dirname(__DIR__, 2) . '/includes/footer.php'; ?>
 </body>
 </html>

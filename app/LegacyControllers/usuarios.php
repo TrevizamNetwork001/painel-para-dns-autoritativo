@@ -1,9 +1,8 @@
 <?php
-
-require_once __DIR__ . '/app/Auth/auth.php';
-require_once __DIR__ . '/app/Auth/users.php';
-require_once __DIR__ . '/app/Support/security.php';
-require_once __DIR__ . '/app/Audit/audit.php';
+require_once dirname(__DIR__, 2) . "/app/Auth/auth.php";
+require_once dirname(__DIR__, 2) . "/app/Auth/users.php";
+require_once dirname(__DIR__, 2) . "/app/Support/security.php";
+require_once dirname(__DIR__, 2) . "/app/Audit/audit.php";
 
 exigir_administrador();
 
@@ -584,7 +583,7 @@ button:disabled{cursor:not-allowed;opacity:.65}
     </div>
 </section>
 </main>
-<?php require __DIR__ . '/includes/footer.php'; ?>
+<?php require_once dirname(__DIR__, 2) . '/includes/footer.php'; ?>
 <?php if ($sucesso || $erro): ?>
 <script>
 setTimeout(function(){

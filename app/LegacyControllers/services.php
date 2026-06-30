@@ -1,10 +1,9 @@
 <?php
-
-require_once "config.php";
-require_once "app/Auth/auth.php";
-require_once "app/Support/security.php";
-require_once "app/Audit/audit.php";
-require_once "app/Support/db.php";
+require_once dirname(__DIR__, 2) . "/config.php";
+require_once dirname(__DIR__, 2) . "/app/Auth/auth.php";
+require_once dirname(__DIR__, 2) . "/app/Support/security.php";
+require_once dirname(__DIR__, 2) . "/app/Audit/audit.php";
+require_once dirname(__DIR__, 2) . "/app/Support/db.php";
 
 $acoes = [
     'CHECK_BIND' => [
@@ -1202,7 +1201,7 @@ function confirmarAcao(acao) {
 }
 </script>
 
-<?php require __DIR__ . '/includes/footer.php'; ?>
+<?php require_once dirname(__DIR__, 2) . '/includes/footer.php'; ?>
 
 </body>
 </html>

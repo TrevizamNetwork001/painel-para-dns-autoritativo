@@ -1,8 +1,8 @@
 <?php
 session_start();
-require_once __DIR__ . "/app/Auth/users.php";
-require_once __DIR__ . "/app/Support/security.php";
-require_once __DIR__ . "/app/Audit/audit.php";
+require_once dirname(__DIR__, 2) . "/app/Auth/users.php";
+require_once dirname(__DIR__, 2) . "/app/Support/security.php";
+require_once dirname(__DIR__, 2) . "/app/Audit/audit.php";
 
 $erro = null;
 
@@ -230,6 +230,6 @@ tsParticles.load("particles", {
     }
 });
 </script>
-<?php require __DIR__ . '/includes/footer.php'; ?>
+<?php require_once dirname(__DIR__, 2) . '/includes/footer.php'; ?>
 </body>
 </html>

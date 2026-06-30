@@ -1,9 +1,8 @@
 <?php
-
-require "config.php";
-require "app/Auth/auth.php";
-require "app/Support/security.php";
-require "app/Audit/audit.php";
+require_once dirname(__DIR__, 2) . "/config.php";
+require_once dirname(__DIR__, 2) . "/app/Auth/auth.php";
+require_once dirname(__DIR__, 2) . "/app/Support/security.php";
+require_once dirname(__DIR__, 2) . "/app/Audit/audit.php";
 
 function ipv6_to_ptr_full($ipv6) {
     $bin = inet_pton($ipv6);
@@ -585,8 +584,8 @@ setTimeout(function() {
 }, 100);
 
 </script>
-<?php require_once __DIR__ . '/includes/session-timeout.php'; ?>
-<?php require __DIR__ . '/includes/footer.php'; ?>
+<?php require_once dirname(__DIR__, 2) . '/includes/session-timeout.php'; ?>
+<?php require_once dirname(__DIR__, 2) . '/includes/footer.php'; ?>
 </body>
 
 </html>
