@@ -227,7 +227,12 @@
                     </div>
 
                     <div class="server-row-actions">
-
+                        <a
+                            href="{{ route('servers.agent.show', $server) }}"
+                            class="button button-secondary button-small"
+                        >
+                            Agente
+                        </a>
 
                         <button
                             type="button"

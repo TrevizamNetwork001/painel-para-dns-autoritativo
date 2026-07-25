@@ -112,4 +112,21 @@ class DnsServer extends Model
         );
     }
 
+
+    public function agent(): \Illuminate\Database\Eloquent\Relations\HasOne
+    {
+        return $this->hasOne(
+            \App\Models\DnsAgent::class,
+            'dns_server_id',
+        );
+    }
+
+    public function agentEnrollments(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(
+            \App\Models\DnsAgentEnrollment::class,
+            'dns_server_id',
+        );
+    }
+
 }

@@ -138,3 +138,15 @@ Route::middleware(['auth'])->group(function (): void {
         [App\Http\Controllers\DnsServerController::class, 'toggleStatus']
     )->name('servers.status');
 });
+
+Route::middleware(['auth'])->group(function (): void {
+    Route::get(
+        '/servidores/{server}/agente',
+        [\App\Http\Controllers\DnsAgentEnrollmentController::class, 'show'],
+    )->name('servers.agent.show');
+
+    Route::post(
+        '/servidores/{server}/agente/ativacao',
+        [\App\Http\Controllers\DnsAgentEnrollmentController::class, 'store'],
+    )->name('servers.agent.enrollment.store');
+});
