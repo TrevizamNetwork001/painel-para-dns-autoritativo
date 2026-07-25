@@ -123,3 +123,141 @@ document.querySelectorAll('[data-account-menu]').forEach((menu) => {
     });
 });
 
+
+// DNS CENTER USERS UI 2.0
+
+const userModal = document.querySelector('[data-user-modal]');
+
+if (userModal) {
+    const openButtons = document.querySelectorAll(
+        '[data-user-modal-open]'
+    );
+
+    const closeButtons = userModal.querySelectorAll(
+        '[data-user-modal-close]'
+    );
+
+    const firstInput = userModal.querySelector('input[name="name"]');
+
+    const openUserModal = () => {
+        userModal.classList.add('is-open');
+        userModal.setAttribute('aria-hidden', 'false');
+        document.body.classList.add('users-modal-open');
+
+        window.setTimeout(() => {
+            firstInput?.focus();
+        }, 50);
+    };
+
+    const closeUserModal = () => {
+        userModal.classList.remove('is-open');
+        userModal.setAttribute('aria-hidden', 'true');
+        document.body.classList.remove('users-modal-open');
+    };
+
+    openButtons.forEach((button) => {
+        button.addEventListener('click', openUserModal);
+    });
+
+    closeButtons.forEach((button) => {
+        button.addEventListener('click', closeUserModal);
+    });
+
+    document.addEventListener('keydown', (event) => {
+        if (
+            event.key === 'Escape'
+            && userModal.classList.contains('is-open')
+        ) {
+            closeUserModal();
+        }
+    });
+
+    if (document.querySelector('[data-open-user-modal-on-error]')) {
+        openUserModal();
+    }
+}
+
+const usersSearch = document.querySelector('[data-users-search]');
+const usersRoleFilter = document.querySelector(
+    '[data-users-role-filter]'
+);
+const usersStatusFilter = document.querySelector(
+    '[data-users-status-filter]'
+);
+const usersClearFilters = document.querySelector(
+    '[data-users-clear-filters]'
+);
+const userRows = Array.from(
+    document.querySelectorAll('[data-user-row]')
+);
+const usersFilterEmpty = document.querySelector(
+    '[data-users-filter-empty]'
+);
+
+const normalizeUserFilterText = (value) => {
+    return value
+        .toLocaleLowerCase('pt-BR')
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .trim();
+};
+
+const applyUserFilters = () => {
+    const search = normalizeUserFilterText(
+        usersSearch?.value || ''
+    );
+
+    const role = usersRoleFilter?.value || '';
+    const status = usersStatusFilter?.value || '';
+
+    let visibleCount = 0;
+
+    userRows.forEach((row) => {
+        const rowSearch = normalizeUserFilterText(
+            row.dataset.userSearch || ''
+        );
+
+        const matchesSearch =
+            !search || rowSearch.includes(search);
+
+        const matchesRole =
+            !role || row.dataset.userRole === role;
+
+        const matchesStatus =
+            !status || row.dataset.userStatus === status;
+
+        const visible =
+            matchesSearch && matchesRole && matchesStatus;
+
+        row.hidden = !visible;
+
+        if (visible) {
+            visibleCount += 1;
+        }
+    });
+
+    if (usersFilterEmpty) {
+        usersFilterEmpty.hidden =
+            visibleCount > 0 || userRows.length === 0;
+    }
+};
+
+usersSearch?.addEventListener('input', applyUserFilters);
+usersRoleFilter?.addEventListener('change', applyUserFilters);
+usersStatusFilter?.addEventListener('change', applyUserFilters);
+
+usersClearFilters?.addEventListener('click', () => {
+    if (usersSearch) {
+        usersSearch.value = '';
+    }
+
+    if (usersRoleFilter) {
+        usersRoleFilter.value = '';
+    }
+
+    if (usersStatusFilter) {
+        usersStatusFilter.value = '';
+    }
+
+    applyUserFilters();
+});
