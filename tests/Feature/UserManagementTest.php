@@ -61,6 +61,62 @@ class UserManagementTest extends TestCase
         ]);
     }
 
+
+    public function test_organization_admin_cannot_change_platform_admin_role(): void
+    {
+        [$organization, $platformAdmin] = $this->makeAdmin();
+
+        $organizationAdmin = User::factory()->create([
+            'current_organization_id' => $organization->id,
+            'is_platform_admin' => false,
+            'status' => 'active',
+        ]);
+
+        $organizationAdmin->organizations()->attach($organization->id, [
+            'role' => 'organization_admin',
+            'status' => 'active',
+            'is_default' => true,
+        ]);
+
+        $this->actingAs($organizationAdmin)
+            ->patch("/usuarios/{$platformAdmin->id}/papel", [
+                'role' => 'viewer',
+            ])
+            ->assertForbidden();
+
+        $this->assertDatabaseHas('organization_user', [
+            'organization_id' => $organization->id,
+            'user_id' => $platformAdmin->id,
+            'role' => 'organization_admin',
+        ]);
+    }
+
+    public function test_organization_admin_cannot_disable_platform_admin(): void
+    {
+        [$organization, $platformAdmin] = $this->makeAdmin();
+
+        $organizationAdmin = User::factory()->create([
+            'current_organization_id' => $organization->id,
+            'is_platform_admin' => false,
+            'status' => 'active',
+        ]);
+
+        $organizationAdmin->organizations()->attach($organization->id, [
+            'role' => 'organization_admin',
+            'status' => 'active',
+            'is_default' => true,
+        ]);
+
+        $this->actingAs($organizationAdmin)
+            ->post("/usuarios/{$platformAdmin->id}/status")
+            ->assertForbidden();
+
+        $this->assertDatabaseHas('users', [
+            'id' => $platformAdmin->id,
+            'status' => 'active',
+        ]);
+    }
+
     private function makeAdmin(): array
     {
         $organization = Organization::query()->create([

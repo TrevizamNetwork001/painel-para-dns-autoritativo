@@ -188,7 +188,13 @@
                                     </td>
 
                                     <td>
-                                        @if (auth()->user()->is($user))
+                                        @if (
+                                            auth()->user()->is($user)
+                                            || (
+                                                $user->is_platform_admin
+                                                && ! auth()->user()->is_platform_admin
+                                            )
+                                        )
                                             <span class="badge badge-neutral">
                                                 {{
                                                     match ($user->pivot->role) {
@@ -244,7 +250,13 @@
                                     </td>
 
                                     <td>
-                                        @if (! auth()->user()->is($user))
+                                        @if (
+                                            ! auth()->user()->is($user)
+                                            && (
+                                                ! $user->is_platform_admin
+                                                || auth()->user()->is_platform_admin
+                                            )
+                                        )
                                             <form method="POST"
                                                   action="{{ route('users.status', $user) }}">
                                                 @csrf
@@ -260,7 +272,13 @@
                                             </form>
                                         @else
                                             <span class="table-note">
-                                                Sessão atual
+                                                @if (auth()->user()->is($user))
+                                                    Sessão atual
+                                                @elseif ($user->is_platform_admin)
+                                                    Administrador da plataforma
+                                                @else
+                                                    Protegido
+                                                @endif
                                             </span>
                                         @endif
                                     </td>

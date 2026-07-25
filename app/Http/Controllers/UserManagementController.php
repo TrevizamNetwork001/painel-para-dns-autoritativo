@@ -111,6 +111,10 @@ class UserManagementController extends Controller
             ]);
         }
 
+        if ($user->is_platform_admin && ! $request->user()->is_platform_admin) {
+            abort(403, 'Você não pode alterar um administrador da plataforma.');
+        }
+
         $validated = $request->validate([
             'role' => [
                 'required',
@@ -144,6 +148,10 @@ class UserManagementController extends Controller
             return back()->withErrors([
                 'status' => 'Você não pode desativar sua própria conta.',
             ]);
+        }
+
+        if ($user->is_platform_admin && ! $request->user()->is_platform_admin) {
+            abort(403, 'Você não pode desativar um administrador da plataforma.');
         }
 
         $newStatus = $user->status === 'active'

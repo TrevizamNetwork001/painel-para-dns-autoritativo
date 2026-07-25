@@ -202,15 +202,31 @@
                     <div>
                         <dt>Papel</dt>
                         <dd>
-                            {{ auth()->user()->roleForOrganization(
-                                auth()->user()->current_organization_id
-                            ) ?? 'platform_admin' }}
+                            {{
+                                match (
+                                    auth()->user()->roleForOrganization(
+                                        auth()->user()->current_organization_id
+                                    ) ?? 'platform_admin'
+                                ) {
+                                    'platform_admin' => 'Administrador da plataforma',
+                                    'organization_admin' => 'Administrador',
+                                    'operator' => 'Operador',
+                                    'viewer' => 'Visualizador',
+                                    default => 'Usuário',
+                                }
+                            }}
                         </dd>
                     </div>
 
                     <div>
                         <dt>Status</dt>
-                        <dd>{{ auth()->user()->status }}</dd>
+                        <dd>
+                            {{
+                                auth()->user()->status === 'active'
+                                    ? 'Ativo'
+                                    : 'Inativo'
+                            }}
+                        </dd>
                     </div>
                 </dl>
             </article>
