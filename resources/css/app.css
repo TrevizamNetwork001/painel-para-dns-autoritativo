@@ -987,3 +987,30 @@ a:hover {
         grid-template-columns: 1fr;
     }
 }
+
+.password-requirements {
+    display: grid;
+    gap: 0.35rem;
+    padding: 0.9rem 1rem;
+    border: 1px solid var(--border);
+    border-radius: 11px;
+    background: var(--surface-soft);
+    color: var(--text-muted);
+    font-size: 0.75rem;
+}
+
+.password-requirements strong {
+    margin-bottom: 0.2rem;
+    color: var(--text);
+}
+
+.password-requirements span::before {
+    margin-right: 0.45rem;
+    color: var(--accent);
+    content: "•";
+}
+
+.password-logout {
+    width: 100%;
+    margin-top: 1rem;
+}

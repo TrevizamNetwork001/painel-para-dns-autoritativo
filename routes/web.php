@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\UserManagementController;
+use App\Http\Controllers\PasswordChangeController;
 
 use Illuminate\Support\Facades\Route;
 
@@ -10,7 +11,21 @@ Route::get('/', function () {
         : redirect()->route('login');
 })->name('home');
 
-Route::middleware(['auth', 'organization'])
+
+
+Route::middleware('auth')->group(function (): void {
+    Route::get(
+        '/alterar-senha',
+        [PasswordChangeController::class, 'edit']
+    )->name('password.change');
+
+    Route::put(
+        '/alterar-senha',
+        [PasswordChangeController::class, 'update']
+    )->name('password.change.update');
+});
+
+Route::middleware(['auth', 'password.changed', 'organization'])
     ->get('/dashboard', function () {
         return view('dashboard.index');
     })
@@ -18,6 +33,7 @@ Route::middleware(['auth', 'organization'])
 
 Route::middleware([
     'auth',
+    'password.changed',
     'organization',
     'organization.role:organization_admin',
 ])->prefix('usuarios')->name('users.')->group(function (): void {
@@ -40,6 +56,7 @@ Route::middleware([
 
 Route::middleware([
     'auth',
+    'password.changed',
     'organization',
     'organization.role:organization_admin',
 ])->prefix('usuarios')->name('users.')->group(function (): void {
@@ -62,6 +79,7 @@ Route::middleware([
 
 Route::middleware([
     'auth',
+    'password.changed',
     'organization',
     'organization.role:organization_admin',
 ])->prefix('usuarios')->name('users.')->group(function (): void {

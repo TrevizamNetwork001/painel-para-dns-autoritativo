@@ -2,6 +2,7 @@
 
 use App\Http\Middleware\EnsureOrganizationContext;
 use App\Http\Middleware\EnsureOrganizationRole;
+use App\Http\Middleware\EnsurePasswordChanged;
 
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
@@ -18,6 +19,7 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->alias([
             'organization' => EnsureOrganizationContext::class,
             'organization.role' => EnsureOrganizationRole::class,
+            'password.changed' => EnsurePasswordChanged::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

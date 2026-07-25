@@ -55,10 +55,8 @@ class UserManagementController extends Controller
             'password' => [
                 'required',
                 'confirmed',
-                Password::min(12)
-                    ->mixedCase()
-                    ->numbers()
-                    ->symbols(),
+                'string',
+                'min:8',
             ],
             'role' => [
                 'required',
@@ -79,6 +77,9 @@ class UserManagementController extends Controller
                 'current_organization_id' => $organization->id,
                 'is_platform_admin' => false,
                 'status' => 'active',
+                'must_change_password' => true,
+                'temporary_password_expires_at' => now()->addHours(48),
+                'password_changed_at' => null,
             ])->save();
 
             $user->organizations()->attach($organization->id, [
