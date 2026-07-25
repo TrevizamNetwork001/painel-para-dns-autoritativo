@@ -29,10 +29,49 @@
         type="button"
         class="theme-toggle"
         data-theme-toggle
-        aria-label="Alternar tema"
+        aria-label="Alternar entre tema claro e escuro"
         title="Alternar tema"
     >
-        <span data-theme-icon>◐</span>
+        <svg
+            class="theme-icon theme-icon-sun"
+            viewBox="0 0 24 24"
+            fill="none"
+            aria-hidden="true"
+        >
+            <circle
+                cx="12"
+                cy="12"
+                r="3.5"
+                stroke="currentColor"
+                stroke-width="1.8"
+            />
+            <path
+                d="M12 2.5v2M12 19.5v2M4.5 12h-2M21.5 12h-2
+                   M5.3 5.3 6.7 6.7M17.3 17.3l1.4 1.4
+                   M18.7 5.3l-1.4 1.4M6.7 17.3l-1.4 1.4"
+                stroke="currentColor"
+                stroke-width="1.8"
+                stroke-linecap="round"
+            />
+        </svg>
+
+        <svg
+            class="theme-icon theme-icon-moon"
+            viewBox="0 0 24 24"
+            fill="none"
+            aria-hidden="true"
+        >
+            <path
+                d="M20.2 15.2A8.2 8.2 0 0 1 8.8 3.8
+                   8.3 3.6 7.9 4 8 4.5
+                   A7.4 7.4 0 0 0 19.5 16
+                   c.5.1.9-.3.7-.8Z"
+                stroke="currentColor"
+                stroke-width="1.9"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+            />
+        </svg>
     </button>
 
     <div class="account-menu" data-account-menu>

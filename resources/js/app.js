@@ -4,8 +4,7 @@ function updateThemeIcon() {
     const theme = root.dataset.theme || 'dark';
 
     document.querySelectorAll('[data-theme-icon]').forEach((icon) => {
-        icon.textContent = theme === 'dark' ? '☀' : '☾';
-    });
+});
 }
 
 document.querySelectorAll('[data-theme-toggle]').forEach((button) => {

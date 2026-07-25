@@ -155,16 +155,16 @@
                         </div>
 
                         <div>
+                            <dt>Perfil</dt>
+                            <dd>{{ $roleLabel }}</dd>
+                        </div>
+
+                        <div>
                             <dt>Empresa</dt>
                             <dd>
                                 {{ $user->currentOrganization?->name
                                     ?? 'Plataforma' }}
                             </dd>
-                        </div>
-
-                        <div>
-                            <dt>Perfil</dt>
-                            <dd>{{ $roleLabel }}</dd>
                         </div>
 
                         <div>
