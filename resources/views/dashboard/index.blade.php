@@ -57,17 +57,6 @@
                 Configurações
             </a>
         </nav>
-
-        <div class="sidebar-user">
-            <div class="user-avatar">
-                {{ str(auth()->user()->name)->substr(0, 1)->upper() }}
-            </div>
-
-            <div class="sidebar-user-info">
-                <strong>{{ auth()->user()->name }}</strong>
-                <span>{{ auth()->user()->email }}</span>
-            </div>
-        </div>
     </aside>
 
     <main class="main-content">
@@ -78,31 +67,7 @@
             </div>
 
             <div class="topbar-actions">
-                <div class="organization-context">
-                    <span>Empresa atual</span>
-                    <strong>
-                        {{ auth()->user()->currentOrganization?->name
-                            ?? 'Administração da plataforma' }}
-                    </strong>
-                </div>
-
-                <button
-                    type="button"
-                    class="theme-toggle"
-                    data-theme-toggle
-                    aria-label="Alternar tema"
-                    title="Alternar tema"
-                >
-                    <span data-theme-icon>◐</span>
-                </button>
-
-                <form method="POST" action="{{ route('logout') }}">
-                    @csrf
-
-                    <button type="submit" class="button button-secondary">
-                        Sair
-                    </button>
-                </form>
+                <x-account-menu />
             </div>
         </header>
 

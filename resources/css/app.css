@@ -1034,3 +1034,216 @@ a:hover {
     opacity: 0;
     transform: translateY(-8px);
 }
+
+/* DNS CENTER ACCOUNT MENU */
+
+.header-account {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.account-menu {
+    position: relative;
+}
+
+.account-menu-trigger {
+    display: flex;
+    min-height: 46px;
+    align-items: center;
+    gap: 0.7rem;
+    padding: 0.35rem 0.65rem 0.35rem 0.4rem;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    background: var(--surface);
+    color: var(--text);
+    cursor: pointer;
+}
+
+.account-menu-trigger:hover,
+.account-menu.is-open .account-menu-trigger {
+    border-color: var(--border-strong);
+    background: var(--surface-soft);
+}
+
+.account-avatar {
+    display: grid;
+    width: 34px;
+    height: 34px;
+    flex: 0 0 auto;
+    place-items: center;
+    border-radius: 10px;
+    background: var(--accent);
+    color: var(--accent-text);
+    font-size: 0.76rem;
+    font-weight: 900;
+}
+
+.account-avatar-large {
+    width: 42px;
+    height: 42px;
+    border-radius: 12px;
+    font-size: 0.9rem;
+}
+
+.account-trigger-info {
+    display: grid;
+    min-width: 0;
+    gap: 0.05rem;
+    text-align: left;
+}
+
+.account-trigger-info strong {
+    max-width: 150px;
+    overflow: hidden;
+    font-size: 0.76rem;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.account-trigger-info small {
+    color: var(--text-muted);
+    font-size: 0.62rem;
+}
+
+.account-chevron {
+    color: var(--text-muted);
+    transition: transform 160ms ease;
+}
+
+.account-menu.is-open .account-chevron {
+    transform: rotate(180deg);
+}
+
+.account-menu-panel {
+    position: absolute;
+    z-index: 100;
+    top: calc(100% + 0.55rem);
+    right: 0;
+    width: min(290px, calc(100vw - 2rem));
+    padding: 0.65rem;
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    background: var(--surface-raised);
+    box-shadow: var(--shadow);
+}
+
+.account-menu-header {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.55rem;
+}
+
+.account-menu-header > div {
+    display: grid;
+    min-width: 0;
+    gap: 0.15rem;
+}
+
+.account-menu-header strong,
+.account-menu-header span,
+.account-menu-header small {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.account-menu-header strong {
+    font-size: 0.82rem;
+}
+
+.account-menu-header span {
+    color: var(--text-muted);
+    font-size: 0.68rem;
+}
+
+.account-menu-header small {
+    color: var(--accent);
+    font-size: 0.65rem;
+    font-weight: 800;
+}
+
+.account-menu-divider {
+    height: 1px;
+    margin: 0.45rem 0;
+    background: var(--border);
+}
+
+.account-menu-item {
+    display: flex;
+    width: 100%;
+    min-height: 40px;
+    align-items: center;
+    gap: 0.7rem;
+    padding: 0.65rem 0.7rem;
+    border: 0;
+    border-radius: 9px;
+    background: transparent;
+    color: var(--text-soft);
+    font-size: 0.76rem;
+    font-weight: 700;
+    text-align: left;
+    cursor: pointer;
+}
+
+.account-menu-item:hover {
+    background: var(--surface-soft);
+    color: var(--text);
+    text-decoration: none;
+}
+
+.account-menu-logout {
+    color: var(--danger);
+}
+
+.account-menu-logout:hover {
+    background: rgba(239, 68, 68, 0.08);
+    color: var(--danger);
+}
+
+@media (max-width: 760px) {
+    .header-account {
+        width: 100%;
+        justify-content: flex-end;
+    }
+
+    .organization-context {
+        display: none;
+    }
+
+    .account-trigger-info {
+        display: none;
+    }
+
+    .account-menu-trigger {
+        padding-right: 0.45rem;
+    }
+}
+
+
+.password-page-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 1rem;
+    margin-bottom: 1.75rem;
+}
+
+.password-page-header h1 {
+    margin: 0;
+}
+
+.password-page-header .auth-description-small {
+    max-width: 520px;
+}
+
+@media (max-width: 560px) {
+    .password-page-header {
+        flex-direction: column;
+    }
+
+    .password-page-header .button {
+        width: 100%;
+    }
+}

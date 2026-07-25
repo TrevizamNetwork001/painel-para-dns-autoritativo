@@ -4,15 +4,46 @@
 @section('body-class', 'auth-page')
 
 @section('content')
+@php
+    $isFirstAccess = auth()->user()->must_change_password;
+@endphp
+
 <main class="auth-simple-shell">
     <section class="auth-card auth-card-small">
-        <p class="eyebrow">Primeiro acesso</p>
-        <h1>Defina sua nova senha</h1>
+        <div class="password-page-header">
+            <div>
+                <p class="eyebrow">
+                    {{ $isFirstAccess
+                        ? 'Primeiro acesso'
+                        : 'Segurança da conta' }}
+                </p>
 
-        <p class="auth-description-small">
-            Sua senha atual é temporária. Para continuar, crie uma senha
-            definitiva com pelo menos 12 caracteres.
-        </p>
+                <h1>
+                    {{ $isFirstAccess
+                        ? 'Defina sua nova senha'
+                        : 'Alterar senha' }}
+                </h1>
+
+                <p class="auth-description-small">
+                    @if ($isFirstAccess)
+                        Sua senha atual é temporária. Para continuar, crie uma
+                        senha definitiva com pelo menos 12 caracteres.
+                    @else
+                        Informe sua senha atual e defina uma nova senha para
+                        proteger sua conta.
+                    @endif
+                </p>
+            </div>
+
+            @unless ($isFirstAccess)
+                <a
+                    href="{{ route('dashboard') }}"
+                    class="button button-secondary"
+                >
+                    Voltar
+                </a>
+            @endunless
+        </div>
 
         @if ($errors->any())
             <div class="alert alert-error">
@@ -33,7 +64,11 @@
             @method('PUT')
 
             <label class="form-field">
-                <span>Senha temporária atual</span>
+                <span>
+                    {{ $isFirstAccess
+                        ? 'Senha temporária atual'
+                        : 'Senha atual' }}
+                </span>
 
                 <span class="password-field">
                     <input
@@ -49,6 +84,7 @@
                         class="password-toggle"
                         data-password-toggle
                         aria-controls="current_password"
+                        aria-label="Mostrar senha atual"
                     >
                         Mostrar
                     </button>
@@ -72,6 +108,7 @@
                         class="password-toggle"
                         data-password-toggle
                         aria-controls="new_password"
+                        aria-label="Mostrar nova senha"
                     >
                         Mostrar
                     </button>
@@ -95,6 +132,7 @@
                         class="password-toggle"
                         data-password-toggle
                         aria-controls="password_confirmation"
+                        aria-label="Mostrar confirmação da senha"
                     >
                         Mostrar
                     </button>
@@ -109,20 +147,24 @@
             </div>
 
             <button type="submit" class="button button-primary">
-                Alterar senha e continuar
+                {{ $isFirstAccess
+                    ? 'Alterar senha e continuar'
+                    : 'Salvar nova senha' }}
             </button>
         </form>
 
-        <form method="POST" action="{{ route('logout') }}">
-            @csrf
+        @if ($isFirstAccess)
+            <form method="POST" action="{{ route('logout') }}">
+                @csrf
 
-            <button
-                type="submit"
-                class="button button-secondary password-logout"
-            >
-                Sair da conta
-            </button>
-        </form>
+                <button
+                    type="submit"
+                    class="button button-secondary password-logout"
+                >
+                    Sair da conta
+                </button>
+            </form>
+        @endif
     </section>
 </main>
 @endsection

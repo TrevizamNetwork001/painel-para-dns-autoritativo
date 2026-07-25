@@ -31,17 +31,6 @@
                 Usuários
             </a>
         </nav>
-
-        <div class="sidebar-user">
-            <div class="user-avatar">
-                {{ str(auth()->user()->name)->substr(0, 1)->upper() }}
-            </div>
-
-            <div class="sidebar-user-info">
-                <strong>{{ auth()->user()->name }}</strong>
-                <span>{{ auth()->user()->email }}</span>
-            </div>
-        </div>
     </aside>
 
     <main class="main-content">
@@ -52,15 +41,14 @@
             </div>
 
             <div class="topbar-actions">
-                <div class="organization-context">
-                    <span>Empresa atual</span>
-                    <strong>{{ $organization->name }}</strong>
-                </div>
-
-                <a href="{{ route('dashboard') }}"
-                   class="button button-secondary">
+                <a
+                    href="{{ route('dashboard') }}"
+                    class="button button-secondary"
+                >
                     Voltar
                 </a>
+
+                <x-account-menu />
             </div>
         </header>
 
