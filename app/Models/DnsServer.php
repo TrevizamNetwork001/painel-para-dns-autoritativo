@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class DnsServer extends Model
 {
@@ -14,13 +15,12 @@ class DnsServer extends Model
     public const ROLES = [
         'primary',
         'secondary',
-        'standalone',
     ];
 
     public const ENVIRONMENTS = [
         'production',
         'staging',
-        'laboratory',
+        'development',
     ];
 
     public const STATUSES = [
@@ -31,6 +31,14 @@ class DnsServer extends Model
         'maintenance',
     ];
 
+    public const AGENT_STATUSES = [
+        'not_installed',
+        'pending',
+        'online',
+        'offline',
+        'blocked',
+    ];
+
     protected $fillable = [
         'organization_id',
         'name',
@@ -39,12 +47,19 @@ class DnsServer extends Model
         'ipv6_address',
         'role',
         'environment',
+        'operating_system',
+        'operating_system_version',
+        'bind_version',
         'status',
         'enabled',
         'agent_uuid',
         'agent_version',
+        'agent_status',
+        'agent_fingerprint',
+        'agent_registered_at',
         'last_seen_at',
         'capabilities',
+        'inventory',
         'notes',
     ];
 
@@ -53,7 +68,9 @@ class DnsServer extends Model
         return [
             'enabled' => 'boolean',
             'last_seen_at' => 'immutable_datetime',
+            'agent_registered_at' => 'immutable_datetime',
             'capabilities' => 'array',
+            'inventory' => 'array',
         ];
     }
 
@@ -86,4 +103,13 @@ class DnsServer extends Model
     {
         return $this->status === 'online';
     }
+
+    public function enrollments(): HasMany
+    {
+        return $this->hasMany(
+            DnsAgentEnrollment::class,
+            'dns_server_id',
+        );
+    }
+
 }

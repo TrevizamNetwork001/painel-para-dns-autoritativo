@@ -78,4 +78,56 @@ class DnsServerFoundationTest extends TestCase
         $this->assertFalse($server->hasAgentContact());
         $this->assertFalse($server->isOnline());
     }
+
+    public function test_server_roles_only_allow_primary_or_secondary(): void
+    {
+        $this->assertSame(
+            [
+                'primary',
+                'secondary',
+            ],
+            DnsServer::ROLES,
+        );
+    }
+
+
+    public function test_server_can_store_operational_inventory(): void
+    {
+        $server = DnsServer::factory()->create([
+            'operating_system' => 'Debian',
+            'operating_system_version' => '13',
+            'bind_version' => '9.20.4',
+            'agent_status' => 'not_installed',
+            'inventory' => [
+                'architecture' => 'x86_64',
+                'bind_service' => 'named',
+            ],
+        ]);
+
+        $this->assertSame(
+            'Debian',
+            $server->operating_system,
+        );
+
+        $this->assertSame(
+            '13',
+            $server->operating_system_version,
+        );
+
+        $this->assertSame(
+            '9.20.4',
+            $server->bind_version,
+        );
+
+        $this->assertSame(
+            'not_installed',
+            $server->agent_status,
+        );
+
+        $this->assertSame(
+            'x86_64',
+            $server->inventory['architecture'],
+        );
+    }
+
 }

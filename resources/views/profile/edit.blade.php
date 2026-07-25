@@ -25,7 +25,7 @@
 
             <span class="nav-section">DNS autoritativo</span>
 
-            <a href="#" class="nav-item">
+            <a href="{{ route('servers.index') }}" class="nav-item">
                 <span class="nav-icon">◈</span>
                 Servidores
             </a>

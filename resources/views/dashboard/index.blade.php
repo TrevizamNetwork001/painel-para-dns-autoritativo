@@ -5,20 +5,37 @@
 
 @section('content')
 @php
-    /*
-     * Estes valores continuam em zero enquanto os módulos operacionais
-     * ainda não foram implementados. Quando os módulos forem criados,
-     * o controller poderá fornecer estes mesmos nomes.
-     */
-    $serverCount = $serverCount ?? 0;
-    $zoneCount = $zoneCount ?? 0;
-    $onlineServiceCount = $onlineServiceCount ?? 0;
-    $activeAlertCount = $activeAlertCount ?? 0;
+    $organizationId = auth()->user()->current_organization_id;
 
-    $onlineServerCount = $onlineServerCount ?? 0;
-    $warningServerCount = $warningServerCount ?? 0;
-    $offlineServerCount = $offlineServerCount ?? 0;
-    $unknownServerCount = $unknownServerCount ?? $serverCount;
+    $dashboardServers = App\Models\DnsServer::query()
+        ->forOrganization($organizationId)
+        ->orderBy('name')
+        ->get();
+
+    $serverCount = $dashboardServers->count();
+    $zoneCount = 0;
+
+    $onlineServerCount = $dashboardServers
+        ->where('status', 'online')
+        ->count();
+
+    $warningServerCount = $dashboardServers
+        ->where('status', 'warning')
+        ->count();
+
+    $offlineServerCount = $dashboardServers
+        ->where('status', 'offline')
+        ->count();
+
+    $unknownServerCount = $dashboardServers
+        ->whereIn('status', ['pending', 'maintenance'])
+        ->count();
+
+    $onlineServiceCount = $onlineServerCount;
+
+    $activeAlertCount = $dashboardServers
+        ->whereIn('status', ['warning', 'offline'])
+        ->count();
 
     $hasServers = $serverCount > 0;
     $hasAlerts = $activeAlertCount > 0;
@@ -110,7 +127,7 @@
                 Servidores
             </a>
 
-            <a href="#" class="nav-item">
+            <a href="{{ route('servers.index') }}" class="nav-item">
                 <span class="nav-icon" aria-hidden="true">
                     <svg viewBox="0 0 24 24" fill="none">
                         <circle cx="12" cy="12" r="9" />
@@ -399,14 +416,52 @@
                         <h2>Estado dos servidores</h2>
                     </div>
 
-                    <a href="#" class="dashboard-panel-link">
+                    <a
+                        href="{{ route('servers.index') }}"
+                        class="dashboard-panel-link"
+                    >
                         Ver todos
                     </a>
                 </div>
 
                 @if ($hasServers)
                     <div class="dashboard-server-list">
-                        {{-- A lista real será conectada ao módulo de servidores. --}}
+                        @foreach ($dashboardServers->take(5) as $server)
+                            @php
+                                $serverStatusLabel = match ($server->status) {
+                                    'online' => 'Online',
+                                    'warning' => 'Atenção',
+                                    'offline' => 'Offline',
+                                    'maintenance' => 'Desativado',
+                                    default => 'Aguardando agente',
+                                };
+                            @endphp
+
+                            <a
+                                href="{{ route('servers.index') }}"
+                                class="dashboard-server-item"
+                            >
+                                <span
+                                    class="dashboard-server-status
+                                        dashboard-server-status-{{ $server->status }}"
+                                ></span>
+
+                                <span class="dashboard-server-info">
+                                    <strong>{{ $server->name }}</strong>
+                                    <small>{{ $server->hostname }}</small>
+                                </span>
+
+                                <span class="dashboard-server-role">
+                                    {{ $server->role === 'primary'
+                                        ? 'Primário'
+                                        : 'Secundário' }}
+                                </span>
+
+                                <span class="dashboard-server-state">
+                                    {{ $serverStatusLabel }}
+                                </span>
+                            </a>
+                        @endforeach
                     </div>
                 @else
                     <div class="dashboard-empty-state">
@@ -440,7 +495,10 @@
                             o gerenciamento da infraestrutura.
                         </p>
 
-                        <a href="#" class="button button-primary">
+                        <a
+                            href="{{ route('servers.index') }}"
+                            class="button button-primary"
+                        >
                             Adicionar servidor
                         </a>
                     </div>
@@ -638,7 +696,7 @@
                 </div>
 
                 <div class="dashboard-quick-actions">
-                    <a href="#" class="dashboard-quick-action">
+                    <a href="{{ route('servers.index') }}" class="dashboard-quick-action">
                         <span class="quick-action-icon">
                             <svg viewBox="0 0 24 24" fill="none">
                                 <rect

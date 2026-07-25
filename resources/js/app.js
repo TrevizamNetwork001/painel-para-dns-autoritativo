@@ -261,3 +261,91 @@ usersClearFilters?.addEventListener('click', () => {
 
     applyUserFilters();
 });
+
+// DNS SERVERS V1
+
+const serverModal = document.querySelector('[data-server-modal]');
+
+if (serverModal) {
+    const serverForm = serverModal.querySelector('[data-server-form]');
+    const serverMethod = serverModal.querySelector('[data-server-method]');
+    const serverTitle = serverModal.querySelector(
+        '[data-server-modal-title]'
+    );
+    const serverSubmit = serverModal.querySelector(
+        '[data-server-submit-label]'
+    );
+
+    const openServerModal = () => {
+        serverModal.classList.add('is-open');
+        serverModal.setAttribute('aria-hidden', 'false');
+        document.body.style.overflow = 'hidden';
+    };
+
+    const closeServerModal = () => {
+        serverModal.classList.remove('is-open');
+        serverModal.setAttribute('aria-hidden', 'true');
+        document.body.style.overflow = '';
+    };
+
+    const prepareCreateServer = () => {
+        serverForm.reset();
+        serverForm.action = serverForm.dataset.storeAction;
+        serverMethod.value = 'POST';
+        serverTitle.textContent = 'Novo servidor';
+        serverSubmit.textContent = 'Criar servidor';
+        openServerModal();
+    };
+
+    document
+        .querySelectorAll('[data-server-modal-open]')
+        .forEach((button) => {
+            button.addEventListener('click', prepareCreateServer);
+        });
+
+    document
+        .querySelectorAll('[data-server-modal-close]')
+        .forEach((button) => {
+            button.addEventListener('click', closeServerModal);
+        });
+
+    document
+        .querySelectorAll('[data-server-edit]')
+        .forEach((button) => {
+            button.addEventListener('click', () => {
+                serverForm.action = serverForm.dataset.updateTemplate
+                    .replace('__ID__', button.dataset.serverId);
+
+                serverMethod.value = 'PUT';
+                serverTitle.textContent = 'Editar servidor';
+                serverSubmit.textContent = 'Salvar alterações';
+
+                serverForm.elements.name.value =
+                    button.dataset.serverName || '';
+
+                serverForm.elements.hostname.value =
+                    button.dataset.serverHostname || '';
+
+                serverForm.elements.ipv4_address.value =
+                    button.dataset.serverIpv4 || '';
+
+                serverForm.elements.ipv6_address.value =
+                    button.dataset.serverIpv6 || '';
+
+                serverForm.elements.role.value =
+                    button.dataset.serverRole || 'primary';
+
+                serverForm.elements.environment.value =
+                    button.dataset.serverEnvironment || 'production';
+
+                serverForm.elements.notes.value =
+                    button.dataset.serverNotes || '';
+
+                openServerModal();
+            });
+        });
+
+    if (document.querySelector('[data-server-open-on-error]')) {
+        openServerModal();
+    }
+}

@@ -116,3 +116,25 @@ Route::middleware([
         [ProfileController::class, 'updateAvatar']
     )->name('avatar.update');
 });
+
+Route::middleware(['auth'])->group(function (): void {
+    Route::get(
+        '/servidores',
+        [App\Http\Controllers\DnsServerController::class, 'index']
+    )->name('servers.index');
+
+    Route::post(
+        '/servidores',
+        [App\Http\Controllers\DnsServerController::class, 'store']
+    )->name('servers.store');
+
+    Route::put(
+        '/servidores/{server}',
+        [App\Http\Controllers\DnsServerController::class, 'update']
+    )->name('servers.update');
+
+    Route::patch(
+        '/servidores/{server}/status',
+        [App\Http\Controllers\DnsServerController::class, 'toggleStatus']
+    )->name('servers.status');
+});

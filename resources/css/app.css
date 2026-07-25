@@ -2979,3 +2979,371 @@ html[data-theme='light'] .users-modal-backdrop {
         width: 100%;
     }
 }
+
+/* DNS SERVERS V1 */
+
+.servers-heading h1 {
+    margin: .35rem 0 0;
+    font-size: clamp(1.8rem, 2.6vw, 2.2rem);
+}
+
+.servers-summary-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: .8rem;
+}
+
+.server-summary-card,
+.servers-list-panel {
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    background: var(--surface);
+}
+
+.server-summary-card {
+    display: grid;
+    gap: .35rem;
+    padding: 1rem;
+}
+
+.server-summary-card span,
+.server-summary-card small {
+    color: var(--text-muted);
+    font-size: .65rem;
+}
+
+.server-summary-card strong {
+    font-size: 1.65rem;
+}
+
+.servers-list-panel {
+    margin-top: .8rem;
+    padding: 1rem;
+}
+
+.servers-list-heading {
+    display: flex;
+    justify-content: space-between;
+    padding-bottom: .8rem;
+    border-bottom: 1px solid var(--border);
+}
+
+.servers-list-heading h2 {
+    margin: .2rem 0 0;
+    font-size: .92rem;
+}
+
+.server-row {
+    display: grid;
+    grid-template-columns: minmax(260px, 1.4fr) 1fr auto;
+    gap: 1rem;
+    align-items: center;
+    padding: .9rem 0;
+    border-bottom: 1px solid var(--border);
+}
+
+.server-row:last-child {
+    border-bottom: 0;
+}
+
+.server-row-main {
+    display: flex;
+    gap: .75rem;
+    align-items: center;
+}
+
+.server-row-main > div:last-child {
+    display: grid;
+    gap: .15rem;
+}
+
+.server-row-main strong {
+    font-size: .75rem;
+}
+
+.server-row-main span,
+.server-row-main small {
+    color: var(--text-muted);
+    font-size: .63rem;
+}
+
+.server-icon {
+    display: grid;
+    width: 38px;
+    height: 38px;
+    place-items: center;
+    border-radius: 10px;
+    background: rgba(245, 158, 11, .12);
+    color: var(--accent);
+}
+
+.server-icon-large {
+    width: 54px;
+    height: 54px;
+    font-size: 1.3rem;
+}
+
+.server-row-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: .45rem;
+}
+
+.server-row-meta > span {
+    padding: .3rem .55rem;
+    border-radius: 999px;
+    background: var(--surface-soft);
+    color: var(--text-muted);
+    font-size: .58rem;
+    font-weight: 700;
+}
+
+.server-status-online {
+    color: #10b981 !important;
+}
+
+.server-status-warning {
+    color: #f59e0b !important;
+}
+
+.server-status-offline {
+    color: #ef4444 !important;
+}
+
+.server-row-actions {
+    display: flex;
+    gap: .5rem;
+}
+
+.servers-empty-state {
+    display: grid;
+    min-height: 330px;
+    place-items: center;
+    align-content: center;
+    text-align: center;
+}
+
+.servers-empty-state h2 {
+    margin: 1rem 0 .4rem;
+    font-size: 1rem;
+}
+
+.servers-empty-state p {
+    max-width: 420px;
+    margin: 0 0 1rem;
+    color: var(--text-muted);
+    font-size: .72rem;
+}
+
+.servers-modal {
+    position: fixed;
+    z-index: 400;
+    inset: 0;
+    display: none;
+    place-items: center;
+    padding: 1rem;
+}
+
+.servers-modal.is-open {
+    display: grid;
+}
+
+.servers-modal-backdrop {
+    position: absolute;
+    inset: 0;
+    border: 0;
+    background: rgba(2, 6, 12, .72);
+    backdrop-filter: blur(4px);
+}
+
+.servers-modal-dialog {
+    position: relative;
+    z-index: 1;
+    width: min(720px, 100%);
+    max-height: calc(100vh - 2rem);
+    overflow-y: auto;
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    background: var(--surface-raised);
+}
+
+.servers-modal-header {
+    display: flex;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 1.2rem;
+    border-bottom: 1px solid var(--border);
+}
+
+.servers-modal-header h2 {
+    margin: .2rem 0;
+    font-size: 1.05rem;
+}
+
+.servers-modal-header p:not(.eyebrow) {
+    color: var(--text-muted);
+    font-size: .68rem;
+}
+
+.servers-form {
+    display: grid;
+    gap: 1rem;
+    padding: 1.2rem;
+}
+
+.servers-form-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: .8rem;
+}
+
+.servers-form textarea {
+    width: 100%;
+    resize: vertical;
+}
+
+.servers-modal-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: .65rem;
+    padding-top: 1rem;
+    border-top: 1px solid var(--border);
+}
+
+@media (max-width: 850px) {
+    .servers-summary-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .server-row {
+        grid-template-columns: 1fr;
+    }
+}
+
+@media (max-width: 600px) {
+    .servers-summary-grid,
+    .servers-form-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* DNS SERVER INVENTORY POLISH */
+
+.server-row-main {
+    min-width: 0;
+}
+
+.server-row-main > div:last-child {
+    min-width: 0;
+}
+
+.server-row-main strong,
+.server-row-main span,
+.server-row-main small {
+    max-width: 100%;
+}
+
+.server-row-main span,
+.server-row-main small {
+    overflow-wrap: anywhere;
+}
+
+.server-inventory-line {
+    color: var(--text-muted);
+    line-height: 1.45;
+}
+
+/* DNS CENTER PHASE 1 - DASHBOARD SERVER LIST */
+
+.dashboard-server-list {
+    display: grid;
+    padding-top: 0.35rem;
+}
+
+.dashboard-server-item {
+    display: grid;
+    grid-template-columns:
+        9px
+        minmax(160px, 1fr)
+        auto
+        auto;
+    align-items: center;
+    gap: 0.7rem;
+    padding: 0.75rem 0.15rem;
+    border-bottom: 1px solid var(--border);
+    color: var(--text);
+}
+
+.dashboard-server-item:last-child {
+    border-bottom: 0;
+}
+
+.dashboard-server-item:hover {
+    color: var(--text);
+    text-decoration: none;
+}
+
+.dashboard-server-status {
+    width: 8px;
+    height: 8px;
+    border-radius: 999px;
+    background: #64748b;
+}
+
+.dashboard-server-status-online {
+    background: #10b981;
+}
+
+.dashboard-server-status-warning {
+    background: #f59e0b;
+}
+
+.dashboard-server-status-offline {
+    background: #ef4444;
+}
+
+.dashboard-server-status-maintenance {
+    background: #64748b;
+}
+
+.dashboard-server-info {
+    display: grid;
+    min-width: 0;
+    gap: 0.15rem;
+}
+
+.dashboard-server-info strong {
+    overflow: hidden;
+    font-size: 0.7rem;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.dashboard-server-info small {
+    overflow: hidden;
+    color: var(--text-muted);
+    font-size: 0.59rem;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.dashboard-server-role,
+.dashboard-server-state {
+    padding: 0.27rem 0.5rem;
+    border-radius: 999px;
+    background: var(--surface-soft);
+    color: var(--text-muted);
+    font-size: 0.56rem;
+    font-weight: 750;
+    white-space: nowrap;
+}
+
+@media (max-width: 620px) {
+    .dashboard-server-item {
+        grid-template-columns: 9px minmax(0, 1fr) auto;
+    }
+
+    .dashboard-server-role {
+        display: none;
+    }
+}
