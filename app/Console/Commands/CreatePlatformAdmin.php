@@ -89,17 +89,18 @@ class CreatePlatformAdmin extends Command
                 $email,
                 $password
             ): User {
-                $user = User::query()->updateOrCreate(
-                    ['email' => $email],
-                    [
-                        'name' => $name,
-                        'password' => Hash::make($password),
-                        'current_organization_id' => $organization->id,
-                        'is_platform_admin' => true,
-                        'status' => 'active',
-                        'email_verified_at' => now(),
-                    ],
-                );
+                $user = User::query()->firstOrNew([
+                    'email' => $email,
+                ]);
+
+                $user->forceFill([
+                    'name' => $name,
+                    'password' => Hash::make($password),
+                    'current_organization_id' => $organization->id,
+                    'is_platform_admin' => true,
+                    'status' => 'active',
+                    'email_verified_at' => now(),
+                ])->save();
 
                 $user->organizations()->syncWithoutDetaching([
                     $organization->id => [
