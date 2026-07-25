@@ -835,3 +835,155 @@ a:hover {
         padding: 1rem;
     }
 }
+
+.users-grid {
+    display: grid;
+    grid-template-columns: minmax(290px, 0.72fr) minmax(0, 1.6fr);
+    gap: 1rem;
+}
+
+.panel-form {
+    margin-top: 1.25rem;
+}
+
+.form-field select,
+.data-table select {
+    width: 100%;
+    min-height: 42px;
+    padding: 0 0.75rem;
+    border: 1px solid var(--border);
+    border-radius: 9px;
+    outline: none;
+    background: var(--surface);
+    color: var(--text);
+}
+
+.form-field select:focus,
+.data-table select:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.13);
+}
+
+.table-wrapper {
+    width: 100%;
+    overflow-x: auto;
+    margin-top: 1rem;
+}
+
+.data-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.data-table th,
+.data-table td {
+    padding: 0.85rem;
+    border-bottom: 1px solid var(--border);
+    text-align: left;
+    vertical-align: middle;
+}
+
+.data-table th {
+    color: var(--text-muted);
+    font-size: 0.65rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.data-table td {
+    font-size: 0.78rem;
+}
+
+.data-table td:first-child {
+    display: grid;
+    gap: 0.2rem;
+}
+
+.data-table td:first-child span,
+.table-note {
+    color: var(--text-muted);
+    font-size: 0.68rem;
+}
+
+@media (max-width: 1050px) {
+    .users-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* DNS CENTER USERS MODULE */
+
+.users-grid {
+    display: grid;
+    grid-template-columns: minmax(290px, 0.72fr) minmax(0, 1.6fr);
+    gap: 1rem;
+}
+
+.panel-form {
+    margin-top: 1.25rem;
+}
+
+.form-field select,
+.data-table select {
+    width: 100%;
+    min-height: 42px;
+    padding: 0 0.75rem;
+    border: 1px solid var(--border);
+    border-radius: 9px;
+    outline: none;
+    background: var(--surface);
+    color: var(--text);
+}
+
+.form-field select:focus,
+.data-table select:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.13);
+}
+
+.table-wrapper {
+    width: 100%;
+    overflow-x: auto;
+    margin-top: 1rem;
+}
+
+.data-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.data-table th,
+.data-table td {
+    padding: 0.85rem;
+    border-bottom: 1px solid var(--border);
+    text-align: left;
+    vertical-align: middle;
+}
+
+.data-table th {
+    color: var(--text-muted);
+    font-size: 0.65rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.data-table td {
+    font-size: 0.78rem;
+}
+
+.data-table td:first-child {
+    display: grid;
+    gap: 0.2rem;
+}
+
+.data-table td:first-child span,
+.table-note {
+    color: var(--text-muted);
+    font-size: 0.68rem;
+}
+
+@media (max-width: 1050px) {
+    .users-grid {
+        grid-template-columns: 1fr;
+    }
+}

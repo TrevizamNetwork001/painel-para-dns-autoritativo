@@ -47,6 +47,11 @@
                 Atividades
             </a>
 
+            <a href="{{ route('users.index') }}" class="nav-item">
+                <span class="nav-icon">●</span>
+                Usuários
+            </a>
+
             <a href="#" class="nav-item">
                 <span class="nav-icon">⚙</span>
                 Configurações
