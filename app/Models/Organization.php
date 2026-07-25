@@ -50,4 +50,10 @@ class Organization extends Model
     {
         return $this->hasMany(User::class, 'current_organization_id');
     }
+
+    public function dnsServers(): HasMany
+    {
+        return $this->hasMany(DnsServer::class);
+    }
+
 }
