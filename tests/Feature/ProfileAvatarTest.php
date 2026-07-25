@@ -18,7 +18,7 @@ class ProfileAvatarTest extends TestCase
         $this->actingAs($user)
             ->get('/perfil')
             ->assertOk()
-            ->assertSee('Escolher avatar')
+            ->assertSee('Escolha seu avatar')
             ->assertSee($user->email);
     }
 

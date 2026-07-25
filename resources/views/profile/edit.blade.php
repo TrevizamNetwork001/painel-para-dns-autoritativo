@@ -17,35 +17,73 @@
             </div>
         </div>
 
-        <nav class="sidebar-nav">
+        <nav class="sidebar-nav" aria-label="Navegação principal">
             <a href="{{ route('dashboard') }}" class="nav-item">
                 <span class="nav-icon">▦</span>
                 Dashboard
             </a>
 
-            <span class="nav-section">Conta</span>
+            <span class="nav-section">DNS autoritativo</span>
 
-            <a href="{{ route('profile.edit') }}"
-               class="nav-item is-active">
-                <span class="nav-icon">●</span>
-                Meu perfil
+            <a href="#" class="nav-item">
+                <span class="nav-icon">◈</span>
+                Servidores
+            </a>
+
+            <a href="#" class="nav-item">
+                <span class="nav-icon">◎</span>
+                Zonas
+            </a>
+
+            <a href="#" class="nav-item">
+                <span class="nav-icon">≋</span>
+                Registros DNS
+            </a>
+
+            <span class="nav-section">Operações</span>
+
+            <a href="#" class="nav-item">
+                <span class="nav-icon">⌁</span>
+                Atividades
+            </a>
+
+            @if (
+                auth()->user()->is_platform_admin
+                || auth()->user()->roleForOrganization(
+                    auth()->user()->current_organization_id
+                ) === 'organization_admin'
+            )
+                <a href="{{ route('users.index') }}" class="nav-item">
+                    <span class="nav-icon">●</span>
+                    Usuários
+                </a>
+            @endif
+
+            <a href="#" class="nav-item">
+                <span class="nav-icon">⚙</span>
+                Configurações
             </a>
         </nav>
     </aside>
 
     <main class="main-content">
-        <header class="topbar">
+        <header class="topbar profile-topbar">
             <div>
-                <p class="eyebrow">Conta</p>
+                <p class="eyebrow">Conta pessoal</p>
                 <h1>Meu perfil</h1>
+
+                <p class="page-description">
+                    Consulte seus dados e personalize sua identificação
+                    na plataforma.
+                </p>
             </div>
 
             <div class="topbar-actions">
                 <a
-                    href="{{ route('dashboard') }}"
+                    href="{{ route('password.change') }}"
                     class="button button-secondary"
                 >
-                    Voltar
+                    Alterar minha senha
                 </a>
 
                 <x-account-menu />
@@ -71,50 +109,101 @@
             </div>
         @endif
 
-        <section class="profile-grid">
-            <article class="panel">
-                <div class="panel-header">
-                    <div>
-                        <p class="eyebrow">Identidade</p>
-                        <h2>Informações da conta</h2>
-                    </div>
-                </div>
+        @php
+            $role = auth()->user()->roleForOrganization(
+                auth()->user()->current_organization_id
+            );
 
-                <div class="profile-summary">
+            $roleLabel = match ($role) {
+                'organization_admin' => 'Administrador',
+                'operator' => 'Operador',
+                'viewer' => 'Visualizador',
+                default => auth()->user()->is_platform_admin
+                    ? 'Administrador da plataforma'
+                    : 'Usuário',
+            };
+
+            $initialPreviewUser = clone $user;
+            $initialPreviewUser->avatar_key = null;
+        @endphp
+
+        <section class="profile-ircenter-layout">
+            <div class="profile-account-column">
+                <article class="panel profile-identity-card">
                     <x-user-avatar
                         :user="$user"
                         size="large"
                     />
 
-                    <div>
+                    <div class="profile-identity-main">
                         <strong>{{ $user->name }}</strong>
-                        <span>{{ $user->email }}</span>
-                        <small>
-                            {{ $user->currentOrganization?->name }}
-                        </small>
+
+                        <span class="badge badge-success">
+                            {{ mb_strtoupper($roleLabel) }}
+                        </span>
                     </div>
-                </div>
+                </article>
 
-                <a
-                    href="{{ route('password.change') }}"
-                    class="button button-secondary profile-password-link"
-                >
-                    Alterar senha
-                </a>
-            </article>
-
-            <article class="panel profile-avatar-panel">
-                <div class="panel-header">
-                    <div>
-                        <p class="eyebrow">Personalização</p>
-                        <h2>Escolher avatar</h2>
+                <article class="panel profile-data-card">
+                    <div class="compact-panel-heading">
+                        <p class="eyebrow">Conta</p>
+                        <h2>Dados da conta</h2>
                     </div>
-                </div>
 
-                <p class="profile-help">
-                    Selecione um avatar. Para voltar à inicial do nome,
-                    escolha a primeira opção.
-                </p>
+                    <dl class="profile-data-list">
+                        <div>
+                            <dt>Nome</dt>
+                            <dd>{{ $user->name }}</dd>
+                        </div>
+
+                        <div>
+                            <dt>E-mail de acesso</dt>
+                            <dd>{{ $user->email }}</dd>
+                        </div>
+
+                        <div>
+                            <dt>Empresa</dt>
+                            <dd>
+                                {{ $user->currentOrganization?->name
+                                    ?? 'Plataforma' }}
+                            </dd>
+                        </div>
+
+                        <div>
+                            <dt>Perfil</dt>
+                            <dd>{{ $roleLabel }}</dd>
+                        </div>
+
+                        <div>
+                            <dt>Último acesso</dt>
+                            <dd>
+                                {{ $user->last_login_at
+                                    ? $user->last_login_at->format(
+                                        'd/m/Y H:i'
+                                    )
+                                    : 'Ainda não registrado' }}
+                            </dd>
+                        </div>
+
+                        <div>
+                            <dt>Senha alterada em</dt>
+                            <dd>
+                                {{ $user->password_changed_at
+                                    ? $user->password_changed_at->format(
+                                        'd/m/Y H:i'
+                                    )
+                                    : 'Ainda não registrado' }}
+                            </dd>
+                        </div>
+                    </dl>
+                </article>
+            </div>
+
+            <article class="panel profile-avatar-workspace">
+                <div class="compact-panel-heading">
+                    <p class="eyebrow">Personalização</p>
+                    <h2>Escolha seu avatar</h2>
+                </div>
 
                 <form
                     method="POST"
@@ -123,12 +212,7 @@
                     @csrf
                     @method('PUT')
 
-                    <div class="avatar-picker">
-                        @php
-                            $initialPreviewUser = clone $user;
-                            $initialPreviewUser->avatar_key = null;
-                        @endphp
-
+                    <div class="avatar-picker-compact">
                         <label class="avatar-option">
                             <input
                                 type="radio"
@@ -140,10 +224,10 @@
                             <span class="avatar-option-card">
                                 <x-user-avatar
                                     :user="$initialPreviewUser"
-                                    size="large"
+                                    size="medium"
                                 />
 
-                                <small>Inicial</small>
+                                <small>Inicial do nome</small>
                             </span>
                         </label>
 
@@ -151,6 +235,22 @@
                             @php
                                 $previewUser = clone $user;
                                 $previewUser->avatar_key = $avatar;
+
+                                $avatarLabel = match ($avatar) {
+                                    'amber' => 'Âmbar',
+                                    'blue' => 'Azul',
+                                    'cyan' => 'Ciano',
+                                    'emerald' => 'Esmeralda',
+                                    'grape' => 'Uva',
+                                    'indigo' => 'Índigo',
+                                    'lime' => 'Lima',
+                                    'orange' => 'Laranja',
+                                    'pink' => 'Rosa',
+                                    'red' => 'Vermelho',
+                                    'slate' => 'Ardósia',
+                                    'violet' => 'Violeta',
+                                    default => ucfirst($avatar),
+                                };
                             @endphp
 
                             <label class="avatar-option">
@@ -164,23 +264,23 @@
                                 <span class="avatar-option-card">
                                     <x-user-avatar
                                         :user="$previewUser"
-                                        size="large"
+                                        size="medium"
                                     />
 
-                                    <small>
-                                        {{ ucfirst($avatar) }}
-                                    </small>
+                                    <small>{{ $avatarLabel }}</small>
                                 </span>
                             </label>
                         @endforeach
                     </div>
 
-                    <button
-                        type="submit"
-                        class="button button-primary profile-save-avatar"
-                    >
-                        Salvar avatar
-                    </button>
+                    <div class="profile-avatar-actions">
+                        <button
+                            type="submit"
+                            class="button button-primary"
+                        >
+                            Salvar avatar
+                        </button>
+                    </div>
                 </form>
             </article>
         </section>

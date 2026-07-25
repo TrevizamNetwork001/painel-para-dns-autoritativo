@@ -1450,3 +1450,278 @@ a:hover {
         grid-template-columns: repeat(2, minmax(90px, 1fr));
     }
 }
+
+/* DNS CENTER UI 2.0 - PROFILE AND PASSWORD */
+
+.page-description {
+    max-width: 680px;
+    margin: 0.55rem 0 0;
+    color: var(--text-muted);
+    font-size: 0.82rem;
+    line-height: 1.6;
+}
+
+.profile-ircenter-layout {
+    display: grid;
+    grid-template-columns: 260px minmax(0, 1fr);
+    gap: 1rem;
+}
+
+.profile-account-column {
+    display: grid;
+    align-content: start;
+    gap: 1rem;
+}
+
+.profile-identity-card {
+    display: flex;
+    min-height: 114px;
+    align-items: center;
+    gap: 1rem;
+}
+
+.profile-identity-main {
+    display: grid;
+    min-width: 0;
+    gap: 0.5rem;
+}
+
+.profile-identity-main strong {
+    overflow: hidden;
+    font-size: 1rem;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.profile-identity-main .badge {
+    width: fit-content;
+}
+
+.compact-panel-heading {
+    padding-bottom: 0.8rem;
+    border-bottom: 1px solid var(--border);
+}
+
+.compact-panel-heading h2 {
+    margin: 0;
+    font-size: 0.95rem;
+}
+
+.profile-data-card {
+    padding: 1rem;
+}
+
+.profile-data-list {
+    margin: 0;
+}
+
+.profile-data-list > div {
+    display: grid;
+    grid-template-columns: minmax(90px, 0.8fr) minmax(0, 1.2fr);
+    gap: 0.75rem;
+    padding: 0.85rem 0;
+    border-bottom: 1px solid var(--border);
+}
+
+.profile-data-list > div:last-child {
+    border-bottom: 0;
+}
+
+.profile-data-list dt {
+    color: var(--text-muted);
+    font-size: 0.64rem;
+}
+
+.profile-data-list dd {
+    margin: 0;
+    overflow: hidden;
+    color: var(--text-soft);
+    font-size: 0.7rem;
+    text-align: right;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.profile-avatar-workspace {
+    align-self: start;
+    padding: 1rem;
+}
+
+.avatar-picker-compact {
+    display: grid;
+    grid-template-columns: repeat(6, minmax(92px, 1fr));
+    gap: 0.65rem;
+    margin-top: 0.85rem;
+}
+
+.avatar-picker-compact .avatar-option-card {
+    min-height: 96px;
+    padding: 0.65rem 0.4rem;
+    border-radius: 12px;
+}
+
+.avatar-picker-compact .user-avatar-medium {
+    width: 48px;
+    height: 48px;
+    font-size: 1rem;
+}
+
+.avatar-picker-compact .avatar-option-card small {
+    font-size: 0.62rem;
+}
+
+.profile-avatar-actions {
+    display: flex;
+    justify-content: flex-end;
+    margin-top: 1rem;
+    padding-top: 1rem;
+    border-top: 1px solid var(--border);
+}
+
+.profile-avatar-actions .button {
+    min-width: 128px;
+}
+
+.password-ircenter-card {
+    width: min(100%, 820px);
+    padding: 1rem 1.2rem;
+}
+
+.password-ircenter-form {
+    display: grid;
+    gap: 1rem;
+    margin-top: 1rem;
+}
+
+.password-current-field {
+    width: 100%;
+}
+
+.password-new-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 1rem;
+}
+
+.password-policy-inline {
+    margin: -0.35rem 0 0;
+    color: var(--text-muted);
+    font-size: 0.68rem;
+    line-height: 1.5;
+}
+
+.password-form-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.65rem;
+    padding-top: 1rem;
+    border-top: 1px solid var(--border);
+}
+
+.password-form-actions .button {
+    min-width: 112px;
+}
+
+@media (max-width: 1120px) {
+    .avatar-picker-compact {
+        grid-template-columns: repeat(4, minmax(92px, 1fr));
+    }
+}
+
+@media (max-width: 900px) {
+    .profile-ircenter-layout {
+        grid-template-columns: 1fr;
+    }
+
+    .profile-account-column {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
+@media (max-width: 700px) {
+    .profile-account-column,
+    .password-new-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .avatar-picker-compact {
+        grid-template-columns: repeat(3, minmax(82px, 1fr));
+    }
+
+    .profile-topbar .topbar-actions > .button {
+        display: none;
+    }
+}
+
+@media (max-width: 480px) {
+    .avatar-picker-compact {
+        grid-template-columns: repeat(2, minmax(82px, 1fr));
+    }
+
+    .password-form-actions {
+        flex-direction: column-reverse;
+    }
+
+    .password-form-actions .button {
+        width: 100%;
+    }
+}
+
+/* DNS CENTER UI 2.0.1 - FINAL POLISH */
+
+.account-menu-header .user-avatar-large {
+    width: 44px;
+    height: 44px;
+    border-radius: 12px;
+    font-size: 0.95rem;
+}
+
+.account-menu-panel {
+    width: 270px;
+    padding: 0.55rem;
+}
+
+.account-menu-header {
+    padding: 0.45rem;
+}
+
+.account-menu-item {
+    min-height: 38px;
+    padding: 0.58rem 0.65rem;
+}
+
+.profile-account-column {
+    grid-template-columns: minmax(0, 1fr);
+}
+
+.profile-data-card {
+    min-height: auto;
+}
+
+.profile-data-list > div {
+    padding: 0.72rem 0;
+}
+
+.profile-data-list dt {
+    font-size: 0.61rem;
+}
+
+.profile-data-list dd {
+    font-size: 0.68rem;
+}
+
+.password-ircenter-card {
+    width: min(100%, 900px);
+}
+
+.password-ircenter-card .compact-panel-heading {
+    padding-bottom: 0.7rem;
+}
+
+.password-ircenter-card .compact-panel-heading h2 {
+    font-size: 0.88rem;
+}
+
+.password-ircenter-form .form-field input {
+    min-height: 46px;
+}
