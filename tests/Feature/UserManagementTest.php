@@ -52,7 +52,7 @@ class UserManagementTest extends TestCase
         [, $admin] = $this->makeAdmin();
 
         $this->actingAs($admin)
-            ->patch("/usuarios/{$admin->id}/status")
+            ->post("/usuarios/{$admin->id}/status")
             ->assertSessionHasErrors('status');
 
         $this->assertDatabaseHas('users', [

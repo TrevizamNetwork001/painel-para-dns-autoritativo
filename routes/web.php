@@ -48,7 +48,7 @@ Route::middleware([
         [UserManagementController::class, 'updateRole']
     )->name('role');
 
-    Route::patch(
+    Route::post(
         '/{user}/status',
         [UserManagementController::class, 'updateStatus']
     )->name('status');
@@ -71,7 +71,7 @@ Route::middleware([
         [UserManagementController::class, 'updateRole']
     )->name('role');
 
-    Route::patch(
+    Route::post(
         '/{user}/status',
         [UserManagementController::class, 'updateStatus']
     )->name('status');
@@ -94,7 +94,7 @@ Route::middleware([
         [UserManagementController::class, 'updateRole']
     )->name('role');
 
-    Route::patch(
+    Route::post(
         '/{user}/status',
         [UserManagementController::class, 'updateStatus']
     )->name('status');

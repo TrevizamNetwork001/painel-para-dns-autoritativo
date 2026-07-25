@@ -248,7 +248,6 @@
                                             <form method="POST"
                                                   action="{{ route('users.status', $user) }}">
                                                 @csrf
-                                                @method('PATCH')
 
                                                 <button
                                                     class="button button-secondary"
