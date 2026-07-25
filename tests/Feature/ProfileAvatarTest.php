@@ -28,13 +28,13 @@ class ProfileAvatarTest extends TestCase
 
         $this->actingAs($user)
             ->put('/perfil/avatar', [
-                'avatar_key' => 'violet',
+                'avatar_key' => 'owl',
             ])
             ->assertRedirect('/perfil');
 
         $this->assertDatabaseHas('users', [
             'id' => $user->id,
-            'avatar_key' => 'violet',
+            'avatar_key' => 'owl',
         ]);
     }
 

@@ -79,13 +79,6 @@
             </div>
 
             <div class="topbar-actions">
-                <a
-                    href="{{ route('password.change') }}"
-                    class="button button-secondary"
-                >
-                    Alterar minha senha
-                </a>
-
                 <x-account-menu />
             </div>
         </header>
@@ -181,7 +174,7 @@
                                     ? $user->last_login_at->format(
                                         'd/m/Y H:i'
                                     )
-                                    : 'Ainda não registrado' }}
+                                    : 'Primeiro acesso' }}
                             </dd>
                         </div>
 
@@ -192,7 +185,7 @@
                                     ? $user->password_changed_at->format(
                                         'd/m/Y H:i'
                                     )
-                                    : 'Ainda não registrado' }}
+                                    : 'Nunca alterada' }}
                             </dd>
                         </div>
                     </dl>
@@ -237,18 +230,23 @@
                                 $previewUser->avatar_key = $avatar;
 
                                 $avatarLabel = match ($avatar) {
-                                    'amber' => 'Âmbar',
-                                    'blue' => 'Azul',
-                                    'cyan' => 'Ciano',
-                                    'emerald' => 'Esmeralda',
-                                    'grape' => 'Uva',
-                                    'indigo' => 'Índigo',
-                                    'lime' => 'Lima',
-                                    'orange' => 'Laranja',
-                                    'pink' => 'Rosa',
-                                    'red' => 'Vermelho',
-                                    'slate' => 'Ardósia',
-                                    'violet' => 'Violeta',
+                                    'astronaut' => 'Astronauta',
+                                    'robot' => 'Robô',
+                                    'wolf' => 'Lobo',
+                                    'fox' => 'Raposa',
+                                    'eagle' => 'Águia',
+                                    'owl' => 'Coruja',
+                                    'lion' => 'Leão',
+                                    'tiger' => 'Tigre',
+                                    'panda' => 'Panda',
+                                    'dolphin' => 'Golfinho',
+                                    'rocket' => 'Foguete',
+                                    'planet' => 'Planeta',
+                                    'mountain' => 'Montanha',
+                                    'cloud' => 'Nuvem',
+                                    'cactus' => 'Cacto',
+                                    'camera' => 'Câmera',
+                                    'gamepad' => 'Gamepad',
                                     default => ucfirst($avatar),
                                 };
                             @endphp

@@ -1725,3 +1725,197 @@ a:hover {
 .password-ircenter-form .form-field input {
     min-height: 46px;
 }
+
+/* DNS CENTER FIGURE AVATARS */
+
+.avatar-figure {
+    overflow: hidden;
+    border: 1px solid var(--border-strong);
+    background:
+        radial-gradient(
+            circle at 35% 25%,
+            rgba(255, 255, 255, 0.12),
+            transparent 45%
+        ),
+        var(--surface-soft);
+    color: var(--text);
+}
+
+.avatar-figure-symbol {
+    display: block;
+    line-height: 1;
+    transform: translateY(1px);
+}
+
+.user-avatar-small.avatar-figure {
+    font-size: 1.25rem;
+}
+
+.user-avatar-medium.avatar-figure {
+    font-size: 1.8rem;
+}
+
+.user-avatar-large.avatar-figure {
+    font-size: 2.35rem;
+}
+
+.avatar-picker-compact .avatar-option-card {
+    min-height: 102px;
+}
+
+.avatar-picker-compact .avatar-option-card:hover {
+    border-color: var(--accent);
+    transform: translateY(-2px);
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.14);
+}
+
+.avatar-picker-compact
+.avatar-option
+input:checked
++ .avatar-option-card {
+    border-color: var(--accent);
+    background: rgba(245, 158, 11, 0.08);
+    box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.14);
+}
+
+/* Menu de conta mais compacto */
+
+.account-menu-panel {
+    width: 258px;
+}
+
+.account-menu-header .user-avatar-large {
+    width: 40px;
+    height: 40px;
+    font-size: 1.55rem;
+}
+
+.account-menu-header {
+    gap: 0.65rem;
+    padding: 0.35rem;
+}
+
+.account-menu-header strong {
+    font-size: 0.78rem;
+}
+
+.account-menu-header span {
+    font-size: 0.64rem;
+}
+
+.account-menu-item {
+    min-height: 36px;
+    padding: 0.52rem 0.58rem;
+}
+
+.account-menu-divider {
+    margin: 0.35rem 0;
+}
+
+/* DNS CENTER FIGURE AVATARS - FINAL POLISH */
+
+.avatar-picker-compact {
+    grid-template-columns: repeat(6, minmax(96px, 1fr));
+    gap: 0.6rem;
+}
+
+.avatar-picker-compact .avatar-option-card {
+    min-height: 94px;
+    padding: 0.55rem 0.35rem;
+}
+
+.avatar-picker-compact .user-avatar-medium.avatar-figure {
+    width: 52px;
+    height: 52px;
+    font-size: 2rem;
+}
+
+.avatar-picker-compact .avatar-option-card small {
+    font-size: 0.64rem;
+}
+
+.profile-identity-card .user-avatar-large.avatar-figure {
+    width: 58px;
+    height: 58px;
+    font-size: 2.5rem;
+}
+
+.account-menu-trigger .user-avatar-small.avatar-figure {
+    width: 34px;
+    height: 34px;
+    font-size: 1.35rem;
+}
+
+.account-menu-header .user-avatar-large.avatar-figure {
+    width: 42px;
+    height: 42px;
+    font-size: 1.7rem;
+}
+
+/* DNS CENTER PROFILE - FINAL POLISH */
+
+.profile-identity-card {
+    min-height: 108px;
+    padding: 1rem;
+}
+
+.profile-identity-card .user-avatar-large {
+    width: 64px;
+    height: 64px;
+}
+
+.profile-identity-card .user-avatar-large.avatar-figure {
+    font-size: 2.75rem;
+}
+
+.profile-identity-main strong {
+    font-size: 1.08rem;
+    font-weight: 750;
+}
+
+.profile-identity-main .badge {
+    min-height: 20px;
+    padding: 0.24rem 0.5rem;
+    font-size: 0.56rem;
+    letter-spacing: 0.035em;
+}
+
+.profile-data-card {
+    padding: 0.9rem 1rem;
+}
+
+.profile-data-card .compact-panel-heading {
+    padding-bottom: 0.65rem;
+}
+
+.profile-data-list > div {
+    padding: 0.62rem 0;
+}
+
+.profile-data-list dt {
+    font-size: 0.59rem;
+}
+
+.profile-data-list dd {
+    font-size: 0.67rem;
+}
+
+.profile-avatar-workspace .compact-panel-heading {
+    padding-bottom: 0.65rem;
+}
+
+.avatar-picker-compact {
+    margin-top: 0.65rem;
+}
+
+.profile-avatar-actions {
+    margin-top: 0.85rem;
+    padding-top: 0.85rem;
+}
+
+.profile-avatar-actions .button {
+    min-width: 120px;
+    min-height: 42px;
+    padding: 0.6rem 0.9rem;
+    font-size: 0.76rem;
+}

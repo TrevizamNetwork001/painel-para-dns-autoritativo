@@ -10,18 +10,23 @@ use Illuminate\View\View;
 class ProfileController extends Controller
 {
     public const AVATARS = [
-        'amber',
-        'blue',
-        'cyan',
-        'emerald',
-        'grape',
-        'indigo',
-        'lime',
-        'orange',
-        'pink',
-        'red',
-        'slate',
-        'violet',
+        'astronaut',
+        'robot',
+        'wolf',
+        'fox',
+        'eagle',
+        'owl',
+        'lion',
+        'tiger',
+        'panda',
+        'dolphin',
+        'rocket',
+        'planet',
+        'mountain',
+        'cloud',
+        'cactus',
+        'camera',
+        'gamepad',
     ];
 
     public function edit(Request $request): View

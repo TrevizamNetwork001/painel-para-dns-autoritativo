@@ -6,32 +6,40 @@
 @php
     $avatarKey = $user->avatar_key;
     $initial = str($user->name)->substr(0, 1)->upper();
+
+    $avatarFigure = match ($avatarKey) {
+        'astronaut' => '🧑‍🚀',
+        'robot' => '🤖',
+        'wolf' => '🐺',
+        'fox' => '🦊',
+        'eagle' => '🦅',
+        'owl' => '🦉',
+        'lion' => '🦁',
+        'tiger' => '🐯',
+        'panda' => '🐼',
+        'dolphin' => '🐬',
+        'rocket' => '🚀',
+        'planet' => '🪐',
+        'mountain' => '🏔️',
+        'cloud' => '☁️',
+        'cactus' => '🌵',
+        'camera' => '📷',
+        'gamepad' => '🎮',
+        default => null,
+    };
 @endphp
 
 <span
     {{ $attributes->class([
         'user-avatar-component',
         'user-avatar-'.$size,
-        $avatarKey ? 'avatar-'.$avatarKey : 'avatar-initial',
+        $avatarFigure ? 'avatar-figure' : 'avatar-initial',
     ]) }}
     aria-hidden="true"
 >
-    @if ($avatarKey)
-        <span class="avatar-face">
-            @switch($avatarKey)
-                @case('amber') ◆ @break
-                @case('blue') ◉ @break
-                @case('cyan') ◈ @break
-                @case('emerald') ▲ @break
-                @case('grape') ✦ @break
-                @case('indigo') ✹ @break
-                @case('lime') ● @break
-                @case('orange') ◇ @break
-                @case('pink') ✿ @break
-                @case('red') ◆ @break
-                @case('slate') ■ @break
-                @case('violet') ✧ @break
-            @endswitch
+    @if ($avatarFigure)
+        <span class="avatar-figure-symbol">
+            {{ $avatarFigure }}
         </span>
     @else
         {{ $initial }}
