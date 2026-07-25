@@ -65,7 +65,10 @@
         </header>
 
         @if (session('status'))
-            <div class="alert alert-success">
+            <div
+                class="alert alert-success flash-message"
+                data-flash-message
+            >
                 {{ session('status') }}
             </div>
         @endif
@@ -187,7 +190,14 @@
                                     <td>
                                         @if (auth()->user()->is($user))
                                             <span class="badge badge-neutral">
-                                                {{ $user->pivot->role }}
+                                                {{
+                                                    match ($user->pivot->role) {
+                                                        'organization_admin' => 'Administrador',
+                                                        'operator' => 'Operador',
+                                                        'viewer' => 'Visualizador',
+                                                        default => $user->pivot->role,
+                                                    }
+                                                }}
                                             </span>
                                         @else
                                             <form method="POST"
@@ -204,7 +214,14 @@
                                                             value="{{ $role }}"
                                                             @selected($user->pivot->role === $role)
                                                         >
-                                                            {{ $role }}
+                                                            {{
+                                                                match ($role) {
+                                                                    'organization_admin' => 'Administrador',
+                                                                    'operator' => 'Operador',
+                                                                    'viewer' => 'Visualizador',
+                                                                    default => $role,
+                                                                }
+                                                            }}
                                                         </option>
                                                     @endforeach
                                                 </select>
@@ -218,7 +235,11 @@
                                                 ? 'badge-success'
                                                 : 'badge-neutral'
                                         }}">
-                                            {{ $user->status }}
+                                            {{
+                                                $user->status === 'active'
+                                                    ? 'Ativo'
+                                                    : 'Inativo'
+                                            }}
                                         </span>
                                     </td>
 

@@ -40,3 +40,13 @@ document.querySelectorAll('[data-password-toggle]').forEach((button) => {
 });
 
 updateThemeIcon();
+
+document.querySelectorAll('[data-flash-message]').forEach((message) => {
+    window.setTimeout(() => {
+        message.classList.add('is-hiding');
+
+        window.setTimeout(() => {
+            message.remove();
+        }, 350);
+    }, 4000);
+});
