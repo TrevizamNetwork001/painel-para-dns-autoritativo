@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\UserManagementController;
 use App\Http\Controllers\PasswordChangeController;
+use App\Http\Controllers\ProfileController;
 
 use Illuminate\Support\Facades\Route;
 
@@ -98,4 +99,20 @@ Route::middleware([
         '/{user}/status',
         [UserManagementController::class, 'updateStatus']
     )->name('status');
+});
+
+Route::middleware([
+    'auth',
+    'password.changed',
+    'organization',
+])->prefix('perfil')->name('profile.')->group(function (): void {
+    Route::get(
+        '/',
+        [ProfileController::class, 'edit']
+    )->name('edit');
+
+    Route::put(
+        '/avatar',
+        [ProfileController::class, 'updateAvatar']
+    )->name('avatar.update');
 });

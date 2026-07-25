@@ -43,9 +43,10 @@
             aria-haspopup="true"
             aria-expanded="false"
         >
-            <span class="account-avatar">
-                {{ str($currentUser->name)->substr(0, 1)->upper() }}
-            </span>
+            <x-user-avatar
+                :user="$currentUser"
+                size="small"
+            />
 
             <span class="account-trigger-info">
                 <strong>{{ $currentUser->name }}</strong>
@@ -77,9 +78,10 @@
             hidden
         >
             <div class="account-menu-header">
-                <span class="account-avatar account-avatar-large">
-                    {{ str($currentUser->name)->substr(0, 1)->upper() }}
-                </span>
+                <x-user-avatar
+                    :user="$currentUser"
+                    size="large"
+                />
 
                 <div>
                     <strong>{{ $currentUser->name }}</strong>
@@ -89,6 +91,30 @@
             </div>
 
             <div class="account-menu-divider"></div>
+
+            <a
+                href="{{ route('profile.edit') }}"
+                class="account-menu-item"
+                role="menuitem"
+            >
+                <svg
+                    width="18"
+                    height="18"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    aria-hidden="true"
+                >
+                    <path
+                        d="M20 21a8 8 0 0 0-16 0m8-9a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z"
+                        stroke="currentColor"
+                        stroke-width="1.8"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                    />
+                </svg>
+
+                Meu perfil
+            </a>
 
             <a
                 href="{{ route('password.change') }}"
