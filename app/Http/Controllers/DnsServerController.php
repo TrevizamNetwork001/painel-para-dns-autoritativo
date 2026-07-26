@@ -102,6 +102,15 @@ class DnsServerController extends Controller
         int $organizationId,
         ?DnsServer $server = null,
     ): array {
+        $request->merge([
+            'hostname' => mb_strtolower(
+                rtrim(
+                    trim((string) $request->input('hostname')),
+                    '.',
+                )
+            ),
+        ]);
+
         $hostnameRule = Rule::unique(
             'dns_servers',
             'hostname',
@@ -168,15 +177,12 @@ class DnsServerController extends Controller
         ]);
 
         $validated['name'] = trim($validated['name']);
-        $validated['hostname'] = mb_strtolower(
-            rtrim(trim($validated['hostname']), '.')
-        );
 
         $validated['ipv4_address'] =
-            $validated['ipv4_address'] ?: null;
+            $validated['ipv4_address'] ?? null;
 
         $validated['ipv6_address'] =
-            $validated['ipv6_address'] ?: null;
+            $validated['ipv6_address'] ?? null;
 
         $validated['notes'] =
             isset($validated['notes'])

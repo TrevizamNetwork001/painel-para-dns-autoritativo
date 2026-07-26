@@ -13,7 +13,6 @@ Route::get('/', function () {
 })->name('home');
 
 
-
 Route::middleware('auth')->group(function (): void {
     Route::get(
         '/alterar-senha',
@@ -55,51 +54,6 @@ Route::middleware([
     )->name('status');
 });
 
-Route::middleware([
-    'auth',
-    'password.changed',
-    'organization',
-    'organization.role:organization_admin',
-])->prefix('usuarios')->name('users.')->group(function (): void {
-    Route::get('/', [UserManagementController::class, 'index'])
-        ->name('index');
-
-    Route::post('/', [UserManagementController::class, 'store'])
-        ->name('store');
-
-    Route::patch(
-        '/{user}/papel',
-        [UserManagementController::class, 'updateRole']
-    )->name('role');
-
-    Route::post(
-        '/{user}/status',
-        [UserManagementController::class, 'updateStatus']
-    )->name('status');
-});
-
-Route::middleware([
-    'auth',
-    'password.changed',
-    'organization',
-    'organization.role:organization_admin',
-])->prefix('usuarios')->name('users.')->group(function (): void {
-    Route::get('/', [UserManagementController::class, 'index'])
-        ->name('index');
-
-    Route::post('/', [UserManagementController::class, 'store'])
-        ->name('store');
-
-    Route::patch(
-        '/{user}/papel',
-        [UserManagementController::class, 'updateRole']
-    )->name('role');
-
-    Route::post(
-        '/{user}/status',
-        [UserManagementController::class, 'updateStatus']
-    )->name('status');
-});
 
 Route::middleware([
     'auth',
