@@ -1,0 +1,11 @@
+[Unit]
+Description=Executa DNS Center Agent periodicamente
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=5min
+Persistent=true
+RandomizedDelaySec=30s
+
+[Install]
+WantedBy=timers.target
