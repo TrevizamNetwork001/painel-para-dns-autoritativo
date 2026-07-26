@@ -129,6 +129,7 @@ class DnsAgentRegistrationController extends Controller
                 }
 
                 $plainToken = Str::random(96);
+                $now = now();
 
                 $agent = DnsAgent::query()->create([
                     'organization_id' =>
@@ -145,8 +146,8 @@ class DnsAgentRegistrationController extends Controller
                         Str::lower($validated['hostname']),
                     'registered_ip' =>
                         $request->ip(),
-                    'registered_at' =>
-                        now(),
+                    'registered_at' => $now,
+                    'last_seen_at' => $now,
                     'metadata' => [
                         'agent_version' =>
                             $validated['agent_version'] ?? null,
@@ -154,12 +155,18 @@ class DnsAgentRegistrationController extends Controller
                 ]);
 
                 $enrollment->forceFill([
-                    'used_at' => now(),
+                    'used_at' => $now,
                 ])->save();
 
                 $server->forceFill([
                     'status' => 'pending',
-                    'last_agent_contact_at' => now(),
+                    'agent_uuid' => $agent->agent_uuid,
+                    'agent_version' =>
+                        $validated['agent_version'] ?? null,
+                    'agent_status' => 'pending',
+                    'agent_fingerprint' => $agent->fingerprint,
+                    'agent_registered_at' => $now,
+                    'last_seen_at' => $now,
                 ])->save();
 
                 return [

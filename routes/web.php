@@ -111,4 +111,9 @@ Route::middleware([
         '/servidores/{server}/agente/ativacao',
         [\App\Http\Controllers\DnsAgentEnrollmentController::class, 'store'],
     )->name('servers.agent.enrollment.store');
+
+    Route::post(
+        '/servidores/{server}/agente/revogar',
+        [\App\Http\Controllers\DnsAgentEnrollmentController::class, 'revoke'],
+    )->name('servers.agent.revoke');
 });

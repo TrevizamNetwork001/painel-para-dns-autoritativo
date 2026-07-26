@@ -110,7 +110,50 @@
                             IP de registro:
                             {{ $agent->registered_ip ?: 'Não disponível' }}
                         </span>
+
+                        <span>
+                            Último contato:
+                            {{ $agent->last_seen_at
+                                ? $agent->last_seen_at->format('d/m/Y H:i')
+                                : 'Ainda não recebido' }}
+                        </span>
+
+                        <span>
+                            Estado operacional:
+                            {{ $server->agent_status }}
+                        </span>
+
+                        <span>
+                            Sistema:
+                            {{ $server->operating_system ?: 'Não informado' }}
+                            {{ $server->operating_system_version }}
+                        </span>
+
+                        <span>
+                            BIND:
+                            {{ $server->bind_version ?: 'Não informado' }}
+                        </span>
                     </div>
+
+                    <form
+                        method="POST"
+                        action="{{ route(
+                            'servers.agent.revoke',
+                            $server
+                        ) }}"
+                        onsubmit="return confirm(
+                            'Revogar a credencial deste agente?'
+                        )"
+                    >
+                        @csrf
+
+                        <button
+                            type="submit"
+                            class="button button-secondary"
+                        >
+                            Revogar credencial
+                        </button>
+                    </form>
                 @else
                     <div class="agent-state">
                         <strong>Aguardando ativação</strong>

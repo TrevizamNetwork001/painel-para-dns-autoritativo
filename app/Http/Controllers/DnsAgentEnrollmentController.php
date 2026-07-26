@@ -25,6 +25,7 @@ class DnsAgentEnrollmentController extends Controller
         $agent = DnsAgent::query()
             ->where('organization_id', $organizationId)
             ->where('dns_server_id', $server->id)
+            ->latest('id')
             ->first();
 
         $latestEnrollment = DnsAgentEnrollment::query()
@@ -97,6 +98,65 @@ class DnsAgentEnrollmentController extends Controller
                 'agent_enrollment_expires_at' =>
                     $enrollment->expires_at->toIso8601String(),
             ]);
+    }
+
+    public function revoke(
+        Request $request,
+        DnsServer $server,
+    ): RedirectResponse {
+        $organizationId = $this->authorizeServer(
+            $request,
+            $server,
+        );
+
+        DB::transaction(function () use (
+            $server,
+            $organizationId,
+        ): void {
+            $agent = DnsAgent::query()
+                ->where('organization_id', $organizationId)
+                ->where('dns_server_id', $server->id)
+                ->whereNull('revoked_at')
+                ->lockForUpdate()
+                ->first();
+
+            abort_unless($agent, 404, 'Agente ativo não encontrado.');
+
+            $now = now();
+
+            $agent->forceFill([
+                'revoked_at' => $now,
+            ])->save();
+
+            DnsAgentEnrollment::query()
+                ->where('organization_id', $organizationId)
+                ->where('dns_server_id', $server->id)
+                ->whereNull('used_at')
+                ->whereNull('revoked_at')
+                ->update([
+                    'revoked_at' => $now,
+                    'updated_at' => $now,
+                ]);
+
+            $server->forceFill([
+                'status' => 'pending',
+                'agent_uuid' => null,
+                'agent_version' => null,
+                'agent_status' => 'not_installed',
+                'agent_fingerprint' => null,
+                'agent_registered_at' => null,
+                'last_seen_at' => null,
+                'capabilities' => null,
+                'inventory' => null,
+            ])->save();
+        });
+
+        return redirect()
+            ->route('servers.agent.show', $server)
+            ->with(
+                'status',
+                'Credencial do agente revogada com sucesso.',
+            );
     }
 
     private function authorizeServer(

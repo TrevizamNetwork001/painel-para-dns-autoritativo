@@ -1,6 +1,8 @@
 <?php
 
 use App\Http\Controllers\Api\DnsAgentRegistrationController;
+use App\Http\Controllers\Api\DnsAgentRuntimeController;
+use App\Http\Middleware\AuthenticateDnsAgent;
 use Illuminate\Support\Facades\Route;
 
 Route::post(
@@ -8,3 +10,20 @@ Route::post(
     [DnsAgentRegistrationController::class, 'store'],
 )->middleware('throttle:10,1')
     ->name('api.agent.enroll');
+
+Route::middleware([
+    AuthenticateDnsAgent::class,
+    'throttle:120,1',
+])->prefix('agent')->name('api.agent.')->group(
+    function (): void {
+        Route::post(
+            '/heartbeat',
+            [DnsAgentRuntimeController::class, 'heartbeat'],
+        )->name('heartbeat');
+
+        Route::post(
+            '/inventory',
+            [DnsAgentRuntimeController::class, 'inventory'],
+        )->name('inventory');
+    }
+);
