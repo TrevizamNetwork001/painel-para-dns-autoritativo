@@ -117,3 +117,39 @@ Route::middleware([
         [\App\Http\Controllers\DnsAgentEnrollmentController::class, 'revoke'],
     )->name('servers.agent.revoke');
 });
+
+Route::middleware([
+    'auth',
+    'password.changed',
+    'organization',
+])->prefix('zonas')->name('zones.')->group(function (): void {
+    Route::get(
+        '/',
+        [\App\Http\Controllers\DnsZoneController::class, 'index'],
+    )->name('index');
+
+    Route::post(
+        '/',
+        [\App\Http\Controllers\DnsZoneController::class, 'store'],
+    )->name('store');
+
+    Route::get(
+        '/{zone}',
+        [\App\Http\Controllers\DnsZoneController::class, 'show'],
+    )->name('show');
+
+    Route::post(
+        '/{zone}/registros',
+        [\App\Http\Controllers\DnsZoneController::class, 'storeRecord'],
+    )->name('records.store');
+
+    Route::delete(
+        '/{zone}/registros/{record}',
+        [\App\Http\Controllers\DnsZoneController::class, 'destroyRecord'],
+    )->name('records.destroy');
+
+    Route::post(
+        '/{zone}/publicar',
+        [\App\Http\Controllers\DnsZoneController::class, 'publish'],
+    )->name('publish');
+});

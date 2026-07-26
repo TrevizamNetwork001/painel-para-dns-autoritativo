@@ -3678,3 +3678,83 @@ button.theme-toggle::after {
 }
 
 /* DNS CENTER THEME ICON DEFINITIVE FIX — END */
+
+/* DNS CENTER PHASE 3A - AUTHORITATIVE ZONES */
+.zone-layout,
+.zone-detail-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1.25fr) minmax(320px, .8fr);
+    gap: 20px;
+}
+
+.zone-panel {
+    padding: 22px;
+    border: 1px solid rgba(148, 163, 184, .18);
+    border-radius: 18px;
+    background: rgba(15, 23, 42, .68);
+}
+
+.zone-row {
+    display: flex;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 15px 0;
+    border-top: 1px solid rgba(148, 163, 184, .15);
+    color: inherit;
+    text-decoration: none;
+}
+
+.zone-row > div {
+    display: grid;
+    gap: 4px;
+}
+
+.zone-form,
+.record-form {
+    display: grid;
+    gap: 12px;
+}
+
+.record-form {
+    grid-template-columns: 1fr 90px 100px 120px 1.5fr auto;
+    margin-bottom: 18px;
+}
+
+.record-row {
+    display: grid;
+    grid-template-columns: 1fr 70px 90px minmax(180px, 2fr) auto;
+    gap: 12px;
+    align-items: center;
+    padding: 12px 0;
+    border-top: 1px solid rgba(148, 163, 184, .15);
+}
+
+.zone-preview {
+    max-height: 620px;
+    overflow: auto;
+    padding: 16px;
+    border-radius: 14px;
+    background: #07111f;
+    color: #dbeafe;
+    font-size: .82rem;
+    line-height: 1.55;
+    white-space: pre-wrap;
+}
+
+@media (max-width: 1050px) {
+    .zone-layout,
+    .zone-detail-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .record-form {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
+@media (max-width: 680px) {
+    .record-form,
+    .record-row {
+        grid-template-columns: 1fr;
+    }
+}

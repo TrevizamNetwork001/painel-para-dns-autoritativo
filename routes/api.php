@@ -25,5 +25,15 @@ Route::middleware([
             '/inventory',
             [DnsAgentRuntimeController::class, 'inventory'],
         )->name('inventory');
+
+        Route::get(
+            '/zones',
+            [\App\Http\Controllers\Api\DnsZoneArtifactController::class, 'manifest'],
+        )->name('zones.manifest');
+
+        Route::get(
+            '/zones/{zone}/artifact',
+            [\App\Http\Controllers\Api\DnsZoneArtifactController::class, 'artifact'],
+        )->name('zones.artifact');
     }
 );
