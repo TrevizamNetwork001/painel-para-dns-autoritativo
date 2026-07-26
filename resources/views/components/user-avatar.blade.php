@@ -35,6 +35,18 @@
 
         default => null,
     };
+
+    $avatarImage = match ($avatarKey) {
+        'astronaut' => asset('images/avatars/astronaut.png'),
+        'ceo' => asset('images/avatars/ceo.png'),
+        'carrasco' => asset(
+            'images/avatars/carrasco.png'
+        ).'?v=20260726-4',
+        'engenheiro_obra' => asset(
+            'images/avatars/engenheiro_obra.png'
+        ).'?v=20260726-4',
+        default => null,
+    };
 @endphp
 
 <span
@@ -46,7 +58,17 @@
     aria-hidden="true"
 >
     {{-- DNS CENTER CUSTOM AVATARS START --}}
-@if ($avatarKey === 'ogre')
+@if ($avatarImage)
+    <img
+        class="avatar-character-svg avatar-character-image"
+        src="{{ $avatarImage }}"
+        alt=""
+        width="256"
+        height="256"
+        loading="eager"
+        decoding="async"
+    >
+@elseif ($avatarKey === 'ogre')
     <svg
         class="avatar-character-svg"
         viewBox="0 0 64 64"

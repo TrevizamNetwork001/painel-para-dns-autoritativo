@@ -3537,6 +3537,11 @@ html[data-theme='light'] .users-modal-backdrop {
 /* DNS CENTER PROFILE FINAL FIX — START */
 
 /* Avatares vetoriais internos. */
+
+.avatar-character-image {
+    object-fit: contain;
+}
+
 .avatar-character-svg {
     display: block;
     width: 42px;
