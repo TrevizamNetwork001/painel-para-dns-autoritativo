@@ -32,6 +32,7 @@ class User extends Authenticatable
             'password' => 'hashed',
             'is_platform_admin' => 'boolean',
             'last_login_at' => 'datetime',
+            'last_logout_at' => 'datetime',
             'must_change_password' => 'boolean',
             'temporary_password_expires_at' => 'datetime',
             'password_changed_at' => 'datetime',

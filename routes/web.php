@@ -71,7 +71,11 @@ Route::middleware([
     )->name('avatar.update');
 });
 
-Route::middleware(['auth'])->group(function (): void {
+Route::middleware([
+    'auth',
+    'password.changed',
+    'organization',
+])->group(function (): void {
     Route::get(
         '/servidores',
         [App\Http\Controllers\DnsServerController::class, 'index']
@@ -93,7 +97,11 @@ Route::middleware(['auth'])->group(function (): void {
     )->name('servers.status');
 });
 
-Route::middleware(['auth'])->group(function (): void {
+Route::middleware([
+    'auth',
+    'password.changed',
+    'organization',
+])->group(function (): void {
     Route::get(
         '/servidores/{server}/agente',
         [\App\Http\Controllers\DnsAgentEnrollmentController::class, 'show'],

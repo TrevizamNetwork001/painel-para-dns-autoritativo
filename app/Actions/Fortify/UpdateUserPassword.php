@@ -30,6 +30,9 @@ class UpdateUserPassword implements UpdatesUserPasswords
 
         $user->forceFill([
             'password' => Hash::make($input['password']),
+            'must_change_password' => false,
+            'temporary_password_expires_at' => null,
+            'password_changed_at' => now(),
         ])->save();
     }
 }
