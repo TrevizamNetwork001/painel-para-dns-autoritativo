@@ -29,6 +29,11 @@ class ProfileController extends Controller
         'gamepad',
         'ogre',
         'donkey',
+        'ceo',
+        'anta',
+        'peixe',
+        'carrasco',
+        'engenheiro_obra',
     ];
 
     public function edit(Request $request): View

@@ -363,6 +363,11 @@
                                     'gamepad' => 'Gamepad',
                                     'ogre' => 'Ogro verde',
                                     'donkey' => 'Jegue',
+                                    'ceo' => 'CEO',
+                                    'anta' => 'Anta',
+                                    'peixe' => 'Peixe',
+                                    'carrasco' => 'Carrasco',
+                                    'engenheiro_obra' => 'Engenheiro de obra',
 
                                     default => ucfirst($avatar),
                                 };

@@ -38,11 +38,21 @@ class ProfileAvatarTest extends TestCase
         ]);
     }
 
-    public function test_ogre_and_donkey_avatars_can_be_selected(): void
+    public function test_custom_avatars_can_be_selected(): void
     {
         $user = $this->makeUser();
 
-        foreach (['ogre', 'donkey'] as $avatar) {
+        $customAvatars = [
+            'ogre',
+            'donkey',
+            'ceo',
+            'anta',
+            'peixe',
+            'carrasco',
+            'engenheiro_obra',
+        ];
+
+        foreach ($customAvatars as $avatar) {
             $this->actingAs($user)
                 ->put('/perfil/avatar', [
                     'avatar_key' => $avatar,
