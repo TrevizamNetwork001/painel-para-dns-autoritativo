@@ -126,6 +126,7 @@
             stroke-linecap="round"
         />
     </svg>
+
 @elseif ($avatarKey === 'ceo')
     <svg
         class="avatar-character-svg"
@@ -133,63 +134,95 @@
         role="img"
         aria-label="CEO"
     >
-        <circle
-            cx="32"
-            cy="22"
-            r="12"
-            fill="#f2b27c"
-            stroke="#172033"
-            stroke-width="3"
-        />
+        {{-- Corpo e terno --}}
         <path
-            d="M20 20c1-11 23-14 25 0-7-3-17-3-25 0Z"
-            fill="#172033"
-        />
-        <path
-            d="M18 58V47c0-8 6-13 14-13s14 5 14 13v11"
-            fill="#1f2937"
+            d="M14 61V49c0-10 7-16 18-16s18 6 18 16v12Z"
+            fill="#26364d"
             stroke="#172033"
             stroke-width="3"
             stroke-linejoin="round"
         />
+
         <path
-            d="M27 35h10l-2 8h-6Z"
+            d="m21 39 11 10 11-10"
             fill="#ffffff"
             stroke="#172033"
-            stroke-width="2"
+            stroke-width="2.5"
+            stroke-linejoin="round"
         />
+
         <path
-            d="m32 42-4 16h8Z"
-            fill="#ef4444"
+            d="m32 46-5 15h10Z"
+            fill="#f97316"
             stroke="#172033"
             stroke-width="2"
+            stroke-linejoin="round"
         />
+
+        {{-- Cabeça maior --}}
+        <circle
+            cx="32"
+            cy="23"
+            r="15"
+            fill="#d9955e"
+            stroke="#172033"
+            stroke-width="3"
+        />
+
+        {{-- Cabelo --}}
+        <path
+            d="M17 23C17 11 24 5 33 5c10 0 16 7 15 18
+               -4-6-10-9-16-9-6 0-11 3-15 9Z"
+            fill="#111827"
+            stroke="#172033"
+            stroke-width="2.5"
+            stroke-linejoin="round"
+        />
+
+        {{-- Óculos escuros maiores --}}
         <rect
-            x="20"
-            y="18"
-            width="10"
-            height="7"
+            x="18"
+            y="20"
+            width="12"
+            height="8"
             rx="3"
             fill="#111827"
+            stroke="#020617"
+            stroke-width="2"
         />
+
         <rect
             x="34"
-            y="18"
-            width="10"
-            height="7"
+            y="20"
+            width="12"
+            height="8"
             rx="3"
             fill="#111827"
-        />
-        <path
-            d="M30 21h4"
-            stroke="#172033"
+            stroke="#020617"
             stroke-width="2"
         />
+
         <path
-            d="M28 29c3 2 5 2 8 0"
+            d="M30 23h4"
+            stroke="#020617"
+            stroke-width="2.5"
+            stroke-linecap="round"
+        />
+
+        {{-- Reflexo dos óculos --}}
+        <path
+            d="m21 22 3 3M37 22l3 3"
+            stroke="#64748b"
+            stroke-width="1.5"
+            stroke-linecap="round"
+        />
+
+        {{-- Sorriso --}}
+        <path
+            d="M26 31c4 4 8 4 12 0"
             fill="none"
             stroke="#172033"
-            stroke-width="2"
+            stroke-width="2.5"
             stroke-linecap="round"
         />
     </svg>
@@ -276,6 +309,7 @@
             stroke-linecap="round"
         />
     </svg>
+
 @elseif ($avatarKey === 'carrasco')
     <svg
         class="avatar-character-svg"
@@ -283,108 +317,201 @@
         role="img"
         aria-label="Carrasco"
     >
+        {{-- Machado atrás do personagem --}}
         <path
-            d="M16 56V28c0-13 7-22 16-22s16 9 16 22v28Z"
-            fill="#111827"
+            d="M44 44 55 17"
+            stroke="#9a5b2f"
+            stroke-width="5"
+            stroke-linecap="round"
+        />
+
+        <path
+            d="m48 12 12 5-5 13-12-5Z"
+            fill="#cbd5e1"
             stroke="#172033"
             stroke-width="3"
             stroke-linejoin="round"
         />
+
         <path
-            d="M21 26c4-5 18-5 22 0l-4 18H25Z"
-            fill="#1f2937"
+            d="m52 15 5 2"
+            stroke="#ffffff"
+            stroke-width="2"
+            stroke-linecap="round"
+            opacity=".8"
+        />
+
+        {{-- Corpo --}}
+        <path
+            d="M13 61V48c0-10 8-16 19-16s19 6 19 16v13Z"
+            fill="#334155"
             stroke="#172033"
-            stroke-width="2.5"
+            stroke-width="3"
             stroke-linejoin="round"
         />
+
+        {{-- Capuz externo, mais claro para funcionar no tema escuro --}}
         <path
-            d="M25 28h14"
+            d="M14 31C14 14 21 5 32 5s18 9 18 26
+               L45 48H19Z"
+            fill="#475569"
             stroke="#172033"
-            stroke-width="7"
-            stroke-linecap="round"
-        />
-        <circle cx="27" cy="28" r="2" fill="#ffffff" />
-        <circle cx="37" cy="28" r="2" fill="#ffffff" />
-        <path
-            d="M45 41 56 18"
-            stroke="#7c4a22"
-            stroke-width="4"
-            stroke-linecap="round"
-        />
-        <path
-            d="m49 15 10 5-5 10-10-5Z"
-            fill="#94a3b8"
-            stroke="#172033"
-            stroke-width="2.5"
+            stroke-width="3"
             stroke-linejoin="round"
         />
+
+        {{-- Abertura visível do rosto --}}
         <path
-            d="M26 38c4 2 8 2 12 0"
-            fill="none"
-            stroke="#64748b"
+            d="M21 27c0-9 4-15 11-15s11 6 11 15v7
+               c0 8-4 13-11 13s-11-5-11-13Z"
+            fill="#b9784f"
+            stroke="#172033"
+            stroke-width="2.5"
+        />
+
+        {{-- Máscara preta ao redor dos olhos --}}
+        <path
+            d="M22 25c5-5 15-5 20 0l-3 8H25Z"
+            fill="#111827"
+            stroke="#172033"
+            stroke-width="2"
+            stroke-linejoin="round"
+        />
+
+        <circle cx="27" cy="28" r="2.3" fill="#f8fafc" />
+        <circle cx="37" cy="28" r="2.3" fill="#f8fafc" />
+
+        <circle cx="27" cy="28" r="1" fill="#172033" />
+        <circle cx="37" cy="28" r="1" fill="#172033" />
+
+        {{-- Nariz e expressão --}}
+        <path
+            d="M32 31v4"
+            stroke="#7c4a32"
             stroke-width="2"
             stroke-linecap="round"
         />
+
+        <path
+            d="M27 39c3-2 7-2 10 0"
+            fill="none"
+            stroke="#172033"
+            stroke-width="2.3"
+            stroke-linecap="round"
+        />
+
+        {{-- Cordão do capuz --}}
+        <path
+            d="M23 47 19 57M41 47l4 10"
+            stroke="#94a3b8"
+            stroke-width="2.5"
+            stroke-linecap="round"
+        />
     </svg>
+
 @elseif ($avatarKey === 'engenheiro_obra')
     <svg
         class="avatar-character-svg"
         viewBox="0 0 64 64"
         role="img"
-        aria-label="Engenheiro de obra"
+        aria-label="Engenheiro"
     >
+        {{-- Corpo --}}
+        <path
+            d="M13 61V49c0-10 8-16 19-16s19 6 19 16v12Z"
+            fill="#f97316"
+            stroke="#172033"
+            stroke-width="3"
+            stroke-linejoin="round"
+        />
+
+        {{-- Faixas refletivas --}}
+        <path
+            d="M18 51h28M25 37l7 10 7-10"
+            fill="none"
+            stroke="#facc15"
+            stroke-width="3"
+            stroke-linejoin="round"
+        />
+
+        {{-- Cabeça claramente visível --}}
         <circle
             cx="32"
             cy="28"
             r="14"
-            fill="#b87545"
+            fill="#b9784f"
             stroke="#172033"
             stroke-width="3"
         />
-        <path
-            d="M15 25c0-12 7-20 17-20s17 8 17 20"
-            fill="#facc15"
+
+        {{-- Orelhas --}}
+        <circle
+            cx="17.5"
+            cy="29"
+            r="4"
+            fill="#b9784f"
             stroke="#172033"
-            stroke-width="3"
+            stroke-width="2"
         />
+
+        <circle
+            cx="46.5"
+            cy="29"
+            r="4"
+            fill="#b9784f"
+            stroke="#172033"
+            stroke-width="2"
+        />
+
+        {{-- Capacete mais alto, sem cobrir o rosto --}}
         <path
-            d="M11 25h42v7H11Z"
+            d="M17 22C17 11 23 5 32 5s15 6 15 17Z"
             fill="#facc15"
             stroke="#172033"
             stroke-width="3"
             stroke-linejoin="round"
         />
+
         <path
-            d="M28 6v18M36 6v18"
+            d="M12 21h40v7H12Z"
+            fill="#facc15"
+            stroke="#172033"
+            stroke-width="3"
+            stroke-linejoin="round"
+        />
+
+        <path
+            d="M27 6v15M37 6v15"
             stroke="#eab308"
             stroke-width="3"
         />
-        <circle cx="26" cy="29" r="2.5" fill="#172033" />
-        <circle cx="38" cy="29" r="2.5" fill="#172033" />
+
+        {{-- Rosto --}}
+        <circle cx="26" cy="30" r="2.4" fill="#172033" />
+        <circle cx="38" cy="30" r="2.4" fill="#172033" />
+
         <path
-            d="M27 36c3 3 7 3 10 0"
+            d="M32 31v4"
+            stroke="#7c4a32"
+            stroke-width="2"
+            stroke-linecap="round"
+        />
+
+        <path
+            d="M26 38c4 4 8 4 12 0"
             fill="none"
             stroke="#172033"
             stroke-width="2.5"
             stroke-linecap="round"
         />
+
+        {{-- Gola da camisa --}}
         <path
-            d="M16 59V50c0-8 7-13 16-13s16 5 16 13v9"
-            fill="#f97316"
-            stroke="#172033"
-            stroke-width="3"
-        />
-        <path
-            d="M26 40 32 48l6-8"
-            fill="#ffffff"
+            d="m25 40 7 8 7-8"
+            fill="#f8fafc"
             stroke="#172033"
             stroke-width="2"
             stroke-linejoin="round"
-        />
-        <path
-            d="M24 49h16"
-            stroke="#facc15"
-            stroke-width="3"
         />
     </svg>
 @elseif ($avatarFigure)

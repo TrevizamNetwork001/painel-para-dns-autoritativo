@@ -367,7 +367,7 @@
                                     'anta' => 'Anta',
                                     'peixe' => 'Peixe',
                                     'carrasco' => 'Carrasco',
-                                    'engenheiro_obra' => 'Engenheiro de obra',
+                                    'engenheiro_obra' => 'Engenheiro',
 
                                     default => ucfirst($avatar),
                                 };
