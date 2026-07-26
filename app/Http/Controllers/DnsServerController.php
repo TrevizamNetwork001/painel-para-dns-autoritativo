@@ -102,13 +102,16 @@ class DnsServerController extends Controller
         int $organizationId,
         ?DnsServer $server = null,
     ): array {
+        $hostname = mb_strtolower(
+            trim((string) $request->input('hostname'))
+        );
+
+        if (str_ends_with($hostname, '.')) {
+            $hostname = substr($hostname, 0, -1);
+        }
+
         $request->merge([
-            'hostname' => mb_strtolower(
-                rtrim(
-                    trim((string) $request->input('hostname')),
-                    '.',
-                )
-            ),
+            'hostname' => $hostname,
         ]);
 
         $hostnameRule = Rule::unique(

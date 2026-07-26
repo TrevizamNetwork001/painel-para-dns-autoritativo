@@ -242,6 +242,30 @@ class DnsServerManagementTest extends TestCase
             ->assertForbidden();
     }
 
+    public function test_hostname_with_multiple_trailing_dots_is_rejected(): void
+    {
+        [$user] = $this->admin();
+
+        $response = $this
+            ->actingAs($user)
+            ->from(route('servers.index'))
+            ->post(route('servers.store'), [
+                'name' => 'DNS inválido',
+                'hostname' => 'ns1.exemplo.com.br...',
+                'ipv4_address' => '192.0.2.54',
+                'role' => 'primary',
+                'environment' => 'production',
+            ]);
+
+        $response
+            ->assertRedirect(route('servers.index'))
+            ->assertSessionHasErrors('hostname');
+
+        $this->assertDatabaseMissing('dns_servers', [
+            'hostname' => 'ns1.exemplo.com.br',
+        ]);
+    }
+
     private function admin(): array
     {
         return $this->member('organization_admin');
