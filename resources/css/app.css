@@ -3533,3 +3533,143 @@ html[data-theme='light'] .users-modal-backdrop {
         flex-direction: column;
     }
 }
+
+/* DNS CENTER PROFILE FINAL FIX — START */
+
+/* Avatares vetoriais internos. */
+.avatar-character-svg {
+    display: block;
+    width: 42px;
+    height: 42px;
+    max-width: 100%;
+    max-height: 100%;
+    margin: auto;
+    overflow: visible;
+}
+
+.user-avatar-component .avatar-character-svg {
+    width: 76%;
+    height: 76%;
+}
+
+.avatar-option-card .avatar-character-svg {
+    width: 42px;
+    height: 42px;
+}
+
+/*
+ * Tema claro: esconde o desenho incompleto atual e usa uma lua
+ * vetorial própria. Nenhuma regra do tema escuro é modificada.
+ */
+html[data-theme='light'] .theme-toggle {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+html[data-theme='light'] .theme-toggle .theme-icon-moon,
+html[data-theme='light'] .theme-toggle [data-theme-icon] {
+    opacity: 0 !important;
+    visibility: hidden !important;
+}
+
+/* DNS CENTER PROFILE FINAL FIX — END */
+
+/* DNS CENTER THEME TOGGLE CENTER FIX — START */
+
+.theme-toggle {
+    display: grid;
+    place-items: center;
+    padding: 0;
+}
+
+.theme-toggle .theme-icon {
+    grid-area: 1 / 1;
+    display: block;
+    width: 22px;
+    height: 22px;
+    margin: 0;
+    transform: none;
+}
+
+html[data-theme='light'] .theme-toggle .theme-icon-sun {
+    display: none;
+}
+
+html[data-theme='light'] .theme-toggle .theme-icon-moon {
+    display: block;
+    opacity: 1;
+    visibility: visible;
+}
+
+html[data-theme='dark'] .theme-toggle .theme-icon-moon {
+    display: none;
+}
+
+html[data-theme='dark'] .theme-toggle .theme-icon-sun {
+    display: block;
+    opacity: 1;
+    visibility: visible;
+}
+
+.theme-toggle::before,
+.theme-toggle::after {
+    content: none !important;
+    display: none !important;
+}
+
+/* DNS CENTER THEME TOGGLE CENTER FIX — END */
+
+/* DNS CENTER THEME ICON DEFINITIVE FIX — START */
+
+button.theme-toggle {
+    position: relative;
+    display: grid !important;
+    place-items: center !important;
+    padding: 0 !important;
+}
+
+button.theme-toggle > svg.theme-icon {
+    grid-column: 1;
+    grid-row: 1;
+    width: 22px !important;
+    height: 22px !important;
+    margin: 0 !important;
+    transform: none !important;
+    position: static !important;
+}
+
+/* Tema claro: lua visível e sol oculto. */
+html[data-theme='light'] button.theme-toggle > svg.theme-icon-moon {
+    display: block !important;
+    opacity: 1 !important;
+    visibility: visible !important;
+}
+
+html[data-theme='light'] button.theme-toggle > svg.theme-icon-sun {
+    display: none !important;
+    opacity: 0 !important;
+    visibility: hidden !important;
+}
+
+/* Tema escuro: sol visível e lua oculta. */
+html[data-theme='dark'] button.theme-toggle > svg.theme-icon-sun {
+    display: block !important;
+    opacity: 1 !important;
+    visibility: visible !important;
+}
+
+html[data-theme='dark'] button.theme-toggle > svg.theme-icon-moon {
+    display: none !important;
+    opacity: 0 !important;
+    visibility: hidden !important;
+}
+
+button.theme-toggle::before,
+button.theme-toggle::after {
+    content: none !important;
+    display: none !important;
+}
+
+/* DNS CENTER THEME ICON DEFINITIVE FIX — END */

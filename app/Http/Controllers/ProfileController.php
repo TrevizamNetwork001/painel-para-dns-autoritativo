@@ -27,6 +27,8 @@ class ProfileController extends Controller
         'cactus',
         'camera',
         'gamepad',
+        'ogre',
+        'donkey',
     ];
 
     public function edit(Request $request): View

@@ -38,6 +38,24 @@ class ProfileAvatarTest extends TestCase
         ]);
     }
 
+    public function test_ogre_and_donkey_avatars_can_be_selected(): void
+    {
+        $user = $this->makeUser();
+
+        foreach (['ogre', 'donkey'] as $avatar) {
+            $this->actingAs($user)
+                ->put('/perfil/avatar', [
+                    'avatar_key' => $avatar,
+                ])
+                ->assertRedirect('/perfil');
+
+            $this->assertDatabaseHas('users', [
+                'id' => $user->id,
+                'avatar_key' => $avatar,
+            ]);
+        }
+    }
+
     public function test_invalid_avatar_is_rejected(): void
     {
         $user = $this->makeUser();
