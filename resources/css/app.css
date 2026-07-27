@@ -3758,3 +3758,634 @@ button.theme-toggle::after {
         grid-template-columns: 1fr;
     }
 }
+
+/* DNS CENTER ZONES MANAGEMENT START */
+
+.zone-management-page {
+    min-width: 0;
+}
+
+.zone-management-topbar {
+    align-items: flex-start;
+}
+
+.zone-title-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.7rem;
+}
+
+.zone-title-row h1 {
+    margin: 0;
+}
+
+.zone-status-badge,
+.zone-version-chip,
+.zone-count-chip,
+.zone-preview-chip,
+.zone-validation-indicator {
+    display: inline-flex;
+    min-height: 26px;
+    align-items: center;
+    justify-content: center;
+    padding: 0.3rem 0.62rem;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    background: var(--surface-soft);
+    color: var(--text-muted);
+    font-size: 0.68rem;
+    font-weight: 800;
+    line-height: 1;
+    white-space: nowrap;
+}
+
+.zone-status-ready,
+.zone-status-published,
+.zone-validation-indicator.is-ok {
+    border-color: rgba(34, 197, 94, 0.28);
+    background: rgba(34, 197, 94, 0.1);
+    color: #22c55e;
+}
+
+.zone-status-draft {
+    border-color: rgba(245, 158, 11, 0.28);
+    background: rgba(245, 158, 11, 0.1);
+    color: #f59e0b;
+}
+
+.zone-status-disabled,
+.zone-validation-indicator.is-error {
+    border-color: rgba(239, 68, 68, 0.28);
+    background: rgba(239, 68, 68, 0.1);
+    color: #ef4444;
+}
+
+.zone-summary-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 0.8rem;
+    margin-bottom: 0.9rem;
+}
+
+.zone-summary-card {
+    display: grid;
+    min-width: 0;
+    gap: 0.35rem;
+    padding: 0.9rem 1rem;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    background: var(--surface);
+}
+
+.zone-summary-card > span {
+    color: var(--text-muted);
+    font-size: 0.67rem;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.zone-summary-card strong {
+    overflow: hidden;
+    color: var(--text);
+    font-size: 0.88rem;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.zone-summary-card small {
+    overflow: hidden;
+    color: var(--text-muted);
+    font-size: 0.68rem;
+    line-height: 1.45;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.text-success {
+    color: #22c55e !important;
+}
+
+.text-danger {
+    color: #ef4444 !important;
+}
+
+.zone-workspace {
+    display: grid;
+    grid-template-columns: minmax(0, 1.65fr) minmax(310px, 0.75fr);
+    align-items: start;
+    gap: 0.9rem;
+}
+
+.zone-workspace-main,
+.zone-workspace-sidebar {
+    display: grid;
+    min-width: 0;
+    gap: 0.9rem;
+}
+
+.zone-workspace-sidebar {
+    position: sticky;
+    top: 0.85rem;
+}
+
+.zone-panel {
+    min-width: 0;
+    padding: 1rem;
+    border: 1px solid var(--border);
+    border-radius: 13px;
+    background: var(--surface);
+}
+
+.zone-panel-heading {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 1rem;
+    padding-bottom: 0.85rem;
+    border-bottom: 1px solid var(--border);
+}
+
+.zone-panel-heading-compact {
+    align-items: center;
+}
+
+.zone-panel-heading .eyebrow {
+    margin-bottom: 0.3rem;
+}
+
+.zone-panel-heading h2 {
+    margin: 0;
+    color: var(--text);
+    font-size: 0.94rem;
+}
+
+.zone-panel-heading p:not(.eyebrow) {
+    max-width: 680px;
+    margin: 0.35rem 0 0;
+    color: var(--text-muted);
+    font-size: 0.7rem;
+    line-height: 1.5;
+}
+
+.zone-edit-form {
+    display: grid;
+    gap: 1rem;
+    padding-top: 1rem;
+}
+
+.zone-form-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.75rem;
+}
+
+.zone-form-grid-main {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.zone-field {
+    display: grid;
+    min-width: 0;
+    gap: 0.4rem;
+    color: var(--text-muted);
+    font-size: 0.68rem;
+    font-weight: 800;
+}
+
+.zone-field-wide,
+.zone-field-full {
+    grid-column: 1 / -1;
+}
+
+.zone-field input,
+.zone-field select,
+.zone-field textarea {
+    width: 100%;
+    min-width: 0;
+    min-height: 41px;
+    padding: 0.62rem 0.75rem;
+    border: 1px solid var(--border);
+    border-radius: 9px;
+    outline: none;
+    background: var(--surface-soft);
+    color: var(--text);
+    font: inherit;
+    font-size: 0.74rem;
+    font-weight: 600;
+    transition:
+        border-color 150ms ease,
+        box-shadow 150ms ease,
+        background 150ms ease;
+}
+
+.zone-field textarea {
+    min-height: 82px;
+    resize: vertical;
+}
+
+.zone-field input:focus,
+.zone-field select:focus,
+.zone-field textarea:focus {
+    border-color: var(--accent);
+    background: var(--surface);
+    box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.11);
+}
+
+.zone-form-section {
+    padding-top: 0.9rem;
+    border-top: 1px solid var(--border);
+}
+
+.zone-form-section-heading {
+    margin-bottom: 0.75rem;
+}
+
+.zone-form-section-heading h3 {
+    margin: 0;
+    color: var(--text);
+    font-size: 0.8rem;
+}
+
+.zone-form-section-heading p {
+    margin: 0.25rem 0 0;
+    color: var(--text-muted);
+    font-size: 0.68rem;
+}
+
+.zone-form-actions {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    padding-top: 0.9rem;
+    border-top: 1px solid var(--border);
+}
+
+.zone-form-actions > span {
+    color: var(--text-muted);
+    font-size: 0.67rem;
+    line-height: 1.45;
+}
+
+.zone-action-button,
+.zone-record-add-button {
+    min-height: 40px;
+    padding: 0.58rem 0.9rem;
+    font-size: 0.72rem;
+}
+
+.zone-record-create-form {
+    display: grid;
+    grid-template-columns:
+        minmax(105px, 0.75fr)
+        minmax(80px, 0.45fr)
+        minmax(80px, 0.45fr)
+        minmax(90px, 0.5fr)
+        minmax(180px, 1.5fr)
+        auto;
+    align-items: end;
+    gap: 0.6rem;
+    padding: 0.9rem 0;
+    border-bottom: 1px solid var(--border);
+}
+
+.zone-record-list {
+    display: grid;
+}
+
+.zone-record-card {
+    position: relative;
+    padding: 0.75rem 0;
+    border-bottom: 1px solid var(--border);
+}
+
+.zone-record-card:last-child {
+    border-bottom: 0;
+    padding-bottom: 0;
+}
+
+.zone-record-edit-form {
+    display: grid;
+    grid-template-columns:
+        minmax(105px, 0.75fr)
+        minmax(80px, 0.45fr)
+        minmax(80px, 0.45fr)
+        minmax(90px, 0.5fr)
+        minmax(180px, 1.5fr)
+        auto;
+    align-items: end;
+    gap: 0.6rem;
+    padding-right: 4.8rem;
+}
+
+.zone-record-edit-form .button {
+    min-height: 39px;
+}
+
+.zone-record-delete-form {
+    position: absolute;
+    right: 0;
+    bottom: 0.76rem;
+}
+
+.zone-danger-button {
+    min-height: 36px;
+    padding: 0.45rem 0.65rem;
+    border: 1px solid rgba(239, 68, 68, 0.28);
+    border-radius: 8px;
+    background: rgba(239, 68, 68, 0.08);
+    color: #ef4444;
+    font-size: 0.67rem;
+    font-weight: 800;
+    cursor: pointer;
+}
+
+.zone-danger-button:hover {
+    background: rgba(239, 68, 68, 0.14);
+}
+
+.zone-record-readonly {
+    display: grid;
+    grid-template-columns:
+        minmax(130px, 0.8fr)
+        70px
+        100px
+        minmax(180px, 1.5fr);
+    align-items: center;
+    gap: 0.75rem;
+    color: var(--text-muted);
+    font-size: 0.72rem;
+}
+
+.zone-record-readonly strong {
+    overflow: hidden;
+    color: var(--text);
+    text-overflow: ellipsis;
+}
+
+.zone-record-readonly code {
+    overflow-wrap: anywhere;
+    color: var(--text);
+    font-size: 0.7rem;
+}
+
+.zone-validation-success,
+.zone-validation-block,
+.zone-validation-warning {
+    margin-top: 0.85rem;
+    padding: 0.8rem;
+    border: 1px solid;
+    border-radius: 10px;
+}
+
+.zone-validation-success {
+    border-color: rgba(34, 197, 94, 0.25);
+    background: rgba(34, 197, 94, 0.08);
+}
+
+.zone-validation-block {
+    border-color: rgba(239, 68, 68, 0.25);
+    background: rgba(239, 68, 68, 0.08);
+}
+
+.zone-validation-warning {
+    border-color: rgba(245, 158, 11, 0.25);
+    background: rgba(245, 158, 11, 0.08);
+}
+
+.zone-validation-success strong,
+.zone-validation-block strong,
+.zone-validation-warning strong {
+    color: var(--text);
+    font-size: 0.75rem;
+}
+
+.zone-validation-success p,
+.zone-validation-block ul,
+.zone-validation-warning ul {
+    margin: 0.45rem 0 0;
+    color: var(--text-muted);
+    font-size: 0.68rem;
+    line-height: 1.55;
+}
+
+.zone-validation-block ul,
+.zone-validation-warning ul {
+    padding-left: 1rem;
+}
+
+.zone-publish-form {
+    display: grid;
+    gap: 0.55rem;
+    margin-top: 0.85rem;
+}
+
+.zone-publish-form .button {
+    width: 100%;
+    min-height: 42px;
+    padding: 0.62rem 0.75rem;
+    font-size: 0.72rem;
+}
+
+.zone-publish-form small,
+.zone-preview-note {
+    color: var(--text-muted);
+    font-size: 0.65rem;
+    line-height: 1.5;
+}
+
+.zone-preview {
+    max-height: 460px;
+    overflow: auto;
+    margin: 0.85rem 0 0;
+    padding: 0.85rem;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: var(--surface-soft);
+    color: var(--text);
+    font-size: 0.67rem;
+    line-height: 1.55;
+    white-space: pre;
+}
+
+.zone-preview-note {
+    margin: 0.65rem 0 0;
+}
+
+.zone-version-list {
+    display: grid;
+}
+
+.zone-version-row {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: 0.75rem;
+    padding: 0.7rem 0;
+    border-bottom: 1px solid var(--border);
+}
+
+.zone-version-row:last-child {
+    border-bottom: 0;
+    padding-bottom: 0;
+}
+
+.zone-version-row > div {
+    display: grid;
+    min-width: 0;
+    gap: 0.18rem;
+}
+
+.zone-version-row strong {
+    color: var(--text);
+    font-size: 0.74rem;
+}
+
+.zone-version-row span,
+.zone-version-row time {
+    overflow: hidden;
+    color: var(--text-muted);
+    font-size: 0.65rem;
+    line-height: 1.4;
+    text-overflow: ellipsis;
+}
+
+.zone-version-row time {
+    white-space: nowrap;
+}
+
+.zone-readonly-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 0.75rem;
+    padding-top: 1rem;
+}
+
+.zone-readonly-grid > div {
+    display: grid;
+    gap: 0.3rem;
+    padding: 0.75rem;
+    border: 1px solid var(--border);
+    border-radius: 9px;
+    background: var(--surface-soft);
+}
+
+.zone-readonly-grid span {
+    color: var(--text-muted);
+    font-size: 0.65rem;
+    font-weight: 800;
+}
+
+.zone-readonly-grid strong {
+    overflow-wrap: anywhere;
+    color: var(--text);
+    font-size: 0.72rem;
+}
+
+.zone-readonly-note {
+    margin: 0.8rem 0 0;
+    color: var(--text-muted);
+    font-size: 0.68rem;
+}
+
+.zone-empty-state {
+    margin-top: 0.8rem;
+}
+
+@media (max-width: 1280px) {
+    .zone-summary-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .zone-workspace {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .zone-workspace-sidebar {
+        position: static;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .zone-history-panel {
+        grid-column: 1 / -1;
+    }
+}
+
+@media (max-width: 1050px) {
+    .zone-record-create-form,
+    .zone-record-edit-form {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .zone-record-content-field {
+        grid-column: 1 / -1;
+    }
+
+    .zone-record-edit-form {
+        padding-right: 0;
+        padding-bottom: 2.8rem;
+    }
+
+    .zone-record-delete-form {
+        right: auto;
+        left: 0;
+        bottom: 0.7rem;
+    }
+}
+
+@media (max-width: 760px) {
+    .zone-summary-grid,
+    .zone-workspace-sidebar,
+    .zone-form-grid,
+    .zone-form-grid-main,
+    .zone-readonly-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .zone-history-panel {
+        grid-column: auto;
+    }
+
+    .zone-form-actions {
+        align-items: stretch;
+        flex-direction: column;
+    }
+
+    .zone-form-actions .button {
+        width: 100%;
+    }
+
+    .zone-record-readonly {
+        grid-template-columns: 1fr;
+        gap: 0.3rem;
+    }
+}
+
+@media (max-width: 560px) {
+    .zone-record-create-form,
+    .zone-record-edit-form {
+        grid-template-columns: 1fr;
+    }
+
+    .zone-record-content-field {
+        grid-column: auto;
+    }
+
+    .zone-record-create-form .button,
+    .zone-record-edit-form .button {
+        width: 100%;
+    }
+
+    .zone-panel-heading {
+        align-items: flex-start;
+        flex-direction: column;
+    }
+
+    .zone-title-row {
+        align-items: flex-start;
+        flex-direction: column;
+    }
+}
+
+/* DNS CENTER ZONES MANAGEMENT END */
