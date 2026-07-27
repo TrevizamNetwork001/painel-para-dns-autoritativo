@@ -7,6 +7,7 @@ use App\Models\DnsServer;
 use App\Models\DnsZone;
 use App\Models\DnsZoneVersion;
 use App\Services\BindZoneRenderer;
+use App\Services\DnsZoneValidator;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -24,6 +25,7 @@ class DnsZoneController extends Controller
             'zones' => DnsZone::query()
                 ->forOrganization($organizationId)
                 ->withCount('records')
+                ->with('servers')
                 ->orderBy('name')
                 ->get(),
             'servers' => DnsServer::query()
@@ -102,19 +104,143 @@ class DnsZoneController extends Controller
         return redirect()->route('zones.show', $zone)->with('status', 'Zona autoritativa criada.');
     }
 
-    public function show(Request $request, DnsZone $zone, BindZoneRenderer $renderer): View
-    {
+    public function update(
+        Request $request,
+        DnsZone $zone,
+        BindZoneRenderer $renderer,
+    ): RedirectResponse {
+        $organizationId = $this->authorizeWrite($request);
+        $this->authorizeZone($request, $zone);
+
+        $validated = $request->validate([
+            'kind' => ['required', Rule::in(DnsZone::KINDS)],
+            'default_ttl' => [
+                'required',
+                'integer',
+                'min:60',
+                'max:2147483647',
+            ],
+            'soa_mname' => ['required', 'string', 'max:255'],
+            'soa_rname' => ['required', 'string', 'max:255'],
+            'soa_refresh' => [
+                'required',
+                'integer',
+                'min:60',
+                'max:2147483647',
+            ],
+            'soa_retry' => [
+                'required',
+                'integer',
+                'min:60',
+                'max:2147483647',
+            ],
+            'soa_expire' => [
+                'required',
+                'integer',
+                'min:3600',
+                'max:2147483647',
+            ],
+            'soa_minimum' => [
+                'required',
+                'integer',
+                'min:60',
+                'max:2147483647',
+            ],
+            'primary_server_id' => [
+                'required',
+                'integer',
+                Rule::exists('dns_servers', 'id')
+                    ->where('organization_id', $organizationId),
+            ],
+            'secondary_server_id' => [
+                'nullable',
+                'integer',
+                'different:primary_server_id',
+                Rule::exists('dns_servers', 'id')
+                    ->where('organization_id', $organizationId),
+            ],
+            'notes' => ['nullable', 'string', 'max:2000'],
+        ]);
+
+        DB::transaction(function () use (
+            $request,
+            $zone,
+            $validated,
+            $renderer,
+        ): void {
+            $zone->forceFill([
+                'kind' => $validated['kind'],
+                'default_ttl' => $validated['default_ttl'],
+                'soa_mname' => $this->domain(
+                    $validated['soa_mname'],
+                ),
+                'soa_rname' => $this->domain(
+                    $validated['soa_rname'],
+                ),
+                'soa_refresh' => $validated['soa_refresh'],
+                'soa_retry' => $validated['soa_retry'],
+                'soa_expire' => $validated['soa_expire'],
+                'soa_minimum' => $validated['soa_minimum'],
+                'notes' => $validated['notes'] ?? null,
+            ])->save();
+
+            $servers = [
+                (int) $validated['primary_server_id'] => [
+                    'role' => 'primary',
+                ],
+            ];
+
+            if (! empty($validated['secondary_server_id'])) {
+                $servers[
+                    (int) $validated['secondary_server_id']
+                ] = [
+                    'role' => 'secondary',
+                ];
+            }
+
+            $zone->servers()->sync($servers);
+
+            $this->bump(
+                $zone,
+                $request,
+                'Parâmetros da zona atualizados.',
+                $renderer,
+            );
+        });
+
+        return back()->with(
+            'status',
+            'Parâmetros salvos. Nenhuma alteração foi aplicada ao BIND.',
+        );
+    }
+
+    public function show(
+        Request $request,
+        DnsZone $zone,
+        BindZoneRenderer $renderer,
+        DnsZoneValidator $validator,
+    ): View {
         $this->authorizeZone($request, $zone);
 
         $zone->load([
-            'records' => fn ($query) => $query->orderBy('type')->orderBy('name'),
-            'servers',
-            'versions' => fn ($query) => $query->latest('version')->limit(10),
+            'records' => fn ($query) => $query
+                ->orderBy('type')
+                ->orderBy('name'),
+            'servers' => fn ($query) => $query->orderBy('name'),
+            'versions' => fn ($query) => $query
+                ->latest('version')
+                ->limit(10),
         ]);
 
         return view('zones.show', [
             'zone' => $zone,
             'preview' => $renderer->render($zone),
+            'validation' => $validator->validate($zone),
+            'servers' => DnsServer::query()
+                ->forOrganization($zone->organization_id)
+                ->enabled()
+                ->orderBy('name')
+                ->get(),
         ]);
     }
 
@@ -157,6 +283,80 @@ class DnsZoneController extends Controller
         return back()->with('status', 'Registro DNS adicionado.');
     }
 
+    public function updateRecord(
+        Request $request,
+        DnsZone $zone,
+        DnsRecord $record,
+        BindZoneRenderer $renderer,
+    ): RedirectResponse {
+        $this->authorizeWrite($request);
+        $this->authorizeZone($request, $zone);
+
+        abort_unless(
+            (int) $record->dns_zone_id === (int) $zone->id
+            && (int) $record->organization_id
+                === (int) $zone->organization_id,
+            404,
+        );
+
+        $validated = $request->validate([
+            'name' => ['required', 'string', 'max:255'],
+            'type' => ['required', Rule::in(DnsRecord::TYPES)],
+            'ttl' => [
+                'nullable',
+                'integer',
+                'min:60',
+                'max:2147483647',
+            ],
+            'priority' => [
+                'nullable',
+                'integer',
+                'min:0',
+                'max:65535',
+            ],
+            'content' => ['required', 'string', 'max:4096'],
+        ]);
+
+        $this->validateRecord($validated);
+
+        DB::transaction(function () use (
+            $request,
+            $zone,
+            $record,
+            $validated,
+            $renderer,
+        ): void {
+            $record->forceFill([
+                'name' => $validated['name'] === '@'
+                    ? $zone->name
+                    : strtolower(
+                        rtrim(
+                            trim($validated['name']),
+                            '.',
+                        ),
+                    ),
+                'type' => $validated['type'],
+                'ttl' => $validated['ttl'] ?? null,
+                'priority' => $validated['type'] === 'MX'
+                    ? ($validated['priority'] ?? 10)
+                    : null,
+                'content' => trim($validated['content']),
+            ])->save();
+
+            $this->bump(
+                $zone,
+                $request,
+                'Registro atualizado.',
+                $renderer,
+            );
+        });
+
+        return back()->with(
+            'status',
+            'Registro DNS salvo. A alteração permanece pendente de validação.',
+        );
+    }
+
     public function destroyRecord(
         Request $request,
         DnsZone $zone,
@@ -184,27 +384,42 @@ class DnsZoneController extends Controller
         Request $request,
         DnsZone $zone,
         BindZoneRenderer $renderer,
+        DnsZoneValidator $validator,
     ): RedirectResponse {
         $this->authorizeWrite($request);
         $this->authorizeZone($request, $zone);
 
-        abort_if(
-            $zone->records()->where('enabled', true)->where('type', 'NS')->count() < 2,
-            422,
-            'Inclua pelo menos dois registros NS antes de publicar.',
-        );
+        $result = $validator->validate($zone);
 
-        DB::transaction(function () use ($request, $zone, $renderer): void {
+        if (! $result['ok']) {
+            throw ValidationException::withMessages([
+                'zone' => $result['errors'],
+            ]);
+        }
+
+        DB::transaction(function () use (
+            $request,
+            $zone,
+            $renderer,
+        ): void {
             $zone->forceFill([
-                'status' => 'published',
+                'status' => 'ready',
                 'serial' => $this->nextSerial($zone->serial),
                 'version' => $zone->version + 1,
             ])->save();
 
-            $this->saveVersion($zone, $request, 'Zona publicada.', $renderer);
+            $this->saveVersion(
+                $zone,
+                $request,
+                'Plano de publicação validado.',
+                $renderer,
+            );
         });
 
-        return back()->with('status', 'Zona publicada para distribuição.');
+        return back()->with(
+            'status',
+            'Zona validada e pronta. Nenhuma alteração foi aplicada ao BIND.',
+        );
     }
 
     private function validateRecord(array $record): void

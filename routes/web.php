@@ -138,10 +138,20 @@ Route::middleware([
         [\App\Http\Controllers\DnsZoneController::class, 'show'],
     )->name('show');
 
+    Route::put(
+        '/{zone}',
+        [\App\Http\Controllers\DnsZoneController::class, 'update'],
+    )->name('update');
+
     Route::post(
         '/{zone}/registros',
         [\App\Http\Controllers\DnsZoneController::class, 'storeRecord'],
     )->name('records.store');
+
+    Route::put(
+        '/{zone}/registros/{record}',
+        [\App\Http\Controllers\DnsZoneController::class, 'updateRecord'],
+    )->name('records.update');
 
     Route::delete(
         '/{zone}/registros/{record}',
