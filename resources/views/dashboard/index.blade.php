@@ -127,7 +127,7 @@
                 Servidores
             </a>
 
-            <a href="{{ route('servers.index') }}" class="nav-item">
+            <a href="{{ route('zones.index') }}" class="nav-item">
                 <span class="nav-icon" aria-hidden="true">
                     <svg viewBox="0 0 24 24" fill="none">
                         <circle cx="12" cy="12" r="9" />

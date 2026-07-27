@@ -4389,3 +4389,183 @@ button.theme-toggle::after {
 }
 
 /* DNS CENTER ZONES MANAGEMENT END */
+
+/* DNS CENTER ZONES INDEX START */
+
+.zone-layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1.35fr) minmax(360px, 0.65fr);
+    align-items: start;
+    gap: 1rem;
+}
+
+.zone-layout > .zone-panel {
+    min-height: 100%;
+}
+
+.zone-layout .zone-panel > h2 {
+    margin: 0 0 1rem;
+    padding-bottom: 0.8rem;
+    border-bottom: 1px solid var(--border);
+    color: var(--text);
+    font-size: 0.95rem;
+}
+
+.zone-row {
+    display: flex;
+    min-height: 64px;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 0.85rem 0.9rem;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: var(--surface-soft);
+    color: var(--text);
+    transition:
+        border-color 150ms ease,
+        background 150ms ease,
+        transform 150ms ease;
+}
+
+.zone-row + .zone-row {
+    margin-top: 0.65rem;
+}
+
+.zone-row:hover {
+    border-color: var(--border-strong);
+    background: var(--surface);
+    text-decoration: none;
+    transform: translateY(-1px);
+}
+
+.zone-row > div {
+    display: grid;
+    min-width: 0;
+    gap: 0.25rem;
+}
+
+.zone-row strong {
+    overflow: hidden;
+    font-size: 0.78rem;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.zone-row span {
+    color: var(--text-muted);
+    font-size: 0.67rem;
+    line-height: 1.4;
+}
+
+.zone-row > span {
+    flex: 0 0 auto;
+    text-align: right;
+}
+
+.zone-form {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.75rem;
+}
+
+.zone-form input,
+.zone-form select,
+.zone-form textarea {
+    width: 100%;
+    min-width: 0;
+    min-height: 42px;
+    padding: 0.65rem 0.75rem;
+    border: 1px solid var(--border);
+    border-radius: 9px;
+    outline: none;
+    background: var(--surface-soft);
+    color: var(--text);
+    font: inherit;
+    font-size: 0.74rem;
+    font-weight: 600;
+    transition:
+        border-color 150ms ease,
+        box-shadow 150ms ease,
+        background 150ms ease;
+}
+
+.zone-form input::placeholder,
+.zone-form textarea::placeholder {
+    color: var(--text-muted);
+}
+
+.zone-form input:focus,
+.zone-form select:focus,
+.zone-form textarea:focus {
+    border-color: var(--accent);
+    background: var(--surface);
+    box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.11);
+}
+
+.zone-form textarea {
+    min-height: 86px;
+    resize: vertical;
+}
+
+.zone-form textarea,
+.zone-form .button {
+    grid-column: 1 / -1;
+}
+
+.zone-form .button {
+    justify-self: flex-end;
+    min-width: 130px;
+    min-height: 42px;
+    padding: 0.62rem 1rem;
+    font-size: 0.73rem;
+}
+
+.zone-layout .empty-state {
+    display: grid;
+    min-height: 260px;
+    place-items: center;
+    padding: 1.5rem;
+    border: 1px dashed var(--border);
+    border-radius: 10px;
+    color: var(--text-muted);
+    font-size: 0.75rem;
+    text-align: center;
+}
+
+@media (max-width: 1050px) {
+    .zone-layout {
+        grid-template-columns: 1fr;
+    }
+
+    .zone-layout > .zone-panel {
+        min-height: auto;
+    }
+}
+
+@media (max-width: 620px) {
+    .zone-form {
+        grid-template-columns: 1fr;
+    }
+
+    .zone-form textarea,
+    .zone-form .button {
+        grid-column: auto;
+    }
+
+    .zone-form .button {
+        width: 100%;
+        justify-self: stretch;
+    }
+
+    .zone-row {
+        align-items: flex-start;
+        flex-direction: column;
+    }
+
+    .zone-row > span {
+        text-align: left;
+    }
+}
+
+/* DNS CENTER ZONES INDEX END */
