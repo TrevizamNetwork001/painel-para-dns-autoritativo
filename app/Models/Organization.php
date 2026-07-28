@@ -56,4 +56,19 @@ class Organization extends Model
         return $this->hasMany(DnsServer::class);
     }
 
+
+    public function nameserverIdentities(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(
+            DnsNameserverIdentity::class,
+        );
+    }
+
+    public function nameserverProfiles(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(
+            DnsNameserverProfile::class,
+        );
+    }
+
 }

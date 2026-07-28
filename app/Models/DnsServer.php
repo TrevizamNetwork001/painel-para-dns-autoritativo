@@ -129,4 +129,12 @@ class DnsServer extends Model
         );
     }
 
+    public function nameserverIdentities(): HasMany
+    {
+        return $this->hasMany(
+            DnsNameserverIdentity::class,
+            'dns_server_id',
+        );
+    }
+
 }
