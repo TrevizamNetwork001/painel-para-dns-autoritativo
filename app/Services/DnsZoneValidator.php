@@ -83,7 +83,7 @@ class DnsZoneValidator
 
             if (! $hasGlue) {
                 $errors[] = sprintf(
-                    "O nameserver interno %s precisa de registro A ou AAAA (glue).",
+                    "O nameserver %s pertence a este domínio e precisa de pelo menos um registro A ou AAAA com o endereço público usado por ele. Os demais registros do domínio podem apontar normalmente para qualquer rede.",
                     $target,
                 );
             }

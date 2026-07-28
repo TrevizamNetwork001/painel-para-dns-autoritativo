@@ -36,8 +36,10 @@ class DnsZoneController extends Controller
         ]);
     }
 
-    public function store(Request $request, BindZoneRenderer $renderer): RedirectResponse
-    {
+    public function store(
+        Request $request,
+        BindZoneRenderer $renderer,
+    ): RedirectResponse {
         $organizationId = $this->authorizeWrite($request);
 
         $validated = $request->validate([
@@ -45,40 +47,113 @@ class DnsZoneController extends Controller
                 'required',
                 'string',
                 'max:255',
-                'regex:/^(?=.{1,253}\.?$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}\.?$/i',
-                Rule::unique('dns_zones', 'name')->where('organization_id', $organizationId),
+                'regex:/^(?=.{1,253}\\.?$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\\.)+[a-z]{2,63}\\.?$/i',
+                Rule::unique('dns_zones', 'name')
+                    ->where('organization_id', $organizationId),
             ],
-            'kind' => ['required', Rule::in(DnsZone::KINDS)],
-            'default_ttl' => ['required', 'integer', 'min:60', 'max:2147483647'],
-            'soa_mname' => ['required', 'string', 'max:255'],
-            'soa_rname' => ['required', 'string', 'max:255'],
-            'soa_refresh' => ['required', 'integer', 'min:60', 'max:2147483647'],
-            'soa_retry' => ['required', 'integer', 'min:60', 'max:2147483647'],
-            'soa_expire' => ['required', 'integer', 'min:3600', 'max:2147483647'],
-            'soa_minimum' => ['required', 'integer', 'min:60', 'max:2147483647'],
+            'kind' => [
+                'required',
+                Rule::in(DnsZone::KINDS),
+            ],
+            'default_ttl' => [
+                'required',
+                'integer',
+                'min:60',
+                'max:2147483647',
+            ],
+            'soa_mname' => [
+                'nullable',
+                'string',
+                'max:255',
+            ],
+            'soa_rname' => [
+                'nullable',
+                'string',
+                'max:255',
+            ],
+            'soa_refresh' => [
+                'required',
+                'integer',
+                'min:60',
+                'max:2147483647',
+            ],
+            'soa_retry' => [
+                'required',
+                'integer',
+                'min:60',
+                'max:2147483647',
+            ],
+            'soa_expire' => [
+                'required',
+                'integer',
+                'min:3600',
+                'max:2147483647',
+            ],
+            'soa_minimum' => [
+                'required',
+                'integer',
+                'min:60',
+                'max:2147483647',
+            ],
             'primary_server_id' => [
                 'required',
                 'integer',
-                Rule::exists('dns_servers', 'id')->where('organization_id', $organizationId),
+                Rule::exists('dns_servers', 'id')
+                    ->where('organization_id', $organizationId),
             ],
             'secondary_server_id' => [
                 'nullable',
                 'integer',
                 'different:primary_server_id',
-                Rule::exists('dns_servers', 'id')->where('organization_id', $organizationId),
+                Rule::exists('dns_servers', 'id')
+                    ->where('organization_id', $organizationId),
             ],
-            'notes' => ['nullable', 'string', 'max:2000'],
+            'notes' => [
+                'nullable',
+                'string',
+                'max:2000',
+            ],
         ]);
 
-        $zone = DB::transaction(function () use ($request, $validated, $organizationId, $renderer): DnsZone {
+        $zoneName = $this->domain($validated['name']);
+
+        $primaryServer = DnsServer::query()
+            ->forOrganization($organizationId)
+            ->enabled()
+            ->findOrFail(
+                (int) $validated['primary_server_id'],
+            );
+
+        $secondaryServer = null;
+
+        if (! empty($validated['secondary_server_id'])) {
+            $secondaryServer = DnsServer::query()
+                ->forOrganization($organizationId)
+                ->enabled()
+                ->findOrFail(
+                    (int) $validated['secondary_server_id'],
+                );
+        }
+
+        $zone = DB::transaction(function () use (
+            $request,
+            $validated,
+            $organizationId,
+            $renderer,
+            $zoneName,
+            $primaryServer,
+            $secondaryServer,
+        ): DnsZone {
             $zone = DnsZone::query()->create([
                 'organization_id' => $organizationId,
-                'name' => $this->domain($validated['name']),
+                'name' => $zoneName,
                 'kind' => $validated['kind'],
                 'serial' => $this->nextSerial(),
                 'default_ttl' => $validated['default_ttl'],
-                'soa_mname' => $this->domain($validated['soa_mname']),
-                'soa_rname' => $this->domain($validated['soa_rname']),
+                'soa_mname' => $this->domain(
+                    $primaryServer->hostname,
+                ),
+                'soa_rname' => 'hostmaster.'.$zoneName,
                 'soa_refresh' => $validated['soa_refresh'],
                 'soa_retry' => $validated['soa_retry'],
                 'soa_expire' => $validated['soa_expire'],
@@ -86,22 +161,80 @@ class DnsZoneController extends Controller
                 'status' => 'draft',
                 'version' => 1,
                 'enabled' => true,
-                'notes' => $validated['notes'] ?? null,
+                'notes' => isset($validated['notes'])
+                    ? trim($validated['notes'])
+                    : null,
             ]);
 
-            $sync = [(int) $validated['primary_server_id'] => ['role' => 'primary']];
+            $sync = [
+                (int) $primaryServer->id => [
+                    'role' => 'primary',
+                ],
+            ];
 
-            if (! empty($validated['secondary_server_id'])) {
-                $sync[(int) $validated['secondary_server_id']] = ['role' => 'secondary'];
+            if ($secondaryServer !== null) {
+                $sync[(int) $secondaryServer->id] = [
+                    'role' => 'secondary',
+                ];
             }
 
             $zone->servers()->sync($sync);
-            $this->saveVersion($zone, $request, 'Zona criada.', $renderer);
+
+            $nameServers = collect([
+                $primaryServer->hostname,
+                $secondaryServer?->hostname,
+            ])
+                ->filter(
+                    fn ($hostname): bool =>
+                        is_string($hostname)
+                        && trim($hostname) !== '',
+                )
+                ->map(
+                    fn (string $hostname): string =>
+                        $this->domain($hostname),
+                )
+                ->unique()
+                ->values();
+
+            foreach ($nameServers as $nameServer) {
+                $zone->records()->create([
+                    'organization_id' => $organizationId,
+                    'name' => '@',
+                    'type' => 'NS',
+                    'ttl' => null,
+                    'priority' => null,
+                    'content' => $nameServer,
+                    'enabled' => true,
+                ]);
+            }
+
+            $this->saveVersion(
+                $zone,
+                $request,
+                sprintf(
+                    'Domínio criado com %d registro(s) NS automático(s).',
+                    $nameServers->count(),
+                ),
+                $renderer,
+            );
 
             return $zone;
         });
 
-        return redirect()->route('zones.show', $zone)->with('status', 'Zona autoritativa criada.');
+        $nsCount = $zone->records()
+            ->where('name', $zone->name)
+            ->where('type', 'NS')
+            ->count();
+
+        return redirect()
+            ->route('zones.show', $zone)
+            ->with(
+                'status',
+                sprintf(
+                    'Domínio criado com sucesso. %d registro(s) NS foram configurados automaticamente.',
+                    $nsCount,
+                ),
+            );
     }
 
     public function update(
