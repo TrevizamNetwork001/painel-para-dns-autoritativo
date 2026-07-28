@@ -54,6 +54,12 @@
                 Servidores
             </a>
 
+            <a href="{{ route('nameservers.index') }}" class="nav-item">
+                <span class="nav-icon">⇄</span>
+                Nameservers
+            </a>
+
+
             <a href="#" class="nav-item">
                 <span class="nav-icon">◎</span>
                 Zonas

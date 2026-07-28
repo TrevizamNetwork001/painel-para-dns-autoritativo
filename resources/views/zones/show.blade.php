@@ -7,7 +7,7 @@
     $user = auth()->user();
     $organizationId = (int) $user->current_organization_id;
 
-    $canManageZone = $user->is_platform_admin
+    $canManageDomain = $user->is_platform_admin
         || $user->roleForOrganization($organizationId) === 'organization_admin';
 
     $primaryServer = $zone->servers->first(
@@ -19,6 +19,7 @@
     );
 
     $validationOk = (bool) data_get($validation, 'ok', false);
+
     $validationErrors = data_get($validation, 'errors', []);
     $validationWarnings = data_get($validation, 'warnings', []);
 
@@ -32,14 +33,9 @@
 
     $statusLabels = [
         'draft' => 'Rascunho',
-        'ready' => 'Pronta',
-        'published' => 'Publicada',
-        'disabled' => 'Desativada',
-    ];
-
-    $kindLabels = [
-        'primary' => 'Primary',
-        'secondary' => 'Secondary',
+        'ready' => 'Pronto',
+        'published' => 'Publicado',
+        'disabled' => 'Desativado',
     ];
 @endphp
 
@@ -59,45 +55,54 @@
 
         <nav class="sidebar-nav">
             <a href="{{ route('dashboard') }}" class="nav-item">
-                ▦ Dashboard
+                <span class="nav-icon">▦</span>
+                Dashboard
             </a>
 
             <span class="nav-section">DNS autoritativo</span>
 
             <a href="{{ route('servers.index') }}" class="nav-item">
-                ▤ Servidores
+                <span class="nav-icon">▤</span>
+                Servidores
             </a>
 
+            <a href="{{ route('nameservers.index') }}" class="nav-item">
+                <span class="nav-icon">⇄</span>
+                Nameservers
+            </a>
+
+
             <a href="{{ route('zones.index') }}" class="nav-item is-active">
-                ◎ Zonas
+                <span class="nav-icon">◎</span>
+                Domínios
             </a>
 
             @if (Route::has('users.index'))
                 <a href="{{ route('users.index') }}" class="nav-item">
-                    ● Usuários
+                    <span class="nav-icon">●</span>
+                    Usuários
                 </a>
             @endif
         </nav>
     </aside>
 
-    <main class="main-content zone-management-page">
-        <header class="topbar zone-management-topbar">
+    <main class="main-content domain-workspace-page">
+        <header class="topbar domain-workspace-topbar">
             <div>
-                <p class="eyebrow">Zona autoritativa</p>
+                <p class="eyebrow">Domínio autoritativo</p>
 
-                <div class="zone-title-row">
+                <div class="domain-workspace-title">
                     <h1>{{ $zone->name }}</h1>
 
-                    <span class="zone-status-badge zone-status-{{ $zone->status }}">
+                    <span class="domain-status domain-status-{{ $zone->status }}">
                         {{ $statusLabels[$zone->status] ?? $zone->status }}
                     </span>
                 </div>
 
                 <p class="page-description">
-                    Serial {{ $zone->serial }}
+                    {{ $zone->records->count() }} registro(s)
                     · versão {{ $zone->version }}
-                    · {{ $kindLabels[$zone->kind] ?? $zone->kind }}
-                    · {{ $zone->records->count() }} registro(s)
+                    · serial {{ $zone->serial }}
                 </p>
             </div>
 
@@ -114,8 +119,30 @@
         </header>
 
         @if (session('status'))
-            <div class="alert alert-success">
-                {{ session('status') }}
+            <div
+                class="alert alert-success flash-toast"
+                role="status"
+                data-flash-toast
+                data-flash-timeout="6000"
+            >
+                <span class="flash-toast-message">
+                    {{ session('status') }}
+                </span>
+
+                <button
+                    type="button"
+                    class="flash-toast-close"
+                    aria-label="Fechar mensagem"
+                    title="Fechar"
+                    data-flash-toast-close
+                >
+                    ×
+                </button>
+
+                <span
+                    class="flash-toast-progress"
+                    aria-hidden="true"
+                ></span>
             </div>
         @endif
 
@@ -131,8 +158,8 @@
             </div>
         @endif
 
-        <section class="zone-summary-grid">
-            <article class="zone-summary-card">
+        <section class="domain-overview-grid">
+            <article class="domain-overview-card">
                 <span>Estado</span>
 
                 <strong>
@@ -141,21 +168,21 @@
 
                 <small>
                     @if ($zone->status === 'draft')
-                        Ainda existem alterações em preparação.
+                        Existem alterações em preparação.
                     @elseif ($zone->status === 'ready')
-                        Validada e pronta para publicação futura.
+                        Domínio pronto para publicação.
                     @elseif ($zone->status === 'published')
                         Existe uma versão publicada.
                     @else
-                        Zona fora da operação normal.
+                        Domínio fora da operação normal.
                     @endif
                 </small>
             </article>
 
-            <article class="zone-summary-card">
+            <article class="domain-overview-card">
                 <span>Validação</span>
 
-                <strong class="{{ $validationOk ? 'text-success' : 'text-danger' }}">
+                <strong class="{{ $validationOk ? 'is-success' : 'is-danger' }}">
                     {{ $validationOk ? 'Aprovada' : 'Com pendências' }}
                 </strong>
 
@@ -165,107 +192,301 @@
                 </small>
             </article>
 
-            <article class="zone-summary-card">
-                <span>Primary</span>
+            <article class="domain-overview-card">
+                <span>Servidor principal</span>
 
                 <strong>
                     {{ $primaryServer?->name ?? 'Não definido' }}
                 </strong>
 
                 <small>
-                    {{ $primaryServer?->hostname ?? 'Vincule um servidor primary.' }}
+                    {{ $primaryServer?->hostname ?? 'Selecione um servidor.' }}
                 </small>
             </article>
 
-            <article class="zone-summary-card">
-                <span>Secondary</span>
+            <article class="domain-overview-card">
+                <span>Servidor secundário</span>
 
                 <strong>
                     {{ $secondaryServer?->name ?? 'Não definido' }}
                 </strong>
 
                 <small>
-                    {{ $secondaryServer?->hostname ?? 'Secondary opcional.' }}
+                    {{ $secondaryServer?->hostname ?? 'Servidor opcional.' }}
                 </small>
             </article>
         </section>
 
-        <section class="zone-workspace">
-            <div class="zone-workspace-main">
-                <article class="zone-panel zone-configuration-panel">
-                    <div class="zone-panel-heading">
-                        <div>
-                            <p class="eyebrow">Configuração</p>
-                            <h2>Parâmetros da zona</h2>
+        <nav class="domain-tabs" aria-label="Áreas do domínio">
+            <button
+                type="button"
+                class="domain-tab is-active"
+                data-domain-tab="records"
+            >
+                Registros DNS
+                <span>{{ $zone->records->count() }}</span>
+            </button>
 
-                            <p>
-                                Edite servidores, TTL e parâmetros SOA.
-                                Salvar apenas atualiza o banco e gera uma nova versão.
-                            </p>
-                        </div>
+            <button
+                type="button"
+                class="domain-tab"
+                data-domain-tab="configuration"
+            >
+                Configuração
+            </button>
 
-                        <span class="zone-version-chip">
-                            v{{ $zone->version }}
-                        </span>
+            <button
+                type="button"
+                class="domain-tab"
+                data-domain-tab="reverse"
+            >
+                DNS reverso
+            </button>
+
+            <button
+                type="button"
+                class="domain-tab"
+                data-domain-tab="publication"
+            >
+                Publicação
+
+                @if (! $validationOk)
+                    <span class="is-warning">!</span>
+                @endif
+            </button>
+
+            <button
+                type="button"
+                class="domain-tab"
+                data-domain-tab="history"
+            >
+                Histórico
+                <span>{{ $zone->versions->count() }}</span>
+            </button>
+        </nav>
+
+        <section
+            class="domain-tab-panel is-active"
+            data-domain-panel="records"
+        >
+            <article class="domain-section-card">
+                <header class="domain-section-header">
+                    <div>
+                        <p class="eyebrow">Registros DNS</p>
+                        <h2>Gerenciamento de registros</h2>
+
+                        <p>
+                            Cadastre e edite as entradas DNS deste domínio.
+                        </p>
                     </div>
 
-                    @if ($canManageZone)
-                        <form
-                            method="POST"
-                            action="{{ route('zones.update', $zone) }}"
-                            class="zone-edit-form"
+                    @if ($canManageDomain)
+                        <button
+                            type="button"
+                            class="button button-primary domain-add-record-button"
+                            data-record-modal-open
                         >
-                            @csrf
-                            @method('PUT')
+                            <span aria-hidden="true">＋</span>
+                            Adicionar registro
+                        </button>
+                    @endif
+                </header>
 
-                            <div class="zone-form-grid zone-form-grid-main">
-                                <label class="zone-field zone-field-wide">
-                                    <span>Nome da zona</span>
+                <div class="domain-record-toolbar">
+                    <label class="domain-record-search">
+                        <span aria-hidden="true">⌕</span>
 
-                                    <input
-                                        type="text"
-                                        name="name"
-                                        value="{{ old('name', $zone->name) }}"
-                                        required
-                                        maxlength="255"
-                                        autocomplete="off"
-                                    >
-                                </label>
+                        <input
+                            type="search"
+                            placeholder="Pesquisar por nome, tipo ou conteúdo"
+                            data-record-search
+                        >
+                    </label>
 
-                                <label class="zone-field">
-                                    <span>Tipo</span>
+                    <span class="domain-record-total">
+                        {{ $zone->records->count() }}
+                        registro(s)
+                    </span>
+                </div>
 
-                                    <select name="kind" required>
-                                        @foreach (\App\Models\DnsZone::KINDS as $kind)
-                                            <option
-                                                value="{{ $kind }}"
-                                                @selected(old('kind', $zone->kind) === $kind)
+                @if ($zone->records->isNotEmpty())
+                    <div class="domain-record-table-wrapper">
+                        <div class="domain-record-table">
+                            <div class="domain-record-table-header">
+                                <span>Nome</span>
+                                <span>Tipo</span>
+                                <span>Conteúdo</span>
+                                <span>TTL</span>
+                                <span>Estado</span>
+                                <span></span>
+                            </div>
+
+                            @foreach ($zone->records as $record)
+                                <div
+                                    class="domain-record-row"
+                                    data-record-row
+                                    data-record-search-value="{{ mb_strtolower(
+                                        $record->name
+                                        . ' '
+                                        . $record->type
+                                        . ' '
+                                        . $record->content
+                                    ) }}"
+                                >
+                                    <div class="domain-record-name">
+                                        <strong>{{ $record->name }}</strong>
+
+                                        <small>
+                                            {{ $record->name === '@'
+                                                ? $zone->name
+                                                : $record->name . '.' . $zone->name }}
+                                        </small>
+                                    </div>
+
+                                    <div>
+                                        <span class="domain-record-type">
+                                            {{ $record->type }}
+                                        </span>
+                                    </div>
+
+                                    <code class="domain-record-content">
+                                        @if ($record->priority !== null)
+                                            {{ $record->priority }}
+                                        @endif
+
+                                        {{ $record->content }}
+                                    </code>
+
+                                    <div class="domain-record-ttl">
+                                        {{ $record->ttl ?: $zone->default_ttl }}
+                                    </div>
+
+                                    <div>
+                                        <span class="domain-record-state">
+                                            Ativo
+                                        </span>
+                                    </div>
+
+                                    <div class="domain-record-actions">
+                                        @if ($canManageDomain)
+                                            <button
+                                                type="button"
+                                                class="domain-edit-record-button"
+                                                data-record-edit
+                                                data-edit-id="{{ $record->id }}"
+                                                data-edit-name="{{ $record->name }}"
+                                                data-edit-type="{{ $record->type }}"
+                                                data-edit-ttl="{{ $record->ttl }}"
+                                                data-edit-priority="{{ $record->priority }}"
+                                                data-edit-content="{{ $record->content }}"
+                                                data-update-url="{{ route(
+                                                    'zones.records.update',
+                                                    [$zone, $record]
+                                                ) }}"
+                                                data-delete-url="{{ route(
+                                                    'zones.records.destroy',
+                                                    [$zone, $record]
+                                                ) }}"
                                             >
-                                                {{ $kindLabels[$kind] ?? $kind }}
-                                            </option>
-                                        @endforeach
-                                    </select>
-                                </label>
+                                                Editar
+                                            </button>
+                                        @endif
+                                    </div>
+                                </div>
+                            @endforeach
+                        </div>
+                    </div>
+                @else
+                    <div class="domain-record-empty">
+                        <div aria-hidden="true">◎</div>
 
-                                <label class="zone-field">
-                                    <span>TTL padrão</span>
+                        <h3>Nenhum registro DNS cadastrado</h3>
 
-                                    <input
-                                        type="number"
-                                        name="default_ttl"
-                                        value="{{ old('default_ttl', $zone->default_ttl) }}"
-                                        min="60"
-                                        max="2147483647"
+                        <p>
+                            Adicione os registros NS, A, AAAA, MX, TXT e demais
+                            entradas necessárias para este domínio.
+                        </p>
+
+                        @if ($canManageDomain)
+                            <button
+                                type="button"
+                                class="button button-primary"
+                                data-record-modal-open
+                            >
+                                Adicionar primeiro registro
+                            </button>
+                        @endif
+                    </div>
+                @endif
+
+                <div
+                    class="domain-record-no-results"
+                    data-record-no-results
+                    hidden
+                >
+                    Nenhum registro corresponde à pesquisa.
+                </div>
+            </article>
+        </section>
+
+        <section
+            class="domain-tab-panel"
+            data-domain-panel="configuration"
+            hidden
+        >
+            <article class="domain-section-card">
+                <header class="domain-section-header">
+                    <div>
+                        <p class="eyebrow">Configuração</p>
+                        <h2>Configuração do domínio</h2>
+
+                        <p>
+                            Servidores DNS, TTL e parâmetros avançados do SOA.
+                        </p>
+                    </div>
+                </header>
+
+                @if ($canManageDomain)
+                    <form
+                        method="POST"
+                        action="{{ route('zones.update', $zone) }}"
+                        class="domain-configuration-form"
+                    >
+                        @csrf
+                        @method('PUT')
+
+                        <input
+                            type="hidden"
+                            name="name"
+                            value="{{ old('name', $zone->name) }}"
+                        >
+
+                        <input
+                            type="hidden"
+                            name="kind"
+                            value="{{ old('kind', $zone->kind) }}"
+                        >
+
+                        <div class="domain-configuration-section">
+                            <div class="domain-configuration-heading">
+                                <h3>Servidores DNS</h3>
+
+                                <p>
+                                    Servidores responsáveis pela resolução
+                                    autoritativa deste domínio.
+                                </p>
+                            </div>
+
+                            <div class="domain-form-grid">
+                                <label class="domain-field">
+                                    <span>Servidor DNS principal</span>
+
+                                    <select
+                                        name="primary_server_id"
                                         required
                                     >
-                                </label>
-
-                                <label class="zone-field">
-                                    <span>Servidor primary</span>
-
-                                    <select name="primary_server_id" required>
                                         <option value="">
-                                            Selecione o primary
+                                            Selecione o servidor
                                         </option>
 
                                         @foreach ($servers as $server)
@@ -285,12 +506,12 @@
                                     </select>
                                 </label>
 
-                                <label class="zone-field">
-                                    <span>Servidor secondary</span>
+                                <label class="domain-field">
+                                    <span>Servidor DNS secundário</span>
 
                                     <select name="secondary_server_id">
                                         <option value="">
-                                            Sem secondary
+                                            Sem servidor secundário
                                         </option>
 
                                         @foreach ($servers as $server)
@@ -310,441 +531,228 @@
                                     </select>
                                 </label>
                             </div>
+                        </div>
 
-                            <div class="zone-form-section">
-                                <div class="zone-form-section-heading">
-                                    <div>
-                                        <h3>Start of Authority</h3>
-                                        <p>
-                                            Parâmetros utilizados no registro SOA.
-                                        </p>
-                                    </div>
-                                </div>
+                        <div class="domain-configuration-section">
+                            <div class="domain-configuration-heading">
+                                <h3>Parâmetros do SOA</h3>
 
-                                <div class="zone-form-grid">
-                                    <label class="zone-field">
-                                        <span>MNAME</span>
-
-                                        <input
-                                            type="text"
-                                            name="soa_mname"
-                                            value="{{ old('soa_mname', $zone->soa_mname) }}"
-                                            required
-                                            maxlength="255"
-                                            autocomplete="off"
-                                        >
-                                    </label>
-
-                                    <label class="zone-field">
-                                        <span>RNAME</span>
-
-                                        <input
-                                            type="text"
-                                            name="soa_rname"
-                                            value="{{ old('soa_rname', $zone->soa_rname) }}"
-                                            required
-                                            maxlength="255"
-                                            autocomplete="off"
-                                        >
-                                    </label>
-
-                                    <label class="zone-field">
-                                        <span>Refresh</span>
-
-                                        <input
-                                            type="number"
-                                            name="soa_refresh"
-                                            value="{{ old('soa_refresh', $zone->soa_refresh) }}"
-                                            min="60"
-                                            max="2147483647"
-                                            required
-                                        >
-                                    </label>
-
-                                    <label class="zone-field">
-                                        <span>Retry</span>
-
-                                        <input
-                                            type="number"
-                                            name="soa_retry"
-                                            value="{{ old('soa_retry', $zone->soa_retry) }}"
-                                            min="60"
-                                            max="2147483647"
-                                            required
-                                        >
-                                    </label>
-
-                                    <label class="zone-field">
-                                        <span>Expire</span>
-
-                                        <input
-                                            type="number"
-                                            name="soa_expire"
-                                            value="{{ old('soa_expire', $zone->soa_expire) }}"
-                                            min="3600"
-                                            max="2147483647"
-                                            required
-                                        >
-                                    </label>
-
-                                    <label class="zone-field">
-                                        <span>Minimum</span>
-
-                                        <input
-                                            type="number"
-                                            name="soa_minimum"
-                                            value="{{ old('soa_minimum', $zone->soa_minimum) }}"
-                                            min="60"
-                                            max="2147483647"
-                                            required
-                                        >
-                                    </label>
-
-                                    <label class="zone-field zone-field-full">
-                                        <span>Observações</span>
-
-                                        <textarea
-                                            name="notes"
-                                            rows="3"
-                                            maxlength="2000"
-                                            placeholder="Observações operacionais sobre a zona"
-                                        >{{ old('notes', $zone->notes) }}</textarea>
-                                    </label>
-                                </div>
+                                <p>
+                                    Estes valores raramente precisam ser
+                                    alterados.
+                                </p>
                             </div>
 
-                            <div class="zone-form-actions">
-                                <span>
-                                    O serial e a versão serão incrementados
-                                    automaticamente.
-                                </span>
+                            <div class="domain-form-grid domain-form-grid-three">
+                                <label class="domain-field">
+                                    <span>TTL padrão</span>
 
-                                <button
-                                    type="submit"
-                                    class="button button-primary zone-action-button"
-                                >
-                                    Salvar parâmetros
-                                </button>
-                            </div>
-                        </form>
-                    @else
-                        <div class="zone-readonly-grid">
-                            <div>
-                                <span>Tipo</span>
-                                <strong>{{ $kindLabels[$zone->kind] ?? $zone->kind }}</strong>
-                            </div>
+                                    <input
+                                        type="number"
+                                        name="default_ttl"
+                                        value="{{ old(
+                                            'default_ttl',
+                                            $zone->default_ttl
+                                        ) }}"
+                                        min="60"
+                                        required
+                                    >
+                                </label>
 
-                            <div>
-                                <span>TTL padrão</span>
-                                <strong>{{ $zone->default_ttl }}</strong>
-                            </div>
+                                <label class="domain-field">
+                                    <span>Servidor principal do SOA</span>
 
-                            <div>
-                                <span>MNAME</span>
-                                <strong>{{ $zone->soa_mname }}</strong>
-                            </div>
+                                    <input
+                                        type="text"
+                                        name="soa_mname"
+                                        value="{{ old(
+                                            'soa_mname',
+                                            $zone->soa_mname
+                                        ) }}"
+                                        required
+                                    >
+                                </label>
 
-                            <div>
-                                <span>RNAME</span>
-                                <strong>{{ $zone->soa_rname }}</strong>
-                            </div>
+                                <label class="domain-field">
+                                    <span>Contato responsável</span>
 
-                            <div>
-                                <span>Refresh</span>
-                                <strong>{{ $zone->soa_refresh }}</strong>
-                            </div>
+                                    <input
+                                        type="text"
+                                        name="soa_rname"
+                                        value="{{ old(
+                                            'soa_rname',
+                                            $zone->soa_rname
+                                        ) }}"
+                                        required
+                                    >
+                                </label>
 
-                            <div>
-                                <span>Retry</span>
-                                <strong>{{ $zone->soa_retry }}</strong>
-                            </div>
+                                <label class="domain-field">
+                                    <span>Refresh</span>
 
-                            <div>
-                                <span>Expire</span>
-                                <strong>{{ $zone->soa_expire }}</strong>
-                            </div>
+                                    <input
+                                        type="number"
+                                        name="soa_refresh"
+                                        value="{{ old(
+                                            'soa_refresh',
+                                            $zone->soa_refresh
+                                        ) }}"
+                                        min="60"
+                                        required
+                                    >
+                                </label>
 
-                            <div>
-                                <span>Minimum</span>
-                                <strong>{{ $zone->soa_minimum }}</strong>
+                                <label class="domain-field">
+                                    <span>Retry</span>
+
+                                    <input
+                                        type="number"
+                                        name="soa_retry"
+                                        value="{{ old(
+                                            'soa_retry',
+                                            $zone->soa_retry
+                                        ) }}"
+                                        min="60"
+                                        required
+                                    >
+                                </label>
+
+                                <label class="domain-field">
+                                    <span>Expire</span>
+
+                                    <input
+                                        type="number"
+                                        name="soa_expire"
+                                        value="{{ old(
+                                            'soa_expire',
+                                            $zone->soa_expire
+                                        ) }}"
+                                        min="3600"
+                                        required
+                                    >
+                                </label>
+
+                                <label class="domain-field">
+                                    <span>Minimum</span>
+
+                                    <input
+                                        type="number"
+                                        name="soa_minimum"
+                                        value="{{ old(
+                                            'soa_minimum',
+                                            $zone->soa_minimum
+                                        ) }}"
+                                        min="60"
+                                        required
+                                    >
+                                </label>
                             </div>
                         </div>
 
-                        <p class="zone-readonly-note">
-                            Seu perfil possui acesso somente para consulta.
-                        </p>
-                    @endif
-                </article>
+                        <label class="domain-field domain-field-full">
+                            <span>Observações internas</span>
 
-                <article class="zone-panel zone-records-panel">
-                    <div class="zone-panel-heading">
-                        <div>
-                            <p class="eyebrow">Resource records</p>
-                            <h2>Registros DNS</h2>
+                            <textarea
+                                name="notes"
+                                rows="4"
+                                placeholder="Observações operacionais sobre o domínio"
+                            >{{ old('notes', $zone->notes) }}</textarea>
+                        </label>
 
+                        <footer class="domain-form-footer">
                             <p>
-                                Cadastre e edite os registros que compõem
-                                o zonefile.
+                                O serial e a versão serão incrementados
+                                automaticamente.
                             </p>
-                        </div>
-
-                        <span class="zone-count-chip">
-                            {{ $zone->records->count() }}
-                        </span>
-                    </div>
-
-                    @if ($canManageZone)
-                        <form
-                            method="POST"
-                            action="{{ route('zones.records.store', $zone) }}"
-                            class="zone-record-create-form"
-                        >
-                            @csrf
-
-                            <label class="zone-field">
-                                <span>Nome</span>
-
-                                <input
-                                    type="text"
-                                    name="name"
-                                    value="{{ old('name') }}"
-                                    placeholder="@ ou www"
-                                    required
-                                    maxlength="255"
-                                    autocomplete="off"
-                                >
-                            </label>
-
-                            <label class="zone-field">
-                                <span>Tipo</span>
-
-                                <select name="type" required>
-                                    @foreach (\App\Models\DnsRecord::TYPES as $type)
-                                        <option
-                                            value="{{ $type }}"
-                                            @selected(old('type', 'A') === $type)
-                                        >
-                                            {{ $type }}
-                                        </option>
-                                    @endforeach
-                                </select>
-                            </label>
-
-                            <label class="zone-field">
-                                <span>TTL</span>
-
-                                <input
-                                    type="number"
-                                    name="ttl"
-                                    value="{{ old('ttl') }}"
-                                    placeholder="{{ $zone->default_ttl }}"
-                                    min="60"
-                                    max="2147483647"
-                                >
-                            </label>
-
-                            <label class="zone-field">
-                                <span>Prioridade</span>
-
-                                <input
-                                    type="number"
-                                    name="priority"
-                                    value="{{ old('priority') }}"
-                                    placeholder="MX"
-                                    min="0"
-                                    max="65535"
-                                >
-                            </label>
-
-                            <label class="zone-field zone-record-content-field">
-                                <span>Conteúdo</span>
-
-                                <input
-                                    type="text"
-                                    name="content"
-                                    value="{{ old('content') }}"
-                                    placeholder="192.0.2.10 ou destino.exemplo.com"
-                                    required
-                                    maxlength="4096"
-                                    autocomplete="off"
-                                >
-                            </label>
 
                             <button
                                 type="submit"
-                                class="button button-primary zone-record-add-button"
+                                class="button button-primary"
                             >
-                                Adicionar
+                                Salvar configuração
                             </button>
-                        </form>
-                    @endif
-
-                    <div class="zone-record-list">
-                        @forelse ($zone->records as $record)
-                            <article class="zone-record-card">
-                                @if ($canManageZone)
-                                    <form
-                                        method="POST"
-                                        action="{{ route(
-                                            'zones.records.update',
-                                            [$zone, $record]
-                                        ) }}"
-                                        class="zone-record-edit-form"
-                                    >
-                                        @csrf
-                                        @method('PUT')
-
-                                        <label class="zone-field">
-                                            <span>Nome</span>
-
-                                            <input
-                                                type="text"
-                                                name="name"
-                                                value="{{ $record->name }}"
-                                                required
-                                                maxlength="255"
-                                                autocomplete="off"
-                                            >
-                                        </label>
-
-                                        <label class="zone-field">
-                                            <span>Tipo</span>
-
-                                            <select name="type" required>
-                                                @foreach (\App\Models\DnsRecord::TYPES as $type)
-                                                    <option
-                                                        value="{{ $type }}"
-                                                        @selected($record->type === $type)
-                                                    >
-                                                        {{ $type }}
-                                                    </option>
-                                                @endforeach
-                                            </select>
-                                        </label>
-
-                                        <label class="zone-field">
-                                            <span>TTL</span>
-
-                                            <input
-                                                type="number"
-                                                name="ttl"
-                                                value="{{ $record->ttl }}"
-                                                placeholder="{{ $zone->default_ttl }}"
-                                                min="60"
-                                                max="2147483647"
-                                            >
-                                        </label>
-
-                                        <label class="zone-field">
-                                            <span>Prioridade</span>
-
-                                            <input
-                                                type="number"
-                                                name="priority"
-                                                value="{{ $record->priority }}"
-                                                placeholder="MX"
-                                                min="0"
-                                                max="65535"
-                                            >
-                                        </label>
-
-                                        <label class="zone-field zone-record-content-field">
-                                            <span>Conteúdo</span>
-
-                                            <input
-                                                type="text"
-                                                name="content"
-                                                value="{{ $record->content }}"
-                                                required
-                                                maxlength="4096"
-                                                autocomplete="off"
-                                            >
-                                        </label>
-
-                                        <button
-                                            type="submit"
-                                            class="button button-secondary button-small"
-                                        >
-                                            Salvar
-                                        </button>
-                                    </form>
-
-                                    <form
-                                        method="POST"
-                                        action="{{ route(
-                                            'zones.records.destroy',
-                                            [$zone, $record]
-                                        ) }}"
-                                        class="zone-record-delete-form"
-                                        onsubmit="return confirm(
-                                            'Remover este registro DNS?'
-                                        );"
-                                    >
-                                        @csrf
-                                        @method('DELETE')
-
-                                        <button
-                                            type="submit"
-                                            class="zone-danger-button"
-                                            aria-label="Remover registro"
-                                            title="Remover registro"
-                                        >
-                                            Remover
-                                        </button>
-                                    </form>
-                                @else
-                                    <div class="zone-record-readonly">
-                                        <strong>{{ $record->name }}</strong>
-                                        <span>{{ $record->type }}</span>
-                                        <span>
-                                            TTL {{ $record->ttl ?: $zone->default_ttl }}
-                                        </span>
-
-                                        <code>
-                                            @if ($record->priority !== null)
-                                                {{ $record->priority }}
-                                            @endif
-
-                                            {{ $record->content }}
-                                        </code>
-                                    </div>
-                                @endif
-                            </article>
-                        @empty
-                            <div class="empty-state zone-empty-state">
-                                Nenhum registro DNS cadastrado nesta zona.
-                            </div>
-                        @endforelse
+                        </footer>
+                    </form>
+                @else
+                    <div class="domain-readonly-message">
+                        Seu perfil possui acesso somente para consulta.
                     </div>
-                </article>
-            </div>
+                @endif
+            </article>
+        </section>
 
-            <aside class="zone-workspace-sidebar">
-                <article class="zone-panel zone-validation-panel">
-                    <div class="zone-panel-heading zone-panel-heading-compact">
+        <section
+            class="domain-tab-panel"
+            data-domain-panel="reverse"
+            hidden
+        >
+            <article class="domain-section-card">
+                <header class="domain-section-header">
+                    <div>
+                        <p class="eyebrow">DNS reverso</p>
+                        <h2>Zonas reversas IPv4 e IPv6</h2>
+
+                        <p>
+                            Gerencie blocos de endereços e registros PTR
+                            separadamente da zona direta.
+                        </p>
+                    </div>
+                </header>
+
+                <div class="domain-reverse-empty">
+                    <div aria-hidden="true">↺</div>
+
+                    <h3>Nenhum reverso associado</h3>
+
+                    <p>
+                        O assistente de reverso IPv4 e IPv6 será implementado
+                        como um fluxo próprio, sem misturar os registros PTR
+                        com os registros da zona direta.
+                    </p>
+
+                    <span>Funcionalidade preparada para a próxima fase</span>
+                </div>
+            </article>
+        </section>
+
+        <section
+            class="domain-tab-panel"
+            data-domain-panel="publication"
+            hidden
+        >
+            <div class="domain-publication-grid">
+                <article class="domain-section-card">
+                    <header class="domain-section-header">
                         <div>
                             <p class="eyebrow">Pré-publicação</p>
-                            <h2>Validação</h2>
+                            <h2>Validação do domínio</h2>
+
+                            <p>
+                                Verifique as pendências antes de preparar a
+                                publicação.
+                            </p>
                         </div>
 
                         <span
-                            class="zone-validation-indicator {{ $validationOk ? 'is-ok' : 'is-error' }}"
+                            class="domain-validation-badge {{ $validationOk
+                                ? 'is-valid'
+                                : 'is-invalid' }}"
                         >
-                            {{ $validationOk ? 'OK' : 'Pendente' }}
+                            {{ $validationOk ? 'Aprovado' : 'Pendente' }}
                         </span>
-                    </div>
+                    </header>
 
                     @if ($validationOk)
-                        <div class="zone-validation-success">
-                            <strong>Zona estruturalmente válida</strong>
+                        <div class="domain-validation-success">
+                            <strong>Domínio estruturalmente válido</strong>
 
                             <p>
-                                O artefato pode ser marcado como pronto.
-                                Nenhuma alteração será aplicada ao BIND.
+                                A configuração pode ser preparada para
+                                publicação.
                             </p>
                         </div>
                     @else
-                        <div class="zone-validation-block">
+                        <div class="domain-validation-errors">
                             <strong>Correções necessárias</strong>
 
                             <ul>
@@ -752,8 +760,7 @@
                                     <li>{{ $error }}</li>
                                 @empty
                                     <li>
-                                        A zona ainda não atende aos critérios
-                                        de publicação.
+                                        O domínio ainda possui pendências.
                                     </li>
                                 @endforelse
                             </ul>
@@ -761,7 +768,7 @@
                     @endif
 
                     @if ($validationWarnings)
-                        <div class="zone-validation-warning">
+                        <div class="domain-validation-warnings">
                             <strong>Alertas</strong>
 
                             <ul>
@@ -772,11 +779,11 @@
                         </div>
                     @endif
 
-                    @if ($canManageZone)
+                    @if ($canManageDomain)
                         <form
                             method="POST"
                             action="{{ route('zones.publish', $zone) }}"
-                            class="zone-publish-form"
+                            class="domain-publication-action"
                         >
                             @csrf
 
@@ -789,72 +796,682 @@
                             </button>
 
                             <small>
-                                Esta ação apenas grava o estado
-                                <strong>ready</strong> e uma nova versão.
+                                Esta ação não envia arquivos aos servidores
+                                BIND.
                             </small>
                         </form>
                     @endif
                 </article>
 
-                <article class="zone-panel zone-preview-panel">
-                    <div class="zone-panel-heading zone-panel-heading-compact">
+                <article class="domain-section-card">
+                    <header class="domain-section-header">
                         <div>
                             <p class="eyebrow">Artefato</p>
                             <h2>Preview BIND</h2>
+
+                            <p>
+                                Conteúdo que será disponibilizado futuramente
+                                ao agente.
+                            </p>
                         </div>
 
-                        <span class="zone-preview-chip">
+                        <span class="domain-readonly-chip">
                             somente leitura
                         </span>
-                    </div>
+                    </header>
 
-                    <pre class="zone-preview">{{ $preview }}</pre>
-
-                    <p class="zone-preview-note">
-                        Este conteúdo ainda não foi enviado aos servidores.
-                    </p>
+                    <pre class="domain-bind-preview">{{ $preview }}</pre>
                 </article>
+            </div>
+        </section>
 
-                <article class="zone-panel zone-history-panel">
-                    <div class="zone-panel-heading zone-panel-heading-compact">
-                        <div>
-                            <p class="eyebrow">Auditoria</p>
-                            <h2>Últimas versões</h2>
+        <section
+            class="domain-tab-panel"
+            data-domain-panel="history"
+            hidden
+        >
+            <article class="domain-section-card">
+                <header class="domain-section-header">
+                    <div>
+                        <p class="eyebrow">Histórico</p>
+                        <h2>Versões do domínio</h2>
+
+                        <p>
+                            Acompanhe as alterações realizadas na configuração.
+                        </p>
+                    </div>
+                </header>
+
+                <div class="domain-history-list">
+                    @forelse ($zone->versions as $version)
+                        <article class="domain-history-item">
+                            <div class="domain-history-version">
+                                <strong>v{{ $version->version }}</strong>
+
+                                <span>
+                                    Serial {{ $version->serial }}
+                                </span>
+                            </div>
+
+                            <div class="domain-history-description">
+                                <strong>
+                                    {{ $version->reason ?: 'Alteração registrada' }}
+                                </strong>
+
+                                <time datetime="{{ $version->created_at?->toIso8601String() }}">
+                                    {{ $version->created_at?->format(
+                                        'd/m/Y H:i'
+                                    ) }}
+                                </time>
+                            </div>
+                        </article>
+                    @empty
+                        <div class="domain-history-empty">
+                            Nenhuma versão registrada.
                         </div>
-
-                        <span class="zone-count-chip">
-                            {{ $zone->versions->count() }}
-                        </span>
-                    </div>
-
-                    <div class="zone-version-list">
-                        @forelse ($zone->versions as $version)
-                            <div class="zone-version-row">
-                                <div>
-                                    <strong>v{{ $version->version }}</strong>
-
-                                    <span>
-                                        Serial {{ $version->serial }}
-                                    </span>
-                                </div>
-
-                                <div>
-                                    <span>{{ $version->reason }}</span>
-
-                                    <time datetime="{{ $version->created_at?->toIso8601String() }}">
-                                        {{ $version->created_at?->format('d/m/Y H:i') }}
-                                    </time>
-                                </div>
-                            </div>
-                        @empty
-                            <div class="empty-state">
-                                Nenhuma versão registrada.
-                            </div>
-                        @endforelse
-                    </div>
-                </article>
-            </aside>
+                    @endforelse
+                </div>
+            </article>
         </section>
     </main>
 </div>
+
+@if ($canManageDomain)
+    <div
+        class="record-modal-backdrop"
+        data-record-modal
+        aria-hidden="true"
+    >
+        <section
+            class="record-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="record-modal-title"
+        >
+            <header class="record-modal-header">
+                <div>
+                    <p class="eyebrow" data-record-modal-eyebrow>
+                        Novo registro
+                    </p>
+
+                    <h2 id="record-modal-title" data-record-modal-title>
+                        Adicionar registro
+                    </h2>
+
+                    <p data-record-description>
+                        Configure a nova entrada DNS.
+                    </p>
+                </div>
+
+                <button
+                    type="button"
+                    class="record-modal-close"
+                    data-record-modal-close
+                    aria-label="Fechar"
+                >
+                    ×
+                </button>
+            </header>
+
+            <form
+                method="POST"
+                action="{{ route('zones.records.store', $zone) }}"
+                class="record-modal-form"
+                data-record-form
+                data-create-url="{{ route(
+                    'zones.records.store',
+                    $zone
+                ) }}"
+            >
+                @csrf
+
+                <input
+                    type="hidden"
+                    name="_method"
+                    value="POST"
+                    data-record-method
+                >
+
+                <div class="record-modal-main-grid">
+                    <label class="domain-field record-type-field">
+                        <span>Tipo</span>
+
+                        <select name="type" required data-record-type>
+                            @foreach (\App\Models\DnsRecord::TYPES as $type)
+                                <option value="{{ $type }}">
+                                    {{ $type }}
+                                </option>
+                            @endforeach
+                        </select>
+                    </label>
+
+                    <label class="domain-field record-name-field">
+                        <span>Nome</span>
+
+                        <input
+                            type="text"
+                            name="name"
+                            placeholder="Use @ para a raiz"
+                            required
+                            data-record-name
+                        >
+                    </label>
+                </div>
+
+                <div class="record-modal-value-grid">
+                    <label class="domain-field record-content-field">
+                        <span data-record-content-label>
+                            Endereço IPv4
+                        </span>
+
+                        <input
+                            type="text"
+                            name="content"
+                            placeholder="192.0.2.10"
+                            required
+                            data-record-content
+                        >
+                    </label>
+
+                    <label
+                        class="domain-field record-priority-field"
+                        data-record-priority-field
+                        hidden
+                    >
+                        <span>Prioridade</span>
+
+                        <input
+                            type="number"
+                            name="priority"
+                            min="0"
+                            max="65535"
+                            data-record-priority
+                        >
+                    </label>
+
+                    <label class="domain-field record-ttl-field">
+                        <span>TTL</span>
+
+                        <select name="ttl" data-record-ttl>
+                            <option value="">
+                                Automático — {{ $zone->default_ttl }}
+                            </option>
+                            <option value="60">1 minuto</option>
+                            <option value="300">5 minutos</option>
+                            <option value="900">15 minutos</option>
+                            <option value="1800">30 minutos</option>
+                            <option value="3600">1 hora</option>
+                            <option value="14400">4 horas</option>
+                            <option value="86400">1 dia</option>
+                        </select>
+                    </label>
+                </div>
+
+                <details class="record-modal-attributes">
+                    <summary>
+                        <span>Atributos do registro</span>
+                        <small>Opções adicionais</small>
+                    </summary>
+
+                    <div>
+                        <label class="domain-field">
+                            <span>Comentário interno</span>
+
+                            <textarea
+                                rows="3"
+                                disabled
+                                placeholder="Comentários serão implementados em uma fase futura."
+                            ></textarea>
+
+                            <small>
+                                O comentário não fará parte do zonefile.
+                            </small>
+                        </label>
+                    </div>
+                </details>
+
+                <footer class="record-modal-footer">
+                    <div>
+                        <button
+                            type="button"
+                            class="record-delete-button"
+                            data-record-delete-trigger
+                            hidden
+                        >
+                            Excluir
+                        </button>
+                    </div>
+
+                    <div>
+                        <button
+                            type="button"
+                            class="button button-secondary"
+                            data-record-modal-close
+                        >
+                            Cancelar
+                        </button>
+
+                        <button
+                            type="submit"
+                            class="button button-primary"
+                            data-record-submit-label
+                        >
+                            Salvar registro
+                        </button>
+                    </div>
+                </footer>
+            </form>
+
+            <form
+                method="POST"
+                action=""
+                data-record-delete-form
+                hidden
+            >
+                @csrf
+                @method('DELETE')
+            </form>
+        </section>
+    </div>
+@endif
+
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+    const tabs = document.querySelectorAll('[data-domain-tab]');
+    const panels = document.querySelectorAll('[data-domain-panel]');
+
+    const activateTab = (tabName) => {
+        tabs.forEach((tab) => {
+            tab.classList.toggle(
+                'is-active',
+                tab.dataset.domainTab === tabName
+            );
+        });
+
+        panels.forEach((panel) => {
+            const active = panel.dataset.domainPanel === tabName;
+
+            panel.classList.toggle('is-active', active);
+            panel.hidden = !active;
+        });
+
+        window.history.replaceState(
+            null,
+            '',
+            `#${tabName}`
+        );
+    };
+
+    tabs.forEach((tab) => {
+        tab.addEventListener('click', () => {
+            activateTab(tab.dataset.domainTab);
+        });
+    });
+
+    const initialTab = window.location.hash.replace('#', '');
+
+    if (
+        initialTab
+        && document.querySelector(`[data-domain-panel="${initialTab}"]`)
+    ) {
+        activateTab(initialTab);
+    }
+
+    const searchInput = document.querySelector('[data-record-search]');
+    const recordRows = document.querySelectorAll('[data-record-row]');
+    const noResults = document.querySelector('[data-record-no-results]');
+
+    searchInput?.addEventListener('input', () => {
+        const query = searchInput.value
+            .trim()
+            .toLocaleLowerCase('pt-BR');
+
+        let visible = 0;
+
+        recordRows.forEach((row) => {
+            const matches = row.dataset.recordSearchValue.includes(query);
+
+            row.hidden = !matches;
+
+            if (matches) {
+                visible++;
+            }
+        });
+
+        if (noResults) {
+            noResults.hidden = visible !== 0 || query === '';
+        }
+    });
+
+    const modal = document.querySelector('[data-record-modal]');
+    const modalTitle = document.querySelector('[data-record-modal-title]');
+    const modalEyebrow = document.querySelector(
+        '[data-record-modal-eyebrow]'
+    );
+    const description = document.querySelector(
+        '[data-record-description]'
+    );
+
+    const form = document.querySelector('[data-record-form]');
+
+    const methodInput = form?.querySelector(
+        '[data-record-method]'
+    );
+
+    const typeInput = form?.querySelector(
+        'select[name="type"]'
+    );
+
+    const nameInput = form?.querySelector(
+        'input[name="name"]'
+    );
+
+    const contentInput = form?.querySelector(
+        'input[name="content"]'
+    );
+
+    const ttlInput = form?.querySelector(
+        'select[name="ttl"]'
+    );
+
+    const priorityInput = form?.querySelector(
+        'input[name="priority"]'
+    );
+
+    const contentLabel = form?.querySelector(
+        '[data-record-content-label]'
+    );
+
+    const priorityField = form?.querySelector(
+        '[data-record-priority-field]'
+    );
+
+    const submitLabel = form?.querySelector(
+        '[data-record-submit-label]'
+    );
+
+    const deleteTrigger = form?.querySelector(
+        '[data-record-delete-trigger]'
+    );
+
+    const deleteForm = document.querySelector(
+        '[data-record-delete-form]'
+    );
+
+    const recordFieldDefinitions = {
+        A: {
+            label: 'Endereço IPv4',
+            placeholder: '192.0.2.10',
+            priority: false,
+        },
+        AAAA: {
+            label: 'Endereço IPv6',
+            placeholder: '2001:db8::10',
+            priority: false,
+        },
+        CNAME: {
+            label: 'Nome de destino',
+            placeholder: 'destino.exemplo.com.br',
+            priority: false,
+        },
+        MX: {
+            label: 'Servidor de e-mail',
+            placeholder: 'mail.exemplo.com.br',
+            priority: true,
+        },
+        NS: {
+            label: 'Servidor de nomes',
+            placeholder: 'ns1.exemplo.com.br',
+            priority: false,
+        },
+        TXT: {
+            label: 'Conteúdo TXT',
+            placeholder: 'Texto do registro',
+            priority: false,
+        },
+        PTR: {
+            label: 'Nome de destino',
+            placeholder: 'host.exemplo.com.br',
+            priority: false,
+        },
+        SRV: {
+            label: 'Destino do serviço',
+            placeholder: 'servidor.exemplo.com.br',
+            priority: true,
+        },
+        CAA: {
+            label: 'Valor CAA',
+            placeholder: '0 issue "letsencrypt.org"',
+            priority: false,
+        },
+    };
+
+    const updateRecordFields = () => {
+        if (!typeInput || !contentInput || !contentLabel) {
+            return;
+        }
+
+        const definition = recordFieldDefinitions[typeInput.value] || {
+            label: 'Conteúdo',
+            placeholder: 'Valor do registro',
+            priority: false,
+        };
+
+        contentLabel.textContent = definition.label;
+        contentInput.placeholder = definition.placeholder;
+
+        if (priorityField) {
+            priorityField.hidden = !definition.priority;
+        }
+
+        if (!definition.priority && priorityInput) {
+            priorityInput.value = '';
+        }
+    };
+
+    const openRecordModal = () => {
+        if (!modal) {
+            return;
+        }
+
+        modal.classList.add('is-open');
+        modal.setAttribute('aria-hidden', 'false');
+        document.body.classList.add('has-open-modal');
+
+        window.setTimeout(() => {
+            nameInput?.focus();
+        }, 50);
+    };
+
+    const closeRecordModal = () => {
+        if (!modal) {
+            return;
+        }
+
+        modal.classList.remove('is-open');
+        modal.setAttribute('aria-hidden', 'true');
+        document.body.classList.remove('has-open-modal');
+    };
+
+    const prepareCreateRecord = () => {
+        if (!form) {
+            return;
+        }
+
+        form.action = form.dataset.createUrl;
+        methodInput.value = 'POST';
+
+        modalTitle.textContent = 'Adicionar registro';
+        modalEyebrow.textContent = 'Novo registro';
+        description.textContent = 'Configure a nova entrada DNS.';
+        submitLabel.textContent = 'Salvar registro';
+
+        typeInput.value = 'A';
+        nameInput.value = '';
+        contentInput.value = '';
+        ttlInput.value = '';
+        priorityInput.value = '';
+
+        deleteTrigger.hidden = true;
+        deleteForm.action = '';
+
+        updateRecordFields();
+        openRecordModal();
+    };
+
+    const prepareEditRecord = (button) => {
+        if (
+            !form
+            || !methodInput
+            || !typeInput
+            || !nameInput
+            || !contentInput
+            || !ttlInput
+            || !priorityInput
+            || !submitLabel
+            || !deleteTrigger
+            || !deleteForm
+        ) {
+            console.error(
+                'DNS Center: campos do modal de registro não encontrados.'
+            );
+
+            return;
+        }
+
+        const record = {
+            id: button.getAttribute('data-edit-id') || '',
+            name: button.getAttribute('data-edit-name') || '',
+            type: button.getAttribute('data-edit-type') || 'A',
+            ttl: button.getAttribute('data-edit-ttl') || '',
+            priority: button.getAttribute('data-edit-priority') || '',
+            content: button.getAttribute('data-edit-content') || '',
+            updateUrl: button.getAttribute('data-update-url') || '',
+            deleteUrl: button.getAttribute('data-delete-url') || '',
+        };
+
+        console.debug('DNS Center: editando registro', record);
+
+        form.action = record.updateUrl;
+        methodInput.value = 'PUT';
+
+        modalTitle.textContent = 'Editar registro';
+        modalEyebrow.textContent = 'Registro DNS';
+        description.textContent =
+            'Atualize os dados desta entrada DNS.';
+        submitLabel.textContent = 'Salvar alterações';
+
+        typeInput.value = record.type;
+        nameInput.value = record.name;
+        contentInput.value = record.content;
+        ttlInput.value = record.ttl;
+        priorityInput.value = record.priority;
+
+        deleteTrigger.hidden = false;
+        deleteForm.action = record.deleteUrl;
+
+        updateRecordFields();
+
+        // Reaplica depois da atualização visual do tipo.
+        nameInput.value = record.name;
+        contentInput.value = record.content;
+        ttlInput.value = record.ttl;
+        priorityInput.value = record.priority;
+
+        openRecordModal();
+    };
+
+    document.querySelectorAll('[data-record-modal-open]').forEach(
+        (button) => {
+            button.addEventListener('click', prepareCreateRecord);
+        }
+    );
+
+    document.querySelectorAll('[data-record-edit]').forEach(
+        (button) => {
+            button.addEventListener('click', () => {
+                prepareEditRecord(button);
+            });
+        }
+    );
+
+    document.querySelectorAll('[data-record-modal-close]').forEach(
+        (button) => {
+            button.addEventListener('click', closeRecordModal);
+        }
+    );
+
+    modal?.addEventListener('click', (event) => {
+        if (event.target === modal) {
+            closeRecordModal();
+        }
+    });
+
+    typeInput?.addEventListener('change', updateRecordFields);
+
+    deleteTrigger?.addEventListener('click', () => {
+        if (
+            deleteForm
+            && window.confirm('Excluir este registro DNS?')
+        ) {
+            deleteForm.submit();
+        }
+    });
+
+    document.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape') {
+            closeRecordModal();
+        }
+    });
+
+    updateRecordFields();
+});
+</script>
+
+{{-- DNS-CENTER-FLASH-TOAST-START --}}
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+    document.querySelectorAll('[data-flash-toast]').forEach((toast) => {
+        const closeButton = toast.querySelector('[data-flash-toast-close]');
+        const timeout = Number(toast.dataset.flashTimeout || 6000);
+
+        let timer = null;
+        let startedAt = 0;
+        let remaining = timeout;
+
+        const dismiss = () => {
+            if (toast.classList.contains('is-leaving')) {
+                return;
+            }
+
+            toast.classList.add('is-leaving');
+
+            window.setTimeout(() => {
+                toast.remove();
+            }, 260);
+        };
+
+        const startTimer = () => {
+            window.clearTimeout(timer);
+            startedAt = Date.now();
+
+            timer = window.setTimeout(dismiss, remaining);
+        };
+
+        const pauseTimer = () => {
+            window.clearTimeout(timer);
+            remaining -= Date.now() - startedAt;
+            remaining = Math.max(remaining, 500);
+        };
+
+        closeButton?.addEventListener('click', dismiss);
+        toast.addEventListener('mouseenter', pauseTimer);
+        toast.addEventListener('mouseleave', startTimer);
+
+        startTimer();
+    });
+});
+</script>
+{{-- DNS-CENTER-FLASH-TOAST-END --}}
+
 @endsection

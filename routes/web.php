@@ -118,6 +118,48 @@ Route::middleware([
     )->name('servers.agent.revoke');
 });
 
+
+Route::middleware([
+    'auth',
+    'password.changed',
+    'organization',
+])->prefix('nameservers')->name('nameservers.')->group(function (): void {
+    Route::get(
+        '/',
+        [\App\Http\Controllers\DnsNameserverController::class, 'index'],
+    )->name('index');
+
+    Route::post(
+        '/identidades',
+        [\App\Http\Controllers\DnsNameserverController::class, 'storeIdentity'],
+    )->name('identity.store');
+
+    Route::put(
+        '/identidades/{identity}',
+        [\App\Http\Controllers\DnsNameserverController::class, 'updateIdentity'],
+    )->name('identity.update');
+
+    Route::patch(
+        '/identidades/{identity}/status',
+        [\App\Http\Controllers\DnsNameserverController::class, 'toggleIdentity'],
+    )->name('identity.status');
+
+    Route::post(
+        '/perfis',
+        [\App\Http\Controllers\DnsNameserverController::class, 'storeProfile'],
+    )->name('profile.store');
+
+    Route::put(
+        '/perfis/{profile}',
+        [\App\Http\Controllers\DnsNameserverController::class, 'updateProfile'],
+    )->name('profile.update');
+
+    Route::patch(
+        '/perfis/{profile}/status',
+        [\App\Http\Controllers\DnsNameserverController::class, 'toggleProfile'],
+    )->name('profile.status');
+});
+
 Route::middleware([
     'auth',
     'password.changed',
