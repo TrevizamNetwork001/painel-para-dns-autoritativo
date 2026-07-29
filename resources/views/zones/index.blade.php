@@ -324,35 +324,29 @@
                                     </option>
 
                                     @foreach ($nameserverProfiles as $profile)
+                                        @php
+                                            $profileIdentities = $profile->identities
+                                                ->where(
+                                                    'organization_id',
+                                                    $profile->organization_id
+                                                )
+                                                ->sortBy(
+                                                    fn ($identity) => (int) $identity->pivot->position
+                                                )
+                                                ->values()
+                                                ->map(fn ($identity) => [
+                                                    'hostname' => $identity->normalizedHostname(),
+                                                    'ipv4' => $identity->ipv4_address,
+                                                    'ipv6' => $identity->ipv6_address,
+                                                ])
+                                                ->all();
+                                        @endphp
+
                                         <option
                                             value="{{ $profile->id }}"
                                             data-profile-name="{{ $profile->name }}"
                                             data-profile-default="{{ $profile->is_default ? '1' : '0' }}"
-                                            data-profile-identities='@json(
-                                                $profile->identities
-                                                    ->sortBy(
-                                                        fn ($identity) =>
-                                                            (int) $identity
-                                                                ->pivot
-                                                                ->position
-                                                    )
-                                                    ->values()
-                                                    ->map(
-                                                        fn ($identity) => [
-                                                            "name" =>
-                                                                $identity->name,
-                                                            "hostname" =>
-                                                                $identity
-                                                                    ->normalizedHostname(),
-                                                            "ipv4" =>
-                                                                $identity
-                                                                    ->ipv4_address,
-                                                            "ipv6" =>
-                                                                $identity
-                                                                    ->ipv6_address,
-                                                        ]
-                                                    )
-                                            )'
+                                            data-profile-identities='{{ Illuminate\Support\Js::encode($profileIdentities) }}'
                                             @selected(
                                                 (int) old(
                                                     'dns_nameserver_profile_id',
