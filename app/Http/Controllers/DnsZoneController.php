@@ -13,9 +13,11 @@ use App\Services\DnsZoneValidator;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
+use Throwable;
 
 class DnsZoneController extends Controller
 {
@@ -35,20 +37,18 @@ class DnsZoneController extends Controller
                 ->enabled()
                 ->orderBy('name')
                 ->get(),
-            'nameserverProfiles' =>
-                DnsNameserverProfile::query()
-                    ->forOrganization($organizationId)
-                    ->enabled()
-                    ->with([
-                        'identities' => fn ($query) =>
-                            $query->where(
-                                'dns_nameserver_identities.enabled',
-                                true,
-                            ),
-                    ])
-                    ->orderByDesc('is_default')
-                    ->orderBy('name')
-                    ->get(),
+            'nameserverProfiles' => DnsNameserverProfile::query()
+                ->forOrganization($organizationId)
+                ->enabled()
+                ->with([
+                    'identities' => fn ($query) => $query->where(
+                        'dns_nameserver_identities.enabled',
+                        true,
+                    ),
+                ])
+                ->orderByDesc('is_default')
+                ->orderBy('name')
+                ->get(),
         ]);
     }
 
@@ -177,8 +177,7 @@ class DnsZoneController extends Controller
         ): DnsZone {
             $zone = DnsZone::query()->create([
                 'organization_id' => $organizationId,
-                'dns_nameserver_profile_id' =>
-                    $nameserverProfile->id,
+                'dns_nameserver_profile_id' => $nameserverProfile->id,
                 'name' => $zoneName,
                 'kind' => $validated['kind'],
                 'serial' => $this->nextSerial(),
@@ -186,8 +185,7 @@ class DnsZoneController extends Controller
                 'soa_mname' => $this->domain(
                     $nameserverProfile->identities
                         ->sortBy(
-                            fn ($identity): int =>
-                                (int) $identity->pivot->position,
+                            fn ($identity): int => (int) $identity->pivot->position,
                         )
                         ->firstOrFail()
                         ->hostname,
@@ -229,8 +227,7 @@ class DnsZoneController extends Controller
                 ->pluck('hostname')
                 ->filter()
                 ->map(
-                    fn (string $hostname): string =>
-                        $this->domain($hostname),
+                    fn (string $hostname): string => $this->domain($hostname),
                 )
                 ->unique()
                 ->values();
@@ -262,7 +259,7 @@ class DnsZoneController extends Controller
             ->with(
                 'status',
                 sprintf(
-                    'Domínio criado com sucesso. %d registro(s) NS foram configurados automaticamente.',
+                    'Zona salva. %d registro(s) NS foram configurados automaticamente. As alterações ainda não foram publicadas.',
                     $nsCount,
                 ),
             );
@@ -353,14 +350,12 @@ class DnsZoneController extends Controller
         ): void {
             $zone->forceFill([
                 'kind' => $validated['kind'],
-                'dns_nameserver_profile_id' =>
-                    $nameserverProfile->id,
+                'dns_nameserver_profile_id' => $nameserverProfile->id,
                 'default_ttl' => $validated['default_ttl'],
                 'soa_mname' => $this->domain(
                     $nameserverProfile->identities
                         ->sortBy(
-                            fn ($identity): int =>
-                                (int) $identity->pivot->position,
+                            fn ($identity): int => (int) $identity->pivot->position,
                         )
                         ->firstOrFail()
                         ->hostname,
@@ -406,7 +401,7 @@ class DnsZoneController extends Controller
 
         return back()->with(
             'status',
-            'Parâmetros salvos. Nenhuma alteração foi aplicada ao BIND.',
+            'Zona salva. As alterações ainda não foram publicadas.',
         );
     }
 
@@ -433,27 +428,29 @@ class DnsZoneController extends Controller
             'zone' => $zone,
             'preview' => $renderer->render($zone),
             'validation' => $validator->validate($zone),
+            'lastPublication' => $zone->versions()
+                ->where('reason', 'Zona publicada.')
+                ->latest('version')
+                ->first(),
             'servers' => DnsServer::query()
                 ->forOrganization($zone->organization_id)
                 ->enabled()
                 ->orderBy('name')
                 ->get(),
-            'nameserverProfiles' =>
-                DnsNameserverProfile::query()
-                    ->forOrganization(
-                        $zone->organization_id,
-                    )
-                    ->enabled()
-                    ->with([
-                        'identities' => fn ($query) =>
-                            $query->where(
-                                'dns_nameserver_identities.enabled',
-                                true,
-                            ),
-                    ])
-                    ->orderByDesc('is_default')
-                    ->orderBy('name')
-                    ->get(),
+            'nameserverProfiles' => DnsNameserverProfile::query()
+                ->forOrganization(
+                    $zone->organization_id,
+                )
+                ->enabled()
+                ->with([
+                    'identities' => fn ($query) => $query->where(
+                        'dns_nameserver_identities.enabled',
+                        true,
+                    ),
+                ])
+                ->orderByDesc('is_default')
+                ->orderBy('name')
+                ->get(),
         ]);
     }
 
@@ -493,7 +490,10 @@ class DnsZoneController extends Controller
             $this->bump($zone, $request, 'Registro adicionado.', $renderer);
         });
 
-        return back()->with('status', 'Registro DNS adicionado.');
+        return back()->with(
+            'status',
+            'Registro DNS adicionado. As alterações ainda não foram publicadas.',
+        );
     }
 
     public function updateRecord(
@@ -566,7 +566,7 @@ class DnsZoneController extends Controller
 
         return back()->with(
             'status',
-            'Registro DNS salvo. A alteração permanece pendente de validação.',
+            'Registro DNS salvo. As alterações ainda não foram publicadas.',
         );
     }
 
@@ -590,7 +590,10 @@ class DnsZoneController extends Controller
             $this->bump($zone, $request, 'Registro removido.', $renderer);
         });
 
-        return back()->with('status', 'Registro DNS removido.');
+        return back()->with(
+            'status',
+            'Registro DNS removido. As alterações ainda não foram publicadas.',
+        );
     }
 
     public function publish(
@@ -602,43 +605,100 @@ class DnsZoneController extends Controller
         $this->authorizeWrite($request);
         $this->authorizeZone($request, $zone);
 
-        $result = $validator->validate($zone);
+        try {
+            $published = DB::transaction(function () use (
+                $request,
+                $zone,
+                $renderer,
+                $validator,
+            ): bool {
+                $lockedZone = DnsZone::query()
+                    ->whereKey($zone->id)
+                    ->lockForUpdate()
+                    ->firstOrFail();
 
-        if (! $result['ok']) {
-            throw ValidationException::withMessages([
-                'zone' => $result['errors'],
+                $this->authorizeZone($request, $lockedZone);
+
+                if ($lockedZone->status === 'published') {
+                    return false;
+                }
+
+                $lockedZone->load([
+                    'records',
+                    'servers.agent',
+                    'nameserverProfile.identities',
+                ]);
+
+                $result = $validator->validate($lockedZone);
+
+                if (! $result['ok']) {
+                    throw ValidationException::withMessages([
+                        'zone' => $result['errors'],
+                    ]);
+                }
+
+                $this->ensurePublishingServersAvailable($lockedZone);
+
+                // A renderização também valida o artefato antes de expô-lo.
+                $renderer->render($lockedZone);
+
+                $lockedZone->forceFill([
+                    'status' => 'published',
+                    'serial' => $this->nextSerial($lockedZone->serial),
+                    'version' => $lockedZone->version + 1,
+                ])->save();
+
+                $this->saveVersion(
+                    $lockedZone,
+                    $request,
+                    'Zona publicada.',
+                    $renderer,
+                );
+
+                return true;
+            });
+        } catch (ValidationException $exception) {
+            throw $exception;
+        } catch (Throwable $exception) {
+            Log::error('Falha controlada ao publicar zona DNS.', [
+                'zone_id' => $zone->id,
+                'organization_id' => $zone->organization_id,
+                'exception' => $exception::class,
+            ]);
+
+            return back()->withErrors([
+                'zone' => 'Não foi possível concluir a publicação. Verifique o servidor e o agente de publicação e tente novamente.',
             ]);
         }
 
-        DB::transaction(function () use (
-            $request,
-            $zone,
-            $renderer,
-        ): void {
-            $zone->forceFill([
-                'status' => 'ready',
-                'serial' => $this->nextSerial($zone->serial),
-                'version' => $zone->version + 1,
-            ])->save();
-
-            $this->saveVersion(
-                $zone,
-                $request,
-                'Plano de publicação validado.',
-                $renderer,
-            );
-        });
-
         return back()->with(
             'status',
-            'Zona validada e pronta. Nenhuma alteração foi aplicada ao BIND.',
+            $published
+                ? 'Publicação concluída. O artefato está disponível para os agentes configurados.'
+                : 'Esta versão da zona já está publicada.',
         );
     }
 
     private function validateRecord(array $record): void
     {
+        $name = trim($record['name']);
         $type = $record['type'];
         $content = trim($record['content']);
+
+        if (
+            $name !== '@'
+            && ! preg_match('/^(?:[a-z0-9_](?:[a-z0-9_-]{0,61}[a-z0-9_])?)(?:\.(?:[a-z0-9_](?:[a-z0-9_-]{0,61}[a-z0-9_])?))*\.?$/i', $name)
+        ) {
+            throw ValidationException::withMessages([
+                'name' => 'Informe um nome DNS válido.',
+            ]);
+        }
+
+        if (preg_match('/[\x00-\x1F\x7F]/', $content)) {
+            throw ValidationException::withMessages([
+                'content' => 'O valor do registro contém caracteres inválidos.',
+            ]);
+        }
 
         if ($type === 'A' && ! filter_var($content, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4)) {
             throw ValidationException::withMessages(['content' => 'Informe um IPv4 válido.']);
@@ -673,6 +733,35 @@ class DnsZoneController extends Controller
         ])->save();
 
         $this->saveVersion($zone, $request, $reason, $renderer);
+    }
+
+    private function ensurePublishingServersAvailable(DnsZone $zone): void
+    {
+        if ($zone->servers->isEmpty()) {
+            throw ValidationException::withMessages([
+                'zone' => 'Configure ao menos um servidor de publicação.',
+            ]);
+        }
+
+        foreach ($zone->servers as $server) {
+            $agent = $server->agent;
+            $available = $server->enabled
+                && $server->status === 'online'
+                && $server->agent_status === 'online'
+                && $agent !== null
+                && $agent->isActive()
+                && (int) $agent->organization_id
+                    === (int) $zone->organization_id;
+
+            if (! $available) {
+                throw ValidationException::withMessages([
+                    'zone' => sprintf(
+                        'O servidor de publicação %s ou seu agente está indisponível.',
+                        $server->name,
+                    ),
+                ]);
+            }
+        }
     }
 
     private function saveVersion(

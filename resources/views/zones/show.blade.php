@@ -139,11 +139,11 @@
 
                 <small>
                     @if ($zone->status === 'draft')
-                        Existem alterações em preparação.
+                        Alterações ainda não publicadas.
                     @elseif ($zone->status === 'ready')
-                        Domínio pronto para publicação.
+                        Alterações ainda não publicadas.
                     @elseif ($zone->status === 'published')
-                        Existe uma versão publicada.
+                        A versão atual está publicada.
                     @else
                         Domínio fora da operação normal.
                     @endif
@@ -821,8 +821,8 @@
                             <h2>Validação do domínio</h2>
 
                             <p>
-                                Verifique as pendências antes de preparar a
-                                publicação.
+                                Valide e publique explicitamente a versão
+                                salva.
                             </p>
                         </div>
 
@@ -840,8 +840,7 @@
                             <strong>Domínio estruturalmente válido</strong>
 
                             <p>
-                                A configuração pode ser preparada para
-                                publicação.
+                                A configuração pode ser publicada.
                             </p>
                         </div>
                     @else
@@ -877,6 +876,7 @@
                             method="POST"
                             action="{{ route('zones.publish', $zone) }}"
                             class="domain-publication-action"
+                            onsubmit="return confirm('Publicar agora a versão salva desta zona?')"
                         >
                             @csrf
 
@@ -885,15 +885,30 @@
                                 class="button button-primary"
                                 @disabled(! $validationOk)
                             >
-                                Validar plano de publicação
+                                Publicar zona
                             </button>
 
                             <small>
-                                Esta ação não envia arquivos aos servidores
-                                BIND.
+                                Salvar não publica. Esta ação disponibiliza o
+                                artefato aos agentes configurados.
                             </small>
                         </form>
                     @endif
+
+                    <div class="domain-validation-success">
+                        <strong>Última publicação</strong>
+
+                        <p>
+                            @if ($lastPublication)
+                                {{ $lastPublication->created_at?->format(
+                                    'd/m/Y H:i'
+                                ) }}
+                                · versão {{ $lastPublication->version }}
+                            @else
+                                Nenhuma publicação realizada.
+                            @endif
+                        </p>
+                    </div>
                 </article>
 
                 <article class="domain-section-card">

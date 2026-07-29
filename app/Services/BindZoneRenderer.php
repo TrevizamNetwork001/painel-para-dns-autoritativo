@@ -63,62 +63,51 @@ class BindZoneRenderer
                 'status',
                 'version',
             ]),
-            'nameserver_profile' =>
-                $zone->nameserverProfile === null
+            'nameserver_profile' => $zone->nameserverProfile === null
                     ? null
                     : [
-                        'id' =>
-                            $zone->nameserverProfile->id,
-                        'name' =>
-                            $zone->nameserverProfile->name,
-                        'is_default' =>
-                            $zone->nameserverProfile->is_default,
-                        'enabled' =>
-                            $zone->nameserverProfile->enabled,
-                        'identities' =>
-                            $zone->nameserverProfile
-                                ->identities
-                                ->sortBy(
-                                    fn ($identity): int =>
-                                        (int) $identity
-                                            ->pivot
-                                            ->position,
-                                )
-                                ->values()
-                                ->map(
-                                    fn ($identity): array => [
-                                        'id' =>
-                                            $identity->id,
-                                        'name' =>
-                                            $identity->name,
-                                        'hostname' =>
-                                            $identity
-                                                ->normalizedHostname(),
-                                        'ipv4_address' =>
-                                            $identity->ipv4_address,
-                                        'ipv6_address' =>
-                                            $identity->ipv6_address,
-                                        'position' =>
-                                            (int) $identity
-                                                ->pivot
-                                                ->position,
-                                        'enabled' =>
-                                            $identity->enabled,
-                                    ],
-                                )
-                                ->all(),
+                        'id' => $zone->nameserverProfile->id,
+                        'name' => $zone->nameserverProfile->name,
+                        'is_default' => $zone->nameserverProfile->is_default,
+                        'enabled' => $zone->nameserverProfile->enabled,
+                        'identities' => $zone->nameserverProfile
+                            ->identities
+                            ->where(
+                                'organization_id',
+                                (int) $zone->organization_id,
+                            )
+                            ->sortBy(
+                                fn ($identity): int => (int) $identity
+                                    ->pivot
+                                    ->position,
+                            )
+                            ->values()
+                            ->map(
+                                fn ($identity): array => [
+                                    'id' => $identity->id,
+                                    'name' => $identity->name,
+                                    'hostname' => $identity
+                                        ->normalizedHostname(),
+                                    'ipv4_address' => $identity->ipv4_address,
+                                    'ipv6_address' => $identity->ipv6_address,
+                                    'position' => (int) $identity
+                                        ->pivot
+                                        ->position,
+                                    'enabled' => $identity->enabled,
+                                ],
+                            )
+                            ->all(),
                     ],
             'records' => $zone->records
                 ->map(
-                    fn (DnsRecord $record): array =>
-                        $record->only([
-                            'name',
-                            'type',
-                            'ttl',
-                            'priority',
-                            'content',
-                            'enabled',
-                        ]),
+                    fn (DnsRecord $record): array => $record->only([
+                        'name',
+                        'type',
+                        'ttl',
+                        'priority',
+                        'content',
+                        'enabled',
+                    ]),
                 )
                 ->values()
                 ->all(),
@@ -179,6 +168,6 @@ class BindZoneRenderer
 
     private function quote(string $value): string
     {
-        return '"'.addcslashes($value, "\\\"").'"';
+        return '"'.addcslashes($value, '\\"').'"';
     }
 }

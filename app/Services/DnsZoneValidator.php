@@ -25,54 +25,56 @@ class DnsZoneValidator
     public function validate(DnsZone $zone): array
     {
         $zone->loadMissing([
-            "records",
-            "servers",
-            "nameserverProfile.identities",
+            'records',
+            'servers',
+            'nameserverProfile.identities',
         ]);
 
         $records = $zone->records
-            ->where("enabled", true)
+            ->where('enabled', true)
             ->values();
 
         $errors = [];
         $warnings = [];
 
         $primaryCount = $zone->servers
-            ->where("pivot.role", "primary")
+            ->where('pivot.role', 'primary')
             ->count();
 
         $secondaryCount = $zone->servers
-            ->where("pivot.role", "secondary")
+            ->where('pivot.role', 'secondary')
             ->count();
 
         $nsRecords = $records
-            ->where("type", "NS")
+            ->where('type', 'NS')
             ->values();
 
         if ($zone->nameserverProfile === null) {
             $errors[] =
-                "Selecione um perfil de nameservers para a zona.";
+                'Selecione um perfil de nameservers para a zona.';
         } else {
             $profileIdentities = $zone
                 ->nameserverProfile
                 ->identities
-                ->where("enabled", true)
+                ->where(
+                    'organization_id',
+                    (int) $zone->organization_id,
+                )
+                ->where('enabled', true)
                 ->sortBy(
-                    fn ($identity): int =>
-                        (int) $identity->pivot->position,
+                    fn ($identity): int => (int) $identity->pivot->position,
                 )
                 ->values();
 
             if ($profileIdentities->count() < 2) {
                 $errors[] =
-                    "O perfil de nameservers deve possuir pelo menos duas identidades habilitadas.";
+                    'O perfil de nameservers deve possuir pelo menos duas identidades habilitadas.';
             }
 
             $expectedNameservers = $profileIdentities
-                ->pluck("hostname")
+                ->pluck('hostname')
                 ->map(
-                    fn (string $hostname): string =>
-                        $this->domain($hostname),
+                    fn (string $hostname): string => $this->domain($hostname),
                 )
                 ->unique()
                 ->sort()
@@ -80,13 +82,11 @@ class DnsZoneValidator
 
             $actualNameservers = $nsRecords
                 ->filter(
-                    fn (DnsRecord $record): bool =>
-                        $this->owner($record, $zone) === "@",
+                    fn (DnsRecord $record): bool => $this->owner($record, $zone) === '@',
                 )
-                ->pluck("content")
+                ->pluck('content')
                 ->map(
-                    fn (string $hostname): string =>
-                        $this->domain($hostname),
+                    fn (string $hostname): string => $this->domain($hostname),
                 )
                 ->unique()
                 ->sort()
@@ -97,7 +97,7 @@ class DnsZoneValidator
                 !== $actualNameservers->all()
             ) {
                 $errors[] =
-                    "Os registros NS do apex não correspondem ao perfil de nameservers selecionado.";
+                    'Os registros NS do apex não correspondem ao perfil de nameservers selecionado.';
             }
 
             $expectedMname = $profileIdentities
@@ -109,26 +109,26 @@ class DnsZoneValidator
                     !== $this->domain($expectedMname)
             ) {
                 $errors[] =
-                    "O SOA MNAME não corresponde ao primeiro nameserver do perfil.";
+                    'O SOA MNAME não corresponde ao primeiro nameserver do perfil.';
             }
         }
 
         if ($primaryCount !== 1) {
-            $errors[] = "A zona deve possuir exatamente um servidor primary.";
+            $errors[] = 'A zona deve possuir exatamente um servidor primary.';
         }
 
         if ($secondaryCount < 1) {
-            $warnings[] = "Nenhum servidor secondary foi associado à zona.";
+            $warnings[] = 'Nenhum servidor secondary foi associado à zona.';
         }
 
         if ($nsRecords->count() < 2) {
-            $errors[] = "Inclua pelo menos dois registros NS no apex da zona.";
+            $errors[] = 'Inclua pelo menos dois registros NS no apex da zona.';
         }
 
         foreach ($nsRecords as $record) {
-            if ($this->owner($record, $zone) !== "@") {
+            if ($this->owner($record, $zone) !== '@') {
                 $warnings[] = sprintf(
-                    "O registro NS %s não está no apex da zona.",
+                    'O registro NS %s não está no apex da zona.',
                     $record->content,
                 );
             }
@@ -141,21 +141,21 @@ class DnsZoneValidator
 
             $hasGlue = $records->contains(
                 function (DnsRecord $candidate) use ($target, $zone): bool {
-                    return in_array($candidate->type, ["A", "AAAA"], true)
+                    return in_array($candidate->type, ['A', 'AAAA'], true)
                         && $this->absoluteOwner($candidate, $zone) === $target;
                 },
             );
 
             if (! $hasGlue) {
                 $errors[] = sprintf(
-                    "O nameserver %s pertence a este domínio e precisa de pelo menos um registro A ou AAAA com o endereço público usado por ele. Os demais registros do domínio podem apontar normalmente para qualquer rede.",
+                    'O nameserver %s pertence a este domínio e precisa de pelo menos um registro A ou AAAA com o endereço público usado por ele. Os demais registros do domínio podem apontar normalmente para qualquer rede.',
                     $target,
                 );
             }
         }
 
         $cnames = $records
-            ->where("type", "CNAME")
+            ->where('type', 'CNAME')
             ->groupBy(
                 fn (DnsRecord $record): string => $this->absoluteOwner($record, $zone),
             );
@@ -163,42 +163,41 @@ class DnsZoneValidator
         foreach ($cnames as $owner => $items) {
             if ($items->count() > 1) {
                 $errors[] = sprintf(
-                    "O nome %s possui mais de um registro CNAME.",
+                    'O nome %s possui mais de um registro CNAME.',
                     $owner,
                 );
             }
 
             $hasConflictingRecord = $records->contains(
-                fn (DnsRecord $record): bool =>
-                    $this->absoluteOwner($record, $zone) === $owner
-                    && $record->type !== "CNAME",
+                fn (DnsRecord $record): bool => $this->absoluteOwner($record, $zone) === $owner
+                    && $record->type !== 'CNAME',
             );
 
             if ($hasConflictingRecord) {
                 $errors[] = sprintf(
-                    "O nome %s possui CNAME junto com outro tipo de registro.",
+                    'O nome %s possui CNAME junto com outro tipo de registro.',
                     $owner,
                 );
             }
         }
 
         if ($zone->soa_retry >= $zone->soa_refresh) {
-            $warnings[] = "O SOA retry normalmente deve ser menor que o refresh.";
+            $warnings[] = 'O SOA retry normalmente deve ser menor que o refresh.';
         }
 
         if ($zone->soa_expire <= $zone->soa_refresh) {
-            $errors[] = "O SOA expire deve ser maior que o refresh.";
+            $errors[] = 'O SOA expire deve ser maior que o refresh.';
         }
 
         return [
-            "ok" => $errors === [],
-            "errors" => array_values(array_unique($errors)),
-            "warnings" => array_values(array_unique($warnings)),
-            "summary" => [
-                "records" => $records->count(),
-                "nameservers" => $nsRecords->count(),
-                "primary_servers" => $primaryCount,
-                "secondary_servers" => $secondaryCount,
+            'ok' => $errors === [],
+            'errors' => array_values(array_unique($errors)),
+            'warnings' => array_values(array_unique($warnings)),
+            'summary' => [
+                'records' => $records->count(),
+                'nameservers' => $nsRecords->count(),
+                'primary_servers' => $primaryCount,
+                'secondary_servers' => $secondaryCount,
             ],
         ];
     }
@@ -206,7 +205,7 @@ class DnsZoneValidator
     private function owner(DnsRecord $record, DnsZone $zone): string
     {
         return $this->absoluteOwner($record, $zone) === $this->domain($zone->name)
-            ? "@"
+            ? '@'
             : $record->name;
     }
 
@@ -215,7 +214,7 @@ class DnsZoneValidator
         $name = $this->domain($record->name);
         $zoneName = $this->domain($zone->name);
 
-        if ($name === "@" || $name === $zoneName) {
+        if ($name === '@' || $name === $zoneName) {
             return $zoneName;
         }
 
@@ -223,7 +222,7 @@ class DnsZoneValidator
             return $name;
         }
 
-        return $name.".".$zoneName;
+        return $name.'.'.$zoneName;
     }
 
     private function isInsideZone(string $name, string $zone): bool
@@ -232,11 +231,11 @@ class DnsZoneValidator
         $zone = $this->domain($zone);
 
         return $name === $zone
-            || str_ends_with($name, ".".$zone);
+            || str_ends_with($name, '.'.$zone);
     }
 
     private function domain(string $value): string
     {
-        return strtolower(rtrim(trim($value), "."));
+        return strtolower(rtrim(trim($value), '.'));
     }
 }
