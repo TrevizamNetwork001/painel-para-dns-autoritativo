@@ -15,6 +15,7 @@ class DnsZone extends Model
 
     protected $fillable = [
         'organization_id',
+        'dns_nameserver_profile_id',
         'name',
         'kind',
         'serial',
@@ -48,6 +49,14 @@ class DnsZone extends Model
     public function organization(): BelongsTo
     {
         return $this->belongsTo(Organization::class);
+    }
+
+    public function nameserverProfile(): BelongsTo
+    {
+        return $this->belongsTo(
+            DnsNameserverProfile::class,
+            'dns_nameserver_profile_id',
+        );
     }
 
     public function records(): HasMany

@@ -6760,3 +6760,227 @@ body.has-open-modal {
         flex-direction: column;
     }
 }
+
+
+/* DNS CENTER NS-3B2 START */
+
+.domains-ns-section,
+.domains-publication-section {
+    display: grid;
+    gap: 0.8rem;
+    padding: 0.9rem;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    background: var(--surface-soft);
+}
+
+.domains-section-heading {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 1rem;
+}
+
+.domains-section-heading strong {
+    color: var(--text);
+    font-size: 0.72rem;
+}
+
+.domains-section-heading p {
+    max-width: 620px;
+    margin: 0.25rem 0 0;
+    color: var(--text-muted);
+    font-size: 0.64rem;
+    line-height: 1.5;
+}
+
+.domains-inline-link {
+    flex: 0 0 auto;
+    color: var(--accent);
+    font-size: 0.65rem;
+    font-weight: 800;
+    text-decoration: none;
+}
+
+.domains-inline-link:hover {
+    text-decoration: underline;
+}
+
+.domains-profile-preview,
+.domain-profile-preview {
+    display: grid;
+    gap: 0.65rem;
+    padding: 0.75rem;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: var(--surface);
+}
+
+.domains-profile-preview-header,
+.domain-profile-preview > header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+}
+
+.domains-profile-preview-header > div,
+.domain-profile-preview > header > div {
+    display: grid;
+    gap: 0.15rem;
+}
+
+.domains-profile-preview-header span,
+.domain-profile-preview > header span {
+    color: var(--text-muted);
+    font-size: 0.61rem;
+    font-weight: 700;
+}
+
+.domains-profile-preview-header strong,
+.domain-profile-preview > header strong {
+    color: var(--text);
+    font-size: 0.72rem;
+}
+
+.domains-profile-count,
+.domain-profile-preview > header > span {
+    display: inline-flex;
+    min-height: 25px;
+    align-items: center;
+    justify-content: center;
+    padding: 0.25rem 0.55rem;
+    border: 1px solid rgba(59, 130, 246, 0.22);
+    border-radius: 999px;
+    background: rgba(59, 130, 246, 0.08);
+    color: #60a5fa !important;
+    font-size: 0.62rem !important;
+    font-weight: 900 !important;
+    white-space: nowrap;
+}
+
+.domains-profile-identities,
+.domain-profile-preview > div {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.55rem;
+}
+
+.domains-profile-identity,
+.domain-profile-identity {
+    display: flex;
+    min-width: 0;
+    align-items: center;
+    gap: 0.55rem;
+    padding: 0.6rem;
+    border: 1px solid var(--border);
+    border-radius: 9px;
+    background: var(--surface-soft);
+}
+
+.domains-profile-identity > span,
+.domain-profile-identity > span {
+    display: grid;
+    width: 25px;
+    height: 25px;
+    flex: 0 0 auto;
+    place-items: center;
+    border-radius: 999px;
+    background: rgba(245, 158, 11, 0.12);
+    color: var(--accent);
+    font-size: 0.62rem;
+    font-weight: 900;
+}
+
+.domains-profile-identity > div,
+.domain-profile-identity > div {
+    display: grid;
+    min-width: 0;
+    gap: 0.15rem;
+}
+
+.domains-profile-identity strong,
+.domain-profile-identity strong {
+    overflow: hidden;
+    color: var(--text);
+    font-size: 0.67rem;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.domains-profile-identity small,
+.domain-profile-identity small {
+    overflow-wrap: anywhere;
+    color: var(--text-muted);
+    font-size: 0.58rem;
+    line-height: 1.4;
+}
+
+.domains-profile-preview-empty {
+    grid-column: 1 / -1;
+    margin: 0;
+    padding: 0.55rem;
+    color: var(--text-muted);
+    font-size: 0.63rem;
+    text-align: center;
+}
+
+.domains-profile-empty {
+    display: flex;
+    align-items: center;
+    gap: 0.8rem;
+    padding: 0.8rem;
+    border: 1px solid rgba(245, 158, 11, 0.25);
+    border-radius: 10px;
+    background: rgba(245, 158, 11, 0.07);
+}
+
+.domains-profile-empty > div:first-child {
+    display: grid;
+    width: 32px;
+    height: 32px;
+    flex: 0 0 auto;
+    place-items: center;
+    border-radius: 999px;
+    background: rgba(245, 158, 11, 0.13);
+    color: var(--accent);
+    font-weight: 900;
+}
+
+.domains-profile-empty > div:nth-child(2) {
+    flex: 1;
+}
+
+.domains-profile-empty strong {
+    color: var(--text);
+    font-size: 0.7rem;
+}
+
+.domains-profile-empty p {
+    margin: 0.25rem 0 0;
+    color: var(--text-muted);
+    font-size: 0.62rem;
+    line-height: 1.45;
+}
+
+.domains-field input[readonly],
+.domain-field input[readonly] {
+    cursor: default;
+    border-style: dashed;
+    color: var(--text-muted);
+}
+
+@media (max-width: 760px) {
+    .domains-section-heading,
+    .domains-profile-empty {
+        align-items: stretch;
+        flex-direction: column;
+    }
+
+    .domains-profile-identities,
+    .domain-profile-preview > div {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* DNS CENTER NS-3B2 END */

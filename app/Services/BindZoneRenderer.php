@@ -40,10 +40,16 @@ class BindZoneRenderer
 
     public function snapshot(DnsZone $zone): array
     {
-        $zone->loadMissing(['records', 'servers']);
+        $zone->loadMissing([
+            'records',
+            'servers',
+            'nameserverProfile.identities',
+        ]);
 
         return [
             'zone' => $zone->only([
+                'organization_id',
+                'dns_nameserver_profile_id',
                 'name',
                 'kind',
                 'serial',
@@ -57,23 +63,75 @@ class BindZoneRenderer
                 'status',
                 'version',
             ]),
-            'records' => $zone->records->map(
-                fn (DnsRecord $record): array => $record->only([
-                    'name',
-                    'type',
-                    'ttl',
-                    'priority',
-                    'content',
-                    'enabled',
-                ])
-            )->values()->all(),
-            'servers' => $zone->servers->map(
-                fn ($server): array => [
-                    'id' => $server->id,
-                    'hostname' => $server->hostname,
-                    'role' => $server->pivot->role,
-                ]
-            )->values()->all(),
+            'nameserver_profile' =>
+                $zone->nameserverProfile === null
+                    ? null
+                    : [
+                        'id' =>
+                            $zone->nameserverProfile->id,
+                        'name' =>
+                            $zone->nameserverProfile->name,
+                        'is_default' =>
+                            $zone->nameserverProfile->is_default,
+                        'enabled' =>
+                            $zone->nameserverProfile->enabled,
+                        'identities' =>
+                            $zone->nameserverProfile
+                                ->identities
+                                ->sortBy(
+                                    fn ($identity): int =>
+                                        (int) $identity
+                                            ->pivot
+                                            ->position,
+                                )
+                                ->values()
+                                ->map(
+                                    fn ($identity): array => [
+                                        'id' =>
+                                            $identity->id,
+                                        'name' =>
+                                            $identity->name,
+                                        'hostname' =>
+                                            $identity
+                                                ->normalizedHostname(),
+                                        'ipv4_address' =>
+                                            $identity->ipv4_address,
+                                        'ipv6_address' =>
+                                            $identity->ipv6_address,
+                                        'position' =>
+                                            (int) $identity
+                                                ->pivot
+                                                ->position,
+                                        'enabled' =>
+                                            $identity->enabled,
+                                    ],
+                                )
+                                ->all(),
+                    ],
+            'records' => $zone->records
+                ->map(
+                    fn (DnsRecord $record): array =>
+                        $record->only([
+                            'name',
+                            'type',
+                            'ttl',
+                            'priority',
+                            'content',
+                            'enabled',
+                        ]),
+                )
+                ->values()
+                ->all(),
+            'servers' => $zone->servers
+                ->map(
+                    fn ($server): array => [
+                        'id' => $server->id,
+                        'hostname' => $server->hostname,
+                        'role' => $server->pivot->role,
+                    ],
+                )
+                ->values()
+                ->all(),
             'zonefile' => $this->render($zone),
         ];
     }

@@ -27,6 +27,7 @@ class DnsZoneValidator
         $zone->loadMissing([
             "records",
             "servers",
+            "nameserverProfile.identities",
         ]);
 
         $records = $zone->records
@@ -47,6 +48,70 @@ class DnsZoneValidator
         $nsRecords = $records
             ->where("type", "NS")
             ->values();
+
+        if ($zone->nameserverProfile === null) {
+            $errors[] =
+                "Selecione um perfil de nameservers para a zona.";
+        } else {
+            $profileIdentities = $zone
+                ->nameserverProfile
+                ->identities
+                ->where("enabled", true)
+                ->sortBy(
+                    fn ($identity): int =>
+                        (int) $identity->pivot->position,
+                )
+                ->values();
+
+            if ($profileIdentities->count() < 2) {
+                $errors[] =
+                    "O perfil de nameservers deve possuir pelo menos duas identidades habilitadas.";
+            }
+
+            $expectedNameservers = $profileIdentities
+                ->pluck("hostname")
+                ->map(
+                    fn (string $hostname): string =>
+                        $this->domain($hostname),
+                )
+                ->unique()
+                ->sort()
+                ->values();
+
+            $actualNameservers = $nsRecords
+                ->filter(
+                    fn (DnsRecord $record): bool =>
+                        $this->owner($record, $zone) === "@",
+                )
+                ->pluck("content")
+                ->map(
+                    fn (string $hostname): string =>
+                        $this->domain($hostname),
+                )
+                ->unique()
+                ->sort()
+                ->values();
+
+            if (
+                $expectedNameservers->all()
+                !== $actualNameservers->all()
+            ) {
+                $errors[] =
+                    "Os registros NS do apex não correspondem ao perfil de nameservers selecionado.";
+            }
+
+            $expectedMname = $profileIdentities
+                ->first()?->hostname;
+
+            if (
+                filled($expectedMname)
+                && $this->domain($zone->soa_mname)
+                    !== $this->domain($expectedMname)
+            ) {
+                $errors[] =
+                    "O SOA MNAME não corresponde ao primeiro nameserver do perfil.";
+            }
+        }
 
         if ($primaryCount !== 1) {
             $errors[] = "A zona deve possuir exatamente um servidor primary.";

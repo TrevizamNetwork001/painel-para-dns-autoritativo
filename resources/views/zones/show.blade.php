@@ -18,6 +18,15 @@
         fn ($server) => $server->pivot?->role === 'secondary'
     );
 
+    $currentNameserverProfile = $zone->nameserverProfile;
+
+    $currentNameserverIdentities = $currentNameserverProfile
+        ?->identities
+        ?->sortBy(
+            fn ($identity) => (int) $identity->pivot->position
+        )
+        ?->values() ?? collect();
+
     $validationOk = (bool) data_get($validation, 'ok', false);
 
     $validationErrors = data_get($validation, 'errors', []);
@@ -193,7 +202,20 @@
             </article>
 
             <article class="domain-overview-card">
-                <span>Servidor principal</span>
+                <span>Perfil de nameservers</span>
+
+                <strong>
+                    {{ $currentNameserverProfile?->name ?? 'Não definido' }}
+                </strong>
+
+                <small>
+                    {{ $currentNameserverIdentities->count() }}
+                    identidade(s) DNS pública(s)
+                </small>
+            </article>
+
+            <article class="domain-overview-card">
+                <span>Publicação principal</span>
 
                 <strong>
                     {{ $primaryServer?->name ?? 'Não definido' }}
@@ -201,18 +223,6 @@
 
                 <small>
                     {{ $primaryServer?->hostname ?? 'Selecione um servidor.' }}
-                </small>
-            </article>
-
-            <article class="domain-overview-card">
-                <span>Servidor secundário</span>
-
-                <strong>
-                    {{ $secondaryServer?->name ?? 'Não definido' }}
-                </strong>
-
-                <small>
-                    {{ $secondaryServer?->hostname ?? 'Servidor opcional.' }}
                 </small>
             </article>
         </section>
@@ -469,17 +479,139 @@
 
                         <div class="domain-configuration-section">
                             <div class="domain-configuration-heading">
-                                <h3>Servidores DNS</h3>
+                                <h3>Identidade DNS pública</h3>
 
                                 <p>
-                                    Servidores responsáveis pela resolução
-                                    autoritativa deste domínio.
+                                    O perfil controla os registros NS, o MNAME
+                                    do SOA e os registros glue da zona.
+                                </p>
+                            </div>
+
+                            <label class="domain-field domain-field-full">
+                                <span>Perfil de nameservers</span>
+
+                                <select
+                                    name="dns_nameserver_profile_id"
+                                    required
+                                    data-zone-profile-select
+                                >
+                                    @foreach ($nameserverProfiles as $profile)
+                                        <option
+                                            value="{{ $profile->id }}"
+                                            data-profile-name="{{ $profile->name }}"
+                                            data-profile-identities='@json(
+                                                $profile->identities
+                                                    ->sortBy(
+                                                        fn ($identity) =>
+                                                            (int) $identity
+                                                                ->pivot
+                                                                ->position
+                                                    )
+                                                    ->values()
+                                                    ->map(
+                                                        fn ($identity) => [
+                                                            "hostname" =>
+                                                                $identity
+                                                                    ->normalizedHostname(),
+                                                            "ipv4" =>
+                                                                $identity
+                                                                    ->ipv4_address,
+                                                            "ipv6" =>
+                                                                $identity
+                                                                    ->ipv6_address,
+                                                        ]
+                                                    )
+                                            )'
+                                            @selected(
+                                                (int) old(
+                                                    'dns_nameserver_profile_id',
+                                                    $zone
+                                                        ->dns_nameserver_profile_id
+                                                ) === (int) $profile->id
+                                            )
+                                        >
+                                            {{ $profile->name }}
+                                            @if ($profile->is_default)
+                                                — padrão
+                                            @endif
+                                        </option>
+                                    @endforeach
+                                </select>
+
+                                <small>
+                                    Alterar o perfil sincroniza automaticamente
+                                    os registros NS e glue da zona.
+                                </small>
+                            </label>
+
+                            <div
+                                class="domain-profile-preview"
+                                data-zone-profile-preview
+                            >
+                                <header>
+                                    <div>
+                                        <span>Nameservers do perfil</span>
+
+                                        <strong data-zone-profile-name>
+                                            {{ $currentNameserverProfile?->name }}
+                                        </strong>
+                                    </div>
+
+                                    <span data-zone-profile-count>
+                                        {{ $currentNameserverIdentities->count() }}
+                                        NS
+                                    </span>
+                                </header>
+
+                                <div data-zone-profile-identities>
+                                    @foreach (
+                                        $currentNameserverIdentities
+                                        as $identity
+                                    )
+                                        <div class="domain-profile-identity">
+                                            <span>{{ $loop->iteration }}</span>
+
+                                            <div>
+                                                <strong>
+                                                    {{ $identity
+                                                        ->normalizedHostname() }}
+                                                </strong>
+
+                                                <small>
+                                                    @php
+                                                        $addresses = collect([
+                                                            $identity
+                                                                ->ipv4_address,
+                                                            $identity
+                                                                ->ipv6_address,
+                                                        ])->filter();
+                                                    @endphp
+
+                                                    {{ $addresses->isNotEmpty()
+                                                        ? $addresses->join(' · ')
+                                                        : 'Nameserver externo ou sem glue' }}
+                                                </small>
+                                            </div>
+                                        </div>
+                                    @endforeach
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="domain-configuration-section">
+                            <div class="domain-configuration-heading">
+                                <h3>Servidores de publicação</h3>
+
+                                <p>
+                                    Destinos que receberão futuramente os
+                                    artefatos da zona. Não definem os nomes NS
+                                    públicos.
                                 </p>
                             </div>
 
                             <div class="domain-form-grid">
                                 <label class="domain-field">
-                                    <span>Servidor DNS principal</span>
+                                    <span>Servidor de publicação principal</span>
 
                                     <select
                                         name="primary_server_id"
@@ -507,7 +639,7 @@
                                 </label>
 
                                 <label class="domain-field">
-                                    <span>Servidor DNS secundário</span>
+                                    <span>Servidor de publicação secundário</span>
 
                                     <select name="secondary_server_id">
                                         <option value="">
@@ -564,13 +696,16 @@
 
                                     <input
                                         type="text"
-                                        name="soa_mname"
-                                        value="{{ old(
-                                            'soa_mname',
-                                            $zone->soa_mname
-                                        ) }}"
-                                        required
+                                        value="{{ $zone->soa_mname }}"
+                                        data-zone-soa-mname
+                                        readonly
+                                        aria-readonly="true"
                                     >
+
+                                    <small>
+                                        Derivado automaticamente do primeiro
+                                        nameserver do perfil.
+                                    </small>
                                 </label>
 
                                 <label class="domain-field">
@@ -1116,6 +1251,96 @@ document.addEventListener('DOMContentLoaded', () => {
     ) {
         activateTab(initialTab);
     }
+
+    const zoneProfileSelect = document.querySelector(
+        '[data-zone-profile-select]'
+    );
+    const zoneProfileName = document.querySelector(
+        '[data-zone-profile-name]'
+    );
+    const zoneProfileCount = document.querySelector(
+        '[data-zone-profile-count]'
+    );
+    const zoneProfileIdentities = document.querySelector(
+        '[data-zone-profile-identities]'
+    );
+    const zoneSoaMname = document.querySelector(
+        '[data-zone-soa-mname]'
+    );
+
+    const updateZoneProfilePreview = () => {
+        if (!zoneProfileSelect) {
+            return;
+        }
+
+        const option = zoneProfileSelect.options[
+            zoneProfileSelect.selectedIndex
+        ];
+
+        let identities = [];
+
+        try {
+            identities = JSON.parse(
+                option?.dataset.profileIdentities || '[]'
+            );
+        } catch (error) {
+            identities = [];
+        }
+
+        if (zoneProfileName) {
+            zoneProfileName.textContent =
+                option?.dataset.profileName || 'Sem perfil';
+        }
+
+        if (zoneProfileCount) {
+            zoneProfileCount.textContent =
+                `${identities.length} NS`;
+        }
+
+        if (zoneSoaMname) {
+            zoneSoaMname.value =
+                identities[0]?.hostname || '';
+        }
+
+        if (zoneProfileIdentities) {
+            zoneProfileIdentities.replaceChildren();
+
+            identities.forEach((identity, index) => {
+                const item = document.createElement('div');
+                item.className = 'domain-profile-identity';
+
+                const order = document.createElement('span');
+                order.textContent = String(index + 1);
+
+                const body = document.createElement('div');
+
+                const hostname = document.createElement('strong');
+                hostname.textContent =
+                    identity.hostname || 'Sem hostname';
+
+                const metadata = document.createElement('small');
+
+                const addresses = [
+                    identity.ipv4,
+                    identity.ipv6,
+                ].filter(Boolean);
+
+                metadata.textContent = addresses.length
+                    ? addresses.join(' · ')
+                    : 'Nameserver externo ou sem glue';
+
+                body.append(hostname, metadata);
+                item.append(order, body);
+
+                zoneProfileIdentities.append(item);
+            });
+        }
+    };
+
+    zoneProfileSelect?.addEventListener(
+        'change',
+        updateZoneProfilePreview
+    );
 
     const searchInput = document.querySelector('[data-record-search]');
     const recordRows = document.querySelectorAll('[data-record-row]');

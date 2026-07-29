@@ -290,7 +290,8 @@
                     <h2 id="domains-modal-title">Adicionar domínio</h2>
 
                     <p>
-                        Crie a zona autoritativa e vincule os servidores DNS.
+                        Escolha a identidade DNS pública e os servidores que
+                        receberão a publicação desta zona.
                     </p>
                 </div>
 
@@ -332,50 +333,208 @@
 
                     <input type="hidden" name="kind" value="primary">
 
-                    <div class="domains-modal-grid">
-                        <label class="domains-field">
-                            <span>Servidor primary</span>
+                    <section class="domains-ns-section">
+                        <div class="domains-section-heading">
+                            <div>
+                                <strong>Identidade DNS pública</strong>
 
-                            <select name="primary_server_id" required>
-                                <option value="">Selecione o servidor</option>
+                                <p>
+                                    O perfil define os hostnames NS publicados,
+                                    o servidor principal do SOA e eventuais
+                                    registros glue.
+                                </p>
+                            </div>
 
-                                @foreach ($servers as $server)
-                                    <option
-                                        value="{{ $server->id }}"
-                                        data-server-hostname="{{ $server->hostname }}"
-                                        @selected(
-                                            (int) old('primary_server_id')
-                                            === (int) $server->id
-                                        )
-                                    >
-                                        {{ $server->name }}
-                                        — {{ $server->hostname }}
+                            <a
+                                href="{{ route('nameservers.index') }}"
+                                class="domains-inline-link"
+                            >
+                                Gerenciar nameservers
+                            </a>
+                        </div>
+
+                        @if ($nameserverProfiles->isNotEmpty())
+                            <label class="domains-field domains-field-full">
+                                <span>Perfil de nameservers</span>
+
+                                <select
+                                    name="dns_nameserver_profile_id"
+                                    required
+                                    data-nameserver-profile-select
+                                >
+                                    <option value="">
+                                        Selecione o perfil
                                     </option>
-                                @endforeach
-                            </select>
-                        </label>
 
-                        <label class="domains-field">
-                            <span>Servidor secondary</span>
+                                    @foreach ($nameserverProfiles as $profile)
+                                        <option
+                                            value="{{ $profile->id }}"
+                                            data-profile-name="{{ $profile->name }}"
+                                            data-profile-default="{{ $profile->is_default ? '1' : '0' }}"
+                                            data-profile-identities='@json(
+                                                $profile->identities
+                                                    ->sortBy(
+                                                        fn ($identity) =>
+                                                            (int) $identity
+                                                                ->pivot
+                                                                ->position
+                                                    )
+                                                    ->values()
+                                                    ->map(
+                                                        fn ($identity) => [
+                                                            "name" =>
+                                                                $identity->name,
+                                                            "hostname" =>
+                                                                $identity
+                                                                    ->normalizedHostname(),
+                                                            "ipv4" =>
+                                                                $identity
+                                                                    ->ipv4_address,
+                                                            "ipv6" =>
+                                                                $identity
+                                                                    ->ipv6_address,
+                                                        ]
+                                                    )
+                                            )'
+                                            @selected(
+                                                (int) old(
+                                                    'dns_nameserver_profile_id',
+                                                    $nameserverProfiles
+                                                        ->firstWhere(
+                                                            'is_default',
+                                                            true
+                                                        )
+                                                        ?->id
+                                                ) === (int) $profile->id
+                                            )
+                                        >
+                                            {{ $profile->name }}
+                                            @if ($profile->is_default)
+                                                — padrão
+                                            @endif
+                                        </option>
+                                    @endforeach
+                                </select>
 
-                            <select name="secondary_server_id">
-                                <option value="">Sem secondary</option>
+                                <small>
+                                    A zona receberá automaticamente os registros
+                                    NS definidos neste perfil.
+                                </small>
+                            </label>
 
-                                @foreach ($servers as $server)
-                                    <option
-                                        value="{{ $server->id }}"
-                                        @selected(
-                                            (int) old('secondary_server_id')
-                                            === (int) $server->id
-                                        )
+                            <div
+                                class="domains-profile-preview"
+                                data-nameserver-profile-preview
+                            >
+                                <div class="domains-profile-preview-header">
+                                    <div>
+                                        <span>Nameservers publicados</span>
+
+                                        <strong data-profile-preview-name>
+                                            Selecione um perfil
+                                        </strong>
+                                    </div>
+
+                                    <span
+                                        class="domains-profile-count"
+                                        data-profile-preview-count
                                     >
-                                        {{ $server->name }}
-                                        — {{ $server->hostname }}
+                                        0 NS
+                                    </span>
+                                </div>
+
+                                <div
+                                    class="domains-profile-identities"
+                                    data-profile-preview-identities
+                                ></div>
+                            </div>
+                        @else
+                            <div class="domains-profile-empty">
+                                <div aria-hidden="true">⇄</div>
+
+                                <div>
+                                    <strong>
+                                        Nenhum perfil de nameservers disponível
+                                    </strong>
+
+                                    <p>
+                                        Crie pelo menos duas identidades e um
+                                        perfil antes de adicionar um domínio.
+                                    </p>
+                                </div>
+
+                                <a
+                                    href="{{ route('nameservers.index') }}"
+                                    class="button button-secondary button-small"
+                                >
+                                    Criar perfil
+                                </a>
+                            </div>
+                        @endif
+                    </section>
+
+                    <section class="domains-publication-section">
+                        <div class="domains-section-heading">
+                            <div>
+                                <strong>Servidores de publicação</strong>
+
+                                <p>
+                                    Estes servidores recebem os artefatos da
+                                    zona. Eles não definem os nomes NS públicos.
+                                </p>
+                            </div>
+                        </div>
+
+                        <div class="domains-modal-grid">
+                            <label class="domains-field">
+                                <span>Servidor de publicação principal</span>
+
+                                <select name="primary_server_id" required>
+                                    <option value="">
+                                        Selecione o servidor
                                     </option>
-                                @endforeach
-                            </select>
-                        </label>
-                    </div>
+
+                                    @foreach ($servers as $server)
+                                        <option
+                                            value="{{ $server->id }}"
+                                            @selected(
+                                                (int) old(
+                                                    'primary_server_id'
+                                                ) === (int) $server->id
+                                            )
+                                        >
+                                            {{ $server->name }}
+                                            — {{ $server->hostname }}
+                                        </option>
+                                    @endforeach
+                                </select>
+                            </label>
+
+                            <label class="domains-field">
+                                <span>Servidor de publicação secundário</span>
+
+                                <select name="secondary_server_id">
+                                    <option value="">
+                                        Sem servidor secundário
+                                    </option>
+
+                                    @foreach ($servers as $server)
+                                        <option
+                                            value="{{ $server->id }}"
+                                            @selected(
+                                                (int) old(
+                                                    'secondary_server_id'
+                                                ) === (int) $server->id
+                                            )
+                                        >
+                                            {{ $server->name }}
+                                            — {{ $server->hostname }}
+                                        </option>
+                                    @endforeach
+                                </select>
+                            </label>
+                        </div>
+                    </section>
 
                     <div class="domains-info-box">
                         <span aria-hidden="true">i</span>
@@ -384,8 +543,10 @@
                             <strong>Configuração automática</strong>
 
                             <p>
-                                TTL e parâmetros SOA serão preenchidos com os
-                                padrões seguros do DNS Center.
+                                O MNAME do SOA, os registros NS e os registros
+                                glue serão derivados do perfil selecionado.
+                                Nenhum arquivo será aplicado ao BIND durante o
+                                cadastro.
                             </p>
                         </div>
                     </div>
@@ -416,15 +577,16 @@
 
                                 <input
                                     type="text"
-                                    name="soa_mname"
-                                    value="{{ old('soa_mname') }}"
-                                    placeholder="Preenchido pelo servidor Primary"
+                                    value=""
+                                    placeholder="Derivado do perfil"
                                     data-soa-mname
-                                    required
+                                    readonly
+                                    aria-readonly="true"
                                 >
 
                                 <small>
-                                    Será usado o hostname do servidor Primary selecionado.
+                                    Preenchido automaticamente com o primeiro
+                                    nameserver do perfil selecionado.
                                 </small>
                             </label>
 
@@ -531,6 +693,7 @@
                     <button
                         type="submit"
                         class="button button-primary"
+                        @disabled($nameserverProfiles->isEmpty())
                     >
                         Adicionar domínio
                     </button>
@@ -550,13 +713,24 @@ document.addEventListener('DOMContentLoaded', () => {
     const noResults = document.querySelector('[data-domains-no-results]');
 
     const domainInput = modal?.querySelector('input[name="name"]');
-    const primarySelect = modal?.querySelector(
-        'select[name="primary_server_id"]'
+    const profileSelect = modal?.querySelector(
+        '[data-nameserver-profile-select]'
+    );
+    const profilePreview = modal?.querySelector(
+        '[data-nameserver-profile-preview]'
+    );
+    const profilePreviewName = modal?.querySelector(
+        '[data-profile-preview-name]'
+    );
+    const profilePreviewCount = modal?.querySelector(
+        '[data-profile-preview-count]'
+    );
+    const profilePreviewIdentities = modal?.querySelector(
+        '[data-profile-preview-identities]'
     );
     const soaMnameInput = modal?.querySelector('[data-soa-mname]');
     const soaRnameInput = modal?.querySelector('[data-soa-rname]');
 
-    let soaMnameWasEdited = Boolean(soaMnameInput?.value.trim());
     let soaRnameWasEdited = Boolean(soaRnameInput?.value.trim());
 
     const normalizeDomain = (value) => {
@@ -568,13 +742,92 @@ document.addEventListener('DOMContentLoaded', () => {
             .replace(/\/$/, '');
     };
 
-    const updateSoaMname = () => {
-        if (!primarySelect || !soaMnameInput || soaMnameWasEdited) {
-            return;
+    const profileIdentities = () => {
+        if (!profileSelect) {
+            return [];
         }
 
-        const option = primarySelect.options[primarySelect.selectedIndex];
-        soaMnameInput.value = option?.dataset.serverHostname || '';
+        const option = profileSelect.options[
+            profileSelect.selectedIndex
+        ];
+
+        if (!option?.dataset.profileIdentities) {
+            return [];
+        }
+
+        try {
+            return JSON.parse(option.dataset.profileIdentities);
+        } catch (error) {
+            return [];
+        }
+    };
+
+    const updateNameserverProfilePreview = () => {
+        const identities = profileIdentities();
+        const option = profileSelect?.options[
+            profileSelect.selectedIndex
+        ];
+
+        if (soaMnameInput) {
+            soaMnameInput.value = identities[0]?.hostname || '';
+        }
+
+        if (profilePreviewName) {
+            profilePreviewName.textContent =
+                option?.dataset.profileName || 'Selecione um perfil';
+        }
+
+        if (profilePreviewCount) {
+            profilePreviewCount.textContent =
+                `${identities.length} NS`;
+        }
+
+        if (profilePreviewIdentities) {
+            profilePreviewIdentities.replaceChildren();
+
+            identities.forEach((identity, index) => {
+                const item = document.createElement('div');
+                item.className = 'domains-profile-identity';
+
+                const order = document.createElement('span');
+                order.textContent = String(index + 1);
+
+                const content = document.createElement('div');
+
+                const hostname = document.createElement('strong');
+                hostname.textContent = identity.hostname || 'Sem hostname';
+
+                const metadata = document.createElement('small');
+
+                const addresses = [
+                    identity.ipv4,
+                    identity.ipv6,
+                ].filter(Boolean);
+
+                metadata.textContent = addresses.length
+                    ? addresses.join(' · ')
+                    : 'Nameserver externo ou sem glue';
+
+                content.append(hostname, metadata);
+                item.append(order, content);
+
+                profilePreviewIdentities.append(item);
+            });
+
+            if (identities.length === 0) {
+                const empty = document.createElement('p');
+                empty.className = 'domains-profile-preview-empty';
+                empty.textContent =
+                    'Selecione um perfil para visualizar os nameservers.';
+
+                profilePreviewIdentities.append(empty);
+            }
+        }
+
+        profilePreview?.classList.toggle(
+            'has-profile',
+            identities.length > 0
+        );
     };
 
     const updateSoaRname = () => {
@@ -598,7 +851,7 @@ document.addEventListener('DOMContentLoaded', () => {
         modal.setAttribute('aria-hidden', 'false');
         document.body.classList.add('has-open-modal');
 
-        updateSoaMname();
+        updateNameserverProfilePreview();
         updateSoaRname();
 
         window.setTimeout(() => {
@@ -620,19 +873,15 @@ document.addEventListener('DOMContentLoaded', () => {
         updateSoaRname();
     });
 
-    primarySelect?.addEventListener('change', () => {
-        updateSoaMname();
-    });
-
-    soaMnameInput?.addEventListener('input', () => {
-        soaMnameWasEdited = soaMnameInput.value.trim() !== '';
+    profileSelect?.addEventListener('change', () => {
+        updateNameserverProfilePreview();
     });
 
     soaRnameInput?.addEventListener('input', () => {
         soaRnameWasEdited = soaRnameInput.value.trim() !== '';
     });
 
-    updateSoaMname();
+    updateNameserverProfilePreview();
     updateSoaRname();
 
     openButtons.forEach((button) => {

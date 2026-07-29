@@ -2,11 +2,13 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\DnsNameserverProfile;
 use App\Models\DnsRecord;
 use App\Models\DnsServer;
 use App\Models\DnsZone;
 use App\Models\DnsZoneVersion;
 use App\Services\BindZoneRenderer;
+use App\Services\DnsZoneNameserverSynchronizer;
 use App\Services\DnsZoneValidator;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -33,12 +35,27 @@ class DnsZoneController extends Controller
                 ->enabled()
                 ->orderBy('name')
                 ->get(),
+            'nameserverProfiles' =>
+                DnsNameserverProfile::query()
+                    ->forOrganization($organizationId)
+                    ->enabled()
+                    ->with([
+                        'identities' => fn ($query) =>
+                            $query->where(
+                                'dns_nameserver_identities.enabled',
+                                true,
+                            ),
+                    ])
+                    ->orderByDesc('is_default')
+                    ->orderBy('name')
+                    ->get(),
         ]);
     }
 
     public function store(
         Request $request,
         BindZoneRenderer $renderer,
+        DnsZoneNameserverSynchronizer $nameservers,
     ): RedirectResponse {
         $organizationId = $this->authorizeWrite($request);
 
@@ -55,16 +72,22 @@ class DnsZoneController extends Controller
                 'required',
                 Rule::in(DnsZone::KINDS),
             ],
+            'dns_nameserver_profile_id' => [
+                'required',
+                'integer',
+                Rule::exists(
+                    'dns_nameserver_profiles',
+                    'id',
+                )->where(
+                    'organization_id',
+                    $organizationId,
+                ),
+            ],
             'default_ttl' => [
                 'required',
                 'integer',
                 'min:60',
                 'max:2147483647',
-            ],
-            'soa_mname' => [
-                'nullable',
-                'string',
-                'max:255',
             ],
             'soa_rname' => [
                 'nullable',
@@ -117,6 +140,12 @@ class DnsZoneController extends Controller
 
         $zoneName = $this->domain($validated['name']);
 
+        $nameserverProfile =
+            $nameservers->profileForOrganization(
+                (int) $validated['dns_nameserver_profile_id'],
+                $organizationId,
+            );
+
         $primaryServer = DnsServer::query()
             ->forOrganization($organizationId)
             ->enabled()
@@ -143,15 +172,25 @@ class DnsZoneController extends Controller
             $zoneName,
             $primaryServer,
             $secondaryServer,
+            $nameservers,
+            $nameserverProfile,
         ): DnsZone {
             $zone = DnsZone::query()->create([
                 'organization_id' => $organizationId,
+                'dns_nameserver_profile_id' =>
+                    $nameserverProfile->id,
                 'name' => $zoneName,
                 'kind' => $validated['kind'],
                 'serial' => $this->nextSerial(),
                 'default_ttl' => $validated['default_ttl'],
                 'soa_mname' => $this->domain(
-                    $primaryServer->hostname,
+                    $nameserverProfile->identities
+                        ->sortBy(
+                            fn ($identity): int =>
+                                (int) $identity->pivot->position,
+                        )
+                        ->firstOrFail()
+                        ->hostname,
                 ),
                 'soa_rname' => 'hostmaster.'.$zoneName,
                 'soa_refresh' => $validated['soa_refresh'],
@@ -180,33 +219,21 @@ class DnsZoneController extends Controller
 
             $zone->servers()->sync($sync);
 
-            $nameServers = collect([
-                $primaryServer->hostname,
-                $secondaryServer?->hostname,
-            ])
-                ->filter(
-                    fn ($hostname): bool =>
-                        is_string($hostname)
-                        && trim($hostname) !== '',
-                )
+            $nameservers->synchronize(
+                $zone,
+                $nameserverProfile,
+            );
+
+            $nameServers = $nameserverProfile
+                ->identities
+                ->pluck('hostname')
+                ->filter()
                 ->map(
                     fn (string $hostname): string =>
                         $this->domain($hostname),
                 )
                 ->unique()
                 ->values();
-
-            foreach ($nameServers as $nameServer) {
-                $zone->records()->create([
-                    'organization_id' => $organizationId,
-                    'name' => '@',
-                    'type' => 'NS',
-                    'ttl' => null,
-                    'priority' => null,
-                    'content' => $nameServer,
-                    'enabled' => true,
-                ]);
-            }
 
             $this->saveVersion(
                 $zone,
@@ -222,8 +249,12 @@ class DnsZoneController extends Controller
         });
 
         $nsCount = $zone->records()
-            ->where('name', $zone->name)
             ->where('type', 'NS')
+            ->where(function ($query) use ($zone): void {
+                $query
+                    ->where('name', '@')
+                    ->orWhere('name', $zone->name);
+            })
             ->count();
 
         return redirect()
@@ -241,19 +272,30 @@ class DnsZoneController extends Controller
         Request $request,
         DnsZone $zone,
         BindZoneRenderer $renderer,
+        DnsZoneNameserverSynchronizer $nameservers,
     ): RedirectResponse {
         $organizationId = $this->authorizeWrite($request);
         $this->authorizeZone($request, $zone);
 
         $validated = $request->validate([
             'kind' => ['required', Rule::in(DnsZone::KINDS)],
+            'dns_nameserver_profile_id' => [
+                'required',
+                'integer',
+                Rule::exists(
+                    'dns_nameserver_profiles',
+                    'id',
+                )->where(
+                    'organization_id',
+                    $organizationId,
+                ),
+            ],
             'default_ttl' => [
                 'required',
                 'integer',
                 'min:60',
                 'max:2147483647',
             ],
-            'soa_mname' => ['required', 'string', 'max:255'],
             'soa_rname' => ['required', 'string', 'max:255'],
             'soa_refresh' => [
                 'required',
@@ -295,17 +337,33 @@ class DnsZoneController extends Controller
             'notes' => ['nullable', 'string', 'max:2000'],
         ]);
 
+        $nameserverProfile =
+            $nameservers->profileForOrganization(
+                (int) $validated['dns_nameserver_profile_id'],
+                $organizationId,
+            );
+
         DB::transaction(function () use (
             $request,
             $zone,
             $validated,
             $renderer,
+            $nameservers,
+            $nameserverProfile,
         ): void {
             $zone->forceFill([
                 'kind' => $validated['kind'],
+                'dns_nameserver_profile_id' =>
+                    $nameserverProfile->id,
                 'default_ttl' => $validated['default_ttl'],
                 'soa_mname' => $this->domain(
-                    $validated['soa_mname'],
+                    $nameserverProfile->identities
+                        ->sortBy(
+                            fn ($identity): int =>
+                                (int) $identity->pivot->position,
+                        )
+                        ->firstOrFail()
+                        ->hostname,
                 ),
                 'soa_rname' => $this->domain(
                     $validated['soa_rname'],
@@ -332,6 +390,11 @@ class DnsZoneController extends Controller
             }
 
             $zone->servers()->sync($servers);
+
+            $nameservers->synchronize(
+                $zone,
+                $nameserverProfile,
+            );
 
             $this->bump(
                 $zone,
@@ -360,6 +423,7 @@ class DnsZoneController extends Controller
                 ->orderBy('type')
                 ->orderBy('name'),
             'servers' => fn ($query) => $query->orderBy('name'),
+            'nameserverProfile.identities',
             'versions' => fn ($query) => $query
                 ->latest('version')
                 ->limit(10),
@@ -374,6 +438,22 @@ class DnsZoneController extends Controller
                 ->enabled()
                 ->orderBy('name')
                 ->get(),
+            'nameserverProfiles' =>
+                DnsNameserverProfile::query()
+                    ->forOrganization(
+                        $zone->organization_id,
+                    )
+                    ->enabled()
+                    ->with([
+                        'identities' => fn ($query) =>
+                            $query->where(
+                                'dns_nameserver_identities.enabled',
+                                true,
+                            ),
+                    ])
+                    ->orderByDesc('is_default')
+                    ->orderBy('name')
+                    ->get(),
         ]);
     }
 
@@ -601,7 +681,11 @@ class DnsZoneController extends Controller
         string $reason,
         BindZoneRenderer $renderer,
     ): void {
-        $zone->refresh()->load(['records', 'servers']);
+        $zone->refresh()->load([
+            'records',
+            'servers',
+            'nameserverProfile.identities',
+        ]);
 
         DnsZoneVersion::query()->create([
             'organization_id' => $zone->organization_id,

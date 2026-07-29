@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class DnsNameserverProfile extends Model
 {
@@ -29,6 +30,14 @@ class DnsNameserverProfile extends Model
     {
         return $this->belongsTo(
             Organization::class,
+        );
+    }
+
+    public function zones(): HasMany
+    {
+        return $this->hasMany(
+            DnsZone::class,
+            'dns_nameserver_profile_id',
         );
     }
 
