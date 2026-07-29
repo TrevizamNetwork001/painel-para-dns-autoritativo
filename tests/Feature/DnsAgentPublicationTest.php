@@ -28,7 +28,15 @@ class DnsAgentPublicationTest extends TestCase
             ->assertJsonPath('zones.0.desired_version', 7)
             ->assertJsonPath('zones.0.installed_version', null)
             ->assertJsonPath('zones.0.apply_status', 'pending')
-            ->assertJsonPath('zones.0.update_available', true);
+            ->assertJsonPath('zones.0.update_available', true)
+            ->assertJsonPath(
+                'zones.0.artifact_checksum',
+                hash('sha256', '$ORIGIN example.test.'.PHP_EOL),
+            )
+            ->assertJsonPath(
+                'zones.0.artifact_size',
+                strlen('$ORIGIN example.test.'.PHP_EOL),
+            );
 
         $this->withToken($context['token'])
             ->getJson(
@@ -40,6 +48,14 @@ class DnsAgentPublicationTest extends TestCase
             ->assertHeader(
                 'X-DNS-Publication-Id',
                 (string) $context['publication']->id,
+            )
+            ->assertHeader(
+                'X-DNS-Artifact-SHA256',
+                hash('sha256', '$ORIGIN example.test.'.PHP_EOL),
+            )
+            ->assertHeader(
+                'Content-Length',
+                (string) strlen('$ORIGIN example.test.'.PHP_EOL),
             )
             ->assertSee('$ORIGIN example.test.', false);
 
@@ -104,6 +120,44 @@ class DnsAgentPublicationTest extends TestCase
         $this->assertDatabaseHas('security_audits', [
             'event' => 'agent.apply_succeeded',
         ]);
+    }
+
+    public function test_real_agent_payload_is_accepted_without_contract_translation(): void
+    {
+        $context = $this->context();
+        $checksum = hash('sha256', '$ORIGIN example.test.'.PHP_EOL);
+        $eventId = (string) Str::uuid();
+
+        $this->withToken($context['token'])
+            ->postJson(
+                '/api/agent/publications/'.$context['publication']->id.'/apply',
+                [
+                    'event_id' => $eventId,
+                    'agent_timestamp' => now()->toIso8601String(),
+                    'status' => 'applying',
+                    'artifact_checksum' => $checksum,
+                ],
+            )
+            ->assertOk()
+            ->assertJsonPath('publication_id', $context['publication']->id)
+            ->assertJsonPath('desired_version', 7)
+            ->assertJsonPath('installed_version', null)
+            ->assertJsonPath('status', 'applying');
+
+        $this->withToken($context['token'])
+            ->postJson(
+                '/api/agent/publications/'.$context['publication']->id.'/apply',
+                [
+                    'event_id' => (string) Str::uuid(),
+                    'agent_timestamp' => now()->toIso8601String(),
+                    'status' => 'applied',
+                    'installed_version' => 7,
+                    'artifact_checksum' => $checksum,
+                ],
+            )
+            ->assertOk()
+            ->assertJsonPath('installed_version', 7)
+            ->assertJsonPath('status', 'applied');
     }
 
     public function test_duplicate_is_idempotent_and_replay_with_different_payload_is_rejected(): void

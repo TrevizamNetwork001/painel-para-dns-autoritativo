@@ -36,6 +36,10 @@ class DnsZoneArtifactController extends Controller
                 ->unique(fn (DnsAgentPublication $item) => $item->zoneVersion->dns_zone_id)
                 ->map(function (DnsAgentPublication $item) use ($destinations): array {
                     $zone = $item->zoneVersion->zone;
+                    $artifact = (string) data_get(
+                        $item->zoneVersion->snapshot,
+                        'zonefile',
+                    );
                     $installedVersion = $destinations
                         ->first(
                             fn (DnsAgentPublication $candidate): bool => $candidate->status === 'applied'
@@ -55,6 +59,8 @@ class DnsZoneArtifactController extends Controller
                         'apply_status' => $item->status,
                         'update_available' => $installedVersion
                             !== $item->zoneVersion->version,
+                        'artifact_checksum' => hash('sha256', $artifact),
+                        'artifact_size' => strlen($artifact),
                         'artifact_url' => route(
                             'api.agent.zones.artifact',
                             [$zone, 'publication' => $item->id],
@@ -114,11 +120,18 @@ class DnsZoneArtifactController extends Controller
             ipAddress: $request->ip(),
         );
 
+        $artifact = (string) data_get(
+            $destination->zoneVersion->snapshot,
+            'zonefile',
+        );
+
         return response(
-            (string) data_get($destination->zoneVersion->snapshot, 'zonefile'),
+            $artifact,
             200,
             [
                 'Content-Type' => 'text/plain; charset=UTF-8',
+                'Content-Length' => (string) strlen($artifact),
+                'X-DNS-Artifact-SHA256' => hash('sha256', $artifact),
                 'X-DNS-Zone-Serial' => (string) $destination->zoneVersion->serial,
                 'X-DNS-Zone-Version' => (string) $destination->zoneVersion->version,
                 'X-DNS-Publication-Id' => (string) $destination->id,

@@ -4,17 +4,21 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import html
 import json
+import logging
 import os
 import platform
 import pwd
 import grp
+import re
 import shutil
 import socket
 import stat
 import subprocess
 import sys
 import tempfile
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -29,6 +33,12 @@ DEFAULT_STATE_DIR = Path("/var/lib/dns-center-agent")
 DEFAULT_ZONES_DIR = Path("/etc/bind/dns-center-zones")
 DEFAULT_INCLUDE = Path("/etc/bind/dns-center-managed.conf")
 DEFAULT_BACKUP_DIR = Path("/var/backups/dns-center-agent")
+DEFAULT_MAX_ARTIFACT_BYTES = 2 * 1024 * 1024
+DEFAULT_RETRIES = 3
+RETRYABLE_HTTP_CODES = {429, 500, 502, 503, 504}
+EXPECTED_ARTIFACT_TYPES = {"text/plain", "application/octet-stream"}
+
+LOGGER = logging.getLogger("dns-center-agent")
 
 
 class AgentError(RuntimeError):
@@ -39,6 +49,57 @@ class AgentOperationError(AgentError):
     def __init__(self, message: str, rolled_back: bool = False) -> None:
         super().__init__(message)
         self.rolled_back = rolled_back
+
+
+class AgentHttpError(AgentError):
+    def __init__(
+        self,
+        status: int,
+        code: str,
+        message: str,
+        retry_after: float | None = None,
+    ) -> None:
+        super().__init__(f"HTTP {status}: {sanitize_message(message)}")
+        self.status = status
+        self.code = code
+        self.retry_after = retry_after
+
+
+def sanitize_message(message: object) -> str:
+    sanitized = html.unescape(str(message))
+    sanitized = re.sub(r"<[^>]*>", " ", sanitized)
+    sanitized = re.sub(r"[\x00-\x1f\x7f]", " ", sanitized)
+    sanitized = re.sub(
+        r"\b(token|secret|password|authorization|api[_-]?key)"
+        r"\s*[:=]\s*\S+",
+        r"\1=[removido]",
+        sanitized,
+        flags=re.IGNORECASE,
+    )
+    sanitized = re.sub(
+        r"(?<!\w)(?:/[A-Za-z0-9._-]+){2,}",
+        "[caminho removido]",
+        sanitized,
+    )
+    sanitized = re.sub(
+        r"`[^`]*`|\$\([^)]*\)",
+        "[comando removido]",
+        sanitized,
+    )
+    sanitized = re.sub(
+        r"\b(?:sudo|bash|sh|powershell|cmd(?:\.exe)?|rm|curl|wget)"
+        r"\s+[^.;]*",
+        "[comando removido]",
+        sanitized,
+        flags=re.IGNORECASE,
+    )
+    sanitized = re.sub(r"\s+", " ", sanitized).strip()
+
+    return sanitized[:1000]
+
+
+def safe_log(message: object) -> None:
+    LOGGER.info("%s", sanitize_message(message))
 
 
 def utc_now() -> str:
@@ -146,6 +207,7 @@ def request_json(
     payload: dict[str, Any] | None = None,
     token: str | None = None,
     timeout: int = 30,
+    retries: int = DEFAULT_RETRIES,
 ) -> dict[str, Any]:
     body = None
 
@@ -170,44 +232,92 @@ def request_json(
         headers=headers,
     )
 
-    try:
-        with urllib.request.urlopen(request, timeout=timeout) as response:
-            content = response.read().decode("utf-8")
-
-            if not content:
-                return {}
-
-            parsed = json.loads(content)
-
-            if not isinstance(parsed, dict):
-                raise AgentError("Resposta JSON inesperada.")
-
-            return parsed
-    except urllib.error.HTTPError as exception:
-        content = exception.read().decode("utf-8", errors="replace")
-
+    for attempt in range(retries):
         try:
-            details = json.loads(content)
-        except json.JSONDecodeError:
-            details = {"message": content or str(exception)}
+            with urllib.request.urlopen(request, timeout=timeout) as response:
+                content = response.read().decode("utf-8")
 
-        message = details.get("message", str(exception))
-        raise AgentError(
-            f"HTTP {exception.code}: {message}"
-        ) from exception
-    except urllib.error.URLError as exception:
-        raise AgentError(
-            f"Falha de conexão: {exception.reason}"
-        ) from exception
-    except json.JSONDecodeError as exception:
-        raise AgentError("Resposta JSON inválida.") from exception
+                if not content:
+                    return {}
+
+                parsed = json.loads(content)
+
+                if not isinstance(parsed, dict):
+                    raise AgentError("Resposta JSON inesperada.")
+
+                return parsed
+        except urllib.error.HTTPError as exception:
+            error = http_error(exception)
+
+            if (
+                error.status not in RETRYABLE_HTTP_CODES
+                or attempt == retries - 1
+            ):
+                raise error from exception
+
+            bounded_backoff(attempt, error.retry_after)
+        except urllib.error.URLError as exception:
+            if attempt == retries - 1:
+                raise AgentError(
+                    "Falha de conexão: "
+                    + sanitize_message(exception.reason)
+                ) from exception
+
+            bounded_backoff(attempt)
+        except json.JSONDecodeError as exception:
+            raise AgentError("Resposta JSON inválida.") from exception
+
+    raise AgentError("Tentativas de rede esgotadas.")
 
 
-def request_text(
+def retry_after_seconds(value: str | None) -> float | None:
+    if value is None:
+        return None
+
+    try:
+        return max(0.0, min(float(value), 60.0))
+    except ValueError:
+        return None
+
+
+def bounded_backoff(
+    attempt: int,
+    retry_after: float | None = None,
+) -> None:
+    delay = retry_after if retry_after is not None else min(2 ** attempt, 30)
+    time.sleep(delay)
+
+
+def http_error(exception: urllib.error.HTTPError) -> AgentHttpError:
+    content = exception.read(8192).decode("utf-8", errors="replace")
+
+    try:
+        details = json.loads(content)
+    except json.JSONDecodeError:
+        details = {}
+
+    if not isinstance(details, dict):
+        details = {}
+
+    code = str(details.get("error", "http_error"))
+    message = str(details.get("message", exception.reason))
+
+    return AgentHttpError(
+        exception.code,
+        code,
+        message,
+        retry_after_seconds(exception.headers.get("Retry-After")),
+    )
+
+
+def request_artifact(
     url: str,
     token: str,
+    destination: Path,
+    max_bytes: int = DEFAULT_MAX_ARTIFACT_BYTES,
     timeout: int = 30,
-) -> str:
+    retries: int = DEFAULT_RETRIES,
+) -> dict[str, Any]:
     request = urllib.request.Request(
         url,
         method="GET",
@@ -218,18 +328,109 @@ def request_text(
         },
     )
 
-    try:
-        with urllib.request.urlopen(request, timeout=timeout) as response:
-            return response.read().decode("utf-8")
-    except urllib.error.HTTPError as exception:
-        content = exception.read().decode("utf-8", errors="replace")
-        raise AgentError(
-            f"HTTP {exception.code}: {content or exception.reason}"
-        ) from exception
-    except urllib.error.URLError as exception:
-        raise AgentError(
-            f"Falha de conexão: {exception.reason}"
-        ) from exception
+    for attempt in range(retries):
+        temporary: Path | None = None
+
+        try:
+            with urllib.request.urlopen(request, timeout=timeout) as response:
+                content_type = (
+                    response.headers.get_content_type()
+                    if response.headers.get("Content-Type")
+                    else None
+                )
+
+                if (
+                    content_type is not None
+                    and content_type not in EXPECTED_ARTIFACT_TYPES
+                ):
+                    raise AgentError("Content-Type do artefato inválido.")
+
+                content_length = response.headers.get("Content-Length")
+
+                if content_length is not None:
+                    try:
+                        declared_length = int(content_length)
+                    except ValueError as exception:
+                        raise AgentError(
+                            "Content-Length do artefato inválido."
+                        ) from exception
+
+                    if declared_length < 0 or declared_length > max_bytes:
+                        raise AgentError(
+                            "Artefato excede o tamanho máximo."
+                        )
+
+                destination.parent.mkdir(parents=True, exist_ok=True)
+                reject_symlink(destination)
+                descriptor, temporary_name = tempfile.mkstemp(
+                    prefix=f".{destination.name}.",
+                    dir=str(destination.parent),
+                )
+                temporary = Path(temporary_name)
+                digest = hashlib.sha256()
+                size = 0
+
+                with os.fdopen(descriptor, "wb") as handle:
+                    while True:
+                        chunk = response.read(min(65536, max_bytes + 1 - size))
+
+                        if not chunk:
+                            break
+
+                        size += len(chunk)
+
+                        if size > max_bytes:
+                            raise AgentError(
+                                "Artefato excede o tamanho máximo."
+                            )
+
+                        digest.update(chunk)
+                        handle.write(chunk)
+
+                    handle.flush()
+                    os.fsync(handle.fileno())
+
+                if content_length is not None and size != declared_length:
+                    raise AgentError("Download truncado do artefato.")
+
+                os.chmod(temporary, 0o640)
+                os.replace(temporary, destination)
+
+                return {
+                    "checksum": digest.hexdigest(),
+                    "size": size,
+                    "content_type": content_type,
+                    "publication_id": response.headers.get(
+                        "X-DNS-Publication-Id"
+                    ),
+                    "version": response.headers.get("X-DNS-Zone-Version"),
+                    "server_checksum": response.headers.get(
+                        "X-DNS-Artifact-SHA256"
+                    ),
+                }
+        except urllib.error.HTTPError as exception:
+            error = http_error(exception)
+
+            if (
+                error.status not in RETRYABLE_HTTP_CODES
+                or attempt == retries - 1
+            ):
+                raise error from exception
+
+            bounded_backoff(attempt, error.retry_after)
+        except urllib.error.URLError as exception:
+            if attempt == retries - 1:
+                raise AgentError(
+                    "Falha de conexão: "
+                    + sanitize_message(exception.reason)
+                ) from exception
+
+            bounded_backoff(attempt)
+        finally:
+            if temporary is not None:
+                temporary.unlink(missing_ok=True)
+
+    raise AgentError("Tentativas de download esgotadas.")
 
 
 def run_command(
@@ -561,6 +762,8 @@ def enroll(args: argparse.Namespace) -> int:
         "named_checkzone": "/usr/bin/named-checkzone",
         "named_checkconf": "/usr/bin/named-checkconf",
         "rndc": "/usr/sbin/rndc",
+        "request_timeout": 30,
+        "max_artifact_bytes": DEFAULT_MAX_ARTIFACT_BYTES,
         "enrolled_at": utc_now(),
     }
 
@@ -966,7 +1169,7 @@ def run_authorized_operation(
 
         return {"status": "succeeded", "result": result}
     except AgentError as exception:
-        message = str(exception)[:1000]
+        message = sanitize_message(exception)
         rolled_back = (
             exception.rolled_back
             if isinstance(exception, AgentOperationError)
@@ -997,6 +1200,177 @@ def safe_zone_filename(name: str) -> str:
         raise AgentError(f"Nome de zona inseguro: {name}")
 
     return normalized + ".zone"
+
+
+def empty_publication_state() -> dict[str, Any]:
+    return {
+        "desired_publication_id": None,
+        "desired_version": None,
+        "downloaded_publication_id": None,
+        "installed_publication_id": None,
+        "installed_version": None,
+        "last_apply_status": None,
+        "last_apply_at": None,
+        "last_apply_error": None,
+        "attempt_id": None,
+        "events": {},
+        "artifacts": {},
+    }
+
+
+def load_publication_state(state_dir: Path) -> dict[str, Any]:
+    state_file = state_dir / "state.json"
+
+    if not state_file.exists():
+        return empty_publication_state()
+
+    state = read_json(state_file)
+    clean = empty_publication_state()
+
+    for key in clean:
+        if key in state:
+            clean[key] = state[key]
+
+    if not isinstance(clean["events"], dict):
+        clean["events"] = {}
+
+    if not isinstance(clean["artifacts"], dict):
+        clean["artifacts"] = {}
+
+    return clean
+
+
+def save_publication_state(
+    state_dir: Path,
+    state: dict[str, Any],
+) -> None:
+    allowed = set(empty_publication_state())
+    payload = {key: state.get(key) for key in allowed}
+    events = payload.get("events")
+
+    if isinstance(events, dict) and len(events) > 256:
+        payload["events"] = dict(list(events.items())[-256:])
+
+    atomic_write(
+        state_dir / "state.json",
+        json.dumps(payload, indent=2, ensure_ascii=False) + "\n",
+        0o600,
+    )
+
+
+def validate_manifest_item(item: object) -> dict[str, Any]:
+    if not isinstance(item, dict):
+        raise AgentError("Entrada inválida no manifesto.")
+
+    publication_id = item.get("publication_id")
+    desired_version = item.get("desired_version", item.get("version"))
+    installed_version = item.get("installed_version")
+
+    if (
+        not isinstance(publication_id, int)
+        or isinstance(publication_id, bool)
+        or publication_id < 1
+    ):
+        raise AgentError("publication_id inválido no manifesto.")
+
+    if (
+        not isinstance(desired_version, int)
+        or isinstance(desired_version, bool)
+        or desired_version < 1
+    ):
+        raise AgentError("Versão desejada inválida no manifesto.")
+
+    if installed_version is not None and (
+        not isinstance(installed_version, int)
+        or isinstance(installed_version, bool)
+        or installed_version < 1
+    ):
+        raise AgentError("Versão instalada inválida no manifesto.")
+
+    name = str(item.get("name", ""))
+    safe_zone_filename(name)
+    zone_type = str(item.get("type", item.get("kind", "primary")))
+
+    if zone_type not in {"primary", "secondary"}:
+        raise AgentError("Tipo de zona inválido no manifesto.")
+
+    artifact_url = str(item.get("artifact_url", ""))
+    parsed = urllib.parse.urlparse(artifact_url)
+
+    if (
+        not artifact_url.startswith("/")
+        or artifact_url.startswith("//")
+        or parsed.scheme
+        or parsed.netloc
+        or ".." in parsed.path.split("/")
+    ):
+        raise AgentError(f"URL de artefato inválida para {name}.")
+
+    normalized = dict(item)
+    normalized["publication_id"] = publication_id
+    normalized["desired_version"] = desired_version
+    normalized["installed_version"] = installed_version
+    normalized["name"] = name
+    normalized["type"] = zone_type
+    normalized["artifact_url"] = artifact_url
+
+    return normalized
+
+
+def publication_event_payload(
+    status_value: str,
+    installed_version: int | None = None,
+    checksum: str | None = None,
+    error: str | None = None,
+) -> dict[str, Any]:
+    payload: dict[str, Any] = {
+        "status": status_value,
+        "installed_version": installed_version,
+        "artifact_checksum": checksum,
+        "error": sanitize_message(error) if error else None,
+    }
+
+    return payload
+
+
+def report_publication(
+    config: dict[str, Any],
+    state: dict[str, Any],
+    publication_id: int,
+    attempt_id: str,
+    payload: dict[str, Any],
+) -> dict[str, Any]:
+    canonical = json.dumps(payload, sort_keys=True, separators=(",", ":"))
+    payload_hash = hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+    event_key = f"{publication_id}:{attempt_id}:{payload_hash}"
+    events = state.setdefault("events", {})
+    event_id = events.get(event_key)
+
+    if not isinstance(event_id, str):
+        event_id = str(uuid.uuid4())
+        events[event_key] = event_id
+        save_publication_state(config_paths(config)["state_dir"], state)
+
+    request_payload = {
+        "event_id": event_id,
+        "agent_timestamp": utc_now(),
+        **{key: value for key, value in payload.items() if value is not None},
+    }
+
+    try:
+        return request_json(
+            "POST",
+            normalize_base_url(str(config["base_url"]))
+            + f"/api/agent/publications/{publication_id}/apply",
+            request_payload,
+            str(config["token"]),
+        )
+    except AgentHttpError as exception:
+        if exception.status == 409 and exception.code == "event_replay":
+            events.pop(event_key, None)
+            save_publication_state(config_paths(config)["state_dir"], state)
+
+        raise
 
 
 def render_managed_include(
@@ -1069,7 +1443,13 @@ def validate_staging(
 
 def build_staging(
     config: dict[str, Any],
-) -> tuple[list[dict[str, Any]], Path, Path]:
+) -> tuple[
+    list[dict[str, Any]],
+    list[dict[str, Any]],
+    Path | None,
+    Path | None,
+    dict[str, Any],
+]:
     base_url = normalize_base_url(str(config["base_url"]))
     token = str(config["token"])
     paths = config_paths(config)
@@ -1080,41 +1460,169 @@ def build_staging(
         token=token,
     )
 
-    manifest = response.get("zones")
+    raw_manifest = response.get("zones")
 
-    if not isinstance(manifest, list):
+    if not isinstance(raw_manifest, list):
         raise AgentError("Manifesto de zonas inválido.")
 
     state_dir = paths["state_dir"]
     state_dir.mkdir(parents=True, exist_ok=True)
+    reject_symlink(state_dir)
+    state = load_publication_state(state_dir)
+    manifest = [validate_manifest_item(item) for item in raw_manifest]
+    updates = [
+        item
+        for item in manifest
+        if bool(item.get("update_available"))
+    ]
 
-    staging_dir = Path(
-        tempfile.mkdtemp(
-            prefix="staging-",
-            dir=str(state_dir),
-        )
-    )
+    if not updates:
+        return manifest, [], None, None, state
+
+    attempt_id = state.get("attempt_id")
+
+    try:
+        attempt_id = str(uuid.UUID(str(attempt_id)))
+    except ValueError:
+        attempt_id = None
+
+    if attempt_id is None or state.get("last_apply_status") not in {
+        "downloaded",
+        "applying",
+        "applied_pending_confirmation",
+    }:
+        attempt_id = str(uuid.uuid4())
+        state["attempt_id"] = attempt_id
+
+    staging_root = state_dir / "staging"
+    reject_symlink(staging_root)
+    staging_dir = staging_root / attempt_id
+
+    if staging_dir.exists():
+        reject_symlink(staging_dir)
+        shutil.rmtree(staging_dir)
+
+    staging_dir.mkdir(parents=True, mode=0o750)
+    artifacts_dir = state_dir / "artifacts"
+    reject_symlink(artifacts_dir)
+    artifacts_dir.mkdir(parents=True, exist_ok=True)
 
     for item in manifest:
-        if not isinstance(item, dict):
-            raise AgentError("Entrada inválida no manifesto.")
-
-        name = str(item.get("name", ""))
-        artifact_url = str(item.get("artifact_url", ""))
-
-        if not artifact_url.startswith("/"):
-            raise AgentError(
-                f"URL de artefato inválida para {name}."
-            )
-
-        content = request_text(
-            base_url + artifact_url,
-            token,
+        name = item["name"]
+        publication_id = item["publication_id"]
+        version = item["desired_version"]
+        artifact_key = str(publication_id)
+        artifact_path = artifacts_dir / f"{publication_id}.zone"
+        reject_symlink(artifact_path)
+        recorded = state["artifacts"].get(artifact_key, {})
+        reuse = (
+            isinstance(recorded, dict)
+            and recorded.get("version") == version
+            and isinstance(recorded.get("checksum"), str)
+            and artifact_path.is_file()
+            and not artifact_path.is_symlink()
         )
 
+        if reuse:
+            actual_checksum = hashlib.sha256(
+                artifact_path.read_bytes()
+            ).hexdigest()
+            reuse = actual_checksum == recorded["checksum"]
+
+        if not reuse:
+            try:
+                metadata = request_artifact(
+                    base_url + item["artifact_url"],
+                    token,
+                    artifact_path,
+                    int(
+                        config.get(
+                            "max_artifact_bytes",
+                            DEFAULT_MAX_ARTIFACT_BYTES,
+                        )
+                    ),
+                    int(config.get("request_timeout", 30)),
+                )
+
+                if (
+                    metadata["publication_id"] is not None
+                    and metadata["publication_id"] != str(publication_id)
+                ):
+                    raise AgentError("Publicação divergente no download.")
+
+                if (
+                    metadata["version"] is not None
+                    and metadata["version"] != str(version)
+                ):
+                    raise AgentError("Versão divergente no download.")
+
+                expected_checksum = item.get("artifact_checksum")
+                server_checksum = metadata["server_checksum"]
+
+                if (
+                    expected_checksum is not None
+                    and str(expected_checksum).lower()
+                    != metadata["checksum"]
+                ):
+                    raise AgentError("Checksum do artefato divergente.")
+
+                if (
+                    server_checksum is not None
+                    and server_checksum.lower() != metadata["checksum"]
+                ):
+                    raise AgentError("Checksum do download divergente.")
+            except AgentError as exception:
+                artifact_path.unlink(missing_ok=True)
+                error = sanitize_message(exception)
+                state["desired_publication_id"] = publication_id
+                state["desired_version"] = version
+                state["last_apply_status"] = "failed"
+                state["last_apply_at"] = utc_now()
+                state["last_apply_error"] = error
+                save_publication_state(state_dir, state)
+
+                if not (
+                    isinstance(exception, AgentHttpError)
+                    and exception.status in {401, 403}
+                ):
+                    try:
+                        report_publication(
+                            config,
+                            state,
+                            publication_id,
+                            str(attempt_id),
+                            publication_event_payload(
+                                "failed",
+                                error=error,
+                            ),
+                        )
+                    except AgentError as report_error:
+                        safe_log(
+                            "Falha ao confirmar download inválido da "
+                            f"publicação {publication_id}: {report_error}"
+                        )
+
+                state["attempt_id"] = None
+                save_publication_state(state_dir, state)
+                raise
+
+            state["artifacts"][artifact_key] = {
+                "version": version,
+                "checksum": metadata["checksum"],
+                "size": metadata["size"],
+            }
+            state["desired_publication_id"] = publication_id
+            state["desired_version"] = version
+            state["downloaded_publication_id"] = publication_id
+            state["last_apply_status"] = "downloaded"
+            state["last_apply_error"] = None
+            save_publication_state(state_dir, state)
+
+        target = staging_dir / safe_zone_filename(name)
+        reject_symlink(target)
         atomic_write(
-            staging_dir / safe_zone_filename(name),
-            content,
+            target,
+            artifact_path.read_text(encoding="utf-8"),
             0o640,
         )
 
@@ -1125,17 +1633,55 @@ def build_staging(
     )
     atomic_write(include_path, include_content, 0o640)
 
-    validate_staging(
-        config,
-        manifest,
-        staging_dir,
-        include_path,
-    )
+    try:
+        validate_staging(
+            config,
+            manifest,
+            staging_dir,
+            include_path,
+        )
+    except AgentError as exception:
+        error = sanitize_message(exception)
+        state["last_apply_status"] = "failed"
+        state["last_apply_at"] = utc_now()
+        state["last_apply_error"] = error
 
-    return manifest, staging_dir, include_path
+        for item in updates:
+            try:
+                report_publication(
+                    config,
+                    state,
+                    item["publication_id"],
+                    str(attempt_id),
+                    publication_event_payload(
+                        "failed",
+                        checksum=state["artifacts"]
+                        .get(str(item["publication_id"]), {})
+                        .get("checksum"),
+                        error=error,
+                    ),
+                )
+            except AgentError as report_error:
+                safe_log(
+                    "Falha ao confirmar staging inválido da publicação "
+                    f"{item['publication_id']}: {report_error}"
+                )
+
+        state["attempt_id"] = None
+        save_publication_state(state_dir, state)
+        raise
+
+    return manifest, updates, staging_dir, include_path, state
 
 
 def backup_current(paths: dict[str, Path]) -> Path:
+    for path in (
+        paths["backup_dir"],
+        paths["zones_dir"],
+        paths["managed_include"],
+    ):
+        reject_symlink(path)
+
     backup_dir = paths["backup_dir"] / datetime.now().strftime(
         "%Y%m%d-%H%M%S"
     )
@@ -1152,6 +1698,8 @@ def backup_current(paths: dict[str, Path]) -> Path:
 
     if paths["zones_dir"].exists():
         for zonefile in paths["zones_dir"].glob("*.zone"):
+            reject_symlink(zonefile)
+
             if zonefile.is_file():
                 shutil.copy2(zonefile, zones_backup / zonefile.name)
 
@@ -1162,6 +1710,13 @@ def restore_backup(
     paths: dict[str, Path],
     backup_dir: Path,
 ) -> None:
+    for path in (
+        paths["zones_dir"],
+        paths["managed_include"],
+        backup_dir,
+    ):
+        reject_symlink(path)
+
     include_backup = backup_dir / "dns-center-managed.conf"
 
     if include_backup.exists():
@@ -1172,12 +1727,14 @@ def restore_backup(
     paths["zones_dir"].mkdir(parents=True, exist_ok=True)
 
     for current in paths["zones_dir"].glob("*.zone"):
+        reject_symlink(current)
         current.unlink()
 
     zones_backup = backup_dir / "zones"
 
     if zones_backup.exists():
         for zonefile in zones_backup.glob("*.zone"):
+            reject_symlink(zonefile)
             shutil.copy2(zonefile, paths["zones_dir"] / zonefile.name)
 
 
@@ -1188,6 +1745,15 @@ def apply_staging(
     include_path: Path,
 ) -> Path:
     paths = config_paths(config)
+
+    for path in (
+        paths["zones_dir"],
+        paths["managed_include"],
+        staging_dir,
+        include_path,
+    ):
+        reject_symlink(path)
+
     paths["zones_dir"].mkdir(parents=True, exist_ok=True)
     paths["managed_include"].parent.mkdir(
         parents=True,
@@ -1206,6 +1772,8 @@ def apply_staging(
 
             source = staging_dir / filename
             target = paths["zones_dir"] / filename
+            reject_symlink(source)
+            reject_symlink(target)
 
             atomic_write(
                 target,
@@ -1214,6 +1782,8 @@ def apply_staging(
             )
 
         for current in paths["zones_dir"].glob("*.zone"):
+            reject_symlink(current)
+
             if current.name not in expected:
                 current.unlink()
 
@@ -1265,13 +1835,50 @@ def sync_zones(
     apply: bool,
     confirmation: str | None,
 ) -> dict[str, Any]:
-    manifest, staging_dir, include_path = build_staging(config)
+    (
+        manifest,
+        updates,
+        staging_dir,
+        include_path,
+        state,
+    ) = build_staging(config)
     paths = config_paths(config)
+
+    if not updates:
+        applied_items = [
+            item
+            for item in manifest
+            if item.get("installed_version") == item["desired_version"]
+        ]
+
+        if applied_items:
+            latest = max(
+                applied_items,
+                key=lambda item: item["desired_version"],
+            )
+            state["installed_publication_id"] = latest["publication_id"]
+            state["installed_version"] = latest["installed_version"]
+            state["last_apply_status"] = "applied"
+            state["last_apply_error"] = None
+            state["attempt_id"] = None
+            save_publication_state(paths["state_dir"], state)
+
+        return {
+            "status": "up_to_date",
+            "dry_run": not apply,
+            "zones": len(manifest),
+            "updates": 0,
+            "created_at": utc_now(),
+        }
+
+    if staging_dir is None or include_path is None:
+        raise AgentError("Staging ausente para atualização.")
 
     result: dict[str, Any] = {
         "status": "validated",
         "dry_run": not apply,
         "zones": len(manifest),
+        "updates": len(updates),
         "staging_dir": str(staging_dir),
         "managed_include_preview": str(include_path),
         "created_at": utc_now(),
@@ -1297,32 +1904,132 @@ def sync_zones(
         if os.geteuid() != 0:
             raise AgentError("Apply exige execução como root.")
 
-        backup_dir = apply_staging(
-            config,
-            manifest,
-            staging_dir,
-            include_path,
+        attempt_id = str(state["attempt_id"])
+        pending_confirmation = (
+            state.get("last_apply_status")
+            == "applied_pending_confirmation"
         )
+
+        if not pending_confirmation:
+            for item in updates:
+                checksum = state["artifacts"][str(item["publication_id"])][
+                    "checksum"
+                ]
+                report_publication(
+                    config,
+                    state,
+                    item["publication_id"],
+                    attempt_id,
+                    publication_event_payload(
+                        "applying",
+                        checksum=checksum,
+                    ),
+                )
+
+            state["last_apply_status"] = "applying"
+            state["last_apply_at"] = utc_now()
+            state["last_apply_error"] = None
+            save_publication_state(paths["state_dir"], state)
+
+            try:
+                backup_dir = apply_staging(
+                    config,
+                    manifest,
+                    staging_dir,
+                    include_path,
+                )
+            except Exception as exception:
+                error = sanitize_message(exception)
+                state["last_apply_status"] = "failed"
+                state["last_apply_at"] = utc_now()
+                state["last_apply_error"] = error
+
+                for item in updates:
+                    checksum = state["artifacts"][
+                        str(item["publication_id"])
+                    ]["checksum"]
+
+                    try:
+                        report_publication(
+                            config,
+                            state,
+                            item["publication_id"],
+                            attempt_id,
+                            publication_event_payload(
+                                "failed",
+                                checksum=checksum,
+                                error=error,
+                            ),
+                        )
+                    except AgentError as report_error:
+                        safe_log(
+                            "Falha ao confirmar erro da publicação "
+                            f"{item['publication_id']}: {report_error}"
+                        )
+
+                state["attempt_id"] = None
+                save_publication_state(paths["state_dir"], state)
+                raise AgentError(error) from exception
+
+            latest = max(
+                updates,
+                key=lambda item: item["desired_version"],
+            )
+            state["installed_publication_id"] = latest["publication_id"]
+            state["installed_version"] = latest["desired_version"]
+            state["last_apply_status"] = "applied_pending_confirmation"
+            state["last_apply_at"] = utc_now()
+            state["last_apply_error"] = None
+            save_publication_state(paths["state_dir"], state)
+        else:
+            backup_dir = None
+
+        for item in updates:
+            checksum = state["artifacts"][str(item["publication_id"])][
+                "checksum"
+            ]
+            response = report_publication(
+                config,
+                state,
+                item["publication_id"],
+                attempt_id,
+                publication_event_payload(
+                    "applied",
+                    installed_version=item["desired_version"],
+                    checksum=checksum,
+                ),
+            )
+
+            if (
+                response.get("status") != "applied"
+                or response.get("installed_version")
+                != item["desired_version"]
+            ):
+                raise AgentError(
+                    "Painel não confirmou a versão aplicada."
+                )
+
+            state["installed_publication_id"] = item["publication_id"]
+            state["installed_version"] = item["desired_version"]
 
         result.update(
             {
                 "status": "applied",
                 "dry_run": False,
-                "backup_dir": str(backup_dir),
+                "backup_dir": (
+                    str(backup_dir) if backup_dir is not None else None
+                ),
                 "zones_dir": str(paths["zones_dir"]),
                 "managed_include": str(
                     paths["managed_include"]
                 ),
             }
         )
-
-    state_dir = paths["state_dir"]
-    state_dir.mkdir(parents=True, exist_ok=True)
-    atomic_write(
-        state_dir / "state.json",
-        json.dumps(result, indent=2, ensure_ascii=False) + "\n",
-        0o600,
-    )
+        state["last_apply_status"] = "applied"
+        state["last_apply_at"] = utc_now()
+        state["last_apply_error"] = None
+        state["attempt_id"] = None
+        save_publication_state(paths["state_dir"], state)
 
     return result
 
@@ -1435,7 +2142,7 @@ def main() -> int:
 
         raise AgentError("Operação não reconhecida.")
     except AgentError as exception:
-        print(f"ERRO: {exception}", file=sys.stderr)
+        print(f"ERRO: {sanitize_message(exception)}", file=sys.stderr)
         return 1
 
 
