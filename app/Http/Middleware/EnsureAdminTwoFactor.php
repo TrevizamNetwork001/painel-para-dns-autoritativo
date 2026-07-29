@@ -4,6 +4,7 @@ namespace App\Http\Middleware;
 
 use Closure;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Schema;
 use Symfony\Component\HttpFoundation\Response;
 
 class EnsureAdminTwoFactor
@@ -25,6 +26,10 @@ class EnsureAdminTwoFactor
                 'passkey.*',
             ])
         ) {
+            return $next($request);
+        }
+
+        if (! Schema::hasColumn('users', 'admin_2fa_grace_expires_at')) {
             return $next($request);
         }
 

@@ -5,6 +5,7 @@ namespace App\Support;
 use App\Models\SecurityAudit;
 use App\Models\User;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 
 final class SecurityAuditLogger
@@ -37,9 +38,8 @@ final class SecurityAuditLogger
             }
         }
 
-        return SecurityAudit::query()->create([
+        $attributes = [
             'event' => $event,
-            'organization_id' => $organizationId,
             'user_id' => $user?->getKey(),
             'email_hash' => $user
                 ? hash('sha256', mb_strtolower(trim($user->email)))
@@ -55,8 +55,16 @@ final class SecurityAuditLogger
                     '',
                 ),
             'result' => $result,
-            'reason' => $reason,
-            'rate_limit_hit' => $rateLimitHit,
-        ]);
+        ];
+
+        if (Schema::hasColumn('security_audits', 'organization_id')) {
+            $attributes += [
+                'organization_id' => $organizationId,
+                'reason' => $reason,
+                'rate_limit_hit' => $rateLimitHit,
+            ];
+        }
+
+        return SecurityAudit::query()->create($attributes);
     }
 }
