@@ -935,6 +935,13 @@ def bind_paths(family: str) -> dict[str, Path]:
     raise AgentError("Distribuição sem caminhos BIND allowlisted.")
 
 
+def bind_service_name(family: str) -> str:
+    if family in {"debian", "rhel"}:
+        return "named"
+
+    raise AgentError("Distribuição sem serviço BIND allowlisted.")
+
+
 def reject_symlink(path: Path) -> None:
     current = path
 
@@ -957,7 +964,7 @@ def configure_bind(action: str) -> dict[str, Any]:
         reject_symlink(path)
 
     systemctl = detected_binary(("/usr/bin/systemctl", "/bin/systemctl"))
-    service = "bind9" if family == "debian" else "named"
+    service = bind_service_name(family)
     was_installed = (
         detected_binary(("/usr/sbin/named", "/usr/bin/named"))
         is not None

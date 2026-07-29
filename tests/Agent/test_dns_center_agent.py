@@ -136,6 +136,13 @@ class AgentTests(unittest.TestCase):
                 "debian",
             )
 
+    def test_bind_systemd_service_uses_canonical_named_unit(self) -> None:
+        self.assertEqual("named", agent.bind_service_name("debian"))
+        self.assertEqual("named", agent.bind_service_name("rhel"))
+
+        with self.assertRaises(agent.AgentError):
+            agent.bind_service_name("unsupported")
+
     def test_command_execution_disables_shell_and_has_timeout(self) -> None:
         completed = Mock(returncode=0, stdout="ok", stderr="")
 
