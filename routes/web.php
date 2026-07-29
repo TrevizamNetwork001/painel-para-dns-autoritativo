@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\AdminTwoFactorController;
 use App\Http\Controllers\Auth\ForgotPasswordController;
 use App\Http\Controllers\Auth\ResetPasswordController;
 use App\Http\Controllers\DnsAgentEnrollmentController;
@@ -42,6 +43,16 @@ Route::get('/', function () {
 })->name('home');
 
 Route::middleware('auth')->group(function (): void {
+    Route::get(
+        '/seguranca/segundo-fator',
+        [AdminTwoFactorController::class, 'show'],
+    )->name('security.two-factor.setup');
+
+    Route::post(
+        '/seguranca/segundo-fator/prazo',
+        [AdminTwoFactorController::class, 'continueDuringGrace'],
+    )->name('security.two-factor.grace');
+
     Route::get(
         '/alterar-senha',
         [PasswordChangeController::class, 'edit']

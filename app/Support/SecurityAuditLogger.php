@@ -4,6 +4,7 @@ namespace App\Support;
 
 use App\Models\SecurityAudit;
 use App\Models\User;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Str;
 
 final class SecurityAuditLogger
@@ -16,9 +17,29 @@ final class SecurityAuditLogger
         string $source,
         ?string $ipAddress = null,
         ?string $userAgent = null,
+        ?int $organizationId = null,
+        ?string $reason = null,
+        bool $rateLimitHit = false,
+        ?string $deduplicationKey = null,
     ): SecurityAudit {
+        if ($deduplicationKey !== null) {
+            $added = Cache::add(
+                'security-audit:'.hash('sha256', $deduplicationKey),
+                true,
+                max(
+                    1,
+                    (int) config('security.login.audit_dedup_seconds'),
+                ),
+            );
+
+            if (! $added) {
+                return new SecurityAudit;
+            }
+        }
+
         return SecurityAudit::query()->create([
             'event' => $event,
+            'organization_id' => $organizationId,
             'user_id' => $user?->getKey(),
             'email_hash' => $user
                 ? hash('sha256', mb_strtolower(trim($user->email)))
@@ -34,6 +55,8 @@ final class SecurityAuditLogger
                     '',
                 ),
             'result' => $result,
+            'reason' => $reason,
+            'rate_limit_hit' => $rateLimitHit,
         ]);
     }
 }

@@ -1229,7 +1229,7 @@
     </div>
 @endif
 
-<script>
+<script nonce="{{ $cspNonce ?? '' }}">
 document.addEventListener('DOMContentLoaded', () => {
     const tabs = document.querySelectorAll('[data-domain-tab]');
     const panels = document.querySelectorAll('[data-domain-panel]');
@@ -1673,7 +1673,7 @@ document.addEventListener('DOMContentLoaded', () => {
 </script>
 
 {{-- DNS-CENTER-FLASH-TOAST-START --}}
-<script>
+<script nonce="{{ $cspNonce ?? '' }}">
 document.addEventListener('DOMContentLoaded', () => {
     document.querySelectorAll('[data-flash-toast]').forEach((toast) => {
         const closeButton = toast.querySelector('[data-flash-toast-close]');

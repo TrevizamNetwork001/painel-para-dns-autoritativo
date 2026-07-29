@@ -14,7 +14,7 @@
         Agente {{ $server->name }} — DNS Center
     </title>
 
-    <script>
+    <script nonce="{{ $cspNonce ?? '' }}">
         (() => {
             const storedTheme = localStorage.getItem('dns-center-theme');
             const preferredTheme = window.matchMedia(
@@ -494,7 +494,7 @@
         </section>
     </main>
 
-    <script>
+    <script nonce="{{ $cspNonce ?? '' }}">
         document
             .querySelector('[data-copy-agent-code]')
             ?.addEventListener('click', async () => {

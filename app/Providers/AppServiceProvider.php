@@ -5,6 +5,7 @@ namespace App\Providers;
 use App\Listeners\RecordAuthenticationActivity;
 use App\Support\TestingDatabaseGuard;
 use Illuminate\Auth\Events\Failed;
+use Illuminate\Auth\Events\Lockout;
 use Illuminate\Auth\Events\Login;
 use Illuminate\Auth\Events\Logout;
 use Illuminate\Support\Facades\Event;
@@ -45,6 +46,11 @@ class AppServiceProvider extends ServiceProvider
         Event::listen(
             Failed::class,
             [RecordAuthenticationActivity::class, 'handleFailed']
+        );
+
+        Event::listen(
+            Lockout::class,
+            [RecordAuthenticationActivity::class, 'handleLockout']
         );
     }
 }

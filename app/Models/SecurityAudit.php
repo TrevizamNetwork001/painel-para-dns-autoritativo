@@ -8,6 +8,7 @@ class SecurityAudit extends Model
 {
     protected $fillable = [
         'event',
+        'organization_id',
         'user_id',
         'email_hash',
         'actor',
@@ -15,5 +16,14 @@ class SecurityAudit extends Model
         'ip_address',
         'user_agent',
         'result',
+        'reason',
+        'rate_limit_hit',
     ];
+
+    protected function casts(): array
+    {
+        return [
+            'rate_limit_hit' => 'boolean',
+        ];
+    }
 }

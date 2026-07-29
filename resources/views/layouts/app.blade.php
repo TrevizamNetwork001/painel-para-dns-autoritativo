@@ -14,7 +14,7 @@
         @endif
     </title>
 
-    <script>
+    <script nonce="{{ $cspNonce ?? '' }}">
         (() => {
             const storedTheme = localStorage.getItem('dns-center-theme');
             const preferredTheme = window.matchMedia(

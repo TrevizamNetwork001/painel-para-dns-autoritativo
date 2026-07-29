@@ -654,7 +654,7 @@
     </div>
 @endif
 
-<script>
+<script nonce="{{ $cspNonce ?? '' }}">
 document.addEventListener('DOMContentLoaded', () => {
     const modal = document.querySelector('[data-domain-modal]');
     const openButtons = document.querySelectorAll('[data-domain-modal-open]');
@@ -880,7 +880,7 @@ document.addEventListener('DOMContentLoaded', () => {
 </script>
 
 {{-- DNS-CENTER-FLASH-TOAST-START --}}
-<script>
+<script nonce="{{ $cspNonce ?? '' }}">
 document.addEventListener('DOMContentLoaded', () => {
     document.querySelectorAll('[data-flash-toast]').forEach((toast) => {
         const closeButton = toast.querySelector('[data-flash-toast-close]');

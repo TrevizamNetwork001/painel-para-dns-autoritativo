@@ -12,14 +12,24 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use Laravel\Fortify\TwoFactorAuthenticatable;
+use Laravel\Passkeys\Contracts\PasskeyUser;
+use Laravel\Passkeys\PasskeyAuthenticatable;
 
 #[Fillable(['name',
     'avatar_key', 'email', 'password'])]
-#[Hidden(['password', 'remember_token'])]
-class User extends Authenticatable
+#[Hidden([
+    'password',
+    'remember_token',
+    'two_factor_secret',
+    'two_factor_recovery_codes',
+])]
+class User extends Authenticatable implements PasskeyUser
 {
     /** @use HasFactory<UserFactory> */
-    use HasFactory, Notifiable;
+    use HasFactory, Notifiable, PasskeyAuthenticatable;
+
+    use TwoFactorAuthenticatable;
 
     /**
      * Get the attributes that should be cast.
@@ -37,6 +47,8 @@ class User extends Authenticatable
             'must_change_password' => 'boolean',
             'temporary_password_expires_at' => 'datetime',
             'password_changed_at' => 'datetime',
+            'two_factor_confirmed_at' => 'datetime',
+            'admin_2fa_grace_expires_at' => 'datetime',
         ];
     }
 
@@ -83,6 +95,22 @@ class User extends Authenticatable
             ->first();
 
         return $membership?->pivot?->role;
+    }
+
+    public function isAdministrative(): bool
+    {
+        return $this->is_platform_admin
+            || (
+                $this->current_organization_id !== null
+                && $this->roleForOrganization($this->current_organization_id)
+                    === 'organization_admin'
+            );
+    }
+
+    public function hasAdministrativeSecondFactor(): bool
+    {
+        return $this->hasEnabledTwoFactorAuthentication()
+            || $this->hasPasskeysEnabled();
     }
 
     public function sendPasswordResetNotification($token): void

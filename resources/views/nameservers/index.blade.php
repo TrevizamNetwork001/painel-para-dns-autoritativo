@@ -751,7 +751,7 @@
     </div>
 @endif
 
-<script>
+<script nonce="{{ $cspNonce ?? '' }}">
 document.addEventListener('DOMContentLoaded', () => {
     const openModal = (modal) => {
         modal?.classList.add('is-open');

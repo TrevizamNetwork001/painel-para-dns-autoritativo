@@ -4,6 +4,7 @@ namespace App\Providers;
 
 use App\Actions\Fortify\UpdateUserPassword;
 use App\Actions\Fortify\UpdateUserProfileInformation;
+use Illuminate\Auth\Events\Lockout;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\RateLimiter;
@@ -36,13 +37,46 @@ class FortifyServiceProvider extends ServiceProvider
             fn () => view('auth.two-factor-challenge')
         );
 
-        RateLimiter::for('login', function (Request $request): Limit {
-            $identifier = Str::transliterate(
+        Fortify::confirmPasswordView(
+            fn () => view('auth.confirm-password')
+        );
+
+        RateLimiter::for('login', function (Request $request): array {
+            $emailIpIdentifier = Str::transliterate(
                 Str::lower((string) $request->input(Fortify::username()))
                 .'|'.$request->ip()
             );
 
-            return Limit::perMinute(5)->by($identifier);
+            $decaySeconds = max(
+                1,
+                (int) config('security.login.decay_seconds'),
+            );
+            $response = function (
+                Request $request,
+                array $headers,
+            ) {
+                event(new Lockout($request));
+
+                return back()
+                    ->withErrors([
+                        Fortify::username() => trans('auth.failed'),
+                    ])
+                    ->withInput($request->only(Fortify::username()))
+                    ->withHeaders($headers);
+            };
+
+            return [
+                Limit::perSecond(
+                    max(1, (int) config('security.login.global_ip_limit')),
+                    $decaySeconds,
+                )->by('login-global-ip|'.$request->ip())
+                    ->response($response),
+                Limit::perSecond(
+                    max(1, (int) config('security.login.email_ip_limit')),
+                    $decaySeconds,
+                )->by('login-email-ip|'.$emailIpIdentifier)
+                    ->response($response),
+            ];
         });
 
         RateLimiter::for(
