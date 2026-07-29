@@ -506,6 +506,32 @@ a:hover {
     text-align: center;
 }
 
+.app-sidebar .sidebar-nav {
+    gap: 0.18rem;
+}
+
+.app-sidebar .nav-item {
+    min-height: 41px;
+    padding: 0.62rem 0.75rem;
+}
+
+.app-sidebar .nav-icon {
+    display: grid;
+    width: 18px;
+    height: 18px;
+    flex: 0 0 18px;
+    place-items: center;
+}
+
+.app-sidebar .nav-icon svg {
+    width: 17px;
+    height: 17px;
+    stroke: currentColor;
+    stroke-width: 1.7;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+
 .sidebar-user {
     display: flex;
     align-items: center;

@@ -15,52 +15,7 @@
 @endphp
 
 <div class="app-shell nameservers-page">
-    <aside class="sidebar">
-        <div class="sidebar-brand">
-            <div class="brand-mark brand-mark-small">
-                <span>DNS</span>
-            </div>
-
-            <div>
-                <strong>DNS Center</strong>
-                <span>Operations Platform</span>
-            </div>
-        </div>
-
-        <nav class="sidebar-nav" aria-label="Navegação principal">
-            <a href="{{ route('dashboard') }}" class="nav-item">
-                <span class="nav-icon">▦</span>
-                Dashboard
-            </a>
-
-            <span class="nav-section">DNS autoritativo</span>
-
-            <a href="{{ route('servers.index') }}" class="nav-item">
-                <span class="nav-icon">▤</span>
-                Servidores
-            </a>
-
-            <a
-                href="{{ route('nameservers.index') }}"
-                class="nav-item is-active"
-            >
-                <span class="nav-icon">⇄</span>
-                Nameservers
-            </a>
-
-            <a href="{{ route('zones.index') }}" class="nav-item">
-                <span class="nav-icon">◎</span>
-                Domínios
-            </a>
-
-            <span class="nav-section">Operações</span>
-
-            <a href="{{ route('users.index') }}" class="nav-item">
-                <span class="nav-icon">●</span>
-                Usuários
-            </a>
-        </nav>
-    </aside>
+    <x-app-sidebar active="nameservers" />
 
     <main class="main-content nameservers-main">
         <header class="topbar nameservers-heading">

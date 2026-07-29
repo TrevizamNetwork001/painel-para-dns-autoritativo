@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Models\DnsZone;
 use App\Models\Organization;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -49,7 +50,52 @@ class AuthenticationDashboardTest extends TestCase
             ->get('/dashboard')
             ->assertOk()
             ->assertSee('Trevizam Network')
-            ->assertSee($user->name);
+            ->assertSee($user->name)
+            ->assertSee(route('servers.index'), false)
+            ->assertSee(route('nameservers.index'), false)
+            ->assertSee(route('zones.index'), false)
+            ->assertSee(route('users.index'), false);
+    }
+
+    public function test_dashboard_counts_only_zones_from_current_organization(): void
+    {
+        $organization = Organization::factory()->create();
+        $otherOrganization = Organization::factory()->create();
+
+        $user = User::factory()->create([
+            'current_organization_id' => $organization->id,
+            'status' => 'active',
+        ]);
+
+        $user->organizations()->attach($organization->id, [
+            'role' => 'organization_admin',
+            'status' => 'active',
+            'is_default' => true,
+        ]);
+
+        foreach ([$organization, $otherOrganization] as $owner) {
+            DnsZone::query()->create([
+                'organization_id' => $owner->id,
+                'name' => $owner->slug.'.example',
+                'kind' => 'primary',
+                'serial' => 2026072901,
+                'soa_mname' => 'ns1.example.net',
+                'soa_rname' => 'hostmaster.example.net',
+            ]);
+        }
+
+        $this->actingAs($user)
+            ->get('/dashboard')
+            ->assertOk()
+            ->assertSee(
+                'data-dashboard-zone-count',
+                false,
+            )
+            ->assertSeeInOrder([
+                'data-dashboard-zone-count',
+                '1',
+                'Zonas autoritativas',
+            ], false);
     }
 
     public function test_user_without_organization_context_is_forbidden(): void

@@ -49,51 +49,8 @@
 @endphp
 
 @section('content')
-<div class="app-shell">
-    <aside class="sidebar">
-        <div class="sidebar-brand">
-            <div class="brand-mark brand-mark-small">
-                <span>DNS</span>
-            </div>
-
-            <div>
-                <strong>DNS Center</strong>
-                <span>Operations Platform</span>
-            </div>
-        </div>
-
-        <nav class="sidebar-nav">
-            <a href="{{ route('dashboard') }}" class="nav-item">
-                <span class="nav-icon">▦</span>
-                Dashboard
-            </a>
-
-            <span class="nav-section">DNS autoritativo</span>
-
-            <a href="{{ route('servers.index') }}" class="nav-item">
-                <span class="nav-icon">▤</span>
-                Servidores
-            </a>
-
-            <a href="{{ route('nameservers.index') }}" class="nav-item">
-                <span class="nav-icon">⇄</span>
-                Nameservers
-            </a>
-
-
-            <a href="{{ route('zones.index') }}" class="nav-item is-active">
-                <span class="nav-icon">◎</span>
-                Domínios
-            </a>
-
-            @if (Route::has('users.index'))
-                <a href="{{ route('users.index') }}" class="nav-item">
-                    <span class="nav-icon">●</span>
-                    Usuários
-                </a>
-            @endif
-        </nav>
-    </aside>
+<div class="app-shell dashboard-v2">
+    <x-app-sidebar active="zones" />
 
     <main class="main-content domain-workspace-page">
         <header class="topbar domain-workspace-topbar">

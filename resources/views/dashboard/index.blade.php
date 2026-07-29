@@ -13,7 +13,9 @@
         ->get();
 
     $serverCount = $dashboardServers->count();
-    $zoneCount = 0;
+    $zoneCount = App\Models\DnsZone::query()
+        ->forOrganization($organizationId)
+        ->count();
 
     $onlineServerCount = $dashboardServers
         ->where('status', 'online')
@@ -103,7 +105,7 @@
 
             <span class="nav-section">DNS autoritativo</span>
 
-            <a href="#" class="nav-item">
+            <a href="{{ route('servers.index') }}" class="nav-item">
                 <span class="nav-icon" aria-hidden="true">
                     <svg viewBox="0 0 24 24" fill="none">
                         <rect
@@ -127,6 +129,16 @@
                 Servidores
             </a>
 
+            <a href="{{ route('nameservers.index') }}" class="nav-item">
+                <span class="nav-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="none">
+                        <path d="M7 7h12M15 3l4 4-4 4M17 17H5M9 13l-4 4 4 4" />
+                    </svg>
+                </span>
+
+                Nameservers
+            </a>
+
             <a href="{{ route('zones.index') }}" class="nav-item">
                 <span class="nav-icon" aria-hidden="true">
                     <svg viewBox="0 0 24 24" fill="none">
@@ -140,35 +152,10 @@
                     </svg>
                 </span>
 
-                Zonas
-            </a>
-
-            <a href="#" class="nav-item">
-                <span class="nav-icon" aria-hidden="true">
-                    <svg viewBox="0 0 24 24" fill="none">
-                        <path
-                            d="M4 7h4l2-3 4 6 2-3h4
-                               M4 17h4l2 3 4-6 2 3h4"
-                        />
-                    </svg>
-                </span>
-
-                Registros DNS
+                Domínios
             </a>
 
             <span class="nav-section">Operações</span>
-
-            <a href="#" class="nav-item">
-                <span class="nav-icon" aria-hidden="true">
-                    <svg viewBox="0 0 24 24" fill="none">
-                        <path
-                            d="M4 12h3l2-6 4 12 2-6h5"
-                        />
-                    </svg>
-                </span>
-
-                Atividades
-            </a>
 
             @if ($canManageUsers)
                 <a href="{{ route('users.index') }}" class="nav-item">
@@ -187,33 +174,6 @@
                 </a>
             @endif
 
-            <a href="#" class="nav-item">
-                <span class="nav-icon" aria-hidden="true">
-                    <svg viewBox="0 0 24 24" fill="none">
-                        <circle cx="12" cy="12" r="3" />
-                        <path
-                            d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1
-                               -2.8 2.8-.1-.1a1.7 1.7 0 0 0-1.9-.3
-                               1.7 1.7 0 0 0-1 1.6V21h-4v-.1
-                               a1.7 1.7 0 0 0-1-1.6
-                               1.7 1.7 0 0 0-1.9.3l-.1.1L4.2 17
-                               l.1-.1a1.7 1.7 0 0 0 .3-1.9
-                               A1.7 1.7 0 0 0 3 14H3v-4h.1
-                               a1.7 1.7 0 0 0 1.6-1
-                               1.7 1.7 0 0 0-.3-1.9L4.3 7
-                               7 4.2l.1.1A1.7 1.7 0 0 0 9 4.6
-                               1.7 1.7 0 0 0 10 3V3h4v.1
-                               a1.7 1.7 0 0 0 1 1.6
-                               1.7 1.7 0 0 0 1.9-.3l.1-.1L19.8 7
-                               l-.1.1a1.7 1.7 0 0 0-.3 1.9
-                               1.7 1.7 0 0 0 1.6 1H21v4h-.1
-                               a1.7 1.7 0 0 0-1.5 1Z"
-                        />
-                    </svg>
-                </span>
-
-                Configurações
-            </a>
         </nav>
     </aside>
 
@@ -287,7 +247,7 @@
                     Servidores DNS
                 </span>
 
-                <a href="#" class="dashboard-kpi-footer">
+                <a href="{{ route('servers.index') }}" class="dashboard-kpi-footer">
                     <span>
                         {{ $serverCount
                             ? $onlineServerCount.' online'
@@ -315,7 +275,10 @@
                     <span class="dashboard-kpi-badge">Total</span>
                 </div>
 
-                <strong class="dashboard-kpi-value">
+                <strong
+                    class="dashboard-kpi-value"
+                    data-dashboard-zone-count
+                >
                     {{ $zoneCount }}
                 </strong>
 
@@ -323,7 +286,7 @@
                     Zonas autoritativas
                 </span>
 
-                <a href="#" class="dashboard-kpi-footer">
+                <a href="{{ route('zones.index') }}" class="dashboard-kpi-footer">
                     <span>
                         {{ $zoneCount
                             ? 'Zonas gerenciadas'
@@ -359,7 +322,7 @@
                     Serviços online
                 </span>
 
-                <a href="#" class="dashboard-kpi-footer">
+                <a href="{{ route('servers.index') }}" class="dashboard-kpi-footer">
                     <span>
                         {{ $onlineServiceCount
                             ? 'Serviços operacionais'
@@ -396,7 +359,7 @@
                     Alertas ativos
                 </span>
 
-                <a href="#" class="dashboard-kpi-footer">
+                <a href="{{ route('servers.index') }}" class="dashboard-kpi-footer">
                     <span>
                         {{ $hasAlerts
                             ? 'Requer atenção'
@@ -512,9 +475,6 @@
                         <h2>Atividades recentes</h2>
                     </div>
 
-                    <a href="#" class="dashboard-panel-link">
-                        Ver todas
-                    </a>
                 </div>
 
                 <div class="dashboard-activity-list">
@@ -720,7 +680,7 @@
                         <small>Adicionar servidor DNS</small>
                     </a>
 
-                    <a href="#" class="dashboard-quick-action">
+                    <a href="{{ route('zones.index') }}" class="dashboard-quick-action">
                         <span class="quick-action-icon quick-icon-purple">
                             <svg viewBox="0 0 24 24" fill="none">
                                 <circle cx="12" cy="12" r="9" />
@@ -749,31 +709,6 @@
                         </a>
                     @endif
 
-                    <a href="#" class="dashboard-quick-action">
-                        <span class="quick-action-icon quick-icon-blue">
-                            <svg viewBox="0 0 24 24" fill="none">
-                                <path d="M8 6h12M8 12h12M8 18h12" />
-                                <circle cx="4" cy="6" r="1" />
-                                <circle cx="4" cy="12" r="1" />
-                                <circle cx="4" cy="18" r="1" />
-                            </svg>
-                        </span>
-
-                        <strong>Ver atividades</strong>
-                        <small>Histórico operacional</small>
-                    </a>
-
-                    <a href="#" class="dashboard-quick-action">
-                        <span class="quick-action-icon quick-icon-neutral">
-                            <svg viewBox="0 0 24 24" fill="none">
-                                <circle cx="12" cy="12" r="3" />
-                                <path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1-2.8 2.8-.1-.1a1.7 1.7 0 0 0-1.9-.3A1.7 1.7 0 0 0 14 21h-4a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1L4.2 17l.1-.1a1.7 1.7 0 0 0 .3-1.9A1.7 1.7 0 0 0 3 14v-4a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.3-1.9L4.2 7 7 4.2l.1.1A1.7 1.7 0 0 0 9 4.6 1.7 1.7 0 0 0 10 3h4a1.7 1.7 0 0 0 1 1.6 1.7 1.7 0 0 0 1.9-.3l.1-.1L19.8 7l-.1.1a1.7 1.7 0 0 0-.3 1.9A1.7 1.7 0 0 0 21 10v4a1.7 1.7 0 0 0-1.6 1Z" />
-                            </svg>
-                        </span>
-
-                        <strong>Configurações</strong>
-                        <small>Ajustes da plataforma</small>
-                    </a>
                 </div>
             </article>
         </section>
