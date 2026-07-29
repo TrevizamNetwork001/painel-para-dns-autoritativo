@@ -14,6 +14,7 @@ class DnsServer extends Model
     use HasFactory;
 
     public const ROLES = [
+        'standalone',
         'primary',
         'secondary',
     ];
@@ -61,6 +62,8 @@ class DnsServer extends Model
         'last_seen_at',
         'capabilities',
         'inventory',
+        'bind_readiness',
+        'bind_readiness_at',
         'notes',
     ];
 
@@ -72,6 +75,8 @@ class DnsServer extends Model
             'agent_registered_at' => 'immutable_datetime',
             'capabilities' => 'array',
             'inventory' => 'array',
+            'bind_readiness' => 'array',
+            'bind_readiness_at' => 'immutable_datetime',
         ];
     }
 
@@ -143,5 +148,10 @@ class DnsServer extends Model
             DnsNameserverIdentity::class,
             'dns_server_id',
         );
+    }
+
+    public function bindOperations(): HasMany
+    {
+        return $this->hasMany(DnsBindOperation::class, 'dns_server_id');
     }
 }

@@ -6,6 +6,7 @@
 @section('content')
 @php
     $roleLabels = [
+        'standalone' => 'Independente',
         'primary' => 'Primário',
         'secondary' => 'Secundário',
     ];

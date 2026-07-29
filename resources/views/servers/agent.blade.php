@@ -63,9 +63,12 @@
                     </div>
 
                     <span class="status-badge">
-                        {{ $server->role === 'primary'
-                            ? 'Primário'
-                            : 'Secundário' }}
+                        {{ match ($server->role) {
+                            'primary' => 'Primário',
+                            'secondary' => 'Secundário',
+                            'standalone' => 'Independente',
+                            default => $server->role,
+                        } }}
                     </span>
                 </div>
 
@@ -254,6 +257,145 @@
                 @endif
             </article>
         </section>
+
+        @if ($agent && $agent->revoked_at === null)
+            <section class="panel-card">
+                <div class="panel-card-header">
+                    <div>
+                        <p class="eyebrow">BIND autoritativo</p>
+                        <h2>Prontidão factual</h2>
+                    </div>
+
+                    <span class="status-badge">
+                        {{ $server->bind_readiness_at
+                            ? 'Inventário recebido'
+                            : 'Aguardando inventário' }}
+                    </span>
+                </div>
+
+                @if ($server->bind_readiness_at)
+                    @php
+                        $readiness = $server->bind_readiness ?? [];
+                        $bindInstalled = (bool) data_get(
+                            $readiness,
+                            'bind_installed',
+                            false
+                        );
+                        $osFamily = data_get(
+                            $readiness,
+                            'os_family',
+                            'unsupported'
+                        );
+                        $packages = match ($osFamily) {
+                            'debian' => 'bind9, bind9-utils',
+                            'rhel' => 'bind, bind-utils',
+                            default => 'Distribuição não suportada',
+                        };
+                    @endphp
+
+                    <dl class="agent-server-details">
+                        <div>
+                            <dt>BIND instalado</dt>
+                            <dd>{{ $bindInstalled ? 'Sim' : 'Não' }}</dd>
+                        </div>
+                        <div>
+                            <dt>Versão detectada</dt>
+                            <dd>{{ data_get($readiness, 'bind_version')
+                                ?: 'Não detectada' }}</dd>
+                        </div>
+                        <div>
+                            <dt>Configuração principal</dt>
+                            <dd>{{ data_get($readiness, 'paths.named_conf')
+                                ?: 'Não detectada' }}</dd>
+                        </div>
+                        <div>
+                            <dt>Include gerenciado</dt>
+                            <dd>{{ data_get($readiness, 'paths.include_dir')
+                                ?: 'Não detectado' }}</dd>
+                        </div>
+                        <div>
+                            <dt>Diretório de zonas gerenciadas</dt>
+                            <dd>{{ data_get($readiness, 'paths.zones_dir') }}</dd>
+                        </div>
+                        <div>
+                            <dt>Serviço ativo</dt>
+                            <dd>{{ data_get($readiness, 'service.active')
+                                ? 'Sim'
+                                : 'Não' }}</dd>
+                        </div>
+                        <div>
+                            <dt>Listener TCP 53</dt>
+                            <dd>{{ data_get($readiness, 'listeners.tcp_53')
+                                ? 'Detectado'
+                                : 'Não detectado' }}</dd>
+                        </div>
+                        <div>
+                            <dt>Listener UDP 53</dt>
+                            <dd>{{ data_get($readiness, 'listeners.udp_53')
+                                ? 'Detectado'
+                                : 'Não detectado' }}</dd>
+                        </div>
+                    </dl>
+
+                    <p>
+                        Plano local allowlisted:
+                        {{ $bindInstalled
+                            ? 'integrar o include gerenciado sem apagar a configuração existente'
+                            : 'instalar '.$packages.' e integrar o include gerenciado' }}.
+                    </p>
+
+                    @if (! $latestBindOperation)
+                        <form
+                            method="POST"
+                            action="{{ route('servers.bind.plan', $server) }}"
+                        >
+                            @csrf
+                            <button type="submit" class="button button-secondary">
+                                Preparar plano BIND
+                            </button>
+                        </form>
+                    @else
+                        <p>
+                            Operação {{ $latestBindOperation->action }}
+                            · estado {{ $latestBindOperation->status }}
+                        </p>
+
+                        @if ($latestBindOperation->error)
+                            <p>Erro sanitizado: {{ $latestBindOperation->error }}</p>
+                        @endif
+
+                        @if ($latestBindOperation->status === 'planned')
+                            <form
+                                method="POST"
+                                action="{{ route(
+                                    'servers.bind.authorize',
+                                    [$server, $latestBindOperation]
+                                ) }}"
+                            >
+                                @csrf
+                                <label>
+                                    Confirmação forte
+                                    <input
+                                        name="confirmation"
+                                        required
+                                        autocomplete="off"
+                                        placeholder="AUTORIZAR BIND {{ Str::upper($server->name) }}"
+                                    >
+                                </label>
+                                <button type="submit" class="button button-primary">
+                                    Autorizar operação
+                                </button>
+                            </form>
+                        @endif
+                    @endif
+                @else
+                    <p>
+                        O agente ainda não enviou a detecção factual do BIND,
+                        ferramentas, serviço, listeners e permissões.
+                    </p>
+                @endif
+            </section>
+        @endif
 
         @if (session('agent_enrollment_code'))
             <section class="panel-card agent-code-panel">

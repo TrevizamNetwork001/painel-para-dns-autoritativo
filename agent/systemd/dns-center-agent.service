@@ -2,6 +2,7 @@
 Description=DNS Center Agent
 After=network-online.target
 Wants=network-online.target
+Wants=dns-center-agent-operation.service
 
 [Service]
 Type=oneshot
@@ -9,10 +10,11 @@ User=root
 Group=root
 ExecStart=/usr/local/sbin/dns-center-agent --heartbeat
 ExecStart=/usr/local/sbin/dns-center-agent --inventory
+ExecStart=/usr/local/sbin/dns-center-agent --readiness
 ExecStart=/usr/local/sbin/dns-center-agent --sync-zones
 NoNewPrivileges=true
 PrivateTmp=true
 ProtectHome=true
 ProtectSystem=strict
-ReadWritePaths=/var/lib/dns-center-agent
+ReadWritePaths=/var/lib/dns-center-agent -/etc/bind -/etc/named -/var/named -/var/backups/dns-center-agent
 UMask=0027

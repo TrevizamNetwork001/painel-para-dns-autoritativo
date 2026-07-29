@@ -4,7 +4,9 @@ namespace App\Http\Controllers;
 
 use App\Models\DnsAgent;
 use App\Models\DnsAgentEnrollment;
+use App\Models\DnsBindOperation;
 use App\Models\DnsServer;
+use App\Support\SecurityAuditLogger;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -44,13 +46,106 @@ class DnsAgentEnrollmentController extends Controller
             ->latest('last_apply_at')
             ->first();
 
+        $latestBindOperation = $server->bindOperations()
+            ->latest('id')
+            ->first();
+
         return view('servers.agent', [
             'server' => $server,
             'agent' => $agent,
             'latestEnrollment' => $latestEnrollment,
             'latestPublication' => $latestPublication,
             'latestAppliedPublication' => $latestAppliedPublication,
+            'latestBindOperation' => $latestBindOperation,
         ]);
+    }
+
+    public function planBind(
+        Request $request,
+        DnsServer $server,
+    ): RedirectResponse {
+        $organizationId = $this->authorizeServer($request, $server);
+        $agent = DnsAgent::query()
+            ->where('organization_id', $organizationId)
+            ->where('dns_server_id', $server->id)
+            ->whereNull('revoked_at')
+            ->firstOrFail();
+
+        abort_unless($server->bind_readiness_at !== null, 409, 'Aguarde o inventário de prontidão do agente.');
+
+        $action = data_get($server->bind_readiness, 'bind_installed', false)
+            ? 'configure_bind'
+            : 'install_bind';
+
+        $operation = DnsBindOperation::query()
+            ->where('dns_server_id', $server->id)
+            ->whereIn('status', ['planned', 'authorized', 'running'])
+            ->latest('id')
+            ->first();
+
+        if (! $operation) {
+            $operation = DnsBindOperation::query()->create([
+                'organization_id' => $organizationId,
+                'dns_server_id' => $server->id,
+                'dns_agent_id' => $agent->id,
+                'action' => $action,
+                'status' => 'planned',
+                'authorization_nonce' => (string) Str::uuid(),
+            ]);
+        }
+
+        return redirect()
+            ->route('servers.agent.show', $server)
+            ->with('status', 'Plano BIND preparado. Nenhuma ação foi executada.');
+    }
+
+    public function authorizeBind(
+        Request $request,
+        DnsServer $server,
+        DnsBindOperation $operation,
+    ): RedirectResponse {
+        $organizationId = $this->authorizeServer($request, $server);
+
+        abort_unless(
+            (int) $operation->organization_id === $organizationId
+            && (int) $operation->dns_server_id === (int) $server->id,
+            404,
+        );
+
+        $validated = $request->validate([
+            'confirmation' => ['required', 'string', 'max:180'],
+        ]);
+
+        abort_unless(
+            hash_equals(
+                'AUTORIZAR BIND '.Str::upper($server->name),
+                Str::upper(trim($validated['confirmation'])),
+            ),
+            422,
+            'A confirmação forte não corresponde ao servidor.',
+        );
+
+        if ($operation->status === 'planned') {
+            $operation->forceFill([
+                'status' => 'authorized',
+                'authorized_by' => $request->user()->id,
+                'authorized_at' => now(),
+            ])->save();
+
+            SecurityAuditLogger::record(
+                event: 'bind.operation_authorized',
+                user: $request->user(),
+                result: 'success',
+                actor: 'user:'.$request->user()->id,
+                source: 'web',
+                ipAddress: $request->ip(),
+                userAgent: $request->userAgent(),
+            );
+        }
+
+        return redirect()
+            ->route('servers.agent.show', $server)
+            ->with('status', 'Operação BIND autorizada para execução pelo agente.');
     }
 
     public function store(

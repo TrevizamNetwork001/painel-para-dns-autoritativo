@@ -143,6 +143,16 @@ Route::middleware([
         '/servidores/{server}/agente/revogar',
         [DnsAgentEnrollmentController::class, 'revoke'],
     )->name('servers.agent.revoke');
+
+    Route::post(
+        '/servidores/{server}/bind/plano',
+        [DnsAgentEnrollmentController::class, 'planBind'],
+    )->name('servers.bind.plan');
+
+    Route::post(
+        '/servidores/{server}/bind/operacoes/{operation}/autorizar',
+        [DnsAgentEnrollmentController::class, 'authorizeBind'],
+    )->name('servers.bind.authorize');
 });
 
 Route::middleware([

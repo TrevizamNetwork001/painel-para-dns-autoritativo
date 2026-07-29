@@ -83,13 +83,13 @@ class DnsServerFoundationTest extends TestCase
     {
         $this->assertSame(
             [
+                'standalone',
                 'primary',
                 'secondary',
             ],
             DnsServer::ROLES,
         );
     }
-
 
     public function test_server_can_store_operational_inventory(): void
     {
@@ -129,5 +129,4 @@ class DnsServerFoundationTest extends TestCase
             $server->inventory['architecture'],
         );
     }
-
 }

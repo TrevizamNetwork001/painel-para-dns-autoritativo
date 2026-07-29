@@ -1,0 +1,13 @@
+[Unit]
+Description=Operação BIND autorizada do DNS Center Agent
+After=network-online.target dns-center-agent.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=root
+Group=root
+ExecStart=/usr/local/sbin/dns-center-agent --run-authorized-operation
+PrivateTmp=true
+ProtectHome=true
+UMask=0027

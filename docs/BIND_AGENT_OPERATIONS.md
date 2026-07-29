@@ -45,4 +45,13 @@ include "/etc/bind/dns-center-managed.conf";
 ```
 
 O agente não altera automaticamente `named.conf`, não instala pacotes e não
-habilita serviços systemd.
+habilita serviços systemd durante a sincronização comum de zonas.
+
+## Prontidão e operação autorizada
+
+`--readiness` detecta BIND, ferramentas, caminhos allowlisted, serviço,
+listeners 53, permissões e módulos de segurança e envia fatos ao painel.
+
+`--run-authorized-operation` consulta uma autorização persistente. Instalação
+e integração são traduzidas por catálogo local fixo; o painel não envia
+comandos. Consulte `BIND_READINESS_INSTALLATION.md`.
