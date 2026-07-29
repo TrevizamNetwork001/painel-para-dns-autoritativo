@@ -62,10 +62,8 @@
             aria-hidden="true"
         >
             <path
-                d="M20.2 15.2A8.2 8.2 0 0 1 8.8 3.8
-                   8.3 3.6 7.9 4 8 4.5
-                   A7.4 7.4 0 0 0 19.5 16
-                   c.5.1.9-.3.7-.8Z"
+                d="M21 12.8A9 9 0 1 1 11.2 3
+                   7 7 0 0 0 21 12.8Z"
                 stroke="currentColor"
                 stroke-width="1.9"
                 stroke-linecap="round"
