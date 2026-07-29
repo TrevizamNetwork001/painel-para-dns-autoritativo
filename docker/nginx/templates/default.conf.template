@@ -1,10 +1,8 @@
 server {
     server_tokens off;
-
     listen 80;
     listen [::]:80;
-
-    server_name dnscenter.trevizamnetwork.com.br;
+    server_name ${NGINX_HOST};
 
     location ^~ /.well-known/acme-challenge/ {
         root /var/www/certbot;
@@ -19,15 +17,11 @@ server {
 
 server {
     server_tokens off;
-
     listen 443 ssl;
     listen [::]:443 ssl;
-
-    server_name dnscenter.trevizamnetwork.com.br;
-
-    ssl_certificate /etc/letsencrypt/live/dnscenter.trevizamnetwork.com.br/fullchain.pem;
-    ssl_certificate_key /etc/letsencrypt/live/dnscenter.trevizamnetwork.com.br/privkey.pem;
-
+    server_name ${NGINX_HOST};
+    ssl_certificate /etc/letsencrypt/live/${NGINX_HOST}/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/${NGINX_HOST}/privkey.pem;
     ssl_protocols TLSv1.2 TLSv1.3;
     ssl_session_timeout 1d;
     ssl_session_cache shared:SSL:10m;
@@ -44,7 +38,6 @@ server {
 
     root /var/www/html/public;
     index index.php;
-
     client_max_body_size 32m;
 
     location / {
@@ -55,7 +48,6 @@ server {
         include fastcgi_params;
         fastcgi_pass app:9000;
         fastcgi_index index.php;
-
         fastcgi_param SCRIPT_FILENAME /var/www/html/public$fastcgi_script_name;
         fastcgi_param DOCUMENT_ROOT /var/www/html/public;
         fastcgi_param HTTPS on;

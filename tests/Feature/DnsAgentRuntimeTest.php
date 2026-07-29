@@ -95,7 +95,7 @@ class DnsAgentRuntimeTest extends TestCase
 
         $code = 'DNSC-ABCDE-FGHJK-LMNPQ-RSTUV';
 
-        DnsAgentEnrollment::query()->create([
+        $enrollment = DnsAgentEnrollment::query()->create([
             'organization_id' => $server->organization_id,
             'dns_server_id' => $server->id,
             'created_by' => $admin->id,
@@ -105,6 +105,8 @@ class DnsAgentRuntimeTest extends TestCase
             ),
             'expires_at' => now()->addMinutes(30),
         ]);
+
+        $this->assertFalse($enrollment->fresh()->expires_at->isPast());
 
         $this->postJson('/api/agent/enroll', [
             'activation_code' => $code,

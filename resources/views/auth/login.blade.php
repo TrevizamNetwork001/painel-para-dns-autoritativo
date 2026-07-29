@@ -11,9 +11,9 @@
         </div>
 
         <div class="auth-brand-content">
-            <p class="eyebrow">Trevizam Network</p>
+            <p class="eyebrow">Plataforma de DNS</p>
 
-            <h1>DNS Center</h1>
+            <h1>{{ config('app.name') }}</h1>
 
             <p class="auth-description">
                 Plataforma centralizada para administração de DNS autoritativo,
@@ -125,7 +125,7 @@
                 </div>
 
                 <button type="submit" class="button button-primary">
-                    Entrar no DNS Center
+                    Entrar em {{ config('app.name') }}
                 </button>
             </form>
 

@@ -8,9 +8,9 @@
 
     <title>
         @hasSection('title')
-            @yield('title') — DNS Center
+            @yield('title') — {{ config('app.name') }}
         @else
-            DNS Center
+            {{ config('app.name') }}
         @endif
     </title>
 

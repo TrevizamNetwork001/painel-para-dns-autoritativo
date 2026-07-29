@@ -6,7 +6,7 @@
 @section('content')
 <main class="auth-simple-shell">
     <section class="auth-card auth-card-small">
-        <p class="eyebrow">DNS Center</p>
+        <p class="eyebrow">{{ config('app.name') }}</p>
         <h1>Recuperar senha</h1>
 
         <p class="auth-description-small">
@@ -39,13 +39,15 @@
                     type="email"
                     name="email"
                     value="{{ old('email') }}"
+                    autocomplete="email"
+                    inputmode="email"
                     required
                     autofocus
                 >
             </label>
 
             <button type="submit" class="button button-primary">
-                Enviar instruções
+                Enviar link de recuperação
             </button>
         </form>
 

@@ -2,10 +2,10 @@
 
 namespace App\Http\Controllers;
 
+use App\Support\PasswordRules;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
-use Illuminate\Validation\Rules\Password;
 use Illuminate\View\View;
 
 class PasswordChangeController extends Controller
@@ -23,13 +23,8 @@ class PasswordChangeController extends Controller
                 'current_password:web',
             ],
             'password' => [
-                'required',
-                'confirmed',
+                ...PasswordRules::rules(),
                 'different:current_password',
-                Password::min(12)
-                    ->mixedCase()
-                    ->numbers()
-                    ->symbols(),
             ],
         ]);
 

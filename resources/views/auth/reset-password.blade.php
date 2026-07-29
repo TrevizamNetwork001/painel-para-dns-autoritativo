@@ -6,7 +6,7 @@
 @section('content')
 <main class="auth-simple-shell">
     <section class="auth-card auth-card-small">
-        <p class="eyebrow">DNS Center</p>
+        <p class="eyebrow">{{ config('app.name') }}</p>
         <h1>Definir nova senha</h1>
 
         @if ($errors->any())
@@ -26,7 +26,7 @@
             <input
                 type="hidden"
                 name="token"
-                value="{{ $request->route('token') }}"
+                value="{{ $token }}"
             >
 
             <label class="form-field">
@@ -34,7 +34,9 @@
                 <input
                     type="email"
                     name="email"
-                    value="{{ old('email', $request->email) }}"
+                    value="{{ old('email', $email) }}"
+                    autocomplete="email"
+                    inputmode="email"
                     required
                     autofocus
                 >

@@ -2,9 +2,8 @@
 
 namespace App\Providers;
 
-use App\Actions\ResetUserPassword;
-use App\Actions\UpdateUserPassword;
-use App\Actions\UpdateUserProfileInformation;
+use App\Actions\Fortify\UpdateUserPassword;
+use App\Actions\Fortify\UpdateUserProfileInformation;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\RateLimiter;
@@ -29,22 +28,8 @@ class FortifyServiceProvider extends ServiceProvider
             UpdateUserPassword::class
         );
 
-        Fortify::resetUserPasswordsUsing(
-            ResetUserPassword::class
-        );
-
         Fortify::loginView(
             fn () => view('auth.login')
-        );
-
-        Fortify::requestPasswordResetLinkView(
-            fn () => view('auth.forgot-password')
-        );
-
-        Fortify::resetPasswordView(
-            fn (Request $request) => view('auth.reset-password', [
-                'request' => $request,
-            ])
         );
 
         Fortify::twoFactorChallengeView(
@@ -64,6 +49,27 @@ class FortifyServiceProvider extends ServiceProvider
             'two-factor',
             fn (Request $request): Limit => Limit::perMinute(5)
                 ->by((string) $request->session()->get('login.id'))
+        );
+
+        RateLimiter::for('password-reset-request', function (
+            Request $request
+        ): array {
+            $email = mb_strtolower(trim((string) $request->input('email')));
+            $ip = (string) $request->ip();
+
+            return [
+                Limit::perMinute((int) env('PASSWORD_RESET_IP_LIMIT', 10))
+                    ->by('password-reset-request-ip|'.$ip),
+                Limit::perMinute((int) env('PASSWORD_RESET_EMAIL_IP_LIMIT', 3))
+                    ->by('password-reset-request|'.$ip.'|'.$email),
+            ];
+        });
+
+        RateLimiter::for(
+            'password-reset-submit',
+            fn (Request $request): Limit => Limit::perMinute(
+                (int) env('PASSWORD_RESET_SUBMIT_IP_LIMIT', 10)
+            )->by('password-reset-submit|'.$request->ip())
         );
     }
 }

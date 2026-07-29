@@ -3,6 +3,7 @@
 namespace App\Providers;
 
 use App\Listeners\RecordAuthenticationActivity;
+use App\Support\TestingDatabaseGuard;
 use Illuminate\Auth\Events\Failed;
 use Illuminate\Auth\Events\Login;
 use Illuminate\Auth\Events\Logout;
@@ -24,6 +25,13 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        if ($this->app->environment('testing')) {
+            TestingDatabaseGuard::assertSafe(
+                (string) $this->app->environment(),
+                (string) config('database.connections.pgsql.database'),
+            );
+        }
+
         Event::listen(
             Login::class,
             [RecordAuthenticationActivity::class, 'handleLogin']

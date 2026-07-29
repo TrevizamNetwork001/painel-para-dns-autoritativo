@@ -1,17 +1,45 @@
 <?php
 
-use App\Http\Controllers\UserManagementController;
+use App\Http\Controllers\Auth\ForgotPasswordController;
+use App\Http\Controllers\Auth\ResetPasswordController;
+use App\Http\Controllers\DnsAgentEnrollmentController;
+use App\Http\Controllers\DnsNameserverController;
+use App\Http\Controllers\DnsServerController;
+use App\Http\Controllers\DnsZoneController;
 use App\Http\Controllers\PasswordChangeController;
 use App\Http\Controllers\ProfileController;
-
+use App\Http\Controllers\UserManagementController;
 use Illuminate\Support\Facades\Route;
+
+Route::middleware('guest')->group(function (): void {
+    Route::get(
+        '/esqueci-minha-senha',
+        [ForgotPasswordController::class, 'create'],
+    )->name('password.request');
+
+    Route::post(
+        '/esqueci-minha-senha',
+        [ForgotPasswordController::class, 'store'],
+    )->middleware('throttle:password-reset-request')
+        ->name('password.email');
+
+    Route::get(
+        '/redefinir-senha/{token}',
+        [ResetPasswordController::class, 'create'],
+    )->name('password.reset');
+
+    Route::post(
+        '/redefinir-senha',
+        [ResetPasswordController::class, 'store'],
+    )->middleware('throttle:password-reset-submit')
+        ->name('password.update');
+});
 
 Route::get('/', function () {
     return auth()->check()
         ? redirect()->route('dashboard')
         : redirect()->route('login');
 })->name('home');
-
 
 Route::middleware('auth')->group(function (): void {
     Route::get(
@@ -54,7 +82,6 @@ Route::middleware([
     )->name('status');
 });
 
-
 Route::middleware([
     'auth',
     'password.changed',
@@ -78,22 +105,22 @@ Route::middleware([
 ])->group(function (): void {
     Route::get(
         '/servidores',
-        [App\Http\Controllers\DnsServerController::class, 'index']
+        [DnsServerController::class, 'index']
     )->name('servers.index');
 
     Route::post(
         '/servidores',
-        [App\Http\Controllers\DnsServerController::class, 'store']
+        [DnsServerController::class, 'store']
     )->name('servers.store');
 
     Route::put(
         '/servidores/{server}',
-        [App\Http\Controllers\DnsServerController::class, 'update']
+        [DnsServerController::class, 'update']
     )->name('servers.update');
 
     Route::patch(
         '/servidores/{server}/status',
-        [App\Http\Controllers\DnsServerController::class, 'toggleStatus']
+        [DnsServerController::class, 'toggleStatus']
     )->name('servers.status');
 });
 
@@ -104,20 +131,19 @@ Route::middleware([
 ])->group(function (): void {
     Route::get(
         '/servidores/{server}/agente',
-        [\App\Http\Controllers\DnsAgentEnrollmentController::class, 'show'],
+        [DnsAgentEnrollmentController::class, 'show'],
     )->name('servers.agent.show');
 
     Route::post(
         '/servidores/{server}/agente/ativacao',
-        [\App\Http\Controllers\DnsAgentEnrollmentController::class, 'store'],
+        [DnsAgentEnrollmentController::class, 'store'],
     )->name('servers.agent.enrollment.store');
 
     Route::post(
         '/servidores/{server}/agente/revogar',
-        [\App\Http\Controllers\DnsAgentEnrollmentController::class, 'revoke'],
+        [DnsAgentEnrollmentController::class, 'revoke'],
     )->name('servers.agent.revoke');
 });
-
 
 Route::middleware([
     'auth',
@@ -126,37 +152,37 @@ Route::middleware([
 ])->prefix('nameservers')->name('nameservers.')->group(function (): void {
     Route::get(
         '/',
-        [\App\Http\Controllers\DnsNameserverController::class, 'index'],
+        [DnsNameserverController::class, 'index'],
     )->name('index');
 
     Route::post(
         '/identidades',
-        [\App\Http\Controllers\DnsNameserverController::class, 'storeIdentity'],
+        [DnsNameserverController::class, 'storeIdentity'],
     )->name('identity.store');
 
     Route::put(
         '/identidades/{identity}',
-        [\App\Http\Controllers\DnsNameserverController::class, 'updateIdentity'],
+        [DnsNameserverController::class, 'updateIdentity'],
     )->name('identity.update');
 
     Route::patch(
         '/identidades/{identity}/status',
-        [\App\Http\Controllers\DnsNameserverController::class, 'toggleIdentity'],
+        [DnsNameserverController::class, 'toggleIdentity'],
     )->name('identity.status');
 
     Route::post(
         '/perfis',
-        [\App\Http\Controllers\DnsNameserverController::class, 'storeProfile'],
+        [DnsNameserverController::class, 'storeProfile'],
     )->name('profile.store');
 
     Route::put(
         '/perfis/{profile}',
-        [\App\Http\Controllers\DnsNameserverController::class, 'updateProfile'],
+        [DnsNameserverController::class, 'updateProfile'],
     )->name('profile.update');
 
     Route::patch(
         '/perfis/{profile}/status',
-        [\App\Http\Controllers\DnsNameserverController::class, 'toggleProfile'],
+        [DnsNameserverController::class, 'toggleProfile'],
     )->name('profile.status');
 });
 
@@ -167,41 +193,41 @@ Route::middleware([
 ])->prefix('zonas')->name('zones.')->group(function (): void {
     Route::get(
         '/',
-        [\App\Http\Controllers\DnsZoneController::class, 'index'],
+        [DnsZoneController::class, 'index'],
     )->name('index');
 
     Route::post(
         '/',
-        [\App\Http\Controllers\DnsZoneController::class, 'store'],
+        [DnsZoneController::class, 'store'],
     )->name('store');
 
     Route::get(
         '/{zone}',
-        [\App\Http\Controllers\DnsZoneController::class, 'show'],
+        [DnsZoneController::class, 'show'],
     )->name('show');
 
     Route::put(
         '/{zone}',
-        [\App\Http\Controllers\DnsZoneController::class, 'update'],
+        [DnsZoneController::class, 'update'],
     )->name('update');
 
     Route::post(
         '/{zone}/registros',
-        [\App\Http\Controllers\DnsZoneController::class, 'storeRecord'],
+        [DnsZoneController::class, 'storeRecord'],
     )->name('records.store');
 
     Route::put(
         '/{zone}/registros/{record}',
-        [\App\Http\Controllers\DnsZoneController::class, 'updateRecord'],
+        [DnsZoneController::class, 'updateRecord'],
     )->name('records.update');
 
     Route::delete(
         '/{zone}/registros/{record}',
-        [\App\Http\Controllers\DnsZoneController::class, 'destroyRecord'],
+        [DnsZoneController::class, 'destroyRecord'],
     )->name('records.destroy');
 
     Route::post(
         '/{zone}/publicar',
-        [\App\Http\Controllers\DnsZoneController::class, 'publish'],
+        [DnsZoneController::class, 'publish'],
     )->name('publish');
 });

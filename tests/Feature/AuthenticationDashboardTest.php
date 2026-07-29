@@ -15,7 +15,7 @@ class AuthenticationDashboardTest extends TestCase
     {
         $this->get('/login')
             ->assertOk()
-            ->assertSee('Entrar no DNS Center')
+            ->assertSee('Entrar em DNS Center')
             ->assertSee('DNS Center');
     }
 

@@ -4,17 +4,17 @@ namespace App\Console\Commands;
 
 use App\Models\Organization;
 use App\Models\User;
+use App\Support\PasswordRules;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Validator;
-use Illuminate\Validation\Rules\Password;
 use Throwable;
 
 class CreatePlatformAdmin extends Command
 {
     protected $signature = 'dns-center:create-admin
-        {--organization=trevizam-network : Slug da empresa inicial}
+        {--organization= : Slug da empresa inicial}
         {--name= : Nome completo}
         {--email= : E-mail do administrador}';
 
@@ -22,8 +22,13 @@ class CreatePlatformAdmin extends Command
 
     public function handle(): int
     {
+        $organizationSlug = trim((string) (
+            $this->option('organization')
+            ?: $this->ask('Slug da empresa inicial')
+        ));
+
         $organization = Organization::query()
-            ->where('slug', (string) $this->option('organization'))
+            ->where('slug', $organizationSlug)
             ->where('status', 'active')
             ->first();
 
@@ -64,13 +69,7 @@ class CreatePlatformAdmin extends Command
             [
                 'name' => ['required', 'string', 'min:3', 'max:150'],
                 'email' => ['required', 'email:rfc', 'max:255'],
-                'password' => [
-                    'required',
-                    Password::min(12)
-                        ->mixedCase()
-                        ->numbers()
-                        ->symbols(),
-                ],
+                'password' => PasswordRules::rules(false),
             ],
         );
 
