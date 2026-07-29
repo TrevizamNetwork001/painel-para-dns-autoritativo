@@ -132,6 +132,23 @@ class DnsAgentRuntimeTest extends TestCase
         );
     }
 
+    public function test_agent_page_uses_the_shared_theme_preference(): void
+    {
+        [, , $server, $admin] = $this->registeredAgent(true);
+
+        $this->actingAs($admin)
+            ->get(route('servers.agent.show', $server))
+            ->assertOk()
+            ->assertSee(
+                "localStorage.getItem('dns-center-theme')",
+                false,
+            )
+            ->assertSee(
+                'document.documentElement.dataset.theme',
+                false,
+            );
+    }
+
     private function registeredAgent(
         bool $withAdmin = false,
     ): array {
