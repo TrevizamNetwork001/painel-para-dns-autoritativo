@@ -19,7 +19,25 @@ class ProfileAvatarTest extends TestCase
             ->get('/perfil')
             ->assertOk()
             ->assertSee('Escolha seu avatar')
-            ->assertSee($user->email);
+            ->assertSee($user->email)
+            ->assertSee('sidebar app-sidebar', false)
+            ->assertSee(route('dashboard'), false)
+            ->assertSee(route('servers.index'), false)
+            ->assertSee(route('nameservers.index'), false)
+            ->assertSee(route('zones.index'), false)
+            ->assertSee(route('users.index'), false)
+            ->assertSee(
+                'action="'.route('profile.avatar.update').'"',
+                false,
+            )
+            ->assertSee('name="_method" value="PUT"', false)
+            ->assertDontSee('href="#"', false);
+    }
+
+    public function test_guest_is_redirected_from_profile_to_login(): void
+    {
+        $this->get('/perfil')
+            ->assertRedirect('/login');
     }
 
     public function test_user_can_update_avatar(): void

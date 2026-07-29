@@ -43,66 +43,7 @@
     </main>
 @else
     <div class="app-shell">
-        <aside class="sidebar">
-            <div class="sidebar-brand">
-                <div class="brand-mark brand-mark-small">
-                    <span>DNS</span>
-                </div>
-
-                <div>
-                    <strong>DNS Center</strong>
-                    <span>Operations Platform</span>
-                </div>
-            </div>
-
-            <nav class="sidebar-nav" aria-label="Navegação principal">
-                <a href="{{ route('dashboard') }}" class="nav-item">
-                    <span class="nav-icon">▦</span>
-                    Dashboard
-                </a>
-
-                <span class="nav-section">DNS autoritativo</span>
-
-                <a href="{{ route('servers.index') }}" class="nav-item">
-                    <span class="nav-icon">◈</span>
-                    Servidores
-                </a>
-
-                <a href="#" class="nav-item">
-                    <span class="nav-icon">◎</span>
-                    Zonas
-                </a>
-
-                <a href="#" class="nav-item">
-                    <span class="nav-icon">≋</span>
-                    Registros DNS
-                </a>
-
-                <span class="nav-section">Operações</span>
-
-                <a href="#" class="nav-item">
-                    <span class="nav-icon">⌁</span>
-                    Atividades
-                </a>
-
-                @if (
-                    auth()->user()->is_platform_admin
-                    || auth()->user()->roleForOrganization(
-                        auth()->user()->current_organization_id
-                    ) === 'organization_admin'
-                )
-                    <a href="{{ route('users.index') }}" class="nav-item">
-                        <span class="nav-icon">●</span>
-                        Usuários
-                    </a>
-                @endif
-
-                <a href="#" class="nav-item">
-                    <span class="nav-icon">⚙</span>
-                    Configurações
-                </a>
-            </nav>
-        </aside>
+        <x-app-sidebar />
 
         <main class="main-content">
             <header class="topbar">
