@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\DnsAgentPublication;
 use App\Models\DnsNameserverProfile;
 use App\Models\DnsRecord;
 use App\Models\DnsServer;
@@ -424,14 +425,19 @@ class DnsZoneController extends Controller
                 ->limit(10),
         ]);
 
+        $lastPublication = $zone->versions()
+            ->where('reason', 'Zona publicada.')
+            ->with([
+                'agentPublications.server',
+            ])
+            ->latest('version')
+            ->first();
+
         return view('zones.show', [
             'zone' => $zone,
             'preview' => $renderer->render($zone),
             'validation' => $validator->validate($zone),
-            'lastPublication' => $zone->versions()
-                ->where('reason', 'Zona publicada.')
-                ->latest('version')
-                ->first(),
+            'lastPublication' => $lastPublication,
             'servers' => DnsServer::query()
                 ->forOrganization($zone->organization_id)
                 ->enabled()
@@ -648,12 +654,22 @@ class DnsZoneController extends Controller
                     'version' => $lockedZone->version + 1,
                 ])->save();
 
-                $this->saveVersion(
+                $version = $this->saveVersion(
                     $lockedZone,
                     $request,
                     'Zona publicada.',
                     $renderer,
                 );
+
+                foreach ($lockedZone->servers as $server) {
+                    DnsAgentPublication::query()->create([
+                        'organization_id' => $lockedZone->organization_id,
+                        'dns_zone_version_id' => $version->id,
+                        'dns_server_id' => $server->id,
+                        'dns_agent_id' => $server->agent->id,
+                        'status' => 'pending',
+                    ]);
+                }
 
                 return true;
             });
@@ -769,14 +785,14 @@ class DnsZoneController extends Controller
         Request $request,
         string $reason,
         BindZoneRenderer $renderer,
-    ): void {
+    ): DnsZoneVersion {
         $zone->refresh()->load([
             'records',
             'servers',
             'nameserverProfile.identities',
         ]);
 
-        DnsZoneVersion::query()->create([
+        return DnsZoneVersion::query()->create([
             'organization_id' => $zone->organization_id,
             'dns_zone_id' => $zone->id,
             'created_by' => $request->user()->id,

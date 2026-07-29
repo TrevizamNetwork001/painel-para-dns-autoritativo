@@ -16,6 +16,11 @@ class DnsServerController extends Controller
 
         $servers = DnsServer::query()
             ->forOrganization($organizationId)
+            ->with([
+                'agentPublications' => fn ($query) => $query
+                    ->with('zoneVersion.zone')
+                    ->latest('dns_zone_version_id'),
+            ])
             ->orderBy('name')
             ->get();
 
@@ -165,18 +170,12 @@ class DnsServerController extends Controller
                 'max:2000',
             ],
         ], [
-            'hostname.regex' =>
-                'Informe um hostname DNS válido.',
-            'hostname.unique' =>
-                'Este hostname já está cadastrado nesta empresa.',
-            'ipv4_address.ipv4' =>
-                'Informe um endereço IPv4 válido.',
-            'ipv6_address.ipv6' =>
-                'Informe um endereço IPv6 válido.',
-            'ipv4_address.required_without' =>
-                'Informe ao menos um endereço IPv4 ou IPv6.',
-            'ipv6_address.required_without' =>
-                'Informe ao menos um endereço IPv4 ou IPv6.',
+            'hostname.regex' => 'Informe um hostname DNS válido.',
+            'hostname.unique' => 'Este hostname já está cadastrado nesta empresa.',
+            'ipv4_address.ipv4' => 'Informe um endereço IPv4 válido.',
+            'ipv6_address.ipv6' => 'Informe um endereço IPv6 válido.',
+            'ipv4_address.required_without' => 'Informe ao menos um endereço IPv4 ou IPv6.',
+            'ipv6_address.required_without' => 'Informe ao menos um endereço IPv4 ou IPv6.',
         ]);
 
         $validated['name'] = trim($validated['name']);

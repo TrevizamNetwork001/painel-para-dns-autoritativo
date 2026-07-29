@@ -1,7 +1,9 @@
 <?php
 
+use App\Http\Controllers\Api\DnsAgentPublicationController;
 use App\Http\Controllers\Api\DnsAgentRegistrationController;
 use App\Http\Controllers\Api\DnsAgentRuntimeController;
+use App\Http\Controllers\Api\DnsZoneArtifactController;
 use App\Http\Middleware\AuthenticateDnsAgent;
 use Illuminate\Support\Facades\Route;
 
@@ -28,12 +30,18 @@ Route::middleware([
 
         Route::get(
             '/zones',
-            [\App\Http\Controllers\Api\DnsZoneArtifactController::class, 'manifest'],
+            [DnsZoneArtifactController::class, 'manifest'],
         )->name('zones.manifest');
 
         Route::get(
             '/zones/{zone}/artifact',
-            [\App\Http\Controllers\Api\DnsZoneArtifactController::class, 'artifact'],
+            [DnsZoneArtifactController::class, 'artifact'],
         )->name('zones.artifact');
+
+        Route::post(
+            '/publications/{publication}/apply',
+            [DnsAgentPublicationController::class, 'apply'],
+        )->whereNumber('publication')
+            ->name('publications.apply');
     }
 );

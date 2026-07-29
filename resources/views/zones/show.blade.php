@@ -909,6 +909,52 @@
                             @endif
                         </p>
                     </div>
+
+                    @if ($lastPublication)
+                        @php
+                            $publicationTargets = $lastPublication
+                                ->agentPublications;
+                            $appliedCount = $publicationTargets
+                                ->where('status', 'applied')
+                                ->count();
+                            $failedCount = $publicationTargets
+                                ->where('status', 'failed')
+                                ->count();
+                            $offlineCount = $publicationTargets
+                                ->filter(
+                                    fn ($target) =>
+                                        $target->server?->agent_status === 'offline'
+                                        || $target->server?->status === 'offline'
+                                )
+                                ->count();
+                            $pendingCount = $publicationTargets->count()
+                                - $appliedCount
+                                - $failedCount;
+                        @endphp
+
+                        <dl class="agent-server-details">
+                            <div>
+                                <dt>Agentes aplicáveis</dt>
+                                <dd>{{ $publicationTargets->count() }}</dd>
+                            </div>
+                            <div>
+                                <dt>Aplicação confirmada</dt>
+                                <dd>{{ $appliedCount }}</dd>
+                            </div>
+                            <div>
+                                <dt>Pendentes</dt>
+                                <dd>{{ $pendingCount }}</dd>
+                            </div>
+                            <div>
+                                <dt>Falharam</dt>
+                                <dd>{{ $failedCount }}</dd>
+                            </div>
+                            <div>
+                                <dt>Agentes offline</dt>
+                                <dd>{{ $offlineCount }}</dd>
+                            </div>
+                        </dl>
+                    @endif
                 </article>
 
                 <article class="domain-section-card">

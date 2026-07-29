@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class DnsZoneVersion extends Model
 {
@@ -29,5 +30,13 @@ class DnsZoneVersion extends Model
     public function zone(): BelongsTo
     {
         return $this->belongsTo(DnsZone::class, 'dns_zone_id');
+    }
+
+    public function agentPublications(): HasMany
+    {
+        return $this->hasMany(
+            DnsAgentPublication::class,
+            'dns_zone_version_id',
+        );
     }
 }

@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class DnsServer extends Model
 {
@@ -112,19 +113,26 @@ class DnsServer extends Model
         );
     }
 
-
-    public function agent(): \Illuminate\Database\Eloquent\Relations\HasOne
+    public function agent(): HasOne
     {
         return $this->hasOne(
-            \App\Models\DnsAgent::class,
+            DnsAgent::class,
             'dns_server_id',
         );
     }
 
-    public function agentEnrollments(): \Illuminate\Database\Eloquent\Relations\HasMany
+    public function agentEnrollments(): HasMany
     {
         return $this->hasMany(
-            \App\Models\DnsAgentEnrollment::class,
+            DnsAgentEnrollment::class,
+            'dns_server_id',
+        );
+    }
+
+    public function agentPublications(): HasMany
+    {
+        return $this->hasMany(
+            DnsAgentPublication::class,
             'dns_server_id',
         );
     }
@@ -136,5 +144,4 @@ class DnsServer extends Model
             'dns_server_id',
         );
     }
-
 }

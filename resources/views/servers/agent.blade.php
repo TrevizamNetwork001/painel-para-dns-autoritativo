@@ -136,6 +136,65 @@
                         </span>
 
                         <span>
+                            Versão desejada:
+                            {{ $latestPublication?->zoneVersion?->version
+                                ?? 'Nenhuma publicação destinada' }}
+                        </span>
+
+                        <span>
+                            Versão instalada confirmada:
+                            {{ $latestAppliedPublication?->installed_version
+                                ?? 'Ainda não confirmada' }}
+                        </span>
+
+                        <span>
+                            Estado da aplicação:
+                            {{ $latestPublication?->status
+                                ?? 'Sem publicação' }}
+                        </span>
+
+                        @if (
+                            $latestAppliedPublication
+                            && $latestPublication
+                            && $latestAppliedPublication->installed_version
+                                < $latestPublication->zoneVersion->version
+                        )
+                            <span>
+                                A versão instalada é anterior à desejada.
+                            </span>
+                        @endif
+
+                        <span>
+                            Última confirmação:
+                            {{ $latestPublication?->last_apply_at
+                                ?->format('d/m/Y H:i')
+                                ?? 'Ainda não recebida' }}
+                        </span>
+
+                        @if ($latestPublication?->last_apply_error)
+                            <span>
+                                Erro informado:
+                                {{ $latestPublication->last_apply_error }}
+                            </span>
+                        @endif
+
+                        @if ($latestPublication?->zoneVersion?->zone)
+                            <span>
+                                Publicação:
+                                <a href="{{ route(
+                                    'zones.show',
+                                    $latestPublication->zoneVersion->zone
+                                ) }}">
+                                    {{ $latestPublication
+                                        ->zoneVersion->zone->name }}
+                                    · versão
+                                    {{ $latestPublication
+                                        ->zoneVersion->version }}
+                                </a>
+                            </span>
+                        @endif
+
+                        <span>
                             Sistema:
                             {{ $server->operating_system ?: 'Não informado' }}
                             {{ $server->operating_system_version }}

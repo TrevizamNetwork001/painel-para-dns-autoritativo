@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class DnsAgent extends Model
 {
@@ -39,5 +40,13 @@ class DnsAgent extends Model
     public function isActive(): bool
     {
         return $this->revoked_at === null;
+    }
+
+    public function publications(): HasMany
+    {
+        return $this->hasMany(
+            DnsAgentPublication::class,
+            'dns_agent_id',
+        );
     }
 }

@@ -3,10 +3,12 @@
 namespace Tests\Feature;
 
 use App\Models\DnsAgent;
+use App\Models\DnsAgentPublication;
 use App\Models\DnsNameserverIdentity;
 use App\Models\DnsNameserverProfile;
 use App\Models\DnsServer;
 use App\Models\DnsZone;
+use App\Models\DnsZoneVersion;
 use App\Models\Organization;
 use App\Models\User;
 use App\Services\BindZoneRenderer;
@@ -432,7 +434,7 @@ class DnsZoneManagementTest extends TestCase
 
         $token = Str::random(96);
 
-        DnsAgent::query()->create([
+        $agent = DnsAgent::query()->create([
             'organization_id' => $organization->id,
             'dns_server_id' => $primary->id,
             'agent_uuid' => (string) Str::uuid(),
@@ -442,6 +444,24 @@ class DnsZoneManagementTest extends TestCase
             'registered_ip' => '127.0.0.1',
             'registered_at' => now(),
             'metadata' => [],
+        ]);
+
+        $version = DnsZoneVersion::query()
+            ->where('dns_zone_id', $zone->id)
+            ->where('version', $zone->version)
+            ->firstOrFail();
+
+        $version->update([
+            'reason' => 'Zona publicada.',
+            'snapshot' => app(BindZoneRenderer::class)->snapshot($zone),
+        ]);
+
+        DnsAgentPublication::query()->create([
+            'organization_id' => $organization->id,
+            'dns_zone_version_id' => $version->id,
+            'dns_server_id' => $primary->id,
+            'dns_agent_id' => $agent->id,
+            'status' => 'pending',
         ]);
 
         $this->withToken($token)

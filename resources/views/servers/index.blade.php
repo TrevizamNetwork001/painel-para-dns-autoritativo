@@ -118,6 +118,12 @@
             </div>
 
             @forelse ($servers as $server)
+                @php
+                    $latestPublication = $server->agentPublications->first();
+                    $latestAppliedPublication = $server
+                        ->agentPublications
+                        ->firstWhere('status', 'applied');
+                @endphp
                 <article class="server-row">
                     <div class="server-row-main">
                         <div class="server-icon">▤</div>
@@ -149,6 +155,21 @@
                                         ?: 'desconhecido' }}
                                 @else
                                     Inventário pendente do agente
+                                @endif
+                            </small>
+
+                            <small class="server-inventory-line">
+                                @if ($latestPublication)
+                                    Versão desejada:
+                                    {{ $latestPublication->zoneVersion->version }}
+                                    · instalada confirmada:
+                                    {{ $latestAppliedPublication
+                                        ?->installed_version
+                                        ?? 'não confirmada' }}
+                                    · aplicação:
+                                    {{ $latestPublication->status }}
+                                @else
+                                    Nenhuma publicação destinada
                                 @endif
                             </small>
                         </div>

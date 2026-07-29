@@ -34,10 +34,22 @@ class DnsAgentEnrollmentController extends Controller
             ->latest('id')
             ->first();
 
+        $latestPublication = $server->agentPublications()
+            ->with('zoneVersion.zone')
+            ->latest('dns_zone_version_id')
+            ->first();
+
+        $latestAppliedPublication = $server->agentPublications()
+            ->where('status', 'applied')
+            ->latest('last_apply_at')
+            ->first();
+
         return view('servers.agent', [
             'server' => $server,
             'agent' => $agent,
             'latestEnrollment' => $latestEnrollment,
+            'latestPublication' => $latestPublication,
+            'latestAppliedPublication' => $latestAppliedPublication,
         ]);
     }
 
@@ -95,8 +107,7 @@ class DnsAgentEnrollmentController extends Controller
             ->with([
                 'status' => 'Código de ativação gerado com sucesso.',
                 'agent_enrollment_code' => $plainCode,
-                'agent_enrollment_expires_at' =>
-                    $enrollment->expires_at->toIso8601String(),
+                'agent_enrollment_expires_at' => $enrollment->expires_at->toIso8601String(),
             ]);
     }
 
