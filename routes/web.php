@@ -27,6 +27,37 @@ Route::get('/install/dns-center-agent.py.sha256', function () {
         ->header('Content-Type', 'text/plain');
 })->name('install.agent.checksum');
 
+Route::get('/install/agent_install.sh.sha256', function () {
+    $path = public_path('install/agent_install.sh');
+
+    return response(hash_file('sha256', $path)."  agent_install.sh\n")
+        ->header('Content-Type', 'text/plain');
+})->name('install.agent.installer-checksum');
+
+$agentSystemdArtifacts = [
+    'dns-center-agent.service',
+    'dns-center-agent.timer',
+    'dns-center-agent-operation.service',
+    'dns-center-agent-approval.service',
+    'dns-center-agent-approval.timer',
+];
+
+foreach ($agentSystemdArtifacts as $artifact) {
+    Route::get("/install/{$artifact}", function () use ($artifact) {
+        return response()->file(
+            base_path("agent/systemd/{$artifact}"),
+            ['Content-Type' => 'text/plain'],
+        );
+    });
+
+    Route::get("/install/{$artifact}.sha256", function () use ($artifact) {
+        $path = base_path("agent/systemd/{$artifact}");
+
+        return response(hash_file('sha256', $path)."  {$artifact}\n")
+            ->header('Content-Type', 'text/plain');
+    });
+}
+
 Route::middleware('guest')->group(function (): void {
     Route::get(
         '/esqueci-minha-senha',

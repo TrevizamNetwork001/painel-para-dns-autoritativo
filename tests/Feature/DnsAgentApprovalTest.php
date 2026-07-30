@@ -185,6 +185,35 @@ class DnsAgentApprovalTest extends TestCase
                 ."  dns-center-agent.py\n",
             $checksum,
         );
+
+        $installerChecksum = $this
+            ->get(route('install.agent.installer-checksum'))
+            ->assertOk()
+            ->getContent();
+
+        $this->assertSame(
+            hash_file('sha256', public_path('install/agent_install.sh'))
+                ."  agent_install.sh\n",
+            $installerChecksum,
+        );
+
+        foreach ([
+            'dns-center-agent.service',
+            'dns-center-agent.timer',
+            'dns-center-agent-operation.service',
+            'dns-center-agent-approval.service',
+            'dns-center-agent-approval.timer',
+        ] as $artifact) {
+            $this->get("/install/{$artifact}")
+                ->assertOk()
+                ->assertHeader('Content-Type', 'text/plain; charset=UTF-8');
+
+            $this->get("/install/{$artifact}.sha256")
+                ->assertOk()
+                ->assertSee(
+                    hash_file('sha256', base_path("agent/systemd/{$artifact}")),
+                );
+        }
     }
 
     public function test_agent_page_is_compatible_before_install_request_migration(): void

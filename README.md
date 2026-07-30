@@ -1,3 +1,31 @@
+# DNS Center
+
+Painel Laravel para gestão de servidores DNS autoritativos, zonas, agentes e
+operações BIND controladas.
+
+## Desenvolvimento e operação
+
+O `compose.yaml` usa bind mount do workspace e é destinado somente a
+desenvolvimento. A operação formal usa imagens versionadas, sem mount do
+código:
+
+- `compose.build.yaml` constrói as imagens manualmente;
+- `compose.production.yaml` executa imagens prontas;
+- `deploy/dns-center-deploy` instala, atualiza, cria backup e faz rollback
+  manual da aplicação;
+- configuração e segredos ficam em arquivos externos com modo `0600`.
+
+O projeto não executa deploy automático em produção. Consulte
+[`docs/DEPLOY_BASELINE_1.md`](docs/DEPLOY_BASELINE_1.md).
+
+## Agente
+
+O instalador oficial verifica SHA-256 do agente e de todas as units systemd. O
+servidor deve existir previamente no painel com hostname ou IP correspondente.
+Consulte [`docs/AGENT_API.md`](docs/AGENT_API.md).
+
+---
+
 <p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
 
 <p align="center">

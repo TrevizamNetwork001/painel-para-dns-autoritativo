@@ -1,0 +1,121 @@
+name: dns-center
+
+x-app-image: &app-image
+  image: ${DNS_CENTER_APP_IMAGE:-dns-center-app}:${DNS_CENTER_VERSION:?Defina DNS_CENTER_VERSION com tag imutavel}
+  env_file:
+    - ${DNS_CENTER_ENV_FILE:?Defina DNS_CENTER_ENV_FILE com caminho externo ao repositorio}
+  restart: unless-stopped
+  working_dir: /var/www/html
+  networks:
+    - dns-center
+  volumes:
+    - app_data:/var/www/html/storage/app
+    - app_logs:/var/www/html/storage/logs
+
+services:
+  init:
+    <<: *app-image
+    user: root
+    restart: "no"
+    command:
+      - sh
+      - -eu
+      - -c
+      - |
+        mkdir -p \
+          storage/app/private \
+          storage/app/public \
+          storage/logs
+        chown -R www-data:www-data storage/app storage/logs
+
+  app:
+    <<: *app-image
+    depends_on:
+      init:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "php artisan migrate:status --no-ansi >/dev/null || exit 1"]
+      interval: 30s
+      timeout: 10s
+      start_period: 30s
+      retries: 3
+
+  queue:
+    <<: *app-image
+    command: php artisan queue:work --sleep=2 --tries=3 --timeout=120
+    depends_on:
+      app:
+        condition: service_healthy
+
+  scheduler:
+    <<: *app-image
+    command: php artisan schedule:work
+    depends_on:
+      app:
+        condition: service_healthy
+
+  web:
+    image: ${DNS_CENTER_WEB_IMAGE:-dns-center-web}:${DNS_CENTER_VERSION:?Defina DNS_CENTER_VERSION com tag imutavel}
+    env_file:
+      - ${DNS_CENTER_ENV_FILE:?Defina DNS_CENTER_ENV_FILE com caminho externo ao repositorio}
+    restart: unless-stopped
+    ports:
+      - "${DNS_CENTER_HTTP_PORT:-80}:80"
+      - "${DNS_CENTER_HTTPS_PORT:-443}:443"
+    volumes:
+      - ${DNS_CENTER_CERTBOT_WWW:?Defina DNS_CENTER_CERTBOT_WWW}:/var/www/certbot:ro
+      - ${DNS_CENTER_CERTBOT_CONF:?Defina DNS_CENTER_CERTBOT_CONF}:/etc/letsencrypt:ro
+    networks:
+      - dns-center
+    depends_on:
+      app:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--no-check-certificate", "--spider", "--quiet", "https://127.0.0.1/up"]
+      interval: 30s
+      timeout: 10s
+      start_period: 20s
+      retries: 3
+
+  postgres:
+    image: postgres:17-alpine
+    env_file:
+      - ${DNS_CENTER_ENV_FILE:?Defina DNS_CENTER_ENV_FILE com caminho externo ao repositorio}
+    restart: unless-stopped
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - dns-center
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  redis:
+    image: redis:8-alpine
+    restart: unless-stopped
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    volumes:
+      - redis_data:/data
+    networks:
+      - dns-center
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+networks:
+  dns-center:
+    driver: bridge
+
+volumes:
+  app_data:
+  app_logs:
+  postgres_data:
+  redis_data:

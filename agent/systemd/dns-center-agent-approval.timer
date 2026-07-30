@@ -1,0 +1,10 @@
+[Unit]
+Description=Consulta aprovação do DNS Center Agent
+
+[Timer]
+OnBootSec=5s
+OnUnitActiveSec=5min
+Persistent=true
+
+[Install]
+WantedBy=timers.target

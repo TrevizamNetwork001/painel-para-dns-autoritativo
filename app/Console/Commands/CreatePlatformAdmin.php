@@ -15,6 +15,7 @@ class CreatePlatformAdmin extends Command
 {
     protected $signature = 'dns-center:create-admin
         {--organization= : Slug da empresa inicial}
+        {--organization-name= : Nome da empresa inicial}
         {--name= : Nome completo}
         {--email= : E-mail do administrador}';
 
@@ -32,11 +33,10 @@ class CreatePlatformAdmin extends Command
             ->where('status', 'active')
             ->first();
 
-        if (! $organization) {
-            $this->error('Empresa ativa não encontrada.');
-
-            return self::FAILURE;
-        }
+        $organizationName = $organization?->name ?? trim((string) (
+            $this->option('organization-name')
+            ?: $this->ask('Nome da empresa inicial')
+        ));
 
         $name = trim((string) (
             $this->option('name')
@@ -65,11 +65,24 @@ class CreatePlatformAdmin extends Command
                 'name' => $name,
                 'email' => $email,
                 'password' => $password,
+                'organization_slug' => $organizationSlug,
+                'organization_name' => $organizationName,
             ],
             [
                 'name' => ['required', 'string', 'min:3', 'max:150'],
                 'email' => ['required', 'email:rfc', 'max:255'],
                 'password' => PasswordRules::rules(false),
+                'organization_slug' => [
+                    'required',
+                    'alpha_dash:ascii',
+                    'max:100',
+                ],
+                'organization_name' => [
+                    'required',
+                    'string',
+                    'min:2',
+                    'max:150',
+                ],
             ],
         );
 
@@ -82,12 +95,23 @@ class CreatePlatformAdmin extends Command
         }
 
         try {
-            $user = DB::transaction(function () use (
+            [$organization, $user] = DB::transaction(function () use (
                 $organization,
+                $organizationSlug,
+                $organizationName,
                 $name,
                 $email,
                 $password
-            ): User {
+            ): array {
+                $organization ??= Organization::query()->create([
+                    'name' => $organizationName,
+                    'slug' => $organizationSlug,
+                    'status' => 'active',
+                    'is_default' => ! Organization::query()
+                        ->where('is_default', true)
+                        ->exists(),
+                ]);
+
                 $user = User::query()->firstOrNew([
                     'email' => $email,
                 ]);
@@ -109,10 +133,13 @@ class CreatePlatformAdmin extends Command
                     ],
                 ]);
 
-                return $user->fresh([
-                    'currentOrganization',
-                    'organizations',
-                ]);
+                return [
+                    $organization,
+                    $user->fresh([
+                        'currentOrganization',
+                        'organizations',
+                    ]),
+                ];
             });
         } catch (Throwable $exception) {
             report($exception);

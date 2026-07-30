@@ -1,0 +1,259 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+umask 077
+
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_DIR="$(cd -- "${SCRIPT_DIR}/.." && pwd)"
+COMPOSE_FILE="${PROJECT_DIR}/compose.production.yaml"
+DEPLOY_CONFIG="${DNS_CENTER_DEPLOY_CONFIG:-/etc/dns-center/deployment.env}"
+
+fail() {
+    printf 'ERRO: %s\n' "$*" >&2
+    exit 1
+}
+
+require_command() {
+    command -v "$1" >/dev/null 2>&1 || fail "comando ausente: $1"
+}
+
+load_config() {
+    [ -f "${DEPLOY_CONFIG}" ] || fail "configuração ausente: ${DEPLOY_CONFIG}"
+    # shellcheck disable=SC1090
+    source "${DEPLOY_CONFIG}"
+
+    : "${DNS_CENTER_APP_IMAGE:?ausente em deployment.env}"
+    : "${DNS_CENTER_WEB_IMAGE:?ausente em deployment.env}"
+    : "${DNS_CENTER_ENV_FILE:?ausente em deployment.env}"
+    : "${DNS_CENTER_CERTBOT_WWW:?ausente em deployment.env}"
+    : "${DNS_CENTER_CERTBOT_CONF:?ausente em deployment.env}"
+    : "${DNS_CENTER_BACKUP_DIR:?ausente em deployment.env}"
+    : "${DNS_CENTER_STATE_DIR:?ausente em deployment.env}"
+
+    [ -f "${DNS_CENTER_ENV_FILE}" ] || fail "ambiente da aplicação ausente"
+    [ "$(stat -c '%a' "${DEPLOY_CONFIG}")" = "600" ] \
+        || fail "${DEPLOY_CONFIG} deve ter modo 0600"
+    [ "$(stat -c '%a' "${DNS_CENTER_ENV_FILE}")" = "600" ] \
+        || fail "${DNS_CENTER_ENV_FILE} deve ter modo 0600"
+
+    export DNS_CENTER_APP_IMAGE DNS_CENTER_WEB_IMAGE DNS_CENTER_ENV_FILE
+    export DNS_CENTER_CERTBOT_WWW DNS_CENTER_CERTBOT_CONF
+    export DNS_CENTER_BACKUP_DIR DNS_CENTER_STATE_DIR
+    export DNS_CENTER_HTTP_PORT="${DNS_CENTER_HTTP_PORT:-80}"
+    export DNS_CENTER_HTTPS_PORT="${DNS_CENTER_HTTPS_PORT:-443}"
+}
+
+validate_version() {
+    case "$1" in
+        ""|latest|*:*|*/*|*[!A-Za-z0-9._-]*)
+            fail "versão inválida; use tag imutável sem ':', '/' ou espaços"
+            ;;
+    esac
+}
+
+compose() {
+    docker compose \
+        --project-directory "${PROJECT_DIR}" \
+        --env-file "${DEPLOY_CONFIG}" \
+        -f "${COMPOSE_FILE}" \
+        "$@"
+}
+
+set_version() {
+    DNS_CENTER_VERSION="$1"
+    export DNS_CENTER_VERSION
+}
+
+wait_for_postgres() {
+    local attempt
+    for attempt in $(seq 1 30); do
+        if compose exec -T postgres sh -eu -c \
+            'pg_isready -U "$POSTGRES_USER" -d "$POSTGRES_DB" >/dev/null'
+        then
+            return
+        fi
+        sleep 2
+    done
+    fail "PostgreSQL não ficou pronto"
+}
+
+backup_database() {
+    local timestamp backup_file checksum_file
+    timestamp="$(date -u +%Y%m%dT%H%M%SZ)"
+    install -d -m 0700 "${DNS_CENTER_BACKUP_DIR}"
+    backup_file="${DNS_CENTER_BACKUP_DIR}/dns-center-${timestamp}.dump"
+    checksum_file="${backup_file}.sha256"
+
+    compose exec -T postgres sh -eu -c \
+        'pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB" --format=custom --no-owner --no-privileges' \
+        > "${backup_file}"
+    [ -s "${backup_file}" ] || fail "backup vazio: ${backup_file}"
+    compose exec -T postgres pg_restore --list < "${backup_file}" >/dev/null
+    sha256sum "${backup_file}" > "${checksum_file}"
+
+    printf 'Backup: %s\n' "${backup_file}"
+    printf 'Tamanho: %s bytes\n' "$(stat -c '%s' "${backup_file}")"
+    printf 'SHA-256: %s\n' "$(cut -d ' ' -f 1 "${checksum_file}")"
+}
+
+preflight_release() {
+    compose config --quiet
+    compose run --rm --no-deps app php artisan about --only=environment
+    run_security_check --no-deps
+}
+
+run_security_check() {
+    local status=0
+    set +e
+    compose run --rm "$@" app php artisan dns-center:security-check
+    status=$?
+    set -e
+    [ "${status}" -ne 1 ] || fail "security-check bloqueou o deploy"
+    [ "${status}" -eq 0 ] || [ "${status}" -eq 2 ] \
+        || fail "security-check falhou com código ${status}"
+}
+
+run_migrations() {
+    compose run --rm app php artisan migrate:status --no-ansi
+    compose run --rm app php artisan migrate --force --no-ansi
+}
+
+record_success() {
+    local previous="$1" current="$2"
+    install -d -m 0700 "${DNS_CENTER_STATE_DIR}"
+    if [ -n "${previous}" ]; then
+        printf '%s\n' "${previous}" > "${DNS_CENTER_STATE_DIR}/previous-version"
+    fi
+    printf '%s\n' "${current}" > "${DNS_CENTER_STATE_DIR}/current-version"
+    printf '%s %s\n' "$(date --iso-8601=seconds)" "${current}" \
+        >> "${DNS_CENTER_STATE_DIR}/history"
+}
+
+deploy_release() {
+    local mode="$1" target="$2" current=""
+    validate_version "${target}"
+    if [ -f "${DNS_CENTER_STATE_DIR}/current-version" ]; then
+        current="$(<"${DNS_CENTER_STATE_DIR}/current-version")"
+    fi
+    if [ "${mode}" = "install" ] && [ -n "${current}" ]; then
+        fail "instalação já registrada; use update"
+    fi
+    if [ "${mode}" = "update" ] && [ -z "${current}" ]; then
+        fail "nenhuma instalação registrada; use install"
+    fi
+    [ "${target}" != "${current}" ] || fail "versão ${target} já está ativa"
+
+    set_version "${target}"
+    compose pull --policy missing app web queue scheduler
+    compose run --rm --no-deps init
+    preflight_release
+    compose up -d postgres redis
+    wait_for_postgres
+    backup_database
+    run_migrations
+    if ! compose up -d --remove-orphans --wait --wait-timeout 120; then
+        if [ -n "${current}" ]; then
+            set_version "${current}"
+            compose up -d --no-deps app queue scheduler web || true
+            printf 'Aplicação retornou para %s; schema não foi revertido.\n' \
+                "${current}" >&2
+        fi
+        fail "health checks falharam; versão não registrada como ativa"
+    fi
+    compose ps
+    compose exec -T app php artisan queue:restart
+    run_security_check
+    record_success "${current}" "${target}"
+
+    printf 'Versão ativa: %s\n' "${target}"
+    printf 'Rollback da aplicação: %s rollback\n' "$0"
+}
+
+rollback_release() {
+    local current previous
+    [ -f "${DNS_CENTER_STATE_DIR}/current-version" ] \
+        || fail "versão atual não registrada"
+    [ -f "${DNS_CENTER_STATE_DIR}/previous-version" ] \
+        || fail "versão anterior não registrada"
+    current="$(<"${DNS_CENTER_STATE_DIR}/current-version")"
+    previous="$(<"${DNS_CENTER_STATE_DIR}/previous-version")"
+    validate_version "${previous}"
+    set_version "${previous}"
+
+    compose pull --policy missing app web queue scheduler
+    compose up -d --no-deps --wait --wait-timeout 120 app queue scheduler web
+    compose ps
+    compose exec -T app php artisan queue:restart
+    printf '%s\n' "${previous}" > "${DNS_CENTER_STATE_DIR}/current-version"
+    printf '%s %s rollback-from=%s\n' \
+        "$(date --iso-8601=seconds)" "${previous}" "${current}" \
+        >> "${DNS_CENTER_STATE_DIR}/history"
+
+    printf 'Aplicação revertida para %s.\n' "${previous}"
+    printf 'Migrations NÃO foram revertidas; valide compatibilidade do schema.\n'
+}
+
+show_status() {
+    local current
+    [ -f "${DNS_CENTER_STATE_DIR}/current-version" ] \
+        || fail "versão atual não registrada"
+    current="$(<"${DNS_CENTER_STATE_DIR}/current-version")"
+    set_version "${current}"
+    compose ps
+    compose exec -T app php artisan about --only=environment,cache
+    compose exec -T app php artisan migrate:status --no-ansi
+}
+
+usage() {
+    cat <<'EOF'
+Uso:
+  dns-center-deploy install <versão>
+  dns-center-deploy update <versão>
+  dns-center-deploy backup
+  dns-center-deploy rollback
+  dns-center-deploy status
+
+Todos os comandos são manuais. Não há deploy automático.
+EOF
+}
+
+main() {
+    require_command docker
+    require_command flock
+    require_command sha256sum
+    require_command stat
+    load_config
+    install -d -m 0700 "${DNS_CENTER_STATE_DIR}"
+    exec 9>"${DNS_CENTER_STATE_DIR}/deploy.lock"
+    flock -n 9 || fail "outro deploy está em execução"
+
+    case "${1:-}" in
+        install|update)
+            [ "$#" -eq 2 ] || fail "informe exatamente uma versão"
+            deploy_release "$1" "$2"
+            ;;
+        backup)
+            [ "$#" -eq 1 ] || fail "backup não recebe argumentos"
+            : "${DNS_CENTER_VERSION:?defina DNS_CENTER_VERSION no deployment.env}"
+            validate_version "${DNS_CENTER_VERSION}"
+            export DNS_CENTER_VERSION
+            wait_for_postgres
+            backup_database
+            ;;
+        rollback)
+            [ "$#" -eq 1 ] || fail "rollback não recebe argumentos"
+            rollback_release
+            ;;
+        status)
+            [ "$#" -eq 1 ] || fail "status não recebe argumentos"
+            show_status
+            ;;
+        *)
+            usage
+            exit 2
+            ;;
+    esac
+}
+
+main "$@"

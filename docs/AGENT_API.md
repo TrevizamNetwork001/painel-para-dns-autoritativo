@@ -2,6 +2,11 @@
 
 ## Solicitação de instalação
 
+O instalador formal está descrito em `DEPLOY_BASELINE_1.md`. Ele aceita
+`DNS_CENTER_PANEL_URL`, exige HTTPS fora de localhost e verifica SHA-256 do
+Python e de todas as units systemd antes de instalar. O servidor deve ser
+cadastrado previamente com hostname ou IP que permita correspondência única.
+
 `POST /api/agent/install-requests`
 
 O agente usa a URL oficial embutida, gera localmente uma credencial efêmera e

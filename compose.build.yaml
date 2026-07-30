@@ -1,0 +1,19 @@
+name: dns-center-build
+
+services:
+  app:
+    image: ${DNS_CENTER_APP_IMAGE:-dns-center-app}:${DNS_CENTER_VERSION:?Defina DNS_CENTER_VERSION}
+    build:
+      context: .
+      dockerfile: docker/php/Dockerfile.production
+      args:
+        APP_VERSION: ${DNS_CENTER_VERSION}
+      target: runtime
+
+  web:
+    image: ${DNS_CENTER_WEB_IMAGE:-dns-center-web}:${DNS_CENTER_VERSION:?Defina DNS_CENTER_VERSION}
+    build:
+      context: .
+      dockerfile: docker/nginx/Dockerfile.production
+      args:
+        APP_VERSION: ${DNS_CENTER_VERSION}
