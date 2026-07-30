@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\DnsServer;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\Rule;
 use Illuminate\View\View;
 
@@ -14,15 +15,32 @@ class DnsServerController extends Controller
     {
         $organizationId = $this->organizationId($request);
 
+        $relations = [
+            'agentPublications' => fn ($query) => $query
+                ->with('zoneVersion.zone')
+                ->latest('dns_zone_version_id'),
+        ];
+        $hasAuthoritativeObservations = Schema::hasTable(
+            'dns_authoritative_observations',
+        );
+        if ($hasAuthoritativeObservations) {
+            $relations[] = 'authoritativeObservations.zone';
+        }
+
         $servers = DnsServer::query()
             ->forOrganization($organizationId)
-            ->with([
-                'agentPublications' => fn ($query) => $query
-                    ->with('zoneVersion.zone')
-                    ->latest('dns_zone_version_id'),
-            ])
+            ->with($relations)
             ->orderBy('name')
             ->get();
+
+        if (! $hasAuthoritativeObservations) {
+            $servers->each(
+                fn (DnsServer $server) => $server->setRelation(
+                    'authoritativeObservations',
+                    collect(),
+                ),
+            );
+        }
 
         return view('servers.index', [
             'servers' => $servers,

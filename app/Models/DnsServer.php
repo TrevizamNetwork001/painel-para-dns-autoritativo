@@ -64,6 +64,9 @@ class DnsServer extends Model
         'inventory',
         'bind_readiness',
         'bind_readiness_at',
+        'authoritative_runtime',
+        'authoritative_observed_at',
+        'authoritative_sequence',
         'notes',
     ];
 
@@ -77,6 +80,9 @@ class DnsServer extends Model
             'inventory' => 'array',
             'bind_readiness' => 'array',
             'bind_readiness_at' => 'immutable_datetime',
+            'authoritative_runtime' => 'array',
+            'authoritative_observed_at' => 'immutable_datetime',
+            'authoritative_sequence' => 'integer',
         ];
     }
 
@@ -137,5 +143,10 @@ class DnsServer extends Model
     public function bindOperations(): HasMany
     {
         return $this->hasMany(DnsBindOperation::class, 'dns_server_id');
+    }
+
+    public function authoritativeObservations(): HasMany
+    {
+        return $this->hasMany(DnsAuthoritativeObservation::class, 'dns_server_id');
     }
 }

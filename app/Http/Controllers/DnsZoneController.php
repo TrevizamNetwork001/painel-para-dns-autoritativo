@@ -16,6 +16,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
@@ -415,7 +416,7 @@ class DnsZoneController extends Controller
     ): View {
         $this->authorizeZone($request, $zone);
 
-        $zone->load([
+        $relations = [
             'records' => fn ($query) => $query
                 ->orderBy('type')
                 ->orderBy('name'),
@@ -425,7 +426,17 @@ class DnsZoneController extends Controller
             'versions' => fn ($query) => $query
                 ->latest('version')
                 ->limit(10),
-        ]);
+        ];
+        $hasAuthoritativeObservations = Schema::hasTable(
+            'dns_authoritative_observations',
+        );
+        if ($hasAuthoritativeObservations) {
+            $relations[] = 'authoritativeObservations.server';
+        }
+        $zone->load($relations);
+        if (! $hasAuthoritativeObservations) {
+            $zone->setRelation('authoritativeObservations', collect());
+        }
 
         $lastPublication = $zone->versions()
             ->where('reason', 'Zona publicada.')

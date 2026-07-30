@@ -51,6 +51,25 @@
         'published' => 'Publicado',
         'disabled' => 'Desativado',
     ];
+
+    $authoritativeStatusLabels = [
+        'synchronized' => 'Sincronizada',
+        'awaiting_transfer' => 'Aguardando transferência',
+        'transferring' => 'Transferindo',
+        'transfer_failed' => 'Falha na transferência',
+        'serial_mismatch' => 'Serial divergente',
+        'expired' => 'Expirada',
+        'primary_unreachable' => 'Primary indisponível',
+        'unknown' => 'Desconhecido',
+    ];
+    $authoritativeObservations = $zone->authoritativeObservations
+        ->sortBy(fn ($observation) => $observation->zone_role === 'primary' ? 0 : 1);
+    $authoritativeAlerts = $authoritativeObservations->whereIn('status', [
+        'transfer_failed',
+        'serial_mismatch',
+        'expired',
+        'primary_unreachable',
+    ]);
 @endphp
 
 @section('content')
@@ -187,6 +206,76 @@
                     {{ $primaryServer?->hostname ?? 'Selecione um servidor.' }}
                 </small>
             </article>
+        </section>
+
+        @if ($authoritativeAlerts->isNotEmpty())
+            <div class="alert alert-error" role="alert">
+                <strong>Alerta autoritativo:</strong>
+                {{ $authoritativeAlerts->map(
+                    fn ($item) => ($item->server?->name ?? 'Servidor')
+                        .': '
+                        .($authoritativeStatusLabels[$item->status] ?? $item->status)
+                )->implode(' · ') }}
+            </div>
+        @endif
+
+        <section class="servers-list-panel" aria-label="Observabilidade autoritativa">
+            <div class="servers-list-heading">
+                <div>
+                    <p class="eyebrow">Observabilidade</p>
+                    <h2>Estado autoritativo por servidor</h2>
+                </div>
+
+                <span>Serial esperado {{ $zone->serial }}</span>
+            </div>
+
+            @forelse ($authoritativeObservations as $observation)
+                <article class="server-row">
+                    <div class="server-row-main">
+                        <div>
+                            <strong>{{ $observation->server?->name ?? 'Servidor removido' }}</strong>
+                            <span>
+                                {{ $observation->zone_role === 'primary'
+                                    ? 'Primário'
+                                    : 'Secundário' }}
+                                · serial observado
+                                {{ $observation->observed_serial ?? 'indisponível' }}
+                            </span>
+                            <small class="server-inventory-line">
+                                Última coleta
+                                {{ $observation->agent_observed_at?->diffForHumans()
+                                    ?? 'pendente' }}
+                                · última sincronização
+                                {{ $observation->last_transfer_at?->diffForHumans()
+                                    ?? 'não observada' }}
+                                · última falha
+                                {{ $observation->last_failure_at?->diffForHumans()
+                                    ?? 'nenhuma' }}
+                            </small>
+                            @if ($observation->error)
+                                <small class="server-inventory-line">
+                                    {{ $observation->error }}
+                                </small>
+                            @endif
+                        </div>
+                    </div>
+
+                    <div class="server-row-meta">
+                        <span class="server-status server-status-{{
+                            $observation->status === 'synchronized'
+                                ? 'online'
+                                : ($observation->status === 'unknown' ? 'pending' : 'warning')
+                        }}">
+                            {{ $authoritativeStatusLabels[$observation->status]
+                                ?? $observation->status }}
+                        </span>
+                    </div>
+                </article>
+            @empty
+                <div class="dashboard-empty-state">
+                    Aguardando a primeira coleta dos agentes.
+                </div>
+            @endforelse
         </section>
 
         <nav class="domain-tabs" aria-label="Áreas do domínio">

@@ -124,6 +124,44 @@
                     $latestAppliedPublication = $server
                         ->agentPublications
                         ->firstWhere('status', 'applied');
+                    $runtime = $server->authoritative_runtime ?? [];
+                    $observations = $server->authoritativeObservations;
+                    $serverAlerts = collect();
+                    if (($runtime['available'] ?? null) === false) {
+                        $serverAlerts->push(
+                            $server->role === 'primary'
+                                ? 'Primary offline'
+                                : 'Servidor autoritativo offline'
+                        );
+                    }
+                    if (
+                        $server->authoritative_observed_at
+                        && $server->authoritative_observed_at->lt(now()->subMinutes(10))
+                    ) {
+                        $serverAlerts->push('Telemetria autoritativa desatualizada');
+                    }
+                    if (($runtime['recursion_enabled'] ?? null) === true) {
+                        $serverAlerts->push('Recursão indevidamente habilitada');
+                    }
+                    if ($observations->where('status', 'serial_mismatch')->isNotEmpty()) {
+                        $serverAlerts->push('Zona com serial divergente');
+                    }
+                    if ($observations->where('status', 'transfer_failed')->isNotEmpty()) {
+                        $serverAlerts->push('Transferência falhando');
+                    }
+                    if ($observations->where('status', 'primary_unreachable')->isNotEmpty()) {
+                        $serverAlerts->push('Secondary sem atualizar: primary indisponível');
+                    }
+                    if ($observations->where('status', 'expired')->isNotEmpty()) {
+                        $serverAlerts->push('Zona expirada');
+                    }
+                    if ($observations->contains(
+                        fn ($item) => $item->expires_at
+                            && $item->expires_at->isFuture()
+                            && $item->expires_at->lte(now()->addHours(24))
+                    )) {
+                        $serverAlerts->push('Zona próxima da expiração');
+                    }
                 @endphp
                 <article class="server-row">
                     <div class="server-row-main">
@@ -158,6 +196,27 @@
                                     Inventário pendente do agente
                                 @endif
                             </small>
+
+                            <small class="server-inventory-line">
+                                BIND {{ ($runtime['service_active'] ?? false) ? 'ativo' : 'inativo' }}
+                                · TCP/UDP 53 {{ ($runtime['tcp_53'] ?? false) && ($runtime['udp_53'] ?? false) ? 'ativos' : 'incompletos' }}
+                                · recursão {{ ($runtime['recursion_enabled'] ?? null) === false ? 'desabilitada' : (($runtime['recursion_enabled'] ?? null) === true ? 'HABILITADA' : 'não observada') }}
+                            </small>
+
+                            <small class="server-inventory-line">
+                                Sincronizadas {{ $observations->where('status', 'synchronized')->count() }}
+                                · mismatch {{ $observations->where('status', 'serial_mismatch')->count() }}
+                                · falhas {{ $observations->whereIn('status', ['transfer_failed', 'primary_unreachable'])->count() }}
+                                · expiradas {{ $observations->where('status', 'expired')->count() }}
+                                · coleta {{ $server->authoritative_observed_at?->diffForHumans() ?? 'pendente' }}
+                                · agente {{ $server->last_seen_at?->diffForHumans() ?? 'sem comunicação' }}
+                            </small>
+
+                            @if ($serverAlerts->isNotEmpty())
+                                <small class="server-inventory-line is-danger">
+                                    {{ $serverAlerts->implode(' · ') }}
+                                </small>
+                            @endif
 
                             <small class="server-inventory-line">
                                 @if ($latestPublication)

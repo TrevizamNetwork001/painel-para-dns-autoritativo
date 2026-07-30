@@ -78,6 +78,10 @@ class DnsZoneArtifactController extends Controller
                         'update_available' => $installedVersion
                             !== $item->zoneVersion->version,
                         'reported_serial' => $item->reported_serial,
+                        'authorized_listen_addresses' => array_values(array_filter([
+                            $currentServer?->ipv4_address,
+                            $currentServer?->ipv6_address,
+                        ])),
                         'serial_confirmed_at' => $item->serial_confirmed_at?->toIso8601String(),
                         'artifact_checksum' => $role === 'primary'
                             ? hash('sha256', $artifact)

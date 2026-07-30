@@ -83,6 +83,11 @@ class DnsZone extends Model
             ->withTimestamps();
     }
 
+    public function authoritativeObservations(): HasMany
+    {
+        return $this->hasMany(DnsAuthoritativeObservation::class, 'dns_zone_id');
+    }
+
     public function scopeForOrganization(
         Builder $query,
         int $organizationId,

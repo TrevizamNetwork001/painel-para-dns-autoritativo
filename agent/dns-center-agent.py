@@ -27,10 +27,11 @@ import urllib.parse
 import urllib.request
 import uuid
 from datetime import datetime, timezone
+from email.utils import parsedate_to_datetime
 from pathlib import Path
 from typing import Any
 
-AGENT_VERSION = "0.4.0"
+AGENT_VERSION = "0.5.0"
 OFFICIAL_BASE_URL = "https://dnscenter.trevizamnetwork.com.br"
 DEFAULT_CONFIG = Path("/etc/dns-center-agent/agent.json")
 DEFAULT_STATE_DIR = Path("/var/lib/dns-center-agent")
@@ -473,6 +474,18 @@ def command_path(config: dict[str, Any], key: str, default: str) -> str:
 
 
 def config_paths(config: dict[str, Any]) -> dict[str, Path]:
+    family = os_family()
+    defaults = (
+        bind_paths(family)
+        if family in {"debian", "rhel"}
+        else {
+            "named_conf": Path("/etc/bind/named.conf"),
+            "options_config": Path("/etc/bind/named.conf.options"),
+            "managed_options_include": Path(
+                "/etc/bind/dns-center-options.conf"
+            ),
+        }
+    )
     return {
         "state_dir": Path(
             config.get("state_dir", str(DEFAULT_STATE_DIR))
@@ -485,6 +498,21 @@ def config_paths(config: dict[str, Any]) -> dict[str, Path]:
         ),
         "backup_dir": Path(
             config.get("backup_dir", str(DEFAULT_BACKUP_DIR))
+        ),
+        "named_conf": Path(
+            config.get("named_conf", str(defaults["named_conf"]))
+        ),
+        "options_config": Path(
+            config.get(
+                "options_config",
+                str(defaults["options_config"]),
+            )
+        ),
+        "managed_options_include": Path(
+            config.get(
+                "managed_options_include",
+                str(defaults["managed_options_include"]),
+            )
         ),
     }
 
@@ -961,8 +989,12 @@ def bind_paths(family: str) -> dict[str, Path]:
     if family == "debian":
         return {
             "named_conf": Path("/etc/bind/named.conf"),
+            "options_config": Path("/etc/bind/named.conf.options"),
             "managed_include": Path(
                 "/etc/bind/dns-center-managed.conf"
+            ),
+            "managed_options_include": Path(
+                "/etc/bind/dns-center-options.conf"
             ),
             "zones_dir": Path("/etc/bind/dns-center-zones"),
         }
@@ -970,8 +1002,12 @@ def bind_paths(family: str) -> dict[str, Path]:
     if family == "rhel":
         return {
             "named_conf": Path("/etc/named.conf"),
+            "options_config": Path("/etc/named.conf"),
             "managed_include": Path(
                 "/etc/named/dns-center-managed.conf"
+            ),
+            "managed_options_include": Path(
+                "/etc/named/dns-center-options.conf"
             ),
             "zones_dir": Path("/var/named/dns-center-zones"),
         }
@@ -984,6 +1020,142 @@ def bind_service_name(family: str) -> str:
         return "named"
 
     raise AgentError("Distribuição sem serviço BIND allowlisted.")
+
+
+HARDENED_OPTION_NAMES = {
+    "recursion",
+    "allow-recursion",
+    "allow-query-cache",
+    "minimal-responses",
+    "version",
+    "hostname",
+    "auth-nxdomain",
+    "transfer-format",
+    "listen-on",
+    "listen-on-v6",
+}
+
+
+def render_authoritative_options(addresses: list[str]) -> str:
+    normalized = sorted({
+        str(ipaddress.ip_address(address))
+        for address in addresses
+    })
+    ipv4 = [address for address in normalized if ":" not in address]
+    ipv6 = [address for address in normalized if ":" in address]
+
+    return "\n".join([
+        "// Managed by DNS Center",
+        "// Authoritative-only policy. Do not edit manually.",
+        "recursion no;",
+        "allow-recursion { none; };",
+        "allow-query-cache { none; };",
+        "minimal-responses yes;",
+        "version none;",
+        "hostname none;",
+        "auth-nxdomain no;",
+        "transfer-format many-answers;",
+        "listen-on { " + ("; ".join(ipv4) if ipv4 else "none") + "; };",
+        "listen-on-v6 { " + ("; ".join(ipv6) if ipv6 else "none") + "; };",
+        "",
+    ])
+
+
+def _options_block_bounds(content: str) -> tuple[int, int]:
+    match = re.search(r"\boptions\s*\{", content)
+    if not match:
+        raise AgentError("Bloco options do BIND não foi encontrado.")
+
+    start = match.end()
+    depth = 1
+    quote = False
+    escaped = False
+    for index in range(start, len(content)):
+        character = content[index]
+        if quote:
+            if escaped:
+                escaped = False
+            elif character == "\\":
+                escaped = True
+            elif character == '"':
+                quote = False
+            continue
+        if character == '"':
+            quote = True
+        elif character == "{":
+            depth += 1
+        elif character == "}":
+            depth -= 1
+            if depth == 0:
+                return start, index
+
+    raise AgentError("Bloco options do BIND está incompleto.")
+
+
+def _remove_option_directives(body: str) -> str:
+    result: list[str] = []
+    index = 0
+    depth = 0
+    quote = False
+    escaped = False
+    statement_start = 0
+
+    while index < len(body):
+        character = body[index]
+        if quote:
+            if escaped:
+                escaped = False
+            elif character == "\\":
+                escaped = True
+            elif character == '"':
+                quote = False
+        elif character == '"':
+            quote = True
+        elif character == "{":
+            depth += 1
+        elif character == "}":
+            depth = max(0, depth - 1)
+        elif character == ";" and depth == 0:
+            statement = body[statement_start:index + 1]
+            comparable = re.sub(
+                r"^\s*(?://[^\n]*\n|/\*.*?\*/\s*)*",
+                "",
+                statement,
+                flags=re.DOTALL,
+            )
+            name_match = re.match(
+                r"\s*([a-z][a-z0-9-]*)\b",
+                comparable,
+                flags=re.IGNORECASE,
+            )
+            if (
+                not name_match
+                or name_match.group(1).lower() not in HARDENED_OPTION_NAMES
+            ):
+                result.append(statement)
+            statement_start = index + 1
+        index += 1
+
+    result.append(body[statement_start:])
+    return "".join(result)
+
+
+def install_authoritative_options_include(
+    content: str,
+    include_path: Path,
+) -> str:
+    start, end = _options_block_bounds(content)
+    include_statement = f'include "{include_path}";'
+    body = _remove_option_directives(content[start:end])
+    body = re.sub(
+        r'\s*include\s+"[^"]*dns-center-options\.conf"\s*;',
+        "",
+        body,
+    )
+    body = body.rstrip() + "\n\n    // DNS Center authoritative policy\n"
+    body += f"    {include_statement}\n"
+
+    return content[:start] + body + content[end:]
 
 
 def ensure_zones_directory(path: Path, family: str) -> None:
@@ -1422,6 +1594,13 @@ def validate_manifest_item(item: object) -> dict[str, Any]:
         "secondary_addresses": secondary_addresses,
         "tsig": tsig,
     }
+    normalized["id"] = int(item.get("id", 0))
+    if normalized["id"] < 1:
+        raise AgentError("zone_id inválido no manifesto.")
+    normalized["authorized_listen_addresses"] = validate_transfer_addresses(
+        item.get("authorized_listen_addresses", []),
+        "listen",
+    )
 
     return normalized
 
@@ -1888,6 +2067,8 @@ def backup_current(paths: dict[str, Path]) -> Path:
         paths["backup_dir"],
         paths["zones_dir"],
         paths["managed_include"],
+        paths["options_config"],
+        paths["managed_options_include"],
     ):
         reject_symlink(path)
 
@@ -1900,6 +2081,16 @@ def backup_current(paths: dict[str, Path]) -> Path:
         shutil.copy2(
             paths["managed_include"],
             backup_dir / "dns-center-managed.conf",
+        )
+    if paths["options_config"].exists():
+        shutil.copy2(
+            paths["options_config"],
+            backup_dir / "bind-options.conf",
+        )
+    if paths["managed_options_include"].exists():
+        shutil.copy2(
+            paths["managed_options_include"],
+            backup_dir / "dns-center-options.conf",
         )
 
     zones_backup = backup_dir / "zones"
@@ -1922,6 +2113,8 @@ def restore_backup(
     for path in (
         paths["zones_dir"],
         paths["managed_include"],
+        paths["options_config"],
+        paths["managed_options_include"],
         backup_dir,
     ):
         reject_symlink(path)
@@ -1932,6 +2125,17 @@ def restore_backup(
         shutil.copy2(include_backup, paths["managed_include"])
     else:
         paths["managed_include"].unlink(missing_ok=True)
+    options_backup = backup_dir / "bind-options.conf"
+    if options_backup.exists():
+        shutil.copy2(options_backup, paths["options_config"])
+    managed_options_backup = backup_dir / "dns-center-options.conf"
+    if managed_options_backup.exists():
+        shutil.copy2(
+            managed_options_backup,
+            paths["managed_options_include"],
+        )
+    else:
+        paths["managed_options_include"].unlink(missing_ok=True)
 
     paths["zones_dir"].mkdir(parents=True, exist_ok=True)
 
@@ -1958,6 +2162,9 @@ def apply_staging(
     for path in (
         paths["zones_dir"],
         paths["managed_include"],
+        paths["named_conf"],
+        paths["options_config"],
+        paths["managed_options_include"],
         staging_dir,
         include_path,
     ):
@@ -2004,6 +2211,33 @@ def apply_staging(
             include_path.read_text(encoding="utf-8"),
             0o640,
         )
+        if not paths["options_config"].is_file():
+            raise AgentError("Configuração options do BIND não foi encontrada.")
+
+        addresses = [
+            address
+            for item in manifest
+            for address in item.get("authorized_listen_addresses", [])
+        ]
+        if not addresses:
+            raise AgentError(
+                "Nenhum endereço autorizado para listeners do BIND."
+            )
+        options_mode = stat.S_IMODE(paths["options_config"].stat().st_mode)
+        hardened_options_config = install_authoritative_options_include(
+            paths["options_config"].read_text(encoding="utf-8"),
+            paths["managed_options_include"],
+        )
+        atomic_write(
+            paths["managed_options_include"],
+            render_authoritative_options(addresses),
+            0o640,
+        )
+        atomic_write(
+            paths["options_config"],
+            hardened_options_config,
+            options_mode,
+        )
 
         named_checkconf = command_path(
             config,
@@ -2011,7 +2245,7 @@ def apply_staging(
             "/usr/bin/named-checkconf",
         )
         result = run_command(
-            [named_checkconf, str(paths["managed_include"])]
+            [named_checkconf, str(paths["named_conf"])]
         )
 
         if result.returncode != 0:
@@ -2085,6 +2319,504 @@ def authoritative_serial(
     raise AgentError(
         f"BIND não confirmou o serial SOA esperado para {zone_name}."
     )
+
+
+def normalize_rndc_datetime(value: str) -> str | None:
+    candidate = re.sub(
+        r"\s+\(.*\)\s*$|\s+in\s+\d+\s+seconds?\s*$",
+        "",
+        value,
+        flags=re.IGNORECASE,
+    ).strip()
+
+    try:
+        parsed = parsedate_to_datetime(candidate)
+    except (TypeError, ValueError, OverflowError):
+        return None
+
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+
+    return parsed.astimezone(timezone.utc).isoformat()
+
+
+def parse_rndc_zonestatus(output: str) -> dict[str, Any]:
+    values: dict[str, Any] = {}
+    mapping = {
+        "serial": "observed_serial",
+        "state": "zone_state",
+        "last loaded": "last_refresh_at",
+        "next refresh": "next_retry_at",
+        "expires": "expires_at",
+        "master": "primary_address",
+        "primary": "primary_address",
+    }
+    for raw_line in output.splitlines():
+        if ":" not in raw_line:
+            continue
+        label, value = raw_line.split(":", 1)
+        key = mapping.get(label.strip().lower())
+        value = value.strip()
+        if not key or not value:
+            continue
+        if key == "observed_serial":
+            match = re.search(r"\d+", value)
+            if match:
+                values[key] = int(match.group())
+        elif key in {"last_refresh_at", "next_retry_at", "expires_at"}:
+            parsed = normalize_rndc_datetime(value)
+            if parsed:
+                values[key] = parsed
+        elif key == "primary_address":
+            address = value.rsplit("#", 1)[0].strip("[]")
+            try:
+                values[key] = str(ipaddress.ip_address(address))
+            except ValueError:
+                continue
+        else:
+            values[key] = sanitize_message(value)
+
+    state_text = " ".join(
+        str(value) for value in values.values()
+    ).lower()
+    values["status"] = (
+        "transferring" if "transfer" in state_text
+        else "unknown"
+    )
+    return values
+
+
+def bind_recent_events(config: dict[str, Any]) -> str:
+    journalctl = detected_binary(
+        ("/usr/bin/journalctl", "/bin/journalctl")
+    )
+    if not journalctl:
+        return ""
+    family = os_family()
+    service = (
+        bind_service_name(family)
+        if family in {"debian", "rhel"}
+        else "named"
+    )
+    result = run_command(
+        [
+            journalctl,
+            "--unit",
+            service,
+            "--since",
+            "-10 minutes",
+            "--no-pager",
+            "--lines",
+            "200",
+            "--output",
+            "short-iso",
+        ],
+        timeout=15,
+    )
+    return result.stdout if result.returncode == 0 else ""
+
+
+def journal_event_time(lines: str, terms: tuple[str, ...]) -> str | None:
+    for line in reversed(lines.splitlines()):
+        if not any(term in line.lower() for term in terms):
+            continue
+        match = re.match(
+            r"(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:[.,]\d+)?[+-]\d{4})",
+            line,
+        )
+        if not match:
+            return None
+        candidate = match.group(1).replace(",", ".")
+        try:
+            parsed = datetime.strptime(
+                re.sub(r"(\.\d{6})\d+", r"\1", candidate),
+                "%Y-%m-%dT%H:%M:%S.%f%z"
+                if "." in candidate
+                else "%Y-%m-%dT%H:%M:%S%z",
+            )
+        except ValueError:
+            return None
+        return parsed.astimezone(timezone.utc).isoformat()
+
+    return None
+
+
+def bind_load_facts(recent_log: str) -> dict[str, str | None]:
+    reload_terms = (
+        "reloading configuration succeeded",
+        "received control channel command 'reconfig'",
+        "received control channel command 'reload",
+        "zone reload queued",
+    )
+    error_terms = (
+        "reloading configuration failed",
+        "loading configuration: failure",
+        "not loaded due to errors",
+        "zone load failed",
+        "loading from master file",
+    )
+    last_reload_at = journal_event_time(recent_log, reload_terms)
+    load_error = None
+
+    for line in reversed(recent_log.splitlines()):
+        lowered = line.lower()
+        if any(term in lowered for term in reload_terms):
+            break
+        if any(term in lowered for term in error_terms) and any(
+            marker in lowered
+            for marker in ("failed", "failure", "error", "not loaded")
+        ):
+            load_error = sanitize_message(line)
+            break
+
+    return {
+        "last_reload_at": last_reload_at,
+        "load_error": load_error,
+    }
+
+
+def zone_status_from_facts(
+    role: str,
+    expected_serial: int,
+    facts: dict[str, Any],
+    recent_log: str,
+    zone_name: str,
+) -> dict[str, Any]:
+    observed = facts.get("observed_serial")
+    relevant = "\n".join(
+        line for line in recent_log.splitlines()
+        if zone_name.rstrip(".").lower() in line.lower()
+    )
+    status = str(facts.get("status", "unknown"))
+    error = None
+    transfer_status = None
+    last_transfer_at = journal_event_time(
+        relevant,
+        ("transfer status: success", "transferred serial"),
+    )
+    last_failure_at = None
+    latest_event = None
+    for line in relevant.splitlines():
+        event_line = line.lower()
+        if any(term in event_line for term in (
+            "transfer failed",
+            "refresh: failure",
+            "bad key",
+            "not authoritative",
+        )):
+            latest_event = "transfer_failed"
+        elif any(term in event_line for term in (
+            "network unreachable",
+            "connection refused",
+            "timed out",
+            "no route to host",
+        )):
+            latest_event = "primary_unreachable"
+        elif "expired" in event_line or "zone has expired" in event_line:
+            latest_event = "expired"
+        elif (
+            "transfer status: success" in event_line
+            or "transferred serial" in event_line
+        ):
+            latest_event = "transfer_succeeded"
+
+    if latest_event == "transfer_failed":
+        status = "transfer_failed"
+        transfer_status = "failed"
+        error = sanitize_message(relevant[-1000:])
+        last_failure_at = journal_event_time(
+            relevant,
+            ("transfer failed", "refresh: failure", "bad key"),
+        )
+    elif latest_event == "primary_unreachable":
+        status = "primary_unreachable"
+        transfer_status = "failed"
+        error = sanitize_message(relevant[-1000:])
+        last_failure_at = journal_event_time(
+            relevant,
+            (
+                "network unreachable",
+                "connection refused",
+                "timed out",
+                "no route to host",
+            ),
+        )
+    elif latest_event == "expired":
+        status = "expired"
+        error = sanitize_message(relevant[-1000:])
+        last_failure_at = journal_event_time(
+            relevant,
+            ("expired", "zone has expired"),
+        )
+    elif observed is not None and observed == expected_serial:
+        status = "synchronized"
+        transfer_status = "succeeded" if role == "secondary" else None
+    elif observed is not None:
+        status = "serial_mismatch"
+    elif role == "secondary":
+        status = "awaiting_transfer"
+
+    if not facts.get("primary_address"):
+        match = re.search(
+            r"(?:primary|from)\s+(\[?[0-9a-f:.]+\]?)#\d+",
+            relevant,
+            flags=re.IGNORECASE,
+        )
+        if match:
+            candidate = match.group(1).strip("[]")
+            try:
+                facts["primary_address"] = str(
+                    ipaddress.ip_address(candidate)
+                )
+            except ValueError:
+                pass
+
+    return {
+        **facts,
+        "status": status,
+        "transfer_status": transfer_status,
+        "last_transfer_at": last_transfer_at,
+        "last_failure_at": last_failure_at,
+        "error": error,
+        "source": (
+            "bind_journal"
+            if error
+            else str(facts.get("source", "rndc_zonestatus"))
+        ),
+    }
+
+
+def load_observation_state(state_dir: Path) -> dict[str, Any]:
+    path = state_dir / "observability.json"
+    if not path.exists():
+        return {"sequence": 0, "pending": None, "last_zones": {}}
+    state = read_json(path)
+    return {
+        "sequence": max(0, int(state.get("sequence", 0))),
+        "pending": state.get("pending"),
+        "last_zones": (
+            state.get("last_zones")
+            if isinstance(state.get("last_zones"), dict)
+            else {}
+        ),
+    }
+
+
+def save_observation_state(state_dir: Path, state: dict[str, Any]) -> None:
+    atomic_write(
+        state_dir / "observability.json",
+        json.dumps(state, indent=2, ensure_ascii=False) + "\n",
+        0o600,
+    )
+
+
+def recursion_flag(config: dict[str, Any], addresses: list[str]) -> bool | None:
+    dig = detected_binary(("/usr/bin/dig", "/usr/local/bin/dig"))
+    if not dig or not addresses:
+        return None
+    result = run_command(
+        [dig, f"@{addresses[0]}", ".", "SOA", "+norecurse", "+time=2", "+tries=1"],
+        timeout=8,
+    )
+    header = next(
+        (line for line in result.stdout.splitlines() if "flags:" in line),
+        "",
+    )
+    return bool(re.search(r"\bra\b", header))
+
+
+def local_soa_serial(
+    config: dict[str, Any],
+    zone_name: str,
+    addresses: list[str],
+) -> int | None:
+    dig = detected_binary(("/usr/bin/dig", "/usr/local/bin/dig"))
+    if not dig:
+        return None
+
+    targets = addresses or ["127.0.0.1"]
+    for address in targets[:2]:
+        result = run_command(
+            [
+                dig,
+                f"@{address}",
+                zone_name.rstrip("."),
+                "SOA",
+                "+norecurse",
+                "+short",
+                "+time=2",
+                "+tries=1",
+            ],
+            timeout=8,
+        )
+        if result.returncode != 0:
+            continue
+        match = re.search(
+            r"\s(\d{1,10})\s+\d+\s+\d+\s+\d+\s+\d+\s*$",
+            result.stdout.strip(),
+        )
+        if match:
+            return int(match.group(1))
+
+    return None
+
+
+def collect_authoritative_observation(
+    config: dict[str, Any],
+    manifest: list[dict[str, Any]],
+) -> dict[str, Any]:
+    paths = config_paths(config)
+    state = load_observation_state(paths["state_dir"])
+    pending = state.get("pending")
+    if isinstance(pending, dict):
+        return pending
+
+    rndc = command_path(config, "rndc", "/usr/sbin/rndc")
+    logs = bind_recent_events(config)
+    zones: list[dict[str, Any]] = []
+    listen_addresses: list[str] = []
+    observed_at = utc_now()
+    previous_zones = state.get("last_zones", {})
+
+    for item in manifest:
+        item_addresses = item.get("authorized_listen_addresses", [])
+        listen_addresses.extend(item_addresses)
+        result = run_command(
+            [rndc, "zonestatus", str(item["name"]).rstrip(".")],
+            timeout=15,
+        )
+        facts = parse_rndc_zonestatus(result.stdout)
+        if facts.get("observed_serial") is None:
+            fallback_serial = local_soa_serial(
+                config,
+                str(item["name"]),
+                item_addresses,
+            )
+            if fallback_serial is not None:
+                facts["observed_serial"] = fallback_serial
+                facts["source"] = "dig_soa_local"
+        if result.returncode != 0:
+            facts["status"] = "unknown"
+            facts["error"] = sanitize_message(
+                result.stderr or result.stdout
+            )
+        status = zone_status_from_facts(
+            str(item["type"]),
+            int(item["serial"]),
+            facts,
+            logs,
+            str(item["name"]),
+        )
+        previous = previous_zones.get(str(item["id"]), {})
+        if not isinstance(previous, dict):
+            previous = {}
+        if (
+            item["type"] == "secondary"
+            and status["status"] == "synchronized"
+        ):
+            status["last_transfer_at"] = (
+                status.get("last_transfer_at")
+                or previous.get("last_transfer_at")
+            )
+        else:
+            status["last_transfer_at"] = previous.get("last_transfer_at")
+        if status["status"] in {
+            "transfer_failed",
+            "primary_unreachable",
+            "expired",
+        }:
+            status["last_failure_at"] = (
+                status.get("last_failure_at")
+                or previous.get("last_failure_at")
+                or observed_at
+            )
+        else:
+            status["last_failure_at"] = previous.get("last_failure_at")
+
+        zone_payload = {
+            "zone_id": int(item["id"]),
+            "role": str(item["type"]),
+            **{
+                key: value for key, value in status.items()
+                if key in {
+                    "observed_serial",
+                    "status",
+                    "zone_state",
+                    "last_refresh_at",
+                    "next_retry_at",
+                    "expires_at",
+                    "primary_address",
+                    "transfer_status",
+                    "last_transfer_at",
+                    "last_failure_at",
+                    "error",
+                    "source",
+                }
+            },
+        }
+        zones.append(zone_payload)
+
+    service = service_details(os_family())
+    listeners = port_53_listeners()
+    load_facts = bind_load_facts(logs)
+    sequence = int(state["sequence"]) + 1
+    payload = {
+        "event_id": str(uuid.uuid4()),
+        "sequence": sequence,
+        "observed_at": observed_at,
+        "server": {
+            "service_active": bool(service["active"]),
+            "tcp_53": listeners["tcp_53"],
+            "udp_53": listeners["udp_53"],
+            "recursion_enabled": recursion_flag(config, listen_addresses),
+            "available": bool(
+                service["active"]
+                and listeners["tcp_53"]
+                and listeners["udp_53"]
+            ),
+            "last_reload_at": load_facts["last_reload_at"],
+            "load_error": load_facts["load_error"],
+        },
+        "zones": zones,
+    }
+    state["pending"] = payload
+    save_observation_state(paths["state_dir"], state)
+    return payload
+
+
+def send_authoritative_observation(config: dict[str, Any]) -> dict[str, Any]:
+    response = request_json(
+        "GET",
+        normalize_base_url(str(config["base_url"])) + "/api/agent/zones",
+        token=str(config["token"]),
+    )
+    raw_manifest = response.get("zones")
+    if not isinstance(raw_manifest, list):
+        raise AgentError("Manifesto de zonas inválido.")
+    manifest = [validate_manifest_item(item) for item in raw_manifest]
+    payload = collect_authoritative_observation(config, manifest)
+    result = request_json(
+        "POST",
+        normalize_base_url(str(config["base_url"]))
+        + "/api/agent/bind/observations",
+        payload,
+        str(config["token"]),
+        timeout=30,
+    )
+    state_dir = config_paths(config)["state_dir"]
+    state = load_observation_state(state_dir)
+    state["sequence"] = int(payload["sequence"])
+    state["pending"] = None
+    state["last_zones"] = {
+        str(zone["zone_id"]): {
+            "status": zone["status"],
+            "last_transfer_at": zone.get("last_transfer_at"),
+            "last_failure_at": zone.get("last_failure_at"),
+        }
+        for zone in payload["zones"]
+    }
+    save_observation_state(state_dir, state)
+    return result
 
 
 def sync_zones(
@@ -2328,6 +3060,7 @@ def build_parser() -> argparse.ArgumentParser:
     actions.add_argument("--readiness", action="store_true")
     actions.add_argument("--run-authorized-operation", action="store_true")
     actions.add_argument("--sync-zones", action="store_true")
+    actions.add_argument("--observe-bind", action="store_true")
 
     parser.add_argument("--wait", type=int, default=1800)
     parser.add_argument("--apply", action="store_true")
@@ -2396,6 +3129,16 @@ def main() -> int:
                         args.apply,
                         args.confirm,
                     ),
+                    indent=2,
+                    ensure_ascii=False,
+                )
+            )
+            return 0
+
+        if args.observe_bind:
+            print(
+                json.dumps(
+                    send_authoritative_observation(config),
                     indent=2,
                     ensure_ascii=False,
                 )

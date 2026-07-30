@@ -87,6 +87,7 @@ class AgentTests(unittest.TestCase):
                 {
                     "name": "example.com",
                     "type": "primary",
+                    "authorized_listen_addresses": ["192.0.2.10"],
                 }
             ],
             Path("/etc/bind/dns-center-zones"),
@@ -94,6 +95,163 @@ class AgentTests(unittest.TestCase):
 
         self.assertIn('zone "example.com"', content)
         self.assertIn("type master;", content)
+        self.assertNotIn("options {", content)
+
+    def test_parse_rndc_zonestatus_normalizes_runtime_values(self) -> None:
+        facts = agent.parse_rndc_zonestatus(
+            "\n".join(
+                [
+                    "serial: 2026073001",
+                    "state: running",
+                    "last loaded: Thu, 30 Jul 2026 13:00:00 GMT",
+                    "next refresh: Thu, 30 Jul 2026 14:00:00 GMT in 120 seconds",
+                    "expires: Thu, 13 Aug 2026 13:00:00 GMT",
+                    "primary: 192.0.2.10#53",
+                ]
+            )
+        )
+
+        self.assertEqual(2026073001, facts["observed_serial"])
+        self.assertEqual("running", facts["zone_state"])
+        self.assertEqual(
+            "2026-07-30T13:00:00+00:00",
+            facts["last_refresh_at"],
+        )
+        self.assertEqual(
+            "2026-07-30T14:00:00+00:00",
+            facts["next_retry_at"],
+        )
+        self.assertEqual("192.0.2.10", facts["primary_address"])
+
+    def test_parse_rndc_zonestatus_ignores_invalid_runtime_values(self) -> None:
+        facts = agent.parse_rndc_zonestatus(
+            "last loaded: never\nprimary: invalid-host#53"
+        )
+
+        self.assertNotIn("last_refresh_at", facts)
+        self.assertNotIn("primary_address", facts)
+
+    def test_authoritative_status_classifies_bind_failures(self) -> None:
+        cases = [
+            ("transfer failed: bad key", "transfer_failed"),
+            ("network unreachable", "primary_unreachable"),
+            ("zone has expired", "expired"),
+        ]
+        for log, expected in cases:
+            with self.subTest(expected=expected):
+                status = agent.zone_status_from_facts(
+                    "secondary",
+                    2026073008,
+                    {},
+                    f"example.com {log}",
+                    "example.com",
+                )
+                self.assertEqual(expected, status["status"])
+                self.assertLessEqual(len(status["error"]), 1000)
+
+    def test_authoritative_status_detects_recovered_serial(self) -> None:
+        status = agent.zone_status_from_facts(
+            "secondary",
+            2026073008,
+            {"observed_serial": 2026073008},
+            "\n".join([
+                "2026-07-30T19:40:13+0000 host "
+                "example.com refresh: failure",
+                "2026-07-30T19:40:31+0000 host "
+                "example.com transferred serial 2026073008 "
+                "from 192.0.2.10#53",
+            ]),
+            "example.com",
+        )
+
+        self.assertEqual("synchronized", status["status"])
+        self.assertEqual("succeeded", status["transfer_status"])
+        self.assertEqual(
+            "2026-07-30T19:40:31+00:00",
+            status["last_transfer_at"],
+        )
+        self.assertEqual("192.0.2.10", status["primary_address"])
+
+    def test_bind_load_facts_keep_latest_reload_and_sanitized_error(
+        self,
+    ) -> None:
+        failed = agent.bind_load_facts(
+            "2026-07-30T19:40:00+0000 host "
+            "zone load failed: token=secret /etc/bind/private.zone"
+        )
+        self.assertIsNone(failed["last_reload_at"])
+        self.assertNotIn("secret", failed["load_error"])
+        self.assertNotIn("/etc/bind", failed["load_error"])
+
+        recovered = agent.bind_load_facts(
+            "\n".join([
+                "2026-07-30T19:40:00+0000 host zone load failed: error",
+                "2026-07-30T19:41:00+0000 host "
+                "reloading configuration succeeded",
+            ])
+        )
+        self.assertEqual(
+            "2026-07-30T19:41:00+00:00",
+            recovered["last_reload_at"],
+        )
+        self.assertIsNone(recovered["load_error"])
+
+    def test_observation_does_not_send_tsig_and_reuses_pending_event(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            config = self.config(directory)
+            manifest = [{
+                **self.manifest_item(False, 7),
+                "authorized_listen_addresses": ["192.0.2.10"],
+                "transfer": {
+                    "primary_addresses": ["192.0.2.10"],
+                    "secondary_addresses": ["192.0.2.11"],
+                    "tsig": {
+                        "name": "key",
+                        "algorithm": "hmac-sha256",
+                        "secret": "never-send-this-secret",
+                    },
+                },
+            }]
+            zonestatus = Mock(
+                returncode=0,
+                stdout="serial: 2026073001\nstate: running\n",
+                stderr="",
+            )
+
+            with patch.object(
+                agent,
+                "bind_recent_events",
+                return_value="",
+            ), patch.object(
+                agent,
+                "run_command",
+                return_value=zonestatus,
+            ) as command, patch.object(
+                agent,
+                "service_details",
+                return_value={"active": True},
+            ), patch.object(
+                agent,
+                "port_53_listeners",
+                return_value={"tcp_53": True, "udp_53": True},
+            ), patch.object(
+                agent,
+                "recursion_flag",
+                return_value=False,
+            ):
+                first = agent.collect_authoritative_observation(config, manifest)
+                second = agent.collect_authoritative_observation(config, manifest)
+
+            self.assertEqual(first, second)
+            self.assertEqual(1, command.call_count)
+            self.assertNotIn(
+                "never-send-this-secret",
+                json.dumps(first),
+            )
+            self.assertEqual(
+                2026073001,
+                first["zones"][0]["observed_serial"],
+            )
 
     def test_render_primary_secondary_with_tsig_notify_and_ixfr(self) -> None:
         tsig = {
@@ -324,8 +482,21 @@ class AgentTests(unittest.TestCase):
                 "zones_dir": Path(config["zones_dir"]),
                 "managed_include": Path(config["managed_include"]),
                 "backup_dir": Path(config["backup_dir"]),
+                "named_conf": Path(directory) / "named.conf",
+                "options_config": Path(directory) / "named.conf.options",
+                "managed_options_include": (
+                    Path(directory) / "dns-center-options.conf"
+                ),
             }
             paths["backup_dir"].mkdir(parents=True)
+            paths["named_conf"].write_text(
+                'include "named.conf.options";\n',
+                encoding="utf-8",
+            )
+            paths["options_config"].write_text(
+                "options {\n    recursion yes;\n};\n",
+                encoding="utf-8",
+            )
             staging = Path(directory) / "staging"
             staging.mkdir()
             include = staging / "managed.conf"
@@ -350,7 +521,11 @@ class AgentTests(unittest.TestCase):
             ) as run:
                 agent.apply_staging(
                     config,
-                    [{"name": "example.com", "type": "primary"}],
+                    [{
+                        "name": "example.com",
+                        "type": "primary",
+                        "authorized_listen_addresses": ["192.0.2.10"],
+                    }],
                     staging,
                     include,
                 )
@@ -361,6 +536,48 @@ class AgentTests(unittest.TestCase):
                 ["/usr/sbin/rndc", "reload", "example.com"],
                 commands,
             )
+            self.assertIn(
+                "recursion no;",
+                paths["managed_options_include"].read_text(encoding="utf-8"),
+            )
+
+    def test_authoritative_options_are_scoped_to_authorized_addresses(
+        self,
+    ) -> None:
+        rendered = agent.render_authoritative_options(
+            ["2001:db8::10", "192.0.2.10"]
+        )
+
+        self.assertIn("recursion no;", rendered)
+        self.assertIn("allow-recursion { none; };", rendered)
+        self.assertIn("allow-query-cache { none; };", rendered)
+        self.assertIn("listen-on { 192.0.2.10; };", rendered)
+        self.assertIn("listen-on-v6 { 2001:db8::10; };", rendered)
+        self.assertNotIn("allow-query { any; };", rendered)
+
+    def test_options_include_replaces_only_conflicting_directives(self) -> None:
+        original = """
+options {
+    directory "/var/cache/bind";
+    recursion yes;
+    listen-on-v6 { any; };
+    dnssec-validation auto;
+};
+"""
+        include = Path("/etc/bind/dns-center-options.conf")
+        updated = agent.install_authoritative_options_include(
+            original,
+            include,
+        )
+
+        self.assertIn('directory "/var/cache/bind";', updated)
+        self.assertIn("dnssec-validation auto;", updated)
+        self.assertNotIn("recursion yes;", updated)
+        self.assertNotIn("listen-on-v6 { any; };", updated)
+        self.assertEqual(
+            1,
+            updated.count(f'include "{include}";'),
+        )
 
     def test_configuration_failure_restores_named_conf(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

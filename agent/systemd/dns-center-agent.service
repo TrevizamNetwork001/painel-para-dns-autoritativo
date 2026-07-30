@@ -12,6 +12,7 @@ ExecStart=/usr/local/sbin/dns-center-agent --heartbeat
 ExecStart=/usr/local/sbin/dns-center-agent --inventory
 ExecStart=/usr/local/sbin/dns-center-agent --readiness
 ExecStart=/usr/local/sbin/dns-center-agent --sync-zones
+ExecStart=/usr/local/sbin/dns-center-agent --observe-bind
 NoNewPrivileges=true
 PrivateTmp=true
 ProtectHome=true

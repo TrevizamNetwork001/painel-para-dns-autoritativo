@@ -3,6 +3,7 @@
 use App\Http\Controllers\Api\DnsAgentInstallRequestController;
 use App\Http\Controllers\Api\DnsAgentPublicationController;
 use App\Http\Controllers\Api\DnsAgentRuntimeController;
+use App\Http\Controllers\Api\DnsAuthoritativeObservationController;
 use App\Http\Controllers\Api\DnsBindRuntimeController;
 use App\Http\Controllers\Api\DnsZoneArtifactController;
 use App\Http\Middleware\AuthenticateDnsAgent;
@@ -53,6 +54,10 @@ Route::middleware([
 
         Route::post('/bind/readiness', [DnsBindRuntimeController::class, 'readiness'])
             ->name('bind.readiness');
+        Route::post(
+            '/bind/observations',
+            [DnsAuthoritativeObservationController::class, 'store'],
+        )->name('bind.observations.store');
         Route::get('/bind/operations/next', [DnsBindRuntimeController::class, 'nextOperation'])
             ->name('bind.operations.next');
         Route::post(

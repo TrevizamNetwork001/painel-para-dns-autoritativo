@@ -11,6 +11,13 @@
         ->forOrganization($organizationId)
         ->orderBy('name')
         ->get();
+    $dashboardObservations = Illuminate\Support\Facades\Schema::hasTable(
+        'dns_authoritative_observations'
+    )
+        ? App\Models\DnsAuthoritativeObservation::query()
+            ->where('organization_id', $organizationId)
+            ->get()
+        : collect();
 
     $serverCount = $dashboardServers->count();
     $zoneCount = App\Models\DnsZone::query()
@@ -35,9 +42,49 @@
 
     $onlineServiceCount = $onlineServerCount;
 
-    $activeAlertCount = $dashboardServers
-        ->whereIn('status', ['warning', 'offline'])
+    $primaryServers = $dashboardServers->where('role', 'primary');
+    $secondaryServers = $dashboardServers->where('role', 'secondary');
+    $isAuthoritativeOnline = fn ($server) =>
+        $server->authoritative_observed_at?->gte(now()->subMinutes(10))
+        && (bool) data_get($server->authoritative_runtime, 'available', false);
+    $primaryOnlineCount = $primaryServers->filter($isAuthoritativeOnline)->count();
+    $primaryOfflineCount = $primaryServers->count() - $primaryOnlineCount;
+    $secondaryOnlineCount = $secondaryServers->filter($isAuthoritativeOnline)->count();
+    $secondaryOfflineCount = $secondaryServers->count() - $secondaryOnlineCount;
+    $synchronizedZoneCount = $dashboardObservations
+        ->where('status', 'synchronized')
+        ->pluck('dns_zone_id')
+        ->unique()
         ->count();
+    $mismatchZoneCount = $dashboardObservations
+        ->where('status', 'serial_mismatch')
+        ->pluck('dns_zone_id')
+        ->unique()
+        ->count();
+    $failedTransferCount = $dashboardObservations
+        ->whereIn('status', ['transfer_failed', 'primary_unreachable'])
+        ->count();
+    $expiredZoneCount = $dashboardObservations
+        ->where('status', 'expired')
+        ->pluck('dns_zone_id')
+        ->unique()
+        ->count();
+    $pendingPublicationCount = App\Models\DnsAgentPublication::query()
+        ->where('organization_id', $organizationId)
+        ->whereIn('status', ['pending', 'downloaded', 'applying'])
+        ->count();
+    $recursionAlertCount = $dashboardServers->filter(
+        fn ($server) => data_get(
+            $server->authoritative_runtime,
+            'recursion_enabled'
+        ) === true
+    )->count();
+    $activeAlertCount = $primaryOfflineCount
+        + $secondaryOfflineCount
+        + $mismatchZoneCount
+        + $failedTransferCount
+        + $expiredZoneCount
+        + $recursionAlertCount;
 
     $hasServers = $serverCount > 0;
     $hasAlerts = $activeAlertCount > 0;
@@ -369,6 +416,33 @@
                     <span aria-hidden="true">›</span>
                 </a>
             </article>
+        </section>
+
+        <section class="dashboard-kpi-grid" aria-label="Topologia autoritativa">
+            @foreach ([
+                ['Primaries online', $primaryOnlineCount, $primaryOfflineCount.' offline'],
+                ['Secondaries online', $secondaryOnlineCount, $secondaryOfflineCount.' offline'],
+                ['Zonas sincronizadas', $synchronizedZoneCount, 'Seriais convergentes'],
+                ['Zonas divergentes', $mismatchZoneCount, 'Serial mismatch'],
+                ['Transferências falhando', $failedTransferCount, 'Requer diagnóstico'],
+                ['Zonas expiradas', $expiredZoneCount, 'Sem autoridade válida'],
+                ['Publicações pendentes', $pendingPublicationCount, 'Aguardando aplicação'],
+            ] as [$label, $value, $detail])
+                <article class="dashboard-kpi-card">
+                    <div class="dashboard-kpi-topline">
+                        <span class="dashboard-kpi-badge">Autoritativo</span>
+                    </div>
+                    <strong
+                        class="dashboard-kpi-value"
+                        data-authoritative-counter="{{
+                            Illuminate\Support\Str::slug($label)
+                        }}"
+                        data-authoritative-value="{{ $value }}"
+                    >{{ $value }}</strong>
+                    <span class="dashboard-kpi-label">{{ $label }}</span>
+                    <div class="dashboard-kpi-footer"><span>{{ $detail }}</span></div>
+                </article>
+            @endforeach
         </section>
 
         <section class="dashboard-operations-grid">
