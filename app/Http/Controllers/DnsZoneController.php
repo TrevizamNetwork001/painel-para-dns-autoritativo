@@ -6,6 +6,7 @@ use App\Models\DnsAgentPublication;
 use App\Models\DnsNameserverProfile;
 use App\Models\DnsRecord;
 use App\Models\DnsServer;
+use App\Models\DnsTsigKey;
 use App\Models\DnsZone;
 use App\Models\DnsZoneVersion;
 use App\Services\BindZoneRenderer;
@@ -419,6 +420,7 @@ class DnsZoneController extends Controller
                 ->orderBy('type')
                 ->orderBy('name'),
             'servers' => fn ($query) => $query->orderBy('name'),
+            'tsigKey',
             'nameserverProfile.identities',
             'versions' => fn ($query) => $query
                 ->latest('version')
@@ -455,6 +457,11 @@ class DnsZoneController extends Controller
                     ),
                 ])
                 ->orderByDesc('is_default')
+                ->orderBy('name')
+                ->get(),
+            'tsigKeys' => DnsTsigKey::query()
+                ->forOrganization((int) $zone->organization_id)
+                ->where('enabled', true)
                 ->orderBy('name')
                 ->get(),
         ]);

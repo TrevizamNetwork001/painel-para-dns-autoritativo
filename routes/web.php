@@ -6,6 +6,7 @@ use App\Http\Controllers\Auth\ResetPasswordController;
 use App\Http\Controllers\DnsAgentEnrollmentController;
 use App\Http\Controllers\DnsNameserverController;
 use App\Http\Controllers\DnsServerController;
+use App\Http\Controllers\DnsTsigKeyController;
 use App\Http\Controllers\DnsZoneController;
 use App\Http\Controllers\PasswordChangeController;
 use App\Http\Controllers\ProfileController;
@@ -251,4 +252,18 @@ Route::middleware([
         '/{zone}/publicar',
         [DnsZoneController::class, 'publish'],
     )->name('publish');
+});
+
+Route::middleware([
+    'auth',
+    'password.changed',
+    'organization',
+])->prefix('tsig')->name('tsig.')->group(function (): void {
+    Route::post('/', [DnsTsigKeyController::class, 'store'])->name('store');
+    Route::post('/{tsigKey}/rotacionar', [DnsTsigKeyController::class, 'rotate'])
+        ->name('rotate');
+    Route::post('/{tsigKey}/desativar', [DnsTsigKeyController::class, 'disable'])
+        ->name('disable');
+    Route::post('/zonas/{zone}', [DnsTsigKeyController::class, 'associate'])
+        ->name('associate');
 });

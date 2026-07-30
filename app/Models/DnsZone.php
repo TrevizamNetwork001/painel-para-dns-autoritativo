@@ -11,11 +11,13 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 class DnsZone extends Model
 {
     public const KINDS = ['primary', 'secondary'];
+
     public const STATUSES = ['draft', 'ready', 'published', 'disabled'];
 
     protected $fillable = [
         'organization_id',
         'dns_nameserver_profile_id',
+        'dns_tsig_key_id',
         'name',
         'kind',
         'serial',
@@ -57,6 +59,11 @@ class DnsZone extends Model
             DnsNameserverProfile::class,
             'dns_nameserver_profile_id',
         );
+    }
+
+    public function tsigKey(): BelongsTo
+    {
+        return $this->belongsTo(DnsTsigKey::class, 'dns_tsig_key_id');
     }
 
     public function records(): HasMany

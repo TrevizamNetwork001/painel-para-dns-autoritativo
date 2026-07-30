@@ -151,6 +151,12 @@
                         </span>
 
                         <span>
+                            Serial SOA observado no BIND:
+                            {{ $latestAppliedPublication?->reported_serial
+                                ?? 'Ainda não confirmado' }}
+                        </span>
+
+                        <span>
                             Estado da aplicação:
                             {{ $latestPublication?->status
                                 ?? 'Sem publicação' }}

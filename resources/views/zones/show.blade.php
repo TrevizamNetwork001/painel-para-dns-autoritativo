@@ -766,6 +766,95 @@
                             </button>
                         </footer>
                     </form>
+
+                    <div class="domain-configuration-section">
+                        <div class="domain-configuration-heading">
+                            <h3>Transferência segura TSIG</h3>
+
+                            <p>
+                                Protege AXFR/IXFR e autentica NOTIFY entre o
+                                primary e os secondaries. O segredo nunca é
+                                exibido no painel.
+                            </p>
+                        </div>
+
+                        <form
+                            method="POST"
+                            action="{{ route('tsig.associate', $zone) }}"
+                            class="domain-configuration-form"
+                        >
+                            @csrf
+
+                            <label class="domain-field domain-field-full">
+                                <span>Chave associada</span>
+
+                                <select name="dns_tsig_key_id" required>
+                                    <option value="">Selecione uma chave</option>
+
+                                    @foreach ($tsigKeys as $tsigKey)
+                                        <option
+                                            value="{{ $tsigKey->id }}"
+                                            @selected(
+                                                (int) $zone->dns_tsig_key_id
+                                                    === (int) $tsigKey->id
+                                            )
+                                        >
+                                            {{ $tsigKey->name }}
+                                            — {{ $tsigKey->algorithm }}
+                                        </option>
+                                    @endforeach
+                                </select>
+                            </label>
+
+                            <button type="submit" class="button button-secondary">
+                                Associar chave
+                            </button>
+                        </form>
+
+                        <form
+                            method="POST"
+                            action="{{ route('tsig.store') }}"
+                            class="domain-configuration-form"
+                        >
+                            @csrf
+
+                            <div class="domain-form-grid">
+                                <label class="domain-field">
+                                    <span>Nome da nova chave</span>
+                                    <input
+                                        name="name"
+                                        value="{{ old('name', 'xfr-'.$zone->name) }}"
+                                        required
+                                    >
+                                </label>
+
+                                <label class="domain-field">
+                                    <span>Algoritmo</span>
+                                    <select name="algorithm" required>
+                                        <option value="hmac-sha256">HMAC-SHA256</option>
+                                        <option value="hmac-sha384">HMAC-SHA384</option>
+                                        <option value="hmac-sha512">HMAC-SHA512</option>
+                                    </select>
+                                </label>
+                            </div>
+
+                            <button type="submit" class="button button-secondary">
+                                Criar chave cifrada
+                            </button>
+                        </form>
+
+                        @if ($zone->tsigKey)
+                            <form
+                                method="POST"
+                                action="{{ route('tsig.rotate', $zone->tsigKey) }}"
+                            >
+                                @csrf
+                                <button type="submit" class="button button-secondary">
+                                    Rotacionar chave associada
+                                </button>
+                            </form>
+                        @endif
+                    </div>
                 @else
                     <div class="domain-readonly-message">
                         Seu perfil possui acesso somente para consulta.
@@ -930,6 +1019,9 @@
                             $pendingCount = $publicationTargets->count()
                                 - $appliedCount
                                 - $failedCount;
+                            $serialConfirmedCount = $publicationTargets
+                                ->where('reported_serial', $lastPublication->serial)
+                                ->count();
                         @endphp
 
                         <dl class="agent-server-details">
@@ -940,6 +1032,14 @@
                             <div>
                                 <dt>Aplicação confirmada</dt>
                                 <dd>{{ $appliedCount }}</dd>
+                            </div>
+                            <div>
+                                <dt>Serial SOA confirmado</dt>
+                                <dd>
+                                    {{ $serialConfirmedCount }}
+                                    / {{ $publicationTargets->count() }}
+                                    · {{ $lastPublication->serial }}
+                                </dd>
                             </div>
                             <div>
                                 <dt>Pendentes</dt>

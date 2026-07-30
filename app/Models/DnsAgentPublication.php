@@ -21,9 +21,11 @@ class DnsAgentPublication extends Model
     {
         return [
             'installed_version' => 'integer',
+            'reported_serial' => 'integer',
             'downloaded_at' => 'immutable_datetime',
             'last_apply_at' => 'immutable_datetime',
             'agent_reported_at' => 'immutable_datetime',
+            'serial_confirmed_at' => 'immutable_datetime',
         ];
     }
 

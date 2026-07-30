@@ -13,6 +13,9 @@ O agente 0.2.0 preserva o enrollment existente e adiciona:
 - escrita atômica;
 - rollback automático;
 - `rndc reconfig` somente após validação.
+- configuração distinta para primary e secondary;
+- AXFR/IXFR e NOTIFY autenticados por TSIG;
+- confirmação do serial SOA realmente carregado pelo BIND.
 
 ## Dry-run
 

@@ -34,6 +34,13 @@ class DnsAgentPublicationController extends Controller
                 'integer',
                 'min:1',
             ],
+            'authoritative_serial' => [
+                'required_if:status,applied',
+                'nullable',
+                'integer',
+                'min:1',
+                'max:4294967295',
+            ],
             'agent_timestamp' => ['nullable', 'date'],
             'error' => ['nullable', 'string', 'max:2000'],
             'artifact_checksum' => [
@@ -75,6 +82,20 @@ class DnsAgentPublicationController extends Controller
             ], 422);
         }
 
+        if (
+            $validated['status'] === 'applied'
+            && (int) $validated['authoritative_serial']
+                !== (int) $destination->zoneVersion->serial
+        ) {
+            $this->audit($request, $agent, 'agent.serial_rejected', 'rejected');
+
+            return response()->json([
+                'ok' => false,
+                'error' => 'authoritative_serial_mismatch',
+                'message' => 'O serial SOA observado no BIND não corresponde à publicação.',
+            ], 422);
+        }
+
         $error = $this->sanitizeError($validated['error'] ?? null);
         $payloadHash = hash('sha256', json_encode([
             'publication' => $destination->id,
@@ -83,6 +104,7 @@ class DnsAgentPublicationController extends Controller
             'artifact_checksum' => strtolower(
                 $validated['artifact_checksum'] ?? '',
             ),
+            'authoritative_serial' => $validated['authoritative_serial'] ?? null,
             'error' => $error,
         ], JSON_THROW_ON_ERROR));
 
@@ -168,6 +190,12 @@ class DnsAgentPublicationController extends Controller
                 'installed_version' => $validated['status'] === 'applied'
                     ? (int) $validated['installed_version']
                     : $locked->installed_version,
+                'reported_serial' => $validated['status'] === 'applied'
+                    ? (int) $validated['authoritative_serial']
+                    : $locked->reported_serial,
+                'serial_confirmed_at' => $validated['status'] === 'applied'
+                    ? $now
+                    : $locked->serial_confirmed_at,
                 'artifact_checksum' => isset($validated['artifact_checksum'])
                     ? strtolower($validated['artifact_checksum'])
                     : $locked->artifact_checksum,
@@ -220,6 +248,8 @@ class DnsAgentPublicationController extends Controller
             'status' => $current->status,
             'desired_version' => $destination->zoneVersion->version,
             'installed_version' => $current->installed_version,
+            'authoritative_serial' => $current->reported_serial,
+            'serial_confirmed_at' => $current->serial_confirmed_at?->toIso8601String(),
             'confirmed_at' => $current->last_apply_at?->toIso8601String(),
         ]);
     }

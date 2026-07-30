@@ -27,6 +27,7 @@ class DnsZoneValidator
         $zone->loadMissing([
             'records',
             'servers',
+            'tsigKey',
             'nameserverProfile.identities',
         ]);
 
@@ -119,6 +120,24 @@ class DnsZoneValidator
 
         if ($secondaryCount < 1) {
             $warnings[] = 'Nenhum servidor secondary foi associado à zona.';
+        } else {
+            if ($zone->tsigKey === null || ! $zone->tsigKey->enabled) {
+                $errors[] =
+                    'Associe uma chave TSIG ativa para proteger AXFR/IXFR e NOTIFY.';
+            }
+
+            foreach ($zone->servers as $server) {
+                if (
+                    in_array($server->pivot->role, ['primary', 'secondary'], true)
+                    && blank($server->ipv4_address)
+                    && blank($server->ipv6_address)
+                ) {
+                    $errors[] = sprintf(
+                        'O servidor %s precisa de IPv4 ou IPv6 para transferência de zona.',
+                        $server->name,
+                    );
+                }
+            }
         }
 
         if ($nsRecords->count() < 2) {

@@ -56,19 +56,22 @@ class Organization extends Model
         return $this->hasMany(DnsServer::class);
     }
 
+    public function dnsTsigKeys(): HasMany
+    {
+        return $this->hasMany(DnsTsigKey::class);
+    }
 
-    public function nameserverIdentities(): \Illuminate\Database\Eloquent\Relations\HasMany
+    public function nameserverIdentities(): HasMany
     {
         return $this->hasMany(
             DnsNameserverIdentity::class,
         );
     }
 
-    public function nameserverProfiles(): \Illuminate\Database\Eloquent\Relations\HasMany
+    public function nameserverProfiles(): HasMany
     {
         return $this->hasMany(
             DnsNameserverProfile::class,
         );
     }
-
 }

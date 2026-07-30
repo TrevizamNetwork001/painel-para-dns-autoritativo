@@ -152,6 +152,7 @@ class DnsAgentPublicationTest extends TestCase
                     'agent_timestamp' => now()->toIso8601String(),
                     'status' => 'applied',
                     'installed_version' => 7,
+                    'authoritative_serial' => $context['zone']->serial,
                     'artifact_checksum' => $checksum,
                 ],
             )
@@ -233,6 +234,7 @@ class DnsAgentPublicationTest extends TestCase
                     'event_id' => (string) Str::uuid(),
                     'status' => 'applied',
                     'installed_version' => 7,
+                    'authoritative_serial' => $context['zone']->serial,
                 ],
             )
             ->assertNotFound()
@@ -250,6 +252,7 @@ class DnsAgentPublicationTest extends TestCase
                 'event_id' => (string) Str::uuid(),
                 'status' => 'applied',
                 'installed_version' => 7,
+                'authoritative_serial' => $context['zone']->serial,
             ])
             ->assertNotFound()
             ->assertJsonPath('error', 'publication_not_available');
@@ -272,6 +275,7 @@ class DnsAgentPublicationTest extends TestCase
                 'event_id' => (string) Str::uuid(),
                 'status' => 'applied',
                 'installed_version' => 7,
+                'authoritative_serial' => $context['zone']->serial,
             ],
         )->assertUnauthorized()
             ->assertJsonMissing(['token'])
@@ -335,6 +339,9 @@ class DnsAgentPublicationTest extends TestCase
                 [
                     'event_id' => (string) Str::uuid(),
                     'status' => $status,
+                    ...($status === 'applied'
+                        ? ['authoritative_serial' => $context['zone']->serial]
+                        : []),
                     ...$payload,
                 ],
             );

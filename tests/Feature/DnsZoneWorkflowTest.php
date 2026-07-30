@@ -6,6 +6,7 @@ use App\Models\DnsAgent;
 use App\Models\DnsNameserverIdentity;
 use App\Models\DnsNameserverProfile;
 use App\Models\DnsServer;
+use App\Models\DnsTsigKey;
 use App\Models\DnsZone;
 use App\Models\Organization;
 use App\Models\User;
@@ -370,10 +371,14 @@ class DnsZoneWorkflowTest extends TestCase
             ->post(route('zones.store'), $this->zonePayload($context))
             ->assertSessionHasNoErrors();
 
-        return DnsZone::query()
+        $zone = DnsZone::query()
             ->where('organization_id', $context['organization']->id)
             ->where('name', 'example.com')
             ->firstOrFail();
+
+        $zone->forceFill(['dns_tsig_key_id' => $context['tsigKey']->id])->save();
+
+        return $zone;
     }
 
     private function zonePayload(array $context, array $overrides = []): array
@@ -478,12 +483,22 @@ class DnsZoneWorkflowTest extends TestCase
             $secondIdentity->id => ['position' => 2],
         ]);
 
+        $tsigKey = DnsTsigKey::query()->create([
+            'organization_id' => $organization->id,
+            'name' => 'xfr-'.Str::lower(Str::random(12)),
+            'algorithm' => 'hmac-sha256',
+            'secret' => base64_encode(random_bytes(32)),
+            'enabled' => true,
+            'created_by' => $admin->id,
+        ]);
+
         return compact(
             'organization',
             'admin',
             'primary',
             'secondary',
             'profile',
+            'tsigKey',
             'agentTokens',
         );
     }

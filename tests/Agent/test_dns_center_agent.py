@@ -57,12 +57,18 @@ class AgentTests(unittest.TestCase):
             "publication_id": 20,
             "name": "example.com",
             "type": "primary",
+            "serial": 2026073001,
             "version": 7,
             "desired_version": 7,
             "installed_version": installed_version,
             "apply_status": "pending",
             "update_available": update,
             "artifact_url": "/api/agent/zones/10/artifact?publication=20",
+            "transfer": {
+                "primary_addresses": ["192.0.2.10"],
+                "secondary_addresses": [],
+                "tsig": None,
+            },
         }
 
     def test_safe_zone_filename(self) -> None:
@@ -87,6 +93,44 @@ class AgentTests(unittest.TestCase):
 
         self.assertIn('zone "example.com"', content)
         self.assertIn("type master;", content)
+
+    def test_render_primary_secondary_with_tsig_notify_and_ixfr(self) -> None:
+        tsig = {
+            "name": "xfr-example",
+            "algorithm": "hmac-sha256",
+            "secret": "YWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWE=",
+        }
+        primary = {
+            "name": "example.com",
+            "type": "primary",
+            "transfer": {
+                "primary_addresses": ["192.0.2.10"],
+                "secondary_addresses": ["192.0.2.11"],
+                "tsig": tsig,
+            },
+        }
+        secondary = {
+            "name": "example.net",
+            "type": "secondary",
+            "transfer": {
+                "primary_addresses": ["192.0.2.10"],
+                "secondary_addresses": ["192.0.2.11"],
+                "tsig": tsig,
+            },
+        }
+
+        content = agent.render_managed_include(
+            [primary, secondary],
+            Path("/etc/bind/zones"),
+        )
+
+        self.assertEqual(1, content.count('key "xfr-example" {'))
+        self.assertIn('allow-transfer { key "xfr-example"; };', content)
+        self.assertIn('also-notify { 192.0.2.11 key "xfr-example"; };', content)
+        self.assertIn("notify explicit;", content)
+        self.assertNotIn("provide-ixfr", content)
+        self.assertIn('masters { 192.0.2.10 key "xfr-example"; };', content)
+        self.assertIn("request-ixfr yes;", content)
 
     def test_atomic_write(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -143,6 +187,24 @@ class AgentTests(unittest.TestCase):
         with self.assertRaises(agent.AgentError):
             agent.bind_service_name("unsupported")
 
+    def test_zones_directory_is_group_writable_for_secondary_copy(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            zones = Path(directory) / "zones"
+            bind_group = Mock(gr_gid=1234)
+
+            with patch.object(
+                agent.grp,
+                "getgrnam",
+                return_value=bind_group,
+            ), patch.object(agent.os, "geteuid", return_value=0), patch.object(
+                agent.os,
+                "chown",
+            ) as chown:
+                agent.ensure_zones_directory(zones, "debian")
+
+            self.assertEqual(0o2770, zones.stat().st_mode & 0o7777)
+            chown.assert_called_once_with(zones, 0, 1234)
+
     def test_command_execution_disables_shell_and_has_timeout(self) -> None:
         completed = Mock(returncode=0, stdout="ok", stderr="")
 
@@ -198,6 +260,51 @@ class AgentTests(unittest.TestCase):
                     staging,
                     staging / "managed.conf",
                 )
+
+    def test_primary_apply_reloads_zone_after_reconfig(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            config = self.config(directory)
+            paths = {
+                "zones_dir": Path(config["zones_dir"]),
+                "managed_include": Path(config["managed_include"]),
+                "backup_dir": Path(config["backup_dir"]),
+            }
+            paths["backup_dir"].mkdir(parents=True)
+            staging = Path(directory) / "staging"
+            staging.mkdir()
+            include = staging / "managed.conf"
+            include.write_text("// valid\n", encoding="utf-8")
+            (staging / "example.com.zone").write_text(
+                "$ORIGIN example.com.\n",
+                encoding="utf-8",
+            )
+            completed = Mock(returncode=0, stdout="", stderr="")
+
+            with patch.object(
+                agent,
+                "config_paths",
+                return_value=paths,
+            ), patch.object(
+                agent,
+                "ensure_zones_directory",
+            ), patch.object(
+                agent,
+                "run_command",
+                return_value=completed,
+            ) as run:
+                agent.apply_staging(
+                    config,
+                    [{"name": "example.com", "type": "primary"}],
+                    staging,
+                    include,
+                )
+
+            commands = [call.args[0] for call in run.call_args_list]
+            self.assertIn(["/usr/sbin/rndc", "reconfig"], commands)
+            self.assertIn(
+                ["/usr/sbin/rndc", "reload", "example.com"],
+                commands,
+            )
 
     def test_configuration_failure_restores_named_conf(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -592,6 +699,7 @@ class AgentTests(unittest.TestCase):
                 return {
                     "status": payload["status"],
                     "installed_version": payload.get("installed_version"),
+                    "authoritative_serial": payload.get("authoritative_serial"),
                 }
 
             with patch.object(
@@ -612,6 +720,10 @@ class AgentTests(unittest.TestCase):
                 agent,
                 "apply_staging",
                 return_value=Path(directory) / "backup",
+            ), patch.object(
+                agent,
+                "authoritative_serial",
+                return_value=2026073001,
             ), patch.dict(
                 agent.os.environ,
                 {"DNS_CENTER_AGENT_ALLOW_APPLY": "1"},
@@ -666,6 +778,7 @@ class AgentTests(unittest.TestCase):
                 return_value={
                     "status": "applied",
                     "installed_version": 7,
+                    "authoritative_serial": 2026073001,
                 },
             ) as report, patch.object(
                 agent,
@@ -673,6 +786,10 @@ class AgentTests(unittest.TestCase):
             ) as apply, patch.dict(
                 agent.os.environ,
                 {"DNS_CENTER_AGENT_ALLOW_APPLY": "1"},
+            ), patch.object(
+                agent,
+                "authoritative_serial",
+                return_value=2026073001,
             ), patch.object(agent.os, "geteuid", return_value=0):
                 agent.sync_zones(
                     config,

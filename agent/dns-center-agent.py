@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import argparse
+import base64
 import hashlib
 import html
+import ipaddress
 import json
 import logging
 import os
@@ -27,7 +29,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-AGENT_VERSION = "0.2.0"
+AGENT_VERSION = "0.3.0"
 DEFAULT_CONFIG = Path("/etc/dns-center-agent/agent.json")
 DEFAULT_STATE_DIR = Path("/var/lib/dns-center-agent")
 DEFAULT_ZONES_DIR = Path("/etc/bind/dns-center-zones")
@@ -942,6 +944,23 @@ def bind_service_name(family: str) -> str:
     raise AgentError("Distribuição sem serviço BIND allowlisted.")
 
 
+def ensure_zones_directory(path: Path, family: str) -> None:
+    path.mkdir(parents=True, exist_ok=True)
+    group_name = "bind" if family == "debian" else "named"
+
+    try:
+        group_id = grp.getgrnam(group_name).gr_gid
+    except KeyError as exception:
+        raise AgentError(
+            f"Grupo de runtime do BIND não encontrado: {group_name}."
+        ) from exception
+
+    if os.geteuid() == 0:
+        os.chown(path, 0, group_id)
+
+    os.chmod(path, 0o2770)
+
+
 def reject_symlink(path: Path) -> None:
     current = path
 
@@ -1023,7 +1042,7 @@ def configure_bind(action: str) -> dict[str, Any]:
         current = paths["named_conf"].read_text(encoding="utf-8")
 
         try:
-            paths["zones_dir"].mkdir(parents=True, exist_ok=True)
+            ensure_zones_directory(paths["zones_dir"], family)
 
             if not include_existed:
                 atomic_write(
@@ -1272,6 +1291,7 @@ def validate_manifest_item(item: object) -> dict[str, Any]:
     publication_id = item.get("publication_id")
     desired_version = item.get("desired_version", item.get("version"))
     installed_version = item.get("installed_version")
+    serial = item.get("serial")
 
     if (
         not isinstance(publication_id, int)
@@ -1294,6 +1314,14 @@ def validate_manifest_item(item: object) -> dict[str, Any]:
     ):
         raise AgentError("Versão instalada inválida no manifesto.")
 
+    if (
+        not isinstance(serial, int)
+        or isinstance(serial, bool)
+        or serial < 1
+        or serial > 4294967295
+    ):
+        raise AgentError("Serial SOA inválido no manifesto.")
+
     name = str(item.get("name", ""))
     safe_zone_filename(name)
     zone_type = str(item.get("type", item.get("kind", "primary")))
@@ -1301,17 +1329,43 @@ def validate_manifest_item(item: object) -> dict[str, Any]:
     if zone_type not in {"primary", "secondary"}:
         raise AgentError("Tipo de zona inválido no manifesto.")
 
-    artifact_url = str(item.get("artifact_url", ""))
-    parsed = urllib.parse.urlparse(artifact_url)
+    artifact_value = item.get("artifact_url")
+    artifact_url = str(artifact_value) if artifact_value is not None else ""
 
-    if (
-        not artifact_url.startswith("/")
-        or artifact_url.startswith("//")
-        or parsed.scheme
-        or parsed.netloc
-        or ".." in parsed.path.split("/")
-    ):
-        raise AgentError(f"URL de artefato inválida para {name}.")
+    if zone_type == "primary":
+        parsed = urllib.parse.urlparse(artifact_url)
+
+        if (
+            not artifact_url.startswith("/")
+            or artifact_url.startswith("//")
+            or parsed.scheme
+            or parsed.netloc
+            or ".." in parsed.path.split("/")
+        ):
+            raise AgentError(f"URL de artefato inválida para {name}.")
+    elif artifact_url:
+        raise AgentError("Secondary não deve receber artefato de zona.")
+
+    transfer = item.get("transfer")
+
+    if not isinstance(transfer, dict):
+        raise AgentError(f"Topologia de transferência inválida para {name}.")
+
+    primary_addresses = validate_transfer_addresses(
+        transfer.get("primary_addresses"),
+        "primary",
+    )
+    secondary_addresses = validate_transfer_addresses(
+        transfer.get("secondary_addresses"),
+        "secondary",
+    )
+    tsig = validate_tsig(transfer.get("tsig"))
+
+    if zone_type == "secondary" and not primary_addresses:
+        raise AgentError(f"Secondary {name} sem endereço do primary.")
+
+    if secondary_addresses and tsig is None:
+        raise AgentError(f"Zona {name} com secondary exige TSIG.")
 
     normalized = dict(item)
     normalized["publication_id"] = publication_id
@@ -1320,8 +1374,60 @@ def validate_manifest_item(item: object) -> dict[str, Any]:
     normalized["name"] = name
     normalized["type"] = zone_type
     normalized["artifact_url"] = artifact_url
+    normalized["serial"] = serial
+    normalized["transfer"] = {
+        "primary_addresses": primary_addresses,
+        "secondary_addresses": secondary_addresses,
+        "tsig": tsig,
+    }
 
     return normalized
+
+
+def validate_transfer_addresses(value: object, label: str) -> list[str]:
+    if not isinstance(value, list):
+        raise AgentError(f"Endereços {label} inválidos.")
+
+    addresses: list[str] = []
+
+    for address in value:
+        try:
+            normalized = str(ipaddress.ip_address(str(address)))
+        except ValueError as exception:
+            raise AgentError(f"Endereço {label} inválido.") from exception
+
+        if normalized not in addresses:
+            addresses.append(normalized)
+
+    return addresses
+
+
+def validate_tsig(value: object) -> dict[str, str] | None:
+    if value is None:
+        return None
+
+    if not isinstance(value, dict):
+        raise AgentError("Configuração TSIG inválida.")
+
+    name = str(value.get("name", ""))
+    algorithm = str(value.get("algorithm", ""))
+    secret = str(value.get("secret", ""))
+
+    if not re.fullmatch(r"[A-Za-z0-9._-]{1,255}", name):
+        raise AgentError("Nome TSIG inválido.")
+
+    if algorithm not in {"hmac-sha256", "hmac-sha384", "hmac-sha512"}:
+        raise AgentError("Algoritmo TSIG inválido.")
+
+    try:
+        decoded = base64.b64decode(secret, validate=True)
+    except (ValueError, TypeError) as exception:
+        raise AgentError("Segredo TSIG inválido.") from exception
+
+    if len(decoded) < 16:
+        raise AgentError("Segredo TSIG muito curto.")
+
+    return {"name": name, "algorithm": algorithm, "secret": secret}
 
 
 def publication_event_payload(
@@ -1329,12 +1435,14 @@ def publication_event_payload(
     installed_version: int | None = None,
     checksum: str | None = None,
     error: str | None = None,
+    authoritative_serial: int | None = None,
 ) -> dict[str, Any]:
     payload: dict[str, Any] = {
         "status": status_value,
         "installed_version": installed_version,
         "artifact_checksum": checksum,
         "error": sanitize_message(error) if error else None,
+        "authoritative_serial": authoritative_serial,
     }
 
     return payload
@@ -1390,21 +1498,66 @@ def render_managed_include(
         "",
     ]
 
+    tsig_keys: dict[str, dict[str, str]] = {}
+
+    for item in manifest:
+        tsig = item.get("transfer", {}).get("tsig")
+
+        if isinstance(tsig, dict):
+            tsig_keys[str(tsig["name"])] = tsig
+
+    for tsig in tsig_keys.values():
+        lines.extend(
+            [
+                f'key "{tsig["name"]}" {{',
+                f'    algorithm {tsig["algorithm"]};',
+                f'    secret "{tsig["secret"]}";',
+                "};",
+                "",
+            ]
+        )
+
     for item in manifest:
         name = str(item["name"]).rstrip(".")
         zone_type = str(item.get("type", "primary"))
         filename = safe_zone_filename(name)
         bind_type = "master" if zone_type == "primary" else "slave"
+        transfer = item.get("transfer", {})
+        tsig = transfer.get("tsig")
 
-        lines.extend(
-            [
-                f'zone "{name}" {{',
-                f"    type {bind_type};",
-                f'    file "{zones_dir / filename}";',
-                "};",
-                "",
-            ]
-        )
+        lines.extend([
+            f'zone "{name}" {{',
+            f"    type {bind_type};",
+            f'    file "{zones_dir / filename}";',
+        ])
+
+        if zone_type == "primary":
+            secondary_addresses = transfer.get("secondary_addresses", [])
+
+            if secondary_addresses and isinstance(tsig, dict):
+                key_name = tsig["name"]
+                lines.append(f'    allow-transfer {{ key "{key_name}"; }};')
+                notify_targets = " ".join(
+                    f'{address} key "{key_name}";'
+                    for address in secondary_addresses
+                )
+                lines.append(f"    also-notify {{ {notify_targets} }};")
+                lines.append("    notify explicit;")
+            else:
+                lines.append("    allow-transfer { none; };")
+        else:
+            if not isinstance(tsig, dict):
+                raise AgentError(f"Secondary {name} sem TSIG.")
+
+            key_name = tsig["name"]
+            masters = " ".join(
+                f'{address} key "{key_name}";'
+                for address in transfer.get("primary_addresses", [])
+            )
+            lines.append(f"    masters {{ {masters} }};")
+            lines.append("    request-ixfr yes;")
+
+        lines.extend(["};", ""])
 
     return "\n".join(lines)
 
@@ -1427,6 +1580,9 @@ def validate_staging(
     )
 
     for item in manifest:
+        if item.get("type") != "primary":
+            continue
+
         name = str(item["name"]).rstrip(".")
         zonefile = staging_dir / safe_zone_filename(name)
         result = run_command(
@@ -1442,9 +1598,10 @@ def validate_staging(
     result = run_command([named_checkconf, str(include_path)])
 
     if result.returncode != 0:
+        detail = result.stderr.strip() or result.stdout.strip()
         raise AgentError(
             "named-checkconf falhou: "
-            f"{result.stderr.strip()}"
+            f"{detail}"
         )
 
 
@@ -1518,6 +1675,9 @@ def build_staging(
         name = item["name"]
         publication_id = item["publication_id"]
         version = item["desired_version"]
+        if item["type"] == "secondary":
+            continue
+
         artifact_key = str(publication_id)
         artifact_path = artifacts_dir / f"{publication_id}.zone"
         reject_symlink(artifact_path)
@@ -1761,7 +1921,7 @@ def apply_staging(
     ):
         reject_symlink(path)
 
-    paths["zones_dir"].mkdir(parents=True, exist_ok=True)
+    ensure_zones_directory(paths["zones_dir"], os_family())
     paths["managed_include"].parent.mkdir(
         parents=True,
         exist_ok=True,
@@ -1776,6 +1936,9 @@ def apply_staging(
             name = str(item["name"])
             filename = safe_zone_filename(name)
             expected.add(filename)
+
+            if item.get("type") == "secondary":
+                continue
 
             source = staging_dir / filename
             target = paths["zones_dir"] / filename
@@ -1824,6 +1987,21 @@ def apply_staging(
                 f"{result.stderr.strip()}"
             )
 
+        for item in manifest:
+            if item.get("type") != "primary":
+                continue
+
+            result = run_command(
+                [rndc, "reload", str(item["name"]).rstrip(".")]
+            )
+
+            if result.returncode != 0:
+                detail = result.stderr.strip() or result.stdout.strip()
+                raise AgentError(
+                    "rndc reload falhou para "
+                    f"{item['name']}: {detail}"
+                )
+
         return backup_dir
     except Exception:
         restore_backup(paths, backup_dir)
@@ -1835,6 +2013,36 @@ def apply_staging(
             pass
 
         raise
+
+
+def authoritative_serial(
+    config: dict[str, Any],
+    zone_name: str,
+    expected_serial: int,
+) -> int:
+    rndc = command_path(config, "rndc", "/usr/sbin/rndc")
+    attempts = max(1, min(int(config.get("serial_confirmation_attempts", 10)), 60))
+
+    for attempt in range(attempts):
+        result = run_command([rndc, "zonestatus", zone_name], timeout=15)
+        match = re.search(
+            r"^\s*serial:\s*(\d+)\s*$",
+            result.stdout,
+            flags=re.IGNORECASE | re.MULTILINE,
+        )
+
+        if result.returncode == 0 and match:
+            observed = int(match.group(1))
+
+            if observed == expected_serial:
+                return observed
+
+        if attempt < attempts - 1:
+            time.sleep(1)
+
+    raise AgentError(
+        f"BIND não confirmou o serial SOA esperado para {zone_name}."
+    )
 
 
 def sync_zones(
@@ -1919,9 +2127,10 @@ def sync_zones(
 
         if not pending_confirmation:
             for item in updates:
-                checksum = state["artifacts"][str(item["publication_id"])][
-                    "checksum"
-                ]
+                checksum = state["artifacts"].get(
+                    str(item["publication_id"]),
+                    {},
+                ).get("checksum")
                 report_publication(
                     config,
                     state,
@@ -1952,9 +2161,10 @@ def sync_zones(
                 state["last_apply_error"] = error
 
                 for item in updates:
-                    checksum = state["artifacts"][
-                        str(item["publication_id"])
-                    ]["checksum"]
+                    checksum = state["artifacts"].get(
+                        str(item["publication_id"]),
+                        {},
+                    ).get("checksum")
 
                     try:
                         report_publication(
@@ -1992,9 +2202,15 @@ def sync_zones(
             backup_dir = None
 
         for item in updates:
-            checksum = state["artifacts"][str(item["publication_id"])][
-                "checksum"
-            ]
+            checksum = state["artifacts"].get(
+                str(item["publication_id"]),
+                {},
+            ).get("checksum")
+            observed_serial = authoritative_serial(
+                config,
+                str(item["name"]),
+                int(item["serial"]),
+            )
             response = report_publication(
                 config,
                 state,
@@ -2004,6 +2220,7 @@ def sync_zones(
                     "applied",
                     installed_version=item["desired_version"],
                     checksum=checksum,
+                    authoritative_serial=observed_serial,
                 ),
             )
 
@@ -2011,6 +2228,8 @@ def sync_zones(
                 response.get("status") != "applied"
                 or response.get("installed_version")
                 != item["desired_version"]
+                or response.get("authoritative_serial")
+                != observed_serial
             ):
                 raise AgentError(
                     "Painel não confirmou a versão aplicada."

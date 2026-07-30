@@ -19,7 +19,10 @@ class DnsZoneArtifactController extends Controller
         $agent = $request->attributes->get('dns_agent');
 
         $destinations = DnsAgentPublication::query()
-            ->with('zoneVersion.zone')
+            ->with([
+                'zoneVersion.zone.servers',
+                'zoneVersion.zone.tsigKey',
+            ])
             ->where('organization_id', $agent->organization_id)
             ->where('dns_server_id', $agent->dns_server_id)
             ->where('dns_agent_id', $agent->id)
@@ -36,6 +39,20 @@ class DnsZoneArtifactController extends Controller
                 ->unique(fn (DnsAgentPublication $item) => $item->zoneVersion->dns_zone_id)
                 ->map(function (DnsAgentPublication $item) use ($destinations): array {
                     $zone = $item->zoneVersion->zone;
+                    $currentServer = $zone->servers->firstWhere(
+                        'id',
+                        $item->dns_server_id,
+                    );
+                    $role = (string) ($currentServer?->pivot?->role ?? '');
+                    abort_unless(in_array($role, ['primary', 'secondary'], true), 409);
+
+                    $primary = $zone->servers->first(
+                        fn ($server): bool => $server->pivot?->role === 'primary',
+                    );
+                    $secondaries = $zone->servers->filter(
+                        fn ($server): bool => $server->pivot?->role === 'secondary',
+                    );
+                    $tsigKey = $zone->tsigKey;
                     $artifact = (string) data_get(
                         $item->zoneVersion->snapshot,
                         'zonefile',
@@ -51,7 +68,8 @@ class DnsZoneArtifactController extends Controller
                         'id' => $zone->id,
                         'publication_id' => $item->id,
                         'name' => $zone->name,
-                        'kind' => $zone->kind,
+                        'kind' => $role,
+                        'type' => $role,
                         'serial' => $item->zoneVersion->serial,
                         'version' => $item->zoneVersion->version,
                         'desired_version' => $item->zoneVersion->version,
@@ -59,13 +77,39 @@ class DnsZoneArtifactController extends Controller
                         'apply_status' => $item->status,
                         'update_available' => $installedVersion
                             !== $item->zoneVersion->version,
-                        'artifact_checksum' => hash('sha256', $artifact),
-                        'artifact_size' => strlen($artifact),
-                        'artifact_url' => route(
-                            'api.agent.zones.artifact',
-                            [$zone, 'publication' => $item->id],
-                            false,
-                        ),
+                        'reported_serial' => $item->reported_serial,
+                        'serial_confirmed_at' => $item->serial_confirmed_at?->toIso8601String(),
+                        'artifact_checksum' => $role === 'primary'
+                            ? hash('sha256', $artifact)
+                            : null,
+                        'artifact_size' => $role === 'primary' ? strlen($artifact) : 0,
+                        'artifact_url' => $role === 'primary'
+                            ? route(
+                                'api.agent.zones.artifact',
+                                [$zone, 'publication' => $item->id],
+                                false,
+                            )
+                            : null,
+                        'transfer' => [
+                            'primary_addresses' => array_values(array_filter([
+                                $primary?->ipv4_address,
+                                $primary?->ipv6_address,
+                            ])),
+                            'secondary_addresses' => $secondaries
+                                ->flatMap(fn ($server): array => array_filter([
+                                    $server->ipv4_address,
+                                    $server->ipv6_address,
+                                ]))
+                                ->values()
+                                ->all(),
+                            'tsig' => $tsigKey && $tsigKey->enabled
+                                ? [
+                                    'name' => $tsigKey->name,
+                                    'algorithm' => $tsigKey->algorithm,
+                                    'secret' => $tsigKey->secret,
+                                ]
+                                : null,
+                        ],
                     ];
                 })->values(),
         ]);
@@ -96,9 +140,14 @@ class DnsZoneArtifactController extends Controller
 
         $destination = $destinationQuery->firstOrFail();
 
+        $role = $zone->servers()
+            ->where('dns_servers.id', $agent->dns_server_id)
+            ->first()?->pivot?->role;
+
         abort_unless(
             (int) $zone->organization_id === (int) $agent->organization_id
-            && $zone->enabled,
+            && $zone->enabled
+            && $role === 'primary',
             404,
         );
 

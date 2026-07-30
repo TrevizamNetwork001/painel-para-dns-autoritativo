@@ -15,3 +15,7 @@ A Fase 3A introduz:
 O painel não grava em `/etc/bind`, não executa `rndc` e não reinicia ou
 recarrega o BIND. Aplicação real, validação local, backup e rollback ficam
 para a fase operacional do agente.
+
+A evolução primary/secondary, incluindo AXFR/IXFR, NOTIFY, TSIG, confirmação
+do serial observado e continuidade do secondary, está descrita em
+`BIND_PRIMARY_SECONDARY.md`.

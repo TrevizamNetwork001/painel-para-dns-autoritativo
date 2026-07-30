@@ -70,6 +70,7 @@ class EnsureAdminTwoFactor
             'servers.bind.*',
             'nameservers.*',
             'zones.publish',
+            'tsig.*',
         ]);
     }
 }
