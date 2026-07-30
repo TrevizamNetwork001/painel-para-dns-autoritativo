@@ -9,12 +9,17 @@ use App\Support\SecurityAuditLogger;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 
 class DnsAgentInstallRequestController extends Controller
 {
     public function store(Request $request): JsonResponse
     {
+        if (! Schema::hasTable('dns_agent_install_requests')) {
+            return $this->migrationPending();
+        }
+
         $validated = $request->validate([
             'request_id' => ['required', 'uuid'],
             'request_token' => ['required', 'string', 'min:32', 'max:255'],
@@ -98,6 +103,10 @@ class DnsAgentInstallRequestController extends Controller
 
     public function status(Request $request): JsonResponse
     {
+        if (! Schema::hasTable('dns_agent_install_requests')) {
+            return $this->migrationPending();
+        }
+
         $validated = $request->validate([
             'request_id' => ['required', 'uuid'],
             'request_token' => ['required', 'string', 'min:32', 'max:255'],
@@ -177,5 +186,14 @@ class DnsAgentInstallRequestController extends Controller
             'matched' => $request->dns_server_id !== null,
             'expires_at' => $request->expires_at->toIso8601String(),
         ], 202);
+    }
+
+    private function migrationPending(): JsonResponse
+    {
+        return response()->json([
+            'ok' => false,
+            'error' => 'installation_unavailable',
+            'message' => 'O fluxo de instalação ainda não está disponível.',
+        ], 503);
     }
 }

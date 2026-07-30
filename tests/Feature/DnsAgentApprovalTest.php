@@ -9,6 +9,7 @@ use App\Models\Organization;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 use Tests\TestCase;
 
@@ -184,6 +185,24 @@ class DnsAgentApprovalTest extends TestCase
                 ."  dns-center-agent.py\n",
             $checksum,
         );
+    }
+
+    public function test_agent_page_is_compatible_before_install_request_migration(): void
+    {
+        [$organization, $admin] = $this->organizationAdmin(true);
+        $server = DnsServer::factory()->create([
+            'organization_id' => $organization->id,
+        ]);
+        Schema::drop('dns_agent_install_requests');
+
+        $this->actingAs($admin)
+            ->get(route('servers.agent.show', $server))
+            ->assertOk()
+            ->assertSee('Instalar o agente');
+
+        $this->postJson('/api/agent/install-requests', [])
+            ->assertServiceUnavailable()
+            ->assertJsonPath('error', 'installation_unavailable');
     }
 
     private function organizationAdmin(bool $withTwoFactor): array

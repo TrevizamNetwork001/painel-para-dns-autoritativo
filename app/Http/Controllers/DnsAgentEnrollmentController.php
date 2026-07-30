@@ -10,6 +10,7 @@ use App\Support\SecurityAuditLogger;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 use Illuminate\View\View;
 
@@ -30,11 +31,13 @@ class DnsAgentEnrollmentController extends Controller
             ->latest('id')
             ->first();
 
-        $latestInstallRequest = DnsAgentInstallRequest::query()
-            ->where('organization_id', $organizationId)
-            ->where('dns_server_id', $server->id)
-            ->latest('id')
-            ->first();
+        $latestInstallRequest = Schema::hasTable('dns_agent_install_requests')
+            ? DnsAgentInstallRequest::query()
+                ->where('organization_id', $organizationId)
+                ->where('dns_server_id', $server->id)
+                ->latest('id')
+                ->first()
+            : null;
 
         $latestPublication = $server->agentPublications()
             ->with('zoneVersion.zone')
