@@ -50,6 +50,56 @@ document.querySelectorAll('[data-flash-message]').forEach((message) => {
     }, 4000);
 });
 
+document.querySelectorAll('[data-flash-toast]').forEach((toast) => {
+    const closeButton = toast.querySelector('[data-flash-toast-close]');
+    const configuredTimeout = Number(toast.dataset.flashTimeout);
+    const timeout = Number.isFinite(configuredTimeout)
+        && configuredTimeout > 0
+        ? configuredTimeout
+        : 6000;
+
+    let timer;
+    let startedAt;
+    let remaining = timeout;
+
+    const dismiss = () => {
+        window.clearTimeout(timer);
+
+        if (toast.classList.contains('is-leaving')) {
+            return;
+        }
+
+        toast.classList.add('is-leaving');
+
+        window.setTimeout(() => {
+            toast.remove();
+        }, 260);
+    };
+
+    const startTimer = () => {
+        window.clearTimeout(timer);
+        startedAt = Date.now();
+        timer = window.setTimeout(dismiss, remaining);
+    };
+
+    const pauseTimer = () => {
+        window.clearTimeout(timer);
+
+        if (startedAt !== undefined) {
+            remaining = Math.max(
+                remaining - (Date.now() - startedAt),
+                500
+            );
+        }
+    };
+
+    closeButton?.addEventListener('click', dismiss);
+    toast.addEventListener('mouseenter', pauseTimer);
+    toast.addEventListener('mouseleave', startTimer);
+
+    startTimer();
+});
+
 // DNS CENTER ACCOUNT MENU
 
 document.querySelectorAll('[data-account-menu]').forEach((menu) => {

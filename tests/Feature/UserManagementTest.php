@@ -61,6 +61,39 @@ class UserManagementTest extends TestCase
         ]);
     }
 
+    public function test_admin_can_reactivate_inactive_organization_user(): void
+    {
+        [$organization, $admin] = $this->makeAdmin();
+        $operator = User::factory()->create([
+            'current_organization_id' => $organization->id,
+            'status' => 'active',
+        ]);
+        $operator->organizations()->attach($organization->id, [
+            'role' => 'operator',
+            'status' => 'active',
+            'is_default' => true,
+        ]);
+
+        $this->actingAs($admin)
+            ->post(route('users.status', $operator))
+            ->assertSessionHasNoErrors();
+
+        $this->assertSame('inactive', $operator->fresh()->status);
+        $this->assertSame(
+            'inactive',
+            $operator->organizations()->whereKey($organization->id)->sole()->pivot->status,
+        );
+
+        $this->post(route('users.status', $operator))
+            ->assertSessionHasNoErrors()
+            ->assertSessionHas('status', 'Usuário ativado com sucesso.');
+
+        $this->assertSame('active', $operator->fresh()->status);
+        $this->assertSame(
+            'active',
+            $operator->organizations()->whereKey($organization->id)->sole()->pivot->status,
+        );
+    }
 
     public function test_organization_admin_cannot_change_platform_admin_role(): void
     {

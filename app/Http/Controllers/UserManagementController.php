@@ -9,7 +9,6 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\Rule;
-use Illuminate\Validation\Rules\Password;
 use Illuminate\View\View;
 
 class UserManagementController extends Controller
@@ -68,7 +67,7 @@ class UserManagementController extends Controller
             $validated,
             $organization
         ): void {
-            $user = new User();
+            $user = new User;
 
             $user->forceFill([
                 'name' => trim($validated['name']),
@@ -101,7 +100,7 @@ class UserManagementController extends Controller
         $organization = $this->organization($request);
 
         abort_unless(
-            $user->belongsToOrganization($organization),
+            $this->hasOrganizationMembership($user, $organization),
             404
         );
 
@@ -140,7 +139,7 @@ class UserManagementController extends Controller
         $organization = $this->organization($request);
 
         abort_unless(
-            $user->belongsToOrganization($organization),
+            $this->hasOrganizationMembership($user, $organization),
             404
         );
 
@@ -191,5 +190,14 @@ class UserManagementController extends Controller
         abort_unless($organization, 403);
 
         return $organization;
+    }
+
+    private function hasOrganizationMembership(
+        User $user,
+        Organization $organization,
+    ): bool {
+        return $organization->users()
+            ->whereKey($user->id)
+            ->exists();
     }
 }

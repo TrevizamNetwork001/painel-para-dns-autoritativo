@@ -36,6 +36,20 @@ class DnsNameserverManagementTest extends TestCase
             ->assertSee('ns1.example.net');
     }
 
+    public function test_nameserver_success_message_uses_global_auto_dismiss_toast(): void
+    {
+        [$admin] = $this->userWithRole('organization_admin');
+
+        $this->actingAs($admin)
+            ->withSession(['status' => 'Identidade cadastrada.'])
+            ->get(route('nameservers.index'))
+            ->assertOk()
+            ->assertSee('data-flash-toast', false)
+            ->assertSee('data-flash-timeout="6000"', false)
+            ->assertSee('data-flash-toast-close', false)
+            ->assertSee('flash-toast-progress', false);
+    }
+
     public function test_admin_can_create_external_identity(): void
     {
         [$admin, $organization] = $this->userWithRole(

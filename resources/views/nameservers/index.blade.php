@@ -71,6 +71,11 @@
                 >
                     ×
                 </button>
+
+                <span
+                    class="flash-toast-progress"
+                    aria-hidden="true"
+                ></span>
             </div>
         @endif
 
