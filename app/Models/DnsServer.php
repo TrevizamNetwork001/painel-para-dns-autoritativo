@@ -110,26 +110,10 @@ class DnsServer extends Model
         return $this->status === 'online';
     }
 
-    public function enrollments(): HasMany
-    {
-        return $this->hasMany(
-            DnsAgentEnrollment::class,
-            'dns_server_id',
-        );
-    }
-
     public function agent(): HasOne
     {
         return $this->hasOne(
             DnsAgent::class,
-            'dns_server_id',
-        );
-    }
-
-    public function agentEnrollments(): HasMany
-    {
-        return $this->hasMany(
-            DnsAgentEnrollment::class,
             'dns_server_id',
         );
     }

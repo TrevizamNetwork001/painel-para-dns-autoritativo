@@ -1,11 +1,19 @@
 # API do agente DNS
 
-## Registro
+## Solicitação de instalação
 
-`POST /api/agent/enroll`
+`POST /api/agent/install-requests`
 
-O registro utiliza um código temporário de uso único. O token permanente é
-retornado somente nessa resposta e apenas o SHA-256 é armazenado no banco.
+O agente usa a URL oficial embutida, gera localmente uma credencial efêmera e
+envia hostname, fingerprint e inventário mínimo. O painel associa a solicitação
+a um servidor previamente cadastrado quando hostname ou IP produzem uma
+correspondência única. Não existe código ou licença de ativação digitada.
+
+O administrador da organização aprova a instalação usando a sessão
+administrativa já protegida por 2FA. O agente consulta
+`POST /api/agent/install-requests/status`; após aprovação, o token operacional
+é entregue uma única vez à mesma credencial efêmera. Somente hashes ficam
+persistidos após a entrega.
 
 ## Autenticação operacional
 
@@ -65,7 +73,7 @@ Exemplo:
 
 A revogação é feita pelo painel administrativo, vinculada à empresa e ao
 servidor. Após revogada, a credencial não pode mais usar heartbeat ou
-inventário. Um novo onboarding pode ser realizado com outro código.
+inventário. Uma nova instalação cria outra solicitação pendente.
 
 ## Ciclo persistente de publicações
 

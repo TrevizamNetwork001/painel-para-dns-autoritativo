@@ -252,30 +252,13 @@
                     </form>
                 @else
                     <div class="agent-state">
-                        <strong>Aguardando ativação</strong>
+                        <strong>Aguardando instalação</strong>
 
                         <span>
-                            Gere um código temporário e execute o agente
-                            no servidor correspondente.
+                            Execute o instalador no servidor correspondente.
+                            A solicitação aparecerá abaixo para aprovação.
                         </span>
                     </div>
-
-                    <form
-                        method="POST"
-                        action="{{ route(
-                            'servers.agent.enrollment.store',
-                            $server
-                        ) }}"
-                    >
-                        @csrf
-
-                        <button
-                            type="submit"
-                            class="button button-primary"
-                        >
-                            Gerar código de ativação
-                        </button>
-                    </form>
                 @endif
             </article>
         </section>
@@ -419,42 +402,71 @@
             </section>
         @endif
 
-        @if (session('agent_enrollment_code'))
+        @if (
+            $latestInstallRequest
+            && $latestInstallRequest->status === 'pending'
+            && $latestInstallRequest->expires_at->isFuture()
+            && ! $agent
+        )
             <section class="panel-card agent-code-panel">
                 <div class="panel-card-header">
                     <div>
-                        <p class="eyebrow">Uso único</p>
-                        <h2>Código de ativação</h2>
+                        <p class="eyebrow">Aprovação administrativa</p>
+                        <h2>Instalação aguardando aprovação</h2>
                     </div>
 
                     <span class="status-badge status-warning">
-                        Expira em 30 minutos
+                        Pendente
                     </span>
                 </div>
 
-                <p class="agent-code-warning">
-                    Este código será mostrado somente agora.
-                    Guarde-o apenas durante a instalação.
-                </p>
-
-                <div class="agent-code-box">
-                    <code id="agent-activation-code">
-                        {{ session('agent_enrollment_code') }}
-                    </code>
-
-                    <button
-                        type="button"
-                        class="button button-secondary"
-                        data-copy-agent-code
-                    >
-                        Copiar
-                    </button>
+                <div class="agent-security-list">
+                    <span>Hostname: {{ $latestInstallRequest->reported_hostname }}</span>
+                    <span>Endereço observado: {{ $latestInstallRequest->registered_ip ?? 'não informado' }}</span>
+                    <span>Sistema: {{ $latestInstallRequest->operating_system ?? 'não informado' }} {{ $latestInstallRequest->operating_system_version }}</span>
+                    <span>Expira em: {{ $latestInstallRequest->expires_at->format('d/m/Y H:i') }}</span>
                 </div>
 
-                <h3>Comando de ativação</h3>
+                <div class="agent-actions">
+                    <form
+                        method="POST"
+                        action="{{ route(
+                            'servers.agent.install-requests.approve',
+                            [$server, $latestInstallRequest]
+                        ) }}"
+                    >
+                        @csrf
+                        <button type="submit" class="button button-primary">
+                            Aprovar instalação
+                        </button>
+                    </form>
+
+                    <form
+                        method="POST"
+                        action="{{ route(
+                            'servers.agent.install-requests.reject',
+                            [$server, $latestInstallRequest]
+                        ) }}"
+                    >
+                        @csrf
+                        <button type="submit" class="button button-danger-soft">
+                            Rejeitar
+                        </button>
+                    </form>
+                </div>
+            </section>
+        @elseif (! $agent)
+            <section class="panel-card agent-code-panel">
+                <p class="eyebrow">Instalação automática</p>
+                <h2>Instalar o agente</h2>
+
+                <p>
+                    Execute no servidor cadastrado. O agente identificará esta
+                    máquina e aparecerá aqui para aprovação.
+                </p>
 
                 <div class="agent-command-box">
-                    <code id="agent-enrollment-command">sudo python3 /opt/dns-center-agent/dns-center-agent.py --enroll --url={{ url('/') }} --code={{ session('agent_enrollment_code') }}</code>
+                    <code id="agent-install-command">curl -fsSL https://trevizamnetwork.com.br/install/agent_install.sh | sudo bash</code>
 
                     <button
                         type="button"
@@ -465,40 +477,6 @@
                     </button>
                 </div>
             </section>
-        @elseif (
-            $latestEnrollment
-            && $latestEnrollment->used_at === null
-            && $latestEnrollment->revoked_at === null
-            && $latestEnrollment->expires_at->isFuture()
-            && ! $agent
-        )
-            <section class="panel-card">
-                <p class="eyebrow">Ativação pendente</p>
-
-                <h2>Existe um código ainda válido</h2>
-
-                <p>
-                    Por segurança, o código não pode ser exibido novamente.
-                    Gere outro código caso tenha perdido o anterior.
-                </p>
-
-                <form
-                    method="POST"
-                    action="{{ route(
-                        'servers.agent.enrollment.store',
-                        $server
-                    ) }}"
-                >
-                    @csrf
-
-                    <button
-                        type="submit"
-                        class="button button-secondary"
-                    >
-                        Revogar e gerar novo código
-                    </button>
-                </form>
-            </section>
         @endif
 
         <section class="panel-card">
@@ -506,10 +484,10 @@
             <h2>Como funciona</h2>
 
             <div class="agent-security-list">
-                <span>O código é vinculado a este servidor.</span>
-                <span>O código expira após 30 minutos.</span>
-                <span>O código só pode ser utilizado uma vez.</span>
-                <span>Somente o hash é armazenado no painel.</span>
+                <span>A solicitação é associada por hostname/IP cadastrado.</span>
+                <span>A solicitação expira após 24 horas.</span>
+                <span>A aprovação reutiliza a sessão administrativa com 2FA.</span>
+                <span>A credencial da solicitação é armazenada somente como hash.</span>
                 <span>A credencial permanente aparece somente para o agente.</span>
                 <span>O agente não recebe acesso ao painel administrativo.</span>
             </div>
@@ -518,25 +496,10 @@
 
     <script nonce="{{ $cspNonce ?? '' }}">
         document
-            .querySelector('[data-copy-agent-code]')
-            ?.addEventListener('click', async () => {
-                const code = document
-                    .querySelector('#agent-activation-code')
-                    ?.textContent
-                    ?.trim();
-
-                if (!code) {
-                    return;
-                }
-
-                await navigator.clipboard.writeText(code);
-            });
-
-        document
             .querySelector('[data-copy-agent-command]')
             ?.addEventListener('click', async () => {
                 const command = document
-                    .querySelector('#agent-enrollment-command')
+                    .querySelector('#agent-install-command')
                     ?.textContent
                     ?.trim();
 

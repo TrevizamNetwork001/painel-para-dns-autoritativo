@@ -14,6 +14,7 @@ import platform
 import pwd
 import grp
 import re
+import secrets
 import shutil
 import socket
 import stat
@@ -29,7 +30,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-AGENT_VERSION = "0.3.0"
+AGENT_VERSION = "0.4.0"
+OFFICIAL_BASE_URL = "https://dnscenter.trevizamnetwork.com.br"
 DEFAULT_CONFIG = Path("/etc/dns-center-agent/agent.json")
 DEFAULT_STATE_DIR = Path("/var/lib/dns-center-agent")
 DEFAULT_ZONES_DIR = Path("/etc/bind/dns-center-zones")
@@ -731,48 +733,88 @@ def agent_uuid(config_path: Path) -> str:
     return str(uuid.uuid5(uuid.NAMESPACE_DNS, source))
 
 
-def enroll(args: argparse.Namespace) -> int:
+def request_approval(args: argparse.Namespace) -> int:
     config_path = Path(args.config)
+    pending_path = config_path.with_name("install-request.json")
 
-    payload = request_json(
-        "POST",
-        normalize_base_url(args.url) + "/api/agent/enroll",
-        {
-            "activation_code": args.code,
+    if config_path.exists():
+        raise AgentError("Este agente já possui uma credencial ativa.")
+
+    if pending_path.exists():
+        pending = read_json(pending_path)
+    else:
+        pending = {
+            "request_id": str(uuid.uuid4()),
+            "request_token": secrets.token_urlsafe(48),
             "agent_uuid": agent_uuid(config_path),
             "fingerprint": build_fingerprint(),
             "hostname": socket.gethostname(),
+            "created_at": utc_now(),
+        }
+        save_config(pending_path, pending)
+
+    release = os_release()
+    payload = request_json(
+        "POST",
+        OFFICIAL_BASE_URL + "/api/agent/install-requests",
+        {
+            **pending,
             "agent_version": AGENT_VERSION,
+            "operating_system": release.get("NAME"),
+            "operating_system_version": release.get("VERSION_ID"),
         },
     )
 
-    token = payload.get("agent", {}).get("token")
-    assigned_uuid = payload.get("agent", {}).get("uuid")
+    print("Solicitação enviada ao painel.")
+    print(f"Identificador: {payload.get('request_id', pending['request_id'])}")
+    print("Aguardando aprovação administrativa.")
 
-    if not isinstance(token, str) or not token:
-        raise AgentError("O painel não retornou o token permanente.")
+    wait_seconds = max(0, min(int(args.wait), 86400))
+    deadline = time.monotonic() + wait_seconds
 
-    config = {
-        "base_url": normalize_base_url(args.url),
-        "token": token,
-        "agent_uuid": assigned_uuid,
-        "server": payload.get("server", {}),
-        "state_dir": str(DEFAULT_STATE_DIR),
-        "zones_dir": str(DEFAULT_ZONES_DIR),
-        "managed_include": str(DEFAULT_INCLUDE),
-        "backup_dir": str(DEFAULT_BACKUP_DIR),
-        "named_checkzone": "/usr/bin/named-checkzone",
-        "named_checkconf": "/usr/bin/named-checkconf",
-        "rndc": "/usr/sbin/rndc",
-        "request_timeout": 30,
-        "max_artifact_bytes": DEFAULT_MAX_ARTIFACT_BYTES,
-        "enrolled_at": utc_now(),
-    }
+    while wait_seconds > 0 and time.monotonic() < deadline:
+        result = request_json(
+            "POST",
+            OFFICIAL_BASE_URL + "/api/agent/install-requests/status",
+            {
+                "request_id": pending["request_id"],
+                "request_token": pending["request_token"],
+            },
+        )
+        status_value = result.get("status")
 
-    save_config(config_path, config)
+        if status_value == "approved":
+            token = result.get("agent", {}).get("token")
+            assigned_uuid = result.get("agent", {}).get("uuid")
 
-    print("Agente registrado com sucesso.")
-    print(f"Configuração: {config_path}")
+            if not isinstance(token, str) or not token:
+                raise AgentError("O painel não retornou a credencial permanente.")
+
+            config = {
+                "base_url": OFFICIAL_BASE_URL,
+                "token": token,
+                "agent_uuid": assigned_uuid,
+                "server": result.get("server", {}),
+                "state_dir": str(DEFAULT_STATE_DIR),
+                "zones_dir": str(DEFAULT_ZONES_DIR),
+                "managed_include": str(DEFAULT_INCLUDE),
+                "backup_dir": str(DEFAULT_BACKUP_DIR),
+                "named_checkzone": "/usr/bin/named-checkzone",
+                "named_checkconf": "/usr/bin/named-checkconf",
+                "rndc": "/usr/sbin/rndc",
+                "request_timeout": 30,
+                "max_artifact_bytes": DEFAULT_MAX_ARTIFACT_BYTES,
+                "enrolled_at": utc_now(),
+            }
+            save_config(config_path, config)
+            pending_path.unlink(missing_ok=True)
+            print("Instalação aprovada e agente registrado.")
+            return 0
+
+        if status_value in {"rejected", "expired"}:
+            raise AgentError(f"Solicitação {status_value} pelo painel.")
+
+        time.sleep(5)
 
     return 0
 
@@ -2279,7 +2321,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     actions = parser.add_mutually_exclusive_group(required=True)
 
-    actions.add_argument("--enroll", action="store_true")
+    actions.add_argument("--request-approval", action="store_true")
     actions.add_argument("--status", action="store_true")
     actions.add_argument("--heartbeat", action="store_true")
     actions.add_argument("--inventory", action="store_true")
@@ -2287,8 +2329,7 @@ def build_parser() -> argparse.ArgumentParser:
     actions.add_argument("--run-authorized-operation", action="store_true")
     actions.add_argument("--sync-zones", action="store_true")
 
-    parser.add_argument("--url")
-    parser.add_argument("--code")
+    parser.add_argument("--wait", type=int, default=1800)
     parser.add_argument("--apply", action="store_true")
     parser.add_argument("--confirm")
 
@@ -2299,13 +2340,8 @@ def main() -> int:
     args = build_parser().parse_args()
 
     try:
-        if args.enroll:
-            if not args.url or not args.code:
-                raise AgentError(
-                    "--enroll exige --url e --code."
-                )
-
-            return enroll(args)
+        if args.request_approval:
+            return request_approval(args)
 
         if args.status:
             return status(args)

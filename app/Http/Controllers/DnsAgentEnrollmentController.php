@@ -3,7 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\DnsAgent;
-use App\Models\DnsAgentEnrollment;
+use App\Models\DnsAgentInstallRequest;
 use App\Models\DnsBindOperation;
 use App\Models\DnsServer;
 use App\Support\SecurityAuditLogger;
@@ -30,7 +30,7 @@ class DnsAgentEnrollmentController extends Controller
             ->latest('id')
             ->first();
 
-        $latestEnrollment = DnsAgentEnrollment::query()
+        $latestInstallRequest = DnsAgentInstallRequest::query()
             ->where('organization_id', $organizationId)
             ->where('dns_server_id', $server->id)
             ->latest('id')
@@ -53,7 +53,7 @@ class DnsAgentEnrollmentController extends Controller
         return view('servers.agent', [
             'server' => $server,
             'agent' => $agent,
-            'latestEnrollment' => $latestEnrollment,
+            'latestInstallRequest' => $latestInstallRequest,
             'latestPublication' => $latestPublication,
             'latestAppliedPublication' => $latestAppliedPublication,
             'latestBindOperation' => $latestBindOperation,
@@ -148,62 +148,140 @@ class DnsAgentEnrollmentController extends Controller
             ->with('status', 'Operação BIND autorizada para execução pelo agente.');
     }
 
-    public function store(
+    public function approve(
         Request $request,
         DnsServer $server,
+        DnsAgentInstallRequest $installRequest,
     ): RedirectResponse {
-        $organizationId = $this->authorizeServer(
-            $request,
-            $server,
+        $organizationId = $this->authorizeServer($request, $server);
+
+        abort_unless(
+            (int) $installRequest->organization_id === $organizationId
+            && (int) $installRequest->dns_server_id === (int) $server->id,
+            404,
         );
 
-        abort_if(
-            DnsAgent::query()
-                ->where('dns_server_id', $server->id)
-                ->whereNull('revoked_at')
-                ->exists(),
-            409,
-            'Este servidor já possui um agente ativo.',
-        );
-
-        $plainCode = $this->generateActivationCode();
-        $normalizedCode = $this->normalizeCode($plainCode);
-
-        $enrollment = DB::transaction(function () use (
+        DB::transaction(function () use (
             $request,
             $server,
+            $installRequest,
             $organizationId,
-            $normalizedCode,
-        ): DnsAgentEnrollment {
-            DnsAgentEnrollment::query()
-                ->where('organization_id', $organizationId)
-                ->where('dns_server_id', $server->id)
-                ->whereNull('used_at')
-                ->whereNull('revoked_at')
-                ->update([
-                    'revoked_at' => now(),
-                    'updated_at' => now(),
-                ]);
+        ): void {
+            $locked = DnsAgentInstallRequest::query()
+                ->whereKey($installRequest->id)
+                ->lockForUpdate()
+                ->firstOrFail();
 
-            return DnsAgentEnrollment::query()->create([
+            abort_unless(
+                $locked->status === 'pending'
+                && $locked->expires_at->isFuture(),
+                409,
+                'A solicitação não está mais disponível.',
+            );
+            abort_if(
+                DnsAgent::query()
+                    ->where('dns_server_id', $server->id)
+                    ->whereNull('revoked_at')
+                    ->lockForUpdate()
+                    ->exists(),
+                409,
+                'Este servidor já possui um agente ativo.',
+            );
+            abort_if(
+                DnsAgent::query()
+                    ->where('agent_uuid', $locked->agent_uuid)
+                    ->exists(),
+                409,
+                'Este agente já foi registrado.',
+            );
+
+            $plainToken = Str::random(96);
+            $now = now();
+
+            DnsAgent::query()->create([
                 'organization_id' => $organizationId,
                 'dns_server_id' => $server->id,
-                'created_by' => $request->user()->id,
-                'code_hash' => hash(
-                    'sha256',
-                    $normalizedCode,
-                ),
-                'expires_at' => now()->addMinutes(30),
+                'agent_uuid' => $locked->agent_uuid,
+                'fingerprint' => $locked->fingerprint,
+                'token_hash' => hash('sha256', $plainToken),
+                'reported_hostname' => $locked->reported_hostname,
+                'registered_ip' => $locked->registered_ip,
+                'registered_at' => $now,
+                'last_seen_at' => $now,
+                'metadata' => [
+                    'agent_version' => $locked->agent_version,
+                    'installation' => 'panel_approval',
+                ],
             ]);
+
+            $locked->forceFill([
+                'status' => 'approved',
+                'approved_by' => $request->user()->id,
+                'approved_at' => $now,
+                'agent_token' => $plainToken,
+            ])->save();
+
+            $server->forceFill([
+                'status' => 'pending',
+                'agent_uuid' => $locked->agent_uuid,
+                'agent_version' => $locked->agent_version,
+                'agent_status' => 'pending',
+                'agent_fingerprint' => $locked->fingerprint,
+                'agent_registered_at' => $now,
+                'last_seen_at' => $now,
+            ])->save();
         });
+
+        SecurityAuditLogger::record(
+            event: 'agent.install_approved',
+            user: $request->user(),
+            result: 'success',
+            actor: 'user:'.$request->user()->id,
+            source: 'web',
+            ipAddress: $request->ip(),
+            userAgent: $request->userAgent(),
+            organizationId: $organizationId,
+            reason: 'install_request:'.$installRequest->id,
+        );
 
         return redirect()
             ->route('servers.agent.show', $server)
-            ->with([
-                'status' => 'Código de ativação gerado com sucesso.',
-                'agent_enrollment_code' => $plainCode,
-                'agent_enrollment_expires_at' => $enrollment->expires_at->toIso8601String(),
-            ]);
+            ->with('status', 'Instalação do agente aprovada.');
+    }
+
+    public function reject(
+        Request $request,
+        DnsServer $server,
+        DnsAgentInstallRequest $installRequest,
+    ): RedirectResponse {
+        $organizationId = $this->authorizeServer($request, $server);
+        abort_unless(
+            (int) $installRequest->organization_id === $organizationId
+            && (int) $installRequest->dns_server_id === (int) $server->id,
+            404,
+        );
+
+        $installRequest->forceFill([
+            'status' => 'rejected',
+            'rejected_at' => now(),
+            'agent_token' => null,
+        ])->save();
+
+        SecurityAuditLogger::record(
+            event: 'agent.install_rejected',
+            user: $request->user(),
+            result: 'success',
+            actor: 'user:'.$request->user()->id,
+            source: 'web',
+            ipAddress: $request->ip(),
+            userAgent: $request->userAgent(),
+            organizationId: $organizationId,
+            reason: 'install_request:'.$installRequest->id,
+        );
+
+        return redirect()
+            ->route('servers.agent.show', $server)
+            ->with('status', 'Solicitação de instalação rejeitada.');
     }
 
     public function revoke(
@@ -234,13 +312,13 @@ class DnsAgentEnrollmentController extends Controller
                 'revoked_at' => $now,
             ])->save();
 
-            DnsAgentEnrollment::query()
+            DnsAgentInstallRequest::query()
                 ->where('organization_id', $organizationId)
                 ->where('dns_server_id', $server->id)
-                ->whereNull('used_at')
-                ->whereNull('revoked_at')
+                ->where('status', 'pending')
                 ->update([
-                    'revoked_at' => $now,
+                    'status' => 'rejected',
+                    'rejected_at' => $now,
                     'updated_at' => $now,
                 ]);
 
@@ -287,32 +365,5 @@ class DnsAgentEnrollmentController extends Controller
         );
 
         return $organizationId;
-    }
-
-    private function generateActivationCode(): string
-    {
-        $characters = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-        $parts = [];
-
-        for ($group = 0; $group < 4; $group++) {
-            $value = '';
-
-            for ($position = 0; $position < 5; $position++) {
-                $value .= $characters[
-                    random_int(0, strlen($characters) - 1)
-                ];
-            }
-
-            $parts[] = $value;
-        }
-
-        return 'DNSC-'.implode('-', $parts);
-    }
-
-    private function normalizeCode(string $code): string
-    {
-        return Str::upper(
-            preg_replace('/[^A-Z0-9]/i', '', $code) ?? '',
-        );
     }
 }

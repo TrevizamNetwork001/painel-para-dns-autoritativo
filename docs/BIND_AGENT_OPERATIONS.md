@@ -1,6 +1,6 @@
 # Operação segura do agente BIND
 
-O agente 0.2.0 preserva o enrollment existente e adiciona:
+O agente 0.4.0 usa instalação com aprovação no painel e oferece:
 
 - heartbeat;
 - inventário;

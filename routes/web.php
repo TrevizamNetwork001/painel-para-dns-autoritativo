@@ -13,6 +13,20 @@ use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\UserManagementController;
 use Illuminate\Support\Facades\Route;
 
+Route::get('/install/dns-center-agent.py', function () {
+    return response()->file(
+        base_path('agent/dns-center-agent.py'),
+        ['Content-Type' => 'text/x-python'],
+    );
+})->name('install.agent.binary');
+
+Route::get('/install/dns-center-agent.py.sha256', function () {
+    $path = base_path('agent/dns-center-agent.py');
+
+    return response(hash_file('sha256', $path)."  dns-center-agent.py\n")
+        ->header('Content-Type', 'text/plain');
+})->name('install.agent.checksum');
+
 Route::middleware('guest')->group(function (): void {
     Route::get(
         '/esqueci-minha-senha',
@@ -147,9 +161,14 @@ Route::middleware([
     )->name('servers.agent.show');
 
     Route::post(
-        '/servidores/{server}/agente/ativacao',
-        [DnsAgentEnrollmentController::class, 'store'],
-    )->name('servers.agent.enrollment.store');
+        '/servidores/{server}/agente/solicitacoes/{installRequest}/aprovar',
+        [DnsAgentEnrollmentController::class, 'approve'],
+    )->name('servers.agent.install-requests.approve');
+
+    Route::post(
+        '/servidores/{server}/agente/solicitacoes/{installRequest}/rejeitar',
+        [DnsAgentEnrollmentController::class, 'reject'],
+    )->name('servers.agent.install-requests.reject');
 
     Route::post(
         '/servidores/{server}/agente/revogar',

@@ -4,6 +4,7 @@ import importlib.util
 import io
 import json
 import logging
+import argparse
 import tempfile
 import unittest
 import urllib.error
@@ -141,6 +142,61 @@ class AgentTests(unittest.TestCase):
                 '{"ok": true}\n',
                 target.read_text(encoding="utf-8"),
             )
+
+    def test_request_approval_saves_one_time_credential_after_panel_approval(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            config_path = Path(directory) / "agent.json"
+            args = argparse.Namespace(config=str(config_path), wait=30)
+            responses = [
+                {
+                    "ok": True,
+                    "status": "pending",
+                    "request_id": "95fc4ed4-f31d-4b44-a056-a33ad14cc170",
+                    "matched": True,
+                },
+                {
+                    "ok": True,
+                    "status": "approved",
+                    "agent": {
+                        "uuid": "12e0a9ac-18d0-4efc-aaf3-93ce41545ad6",
+                        "token": "permanent-token",
+                    },
+                    "server": {
+                        "id": 1,
+                        "name": "NS1",
+                        "hostname": "ns1.example.test",
+                        "role": "primary",
+                    },
+                },
+            ]
+
+            with patch.object(
+                agent,
+                "request_json",
+                side_effect=responses,
+            ) as request, patch.object(
+                agent,
+                "os_release",
+                return_value={"NAME": "Debian", "VERSION_ID": "13"},
+            ):
+                result = agent.request_approval(args)
+
+            self.assertEqual(0, result)
+            config = json.loads(config_path.read_text(encoding="utf-8"))
+            self.assertEqual(agent.OFFICIAL_BASE_URL, config["base_url"])
+            self.assertEqual("permanent-token", config["token"])
+            self.assertFalse(
+                config_path.with_name("install-request.json").exists()
+            )
+            self.assertEqual(2, request.call_count)
+
+    def test_parser_removes_legacy_activation_code(self) -> None:
+        parser = agent.build_parser()
+
+        with self.assertRaises(SystemExit):
+            parser.parse_args(["--enroll", "--code", "legacy"])
 
     def test_apply_requires_environment_and_confirmation(self) -> None:
         config = {

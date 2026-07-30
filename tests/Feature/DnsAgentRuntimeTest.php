@@ -3,7 +3,6 @@
 namespace Tests\Feature;
 
 use App\Models\DnsAgent;
-use App\Models\DnsAgentEnrollment;
 use App\Models\DnsServer;
 use App\Models\Organization;
 use App\Models\User;
@@ -75,7 +74,7 @@ class DnsAgentRuntimeTest extends TestCase
             ->assertJsonPath('error', 'invalid_agent_token');
     }
 
-    public function test_admin_can_revoke_agent_and_register_another(): void
+    public function test_admin_can_revoke_agent(): void
     {
         [$agent, $token, $server, $admin] =
             $this->registeredAgent(true);
@@ -93,38 +92,8 @@ class DnsAgentRuntimeTest extends TestCase
             ->assertForbidden()
             ->assertJsonPath('error', 'revoked_agent_token');
 
-        $code = 'DNSC-ABCDE-FGHJK-LMNPQ-RSTUV';
-
-        $enrollment = DnsAgentEnrollment::query()->create([
-            'organization_id' => $server->organization_id,
-            'dns_server_id' => $server->id,
-            'created_by' => $admin->id,
-            'code_hash' => hash(
-                'sha256',
-                $this->normalizeCode($code),
-            ),
-            'expires_at' => now()->addMinutes(30),
-        ]);
-
-        $this->assertFalse($enrollment->fresh()->expires_at->isPast());
-
-        $this->postJson('/api/agent/enroll', [
-            'activation_code' => $code,
-            'agent_uuid' => (string) Str::uuid(),
-            'fingerprint' => str_repeat('b', 64),
-            'hostname' => 'ns1-reinstalado.exemplo.net',
-            'agent_version' => '2.0.0',
-        ])->assertCreated();
-
         $this->assertSame(
-            2,
-            DnsAgent::query()
-                ->where('dns_server_id', $server->id)
-                ->count(),
-        );
-
-        $this->assertSame(
-            1,
+            0,
             DnsAgent::query()
                 ->where('dns_server_id', $server->id)
                 ->whereNull('revoked_at')
@@ -155,11 +124,11 @@ class DnsAgentRuntimeTest extends TestCase
 
         $this->actingAs($admin)
             ->withSession([
-                'status' => 'Código de ativação gerado com sucesso.',
+                'status' => 'Instalação do agente aprovada.',
             ])
             ->get(route('servers.agent.show', $server))
             ->assertOk()
-            ->assertSee('Código de ativação gerado com sucesso.')
+            ->assertSee('Instalação do agente aprovada.')
             ->assertSee('data-flash-toast', false)
             ->assertSee('data-flash-timeout="6000"', false)
             ->assertSee('data-flash-toast-close', false);
@@ -218,12 +187,5 @@ class DnsAgentRuntimeTest extends TestCase
         return $withAdmin
             ? [$agent, $token, $server, $admin]
             : [$agent, $token, $server];
-    }
-
-    private function normalizeCode(string $code): string
-    {
-        return Str::upper(
-            preg_replace('/[^A-Z0-9]/i', '', $code) ?? '',
-        );
     }
 }
