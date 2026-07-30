@@ -149,6 +149,22 @@ class DnsAgentRuntimeTest extends TestCase
             );
     }
 
+    public function test_agent_success_message_uses_auto_dismiss_toast(): void
+    {
+        [, , $server, $admin] = $this->registeredAgent(true);
+
+        $this->actingAs($admin)
+            ->withSession([
+                'status' => 'Código de ativação gerado com sucesso.',
+            ])
+            ->get(route('servers.agent.show', $server))
+            ->assertOk()
+            ->assertSee('Código de ativação gerado com sucesso.')
+            ->assertSee('data-flash-toast', false)
+            ->assertSee('data-flash-timeout="6000"', false)
+            ->assertSee('data-flash-toast-close', false);
+    }
+
     private function registeredAgent(
         bool $withAdmin = false,
     ): array {

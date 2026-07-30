@@ -49,8 +49,24 @@
         </header>
 
         @if (session('status'))
-            <div class="alert alert-success">
-                {{ session('status') }}
+            <div
+                class="alert alert-success flash-toast"
+                role="status"
+                data-flash-toast
+                data-flash-timeout="6000"
+            >
+                <span class="flash-toast-message">
+                    {{ session('status') }}
+                </span>
+
+                <button
+                    type="button"
+                    class="flash-toast-close"
+                    data-flash-toast-close
+                    aria-label="Fechar"
+                >
+                    &times;
+                </button>
             </div>
         @endif
 
