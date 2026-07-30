@@ -679,6 +679,106 @@ a:hover {
     padding: 1.25rem;
 }
 
+.totp-qr-code {
+    width: min(100%, 240px);
+    margin: 1rem 0;
+    padding: 0.75rem;
+    border-radius: 12px;
+    background: #fff;
+}
+
+.totp-qr-code svg {
+    display: block;
+    width: 100%;
+    height: auto;
+}
+
+.security-setup-shell {
+    min-height: 100vh;
+    padding: clamp(1rem, 4vw, 3rem);
+    background: var(--background);
+}
+
+.security-setup-card {
+    width: min(100%, 960px);
+    margin: 0 auto;
+}
+
+.security-setup-heading {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 1.5rem;
+    margin-bottom: 1rem;
+}
+
+.security-setup-heading h1 {
+    margin: 0.25rem 0 0.4rem;
+    font-size: clamp(1.45rem, 3vw, 1.9rem);
+    letter-spacing: -0.035em;
+}
+
+.security-setup-heading p:last-child,
+.security-factor-card p {
+    color: var(--text-muted);
+    font-size: 0.88rem;
+    line-height: 1.55;
+}
+
+.security-grace-notice {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    margin: 1rem 0;
+    padding: 0.85rem 1rem;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    background: var(--surface);
+}
+
+.security-grace-notice p {
+    margin: 0;
+    font-size: 0.82rem;
+}
+
+.security-factor-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1.25fr) minmax(260px, 0.75fr);
+    gap: 1rem;
+}
+
+.security-factor-card h2 {
+    margin-top: 0;
+    font-size: 1rem;
+}
+
+.security-factor-card .auth-form {
+    margin-top: 1rem;
+}
+
+.security-factor-card .agent-command-box {
+    margin: 0.75rem 0 1rem;
+}
+
+.security-setup-actions {
+    display: flex;
+    gap: 0.75rem;
+    margin-top: 1rem;
+}
+
+@media (max-width: 720px) {
+    .security-setup-heading,
+    .security-grace-notice {
+        align-items: stretch;
+        flex-direction: column;
+    }
+
+    .security-factor-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
 .panel-header {
     display: flex;
     align-items: flex-start;

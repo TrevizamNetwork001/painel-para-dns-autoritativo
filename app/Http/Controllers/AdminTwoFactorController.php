@@ -5,16 +5,27 @@ namespace App\Http\Controllers;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Laravel\Fortify\Fortify;
 
 class AdminTwoFactorController extends Controller
 {
     public function show(Request $request): View
     {
         $user = $request->user();
+        $pendingTotp = $user->two_factor_secret
+            && ! $user->hasEnabledTwoFactorAuthentication();
 
         return view('security.two-factor-setup', [
             'user' => $user,
             'totpEnabled' => $user->hasEnabledTwoFactorAuthentication(),
+            'totpQrCodeSvg' => $pendingTotp
+                ? $user->twoFactorQrCodeSvg()
+                : null,
+            'totpSecretKey' => $pendingTotp
+                ? Fortify::currentEncrypter()->decrypt(
+                    $user->two_factor_secret,
+                )
+                : null,
             'passkeysCount' => $user->passkeys()->count(),
             'graceDays' => (int) config('security.admin_2fa.grace_days'),
         ]);

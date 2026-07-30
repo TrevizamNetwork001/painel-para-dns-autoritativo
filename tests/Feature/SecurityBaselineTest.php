@@ -8,6 +8,7 @@ use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\RateLimiter;
+use Laravel\Fortify\Fortify;
 use Tests\TestCase;
 
 class SecurityBaselineTest extends TestCase
@@ -223,6 +224,25 @@ class SecurityBaselineTest extends TestCase
         $this->actingAs($admin)
             ->get('/dashboard')
             ->assertOk();
+    }
+
+    public function test_pending_totp_shows_inline_qr_and_manual_google_key(): void
+    {
+        [$admin] = $this->member('organization_admin');
+        $secret = 'JBSWY3DPEHPK3PXP';
+        $admin->forceFill([
+            'two_factor_secret' => Fortify::currentEncrypter()->encrypt($secret),
+            'two_factor_confirmed_at' => null,
+        ])->save();
+
+        $this->actingAs($admin)
+            ->get(route('security.two-factor.setup'))
+            ->assertOk()
+            ->assertSee('class="totp-qr-code"', false)
+            ->assertSee('<svg', false)
+            ->assertSee('Inserir chave de configuração')
+            ->assertSee($secret)
+            ->assertSee('data-copy-totp-secret', false);
     }
 
     public function test_grace_allows_navigation_but_not_critical_operations(): void
