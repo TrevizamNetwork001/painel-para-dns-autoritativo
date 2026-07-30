@@ -466,14 +466,14 @@
                 </p>
 
                 <div class="agent-command-box">
-                    <code id="agent-install-command">curl -fsSL https://trevizamnetwork.com.br/install/agent_install.sh | sudo bash</code>
+                    <code id="agent-install-command">curl -fsSL https://dnscenter.trevizamnetwork.com.br/install/agent_install.sh | sudo bash</code>
 
                     <button
                         type="button"
                         class="button button-secondary"
                         data-copy-agent-command
                     >
-                        Copiar comando
+                        Copiar
                     </button>
                 </div>
             </section>

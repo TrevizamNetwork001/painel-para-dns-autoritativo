@@ -198,7 +198,12 @@ class DnsAgentApprovalTest extends TestCase
         $this->actingAs($admin)
             ->get(route('servers.agent.show', $server))
             ->assertOk()
-            ->assertSee('Instalar o agente');
+            ->assertSee('Instalar o agente')
+            ->assertSee(
+                'https://dnscenter.trevizamnetwork.com.br/install/agent_install.sh',
+            )
+            ->assertSee('Copiar')
+            ->assertDontSee('Copiar comando');
 
         $this->postJson('/api/agent/install-requests', [])
             ->assertServiceUnavailable()

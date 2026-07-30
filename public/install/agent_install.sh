@@ -10,7 +10,7 @@ CONFIG_DIR="/etc/dns-center-agent"
 STATE_DIR="/var/lib/dns-center-agent"
 
 if [ "$(id -u)" -ne 0 ]; then
-    echo "Execute com privilégios: curl -fsSL https://trevizamnetwork.com.br/install/agent_install.sh | sudo bash" >&2
+    echo "Execute com privilégios: curl -fsSL https://dnscenter.trevizamnetwork.com.br/install/agent_install.sh | sudo bash" >&2
     exit 1
 fi
 
