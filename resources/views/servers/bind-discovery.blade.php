@@ -85,7 +85,8 @@
                                     <th>Tipo</th>
                                     <th>Sintaxe</th>
                                     <th>Serial</th>
-                                    <th>Registros</th>
+                                    <th>Nodes (BIND)</th>
+                                    <th>Registros parseados</th>
                                     <th>Estado</th>
                                     <th>Ação</th>
                                 </tr>
@@ -103,6 +104,7 @@
                                         <td>{{ $zone->detected_syntax ?? '—' }}</td>
                                         <td>{{ $zone->serial ?? '—' }}</td>
                                         <td>{{ $zone->node_count ?? '—' }}</td>
+                                        <td>{{ is_array($zone->records) ? count($zone->records) : '—' }}</td>
                                         <td>
                                             <span class="status-badge {{ match ($zone->comparison_state) {
                                                 'new' => 'status-success',
