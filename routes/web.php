@@ -4,6 +4,7 @@ use App\Http\Controllers\AdminTwoFactorController;
 use App\Http\Controllers\Auth\ForgotPasswordController;
 use App\Http\Controllers\Auth\ResetPasswordController;
 use App\Http\Controllers\DnsAgentEnrollmentController;
+use App\Http\Controllers\DnsAgentInstallAssignmentController;
 use App\Http\Controllers\DnsNameserverController;
 use App\Http\Controllers\DnsServerController;
 use App\Http\Controllers\DnsTsigKeyController;
@@ -160,6 +161,16 @@ Route::middleware([
     'password.changed',
     'organization',
 ])->group(function (): void {
+    Route::get(
+        '/servidores/agentes/solicitacoes/{installRequest}/associacao',
+        [DnsAgentInstallAssignmentController::class, 'show'],
+    )->name('servers.agent.install-requests.assignment.show');
+
+    Route::post(
+        '/servidores/agentes/solicitacoes/{installRequest}/associacao',
+        [DnsAgentInstallAssignmentController::class, 'store'],
+    )->name('servers.agent.install-requests.assignment.store');
+
     Route::get(
         '/servidores',
         [DnsServerController::class, 'index']

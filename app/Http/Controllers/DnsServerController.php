@@ -2,7 +2,9 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\DnsAgentInstallRequest;
 use App\Models\DnsServer;
+use App\Support\DnsAgentInstallRequestMatcher;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Schema;
@@ -11,6 +13,10 @@ use Illuminate\View\View;
 
 class DnsServerController extends Controller
 {
+    public function __construct(
+        private readonly DnsAgentInstallRequestMatcher $installRequestMatcher,
+    ) {}
+
     public function index(Request $request): View
     {
         $organizationId = $this->organizationId($request);
@@ -46,7 +52,59 @@ class DnsServerController extends Controller
             'servers' => $servers,
             'roles' => DnsServer::ROLES,
             'environments' => DnsServer::ENVIRONMENTS,
+            'unassignedInstallRequests' => $this->unassignedInstallRequests(
+                $request,
+            ),
         ]);
+    }
+
+    private function unassignedInstallRequests(Request $request)
+    {
+        $user = $request->user();
+        $organizationId = (int) $user->current_organization_id;
+        $role = $user->roleForOrganization($organizationId);
+
+        if (! $user->is_platform_admin && $role !== 'organization_admin') {
+            return collect();
+        }
+
+        return DnsAgentInstallRequest::query()
+            ->whereNull('dns_server_id')
+            ->whereNull('organization_id')
+            ->where('status', 'pending')
+            ->where('expires_at', '>', now())
+            ->latest('id')
+            ->limit(50)
+            ->get()
+            ->map(function (DnsAgentInstallRequest $installRequest) use (
+                $user,
+                $organizationId,
+            ) {
+                $candidates = $this->installRequestMatcher->candidates(
+                    $installRequest->reported_hostname,
+                    $installRequest->registered_ip,
+                );
+
+                if ($candidates->isEmpty()) {
+                    return null;
+                }
+
+                if (
+                    ! $user->is_platform_admin
+                    && ! $candidates->every(
+                        fn (DnsServer $server) => (int) $server->organization_id === $organizationId,
+                    )
+                ) {
+                    return null;
+                }
+
+                return [
+                    'request' => $installRequest,
+                    'candidates' => $candidates,
+                ];
+            })
+            ->filter()
+            ->values();
     }
 
     public function store(Request $request): RedirectResponse

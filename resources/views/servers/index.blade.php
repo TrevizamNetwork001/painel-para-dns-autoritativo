@@ -108,6 +108,52 @@
             </article>
         </section>
 
+        @if ($unassignedInstallRequests->isNotEmpty())
+            <section class="servers-list-panel">
+                <div class="servers-list-heading">
+                    <div>
+                        <p class="eyebrow">Intervenção administrativa</p>
+                        <h2>Solicitações de agente não associadas</h2>
+                    </div>
+
+                    <span class="status-badge status-warning">
+                        {{ $unassignedInstallRequests->count() }} pendente(s)
+                    </span>
+                </div>
+
+                @foreach ($unassignedInstallRequests as $item)
+                    @php
+                        $installRequest = $item['request'];
+                    @endphp
+                    <article class="server-row">
+                        <div class="server-row-main">
+                            <div>
+                                <strong>Associação necessária</strong>
+                                <span>
+                                    Request {{ substr($installRequest->request_id, 0, 8) }}…
+                                </span>
+                                <small>
+                                    Hostname {{ $installRequest->reported_hostname }} ·
+                                    IP observado {{ $installRequest->registered_ip ?? 'não informado' }} ·
+                                    {{ $item['candidates']->count() }} candidato(s)
+                                </small>
+                            </div>
+                        </div>
+
+                        <a
+                            class="button button-secondary"
+                            href="{{ route(
+                                'servers.agent.install-requests.assignment.show',
+                                $installRequest,
+                            ) }}"
+                        >
+                            Revisar associação
+                        </a>
+                    </article>
+                @endforeach
+            </section>
+        @endif
+
         <section class="servers-list-panel">
             <div class="servers-list-heading">
                 <div>
