@@ -442,7 +442,18 @@ def request_artifact(
 def run_command(
     command: list[str],
     timeout: int = 30,
+    max_output_bytes: int = 8000,
 ) -> subprocess.CompletedProcess[str]:
+    """Run a fixed argv list with shell disabled.
+
+    `max_output_bytes` bounds stdout/stderr for the *default* short
+    diagnostic case (rndc status, checkconf errors, ...). Callers that
+    legitimately expect large output (e.g. a full zone dump) must pass an
+    explicit, larger limit — never rely on the 8000-byte default, which
+    would otherwise silently truncate mid-record. Truncation is exposed via
+    `result.stdout_truncated`/`result.stderr_truncated` so callers can
+    detect and refuse a partial capture instead of parsing it as complete.
+    """
     try:
         result = subprocess.run(
             command,
@@ -452,8 +463,10 @@ def run_command(
             timeout=timeout,
             shell=False,
         )
-        result.stdout = result.stdout[:8000]
-        result.stderr = result.stderr[:8000]
+        result.stdout_truncated = len(result.stdout) > max_output_bytes
+        result.stderr_truncated = len(result.stderr) > max_output_bytes
+        result.stdout = result.stdout[:max_output_bytes]
+        result.stderr = result.stderr[:max_output_bytes]
         return result
     except subprocess.TimeoutExpired as exception:
         raise AgentError(
@@ -1713,12 +1726,22 @@ def discover_bind_zones(config: dict[str, Any]) -> dict[str, Any]:
 
         if is_primary and file_path and named_checkzone and within_limit:
             dump_result = run_command(
-                [named_checkzone, "-D", zone_name, file_path], timeout=30
+                [named_checkzone, "-D", zone_name, file_path],
+                timeout=30,
+                max_output_bytes=DISCOVERY_MAX_ZONEFILE_BYTES,
             )
             if dump_result.returncode != 0:
                 zone_report["validation_status"] = "error"
                 zone_report["validation_message"] = sanitize_message(
                     dump_result.stderr or dump_result.stdout
+                )
+            elif getattr(dump_result, "stdout_truncated", False):
+                # Never parse a partial dump as if it were complete — that
+                # would silently persist a wrong (incomplete) record set.
+                zone_report["validation_status"] = "warning"
+                zone_report["validation_message"] = (
+                    "Saída de named-checkzone -D excede o limite de "
+                    "captura; conteúdo não lido nesta descoberta."
                 )
             else:
                 parsed = parse_canonical_zone_dump(

@@ -890,7 +890,7 @@ class AgentTests(unittest.TestCase):
     ) -> None:
         commands: list[list[str]] = []
 
-        def fake_run_command(command: list[str], timeout: int = 30):
+        def fake_run_command(command: list[str], timeout: int = 30, max_output_bytes: int = 8000):
             commands.append(command)
             if command[:2] == ["/usr/sbin/rndc", "status"]:
                 return Mock(returncode=0, stdout="server is up and running\nnumber of zones: 2 (0 automatic)\n", stderr="")
@@ -912,7 +912,7 @@ class AgentTests(unittest.TestCase):
                     stderr="",
                 )
             if command[0] == "/usr/bin/named-checkzone":
-                return Mock(
+                result = Mock(
                     returncode=0,
                     stdout=(
                         "$ORIGIN example.com.\n$TTL 3600\n"
@@ -921,6 +921,8 @@ class AgentTests(unittest.TestCase):
                     ),
                     stderr="",
                 )
+                result.stdout_truncated = False
+                return result
             raise AssertionError(f"unexpected command: {command}")
 
         with tempfile.TemporaryDirectory() as directory:
@@ -958,6 +960,86 @@ class AgentTests(unittest.TestCase):
             any(c[0] == "/usr/bin/named-checkzone" and "example-secondary.com" in c
                 for c in commands)
         )
+
+    def test_run_command_flags_truncated_output_without_losing_default_limit(self) -> None:
+        with patch.object(
+            agent.subprocess, "run",
+            return_value=Mock(returncode=0, stdout="x" * 9000, stderr="ok"),
+        ):
+            result = agent.run_command(["/usr/bin/true"])
+
+        self.assertTrue(result.stdout_truncated)
+        self.assertEqual(8000, len(result.stdout))
+
+        with patch.object(
+            agent.subprocess, "run",
+            return_value=Mock(returncode=0, stdout="x" * 9000, stderr="ok"),
+        ):
+            result = agent.run_command(["/usr/bin/true"], max_output_bytes=20000)
+
+        self.assertFalse(result.stdout_truncated)
+        self.assertEqual(9000, len(result.stdout))
+
+    def test_discover_bind_zones_refuses_truncated_checkzone_dump_instead_of_parsing_partial_content(
+        self,
+    ) -> None:
+        # Regression for the real legacy.example case: a 1030-record
+        # zone dump is far larger than the old blanket 8000-byte output cap
+        # that run_command applied to every subprocess call, so the parser
+        # silently ingested a truncated fragment (110 records) as if it were
+        # the whole zone. discover_bind_zones must detect truncation and
+        # refuse to parse rather than persist a partial-but-plausible result.
+        commands: list[list[str]] = []
+
+        def fake_run_command(command, timeout=30, max_output_bytes=8000):
+            commands.append(command)
+            if command[:2] == ["/usr/sbin/rndc", "status"]:
+                return Mock(returncode=0, stdout="server is up and running\n", stderr="")
+            if command[:2] == ["/usr/bin/named-checkconf", "-p"]:
+                return Mock(
+                    returncode=0,
+                    stdout=(
+                        'zone "big.example.com" {\n    type master;\n'
+                        '    file "/var/cache/bind/master-aut/big.example.com.hosts";\n};\n'
+                    ),
+                    stderr="",
+                )
+            if command[:2] == ["/usr/sbin/rndc", "zonestatus"]:
+                return Mock(
+                    returncode=0,
+                    stdout="serial: 2026082701\nnodes: 1030\nsecure: no\ndynamic: no\n",
+                    stderr="",
+                )
+            if command[0] == "/usr/bin/named-checkzone":
+                # Simulate the real truncation: caller asked for a large cap
+                # but the raw output still exceeds it.
+                result = Mock(returncode=0, stdout="x" * (max_output_bytes + 1), stderr="")
+                result.stdout_truncated = True
+                return result
+            raise AssertionError(f"unexpected command: {command}")
+
+        with patch.object(
+            agent, "detected_binary", side_effect=lambda candidates: candidates[0],
+        ), patch.object(
+            agent, "detected_named_conf", return_value="/etc/bind/named.conf",
+        ), patch.object(
+            agent, "run_command", side_effect=fake_run_command,
+        ), patch.object(
+            agent, "safe_file_metadata",
+            side_effect=lambda path: (
+                {"size": 900, "mode": "0640", "mtime": "2026-08-27T00:00:00+00:00",
+                 "owner": "bind", "group": "bind", "sha256": "b" * 64},
+                None,
+            ),
+        ):
+            result = agent.discover_bind_zones({})
+
+        zone = result["zones"][0]
+        self.assertIsNone(zone["records"])
+        self.assertEqual("warning", zone["validation_status"])
+        self.assertIn("limite de captura", zone["validation_message"].lower())
+        # node_count from rndc zonestatus is unaffected by the dump truncation.
+        self.assertEqual(1030, zone["node_count"])
 
     def test_run_authorized_operation_dispatches_discovery_without_readiness(
         self,
