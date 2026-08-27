@@ -4,7 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\DnsAgentInstallRequest;
-use App\Models\DnsServer;
+use App\Support\DnsAgentInstallRequestMatcher;
 use App\Support\SecurityAuditLogger;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -14,6 +14,10 @@ use Illuminate\Support\Str;
 
 class DnsAgentInstallRequestController extends Controller
 {
+    public function __construct(
+        private readonly DnsAgentInstallRequestMatcher $matcher,
+    ) {}
+
     public function store(Request $request): JsonResponse
     {
         if (! Schema::hasTable('dns_agent_install_requests')) {
@@ -55,7 +59,7 @@ class DnsAgentInstallRequestController extends Controller
                 $existing->status === 'pending'
                 && $existing->dns_server_id === null
             ) {
-                $server = $this->matchingServer($hostname, $request->ip());
+                $server = $this->matcher->unique($hostname, $request->ip());
 
                 if ($server) {
                     $existing->forceFill([
@@ -69,7 +73,7 @@ class DnsAgentInstallRequestController extends Controller
             return $this->pendingResponse($existing);
         }
 
-        $server = $this->matchingServer($hostname, $request->ip());
+        $server = $this->matcher->unique($hostname, $request->ip());
 
         $installRequest = DnsAgentInstallRequest::query()->create([
             'request_id' => $validated['request_id'],
@@ -196,34 +200,5 @@ class DnsAgentInstallRequestController extends Controller
             'error' => 'installation_unavailable',
             'message' => 'O fluxo de instalação ainda não está disponível.',
         ], 503);
-    }
-
-    private function matchingServer(string $hostname, ?string $ip): ?DnsServer
-    {
-        $matches = DnsServer::query()
-            ->where('enabled', true)
-            ->whereDoesntHave(
-                'agent',
-                fn ($query) => $query->whereNull('revoked_at'),
-            )
-            ->where(function ($query) use ($hostname, $ip): void {
-                $query->whereRaw('LOWER(hostname) = ?', [$hostname]);
-
-                if (! str_contains($hostname, '.')) {
-                    $query->orWhereRaw(
-                        'LOWER(hostname) LIKE ?',
-                        [$hostname.'.%'],
-                    );
-                }
-
-                if ($ip) {
-                    $query->orWhere('ipv4_address', $ip)
-                        ->orWhere('ipv6_address', $ip);
-                }
-            })
-            ->limit(2)
-            ->get();
-
-        return $matches->count() === 1 ? $matches->first() : null;
     }
 }
