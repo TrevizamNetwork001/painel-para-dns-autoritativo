@@ -305,6 +305,137 @@ class DnsBindDiscoveryTest extends TestCase
         )->assertOk();
     }
 
+    public function test_zone_preview_shows_record_content_not_dash(): void
+    {
+        // Golden regression for the real 8.b.d.0.1.0.0.2.ip6.arpa case: the
+        // preview page was reading $record['rdata'] while the persisted/
+        // sanitized shape uses 'content', so every NS/PTR rendered as "—"
+        // even though the RDATA was correctly stored in the database.
+        $context = $this->context();
+        $discovered = $this->discoveredZone($context, [
+            'name' => '8.b.d.0.1.0.0.2.ip6.arpa',
+            'node_count' => 4,
+            'soa' => [
+                'mname' => 'ns1.legacy.example.',
+                'rname' => 'hostmaster.legacy.example.',
+                'serial' => 2026082701,
+                'refresh' => 900,
+                'retry' => 3600,
+                'expire' => 2419200,
+                'minimum' => 300,
+            ],
+            'records' => [
+                ['name' => '8.b.d.0.1.0.0.2.ip6.arpa.', 'ttl' => 3600, 'type' => 'NS', 'content' => 'ns1.legacy.example.'],
+                ['name' => '8.b.d.0.1.0.0.2.ip6.arpa.', 'ttl' => 3600, 'type' => 'NS', 'content' => 'ns2.legacy.example.'],
+                ['name' => '2.4.2.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.8.b.d.0.1.0.0.2.ip6.arpa.', 'ttl' => 3600, 'type' => 'PTR', 'content' => 'ns1.legacy.example.'],
+                ['name' => '3.4.2.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.8.b.d.0.1.0.0.2.ip6.arpa.', 'ttl' => 3600, 'type' => 'PTR', 'content' => 'ns2.legacy.example.'],
+                ['name' => '0.5.2.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.8.b.d.0.1.0.0.2.ip6.arpa.', 'ttl' => 3600, 'type' => 'PTR', 'content' => 'www.legacy.example.'],
+            ],
+            'comparison_state' => 'new',
+        ]);
+
+        $response = $this->actingAs($context['admin'])
+            ->get(route('servers.bind.discovery.zone', [$context['server'], $discovered]));
+
+        $response->assertOk();
+        $response->assertSee('ns1.legacy.example.');
+        $response->assertSee('ns2.legacy.example.');
+        $response->assertSee('www.legacy.example.');
+        // The 5 real RDATA values must render — none of the 5 rows may fall
+        // back to the placeholder used only for genuinely missing content.
+        $response->assertSeeInOrder(['Nome', 'TTL', 'Tipo', 'Conteúdo']);
+    }
+
+    public function test_zone_preview_distinguishes_bind_nodes_from_parsed_record_count(): void
+    {
+        $context = $this->context();
+        $discovered = $this->discoveredZone($context, [
+            'name' => '8.b.d.0.1.0.0.2.ip6.arpa',
+            'node_count' => 4,
+            'records' => [
+                ['name' => '8.b.d.0.1.0.0.2.ip6.arpa.', 'ttl' => 3600, 'type' => 'NS', 'content' => 'ns1.legacy.example.'],
+                ['name' => '8.b.d.0.1.0.0.2.ip6.arpa.', 'ttl' => 3600, 'type' => 'NS', 'content' => 'ns2.legacy.example.'],
+                ['name' => '2.4.2....8.b.d.0.1.0.0.2.ip6.arpa.', 'ttl' => 3600, 'type' => 'PTR', 'content' => 'ns1.legacy.example.'],
+                ['name' => '3.4.2....8.b.d.0.1.0.0.2.ip6.arpa.', 'ttl' => 3600, 'type' => 'PTR', 'content' => 'ns2.legacy.example.'],
+                ['name' => '0.5.2....8.b.d.0.1.0.0.2.ip6.arpa.', 'ttl' => 3600, 'type' => 'PTR', 'content' => 'www.legacy.example.'],
+            ],
+            'comparison_state' => 'new',
+        ]);
+
+        $response = $this->actingAs($context['admin'])
+            ->get(route('servers.bind.discovery.zone', [$context['server'], $discovered]));
+
+        $response->assertOk();
+        // node_count (4, from rndc) and parsed record count (5 RRs) are
+        // different metrics and must both be visible, never collapsed
+        // into a single ambiguous "Registros" number.
+        $response->assertSee('Nodes (BIND, via rndc)');
+        $response->assertSee('Registros parseados');
+        $response->assertSee('Página 1 · 5 no total');
+    }
+
+    public function test_zone_preview_shows_soa_in_its_own_section(): void
+    {
+        $context = $this->context();
+        $discovered = $this->discoveredZone($context, [
+            'name' => 'soa-visible.example.com',
+            'soa' => [
+                'mname' => 'ns1.soa-visible.example.com.',
+                'rname' => 'hostmaster.soa-visible.example.com.',
+                'serial' => 2026082701,
+                'refresh' => 3600,
+                'retry' => 900,
+                'expire' => 1209600,
+                'minimum' => 300,
+            ],
+            'records' => [
+                ['name' => 'soa-visible.example.com.', 'ttl' => 3600, 'type' => 'NS', 'content' => 'ns1.soa-visible.example.com.'],
+            ],
+            'comparison_state' => 'new',
+        ]);
+
+        $response = $this->actingAs($context['admin'])
+            ->get(route('servers.bind.discovery.zone', [$context['server'], $discovered]));
+
+        $response->assertOk();
+        $response->assertSee('Start of Authority');
+        $response->assertSee('ns1.soa-visible.example.com.');
+        $response->assertSee('hostmaster.soa-visible.example.com.');
+        $response->assertSee('2026082701');
+    }
+
+    public function test_full_round_trip_from_agent_report_to_preview_preserves_rdata(): void
+    {
+        // End-to-end regression: agent payload (rdata key) -> report()
+        // sanitization (renames to content) -> persistence -> preview page.
+        // Exercises the exact boundary where the real bug happened.
+        $context = $this->context();
+        $operation = $this->authorizedDiscoveryOperation($context);
+        $this->markOperationRunning($operation, $context['token']);
+
+        $this->withToken($context['token'])->postJson(
+            route('api.agent.bind.operations.report', $operation),
+            $this->reportDiscoveryPayload($operation, 'succeeded', [
+                $this->sampleZone([
+                    'name' => 'roundtrip.example.com',
+                    'records' => [
+                        ['name' => 'roundtrip.example.com.', 'ttl' => 3600, 'type' => 'NS', 'rdata' => 'ns1.roundtrip.example.com.'],
+                        ['name' => 'roundtrip.example.com.', 'ttl' => 3600, 'type' => 'NS', 'rdata' => 'ns2.roundtrip.example.com.'],
+                    ],
+                ]),
+            ]),
+        )->assertOk();
+
+        $discovered = DnsBindDiscoveredZone::query()->where('name', 'roundtrip.example.com')->sole();
+
+        $response = $this->actingAs($context['admin'])
+            ->get(route('servers.bind.discovery.zone', [$context['server'], $discovered]));
+
+        $response->assertOk();
+        $response->assertSee('ns1.roundtrip.example.com.');
+        $response->assertSee('ns2.roundtrip.example.com.');
+    }
+
     private function reportDiscoveryPayload(DnsBindOperation $operation, string $status, ?array $zones = null): array
     {
         return [

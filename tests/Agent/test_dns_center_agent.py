@@ -809,6 +809,58 @@ class AgentTests(unittest.TestCase):
         self.assertEqual("PTR", parsed["records"][0]["type"])
         self.assertEqual("1", parsed["records"][0]["name"])
 
+    def test_parse_canonical_zone_dump_matches_real_ipv6_reverse_zone_case(
+        self,
+    ) -> None:
+        # Golden regression fixture for the real 8.b.d.0.1.0.0.2.ip6.arpa
+        # zone: two NS sharing the same apex owner (one node, two RRs) plus
+        # three PTR records with long nibble-format owners (three nodes,
+        # three RRs) — exercises the exact shape that revealed the UI bug
+        # (RDATA rendered as "—") and the nodes-vs-records distinction.
+        dump = (
+            "$ORIGIN 8.b.d.0.1.0.0.2.ip6.arpa.\n"
+            "$TTL 3600\n"
+            "@\t3600\tIN\tSOA\tns1.legacy.example. hostmaster.legacy.example. "
+            "2026082701 900 3600 2419200 300\n"
+            "@\t3600\tIN\tNS\tns1.legacy.example.\n"
+            "@\t3600\tIN\tNS\tns2.legacy.example.\n"
+            "2.4.2.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.8.b.d.0.1.0.0.2.ip6.arpa."
+            "\t3600\tIN\tPTR\tns1.legacy.example.\n"
+            "3.4.2.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.8.b.d.0.1.0.0.2.ip6.arpa."
+            "\t3600\tIN\tPTR\tns2.legacy.example.\n"
+            "0.5.2.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.8.b.d.0.1.0.0.2.ip6.arpa."
+            "\t3600\tIN\tPTR\twww.legacy.example.\n"
+        )
+
+        parsed = agent.parse_canonical_zone_dump(dump, "8.b.d.0.1.0.0.2.ip6.arpa")
+
+        self.assertEqual(2026082701, parsed["soa"]["serial"])
+        self.assertEqual(5, len(parsed["records"]))
+
+        ns_records = [r for r in parsed["records"] if r["type"] == "NS"]
+        self.assertEqual(2, len(ns_records))
+        self.assertEqual(
+            {"ns1.legacy.example.", "ns2.legacy.example."},
+            {r["rdata"] for r in ns_records},
+        )
+        self.assertTrue(all(r["name"] == "8.b.d.0.1.0.0.2.ip6.arpa." for r in ns_records))
+
+        ptr_records = [r for r in parsed["records"] if r["type"] == "PTR"]
+        self.assertEqual(3, len(ptr_records))
+        self.assertEqual(
+            {
+                "ns1.legacy.example.",
+                "ns2.legacy.example.",
+                "www.legacy.example.",
+            },
+            {r["rdata"] for r in ptr_records},
+        )
+        # Long nibble-format owners must survive intact, never truncated.
+        self.assertTrue(all(
+            r["name"].endswith("8.b.d.0.1.0.0.2.ip6.arpa.") and len(r["name"]) > 40
+            for r in ptr_records
+        ))
+
     def test_parse_canonical_zone_dump_handles_large_zone_within_limit(self) -> None:
         lines = ["$ORIGIN big.example.com.", "$TTL 3600"]
         for index in range(1030):
