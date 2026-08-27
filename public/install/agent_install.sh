@@ -2,7 +2,7 @@
 
 set -euo pipefail
 
-readonly INSTALLER_VERSION="1.1.0"
+readonly INSTALLER_VERSION="1.2.0"
 ENROLL_MODE="${1:-}"
 PANEL_URL="${DNS_CENTER_PANEL_URL:-https://dnscenter.trevizamnetwork.com.br}"
 PANEL_URL="${PANEL_URL%/}"
@@ -27,7 +27,7 @@ if [ "$(id -u)" -ne 0 ]; then
     exit 1
 fi
 
-for command in curl python3 sha256sum systemctl install mktemp; do
+for command in curl python3 sha256sum systemctl install mktemp cmp; do
     if ! command -v "${command}" >/dev/null 2>&1; then
         echo "Dependência ausente: ${command}" >&2
         exit 1
@@ -117,6 +117,58 @@ request_enrollment() {
             "${INSTALL_PATH}" --request-approval --wait 0
     fi
 }
+
+upgrade_agent() {
+    if [ ! -e "${INSTALL_PATH}" ]; then
+        echo "Nenhum agente instalado em ${INSTALL_PATH}; use a instalação completa (sem --upgrade-agent)." >&2
+        exit 1
+    fi
+    if [ -L "${INSTALL_PATH}" ]; then
+        echo "${INSTALL_PATH} é um link simbólico; abortando por segurança." >&2
+        exit 1
+    fi
+
+    local binary_changed=0 units_changed=0 unit
+
+    if ! cmp -s "${temporary_dir}/dns-center-agent.py" "${INSTALL_PATH}"; then
+        binary_changed=1
+        install -m 0750 "${temporary_dir}/dns-center-agent.py" "${INSTALL_PATH}"
+
+        if ! "${INSTALL_PATH}" --version >/dev/null 2>&1 \
+            || ! "${INSTALL_PATH}" --help 2>&1 | grep -q -- '--enroll'; then
+            echo "Falha na validação do novo agente; restaurando binário anterior." >&2
+            install -m 0750 "${backup_dir}/dns-center-agent.py" "${INSTALL_PATH}"
+            exit 1
+        fi
+    fi
+
+    for unit in "${artifacts[@]:1}"; do
+        if [ -e "${SYSTEMD_DIR}/${unit}" ] \
+            && cmp -s "${temporary_dir}/${unit}" "${SYSTEMD_DIR}/${unit}"; then
+            continue
+        fi
+        install -m 0644 "${temporary_dir}/${unit}" "${SYSTEMD_DIR}/${unit}"
+        units_changed=1
+    done
+
+    if [ "${units_changed}" -eq 1 ]; then
+        systemctl daemon-reload
+    fi
+
+    if [ "${binary_changed}" -eq 0 ] && [ "${units_changed}" -eq 0 ]; then
+        echo "Agente já está atualizado; nada foi alterado."
+    else
+        echo "Agente atualizado com sucesso pelo instalador ${INSTALLER_VERSION}."
+    fi
+    echo "Configuração, state e vínculos existentes foram preservados."
+    echo "Nenhum serviço/timer foi (re)iniciado e o BIND não foi tocado."
+    echo "Verifique com: ${INSTALL_PATH} --help"
+}
+
+if [ "${ENROLL_MODE}" = "--upgrade-agent" ]; then
+    upgrade_agent
+    exit 0
+fi
 
 if ! {
     install -d -m 0750 "${CONFIG_DIR}" "${STATE_DIR}"

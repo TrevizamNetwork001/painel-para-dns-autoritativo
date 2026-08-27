@@ -508,6 +508,14 @@
                                 <code id="agent-enroll-command">sudo /usr/local/sbin/dns-center-agent --enroll --wait 0</code>
                                 <button type="button" class="button button-secondary" data-copy-target="agent-enroll-command">Copiar</button>
                             </div>
+                            <p>
+                                Erro <code>unrecognized arguments: --enroll</code>? O agente instalado é anterior a
+                                esta funcionalidade. Atualize somente o binário antes (não reinstala, não mexe no BIND):
+                            </p>
+                            <div class="agent-command-box">
+                                <code id="agent-upgrade-command">curl -fsSL https://dnscenter.trevizamnetwork.com.br/install/agent_install.sh | sudo bash -s -- --upgrade-agent</code>
+                                <button type="button" class="button button-secondary" data-copy-target="agent-upgrade-command">Copiar</button>
+                            </div>
                         </div>
 
                         <div class="agent-choice-card">
