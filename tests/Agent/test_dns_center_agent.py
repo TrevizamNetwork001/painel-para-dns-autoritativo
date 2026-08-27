@@ -308,14 +308,7 @@ class AgentTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             config_path = Path(directory) / "agent.json"
             args = argparse.Namespace(config=str(config_path), wait=30)
-            responses = [
-                {
-                    "ok": True,
-                    "status": "pending",
-                    "request_id": "95fc4ed4-f31d-4b44-a056-a33ad14cc170",
-                    "matched": True,
-                },
-                {
+            approved_response = {
                     "ok": True,
                     "status": "approved",
                     "agent": {
@@ -328,13 +321,27 @@ class AgentTests(unittest.TestCase):
                         "hostname": "ns1.example.test",
                         "role": "primary",
                     },
-                },
-            ]
+                }
+
+            def approval_responses(
+                method: str,
+                url: str,
+                payload: dict,
+            ) -> dict:
+                if url.endswith("/status"):
+                    return approved_response
+
+                return {
+                    "ok": True,
+                    "status": "pending",
+                    "request_id": payload["request_id"],
+                    "matched": True,
+                }
 
             with patch.object(
                 agent,
                 "request_json",
-                side_effect=responses,
+                side_effect=approval_responses,
             ) as request, patch.object(
                 agent,
                 "os_release",
@@ -362,7 +369,11 @@ class AgentTests(unittest.TestCase):
             ), patch.object(
                 agent,
                 "request_json",
-                return_value={"ok": True, "status": "pending"},
+                side_effect=lambda method, url, payload: {
+                    "ok": True,
+                    "status": "pending",
+                    "request_id": payload["request_id"],
+                },
             ) as request, patch.object(
                 agent,
                 "os_release",
@@ -384,6 +395,28 @@ class AgentTests(unittest.TestCase):
                 "https://panel.example.test/api/agent/install-requests",
                 request.call_args.args[1],
             )
+
+    def test_request_approval_requires_persistence_confirmation(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            config_path = Path(directory) / "agent.json"
+            args = argparse.Namespace(config=str(config_path), wait=0)
+
+            with patch.object(
+                agent,
+                "request_json",
+                return_value={"ok": True, "status": "pending"},
+            ), patch.object(
+                agent,
+                "os_release",
+                return_value={"NAME": "Debian", "VERSION_ID": "13"},
+            ), patch("sys.stdout", new_callable=io.StringIO) as stdout:
+                with self.assertRaisesRegex(
+                    agent.AgentError,
+                    "não confirmou a persistência",
+                ):
+                    agent.request_approval(args)
+
+            self.assertNotIn("Solicitação enviada", stdout.getvalue())
 
     def test_parser_removes_legacy_activation_code(self) -> None:
         parser = agent.build_parser()

@@ -161,6 +161,121 @@ class DnsAgentApprovalTest extends TestCase
         $this->assertDatabaseCount('dns_agents', 0);
     }
 
+    public function test_short_hostname_matches_only_one_fqdn_and_appears_for_its_server(): void
+    {
+        [$organization, $admin] = $this->organizationAdmin(true);
+        [$foreignOrganization] = $this->organizationAdmin(true);
+        $server = DnsServer::factory()->create([
+            'organization_id' => $organization->id,
+            'hostname' => 'ns1.legacy.example',
+            'ipv4_address' => '198.51.100.242',
+            'enabled' => true,
+        ]);
+        $otherServer = DnsServer::factory()->create([
+            'organization_id' => $foreignOrganization->id,
+            'hostname' => 'ns2.example.test',
+            'enabled' => true,
+        ]);
+        $requestId = (string) Str::uuid();
+
+        $this->withServerVariables(['REMOTE_ADDR' => '172.18.0.1'])
+            ->postJson('/api/agent/install-requests', [
+                'request_id' => $requestId,
+                'request_token' => Str::random(64),
+                'agent_uuid' => (string) Str::uuid(),
+                'fingerprint' => str_repeat('d', 64),
+                'hostname' => 'ns1',
+            ])->assertAccepted()
+            ->assertJsonPath('request_id', $requestId)
+            ->assertJsonPath('matched', true);
+
+        $installRequest = DnsAgentInstallRequest::query()->sole();
+        $this->assertSame($server->id, $installRequest->dns_server_id);
+        $this->assertSame($organization->id, $installRequest->organization_id);
+
+        $this->actingAs($admin)
+            ->get(route('servers.agent.show', $server))
+            ->assertOk()
+            ->assertSee('Instalação aguardando aprovação');
+        $this->actingAs($admin)
+            ->get(route('servers.agent.show', $otherServer))
+            ->assertNotFound();
+    }
+
+    public function test_ip_matches_server_and_existing_unmatched_request_is_recovered(): void
+    {
+        [$organization, $admin] = $this->organizationAdmin(true);
+        $requestId = (string) Str::uuid();
+        $requestToken = Str::random(64);
+        $agentUuid = (string) Str::uuid();
+        $payload = [
+            'request_id' => $requestId,
+            'request_token' => $requestToken,
+            'agent_uuid' => $agentUuid,
+            'fingerprint' => str_repeat('e', 64),
+            'hostname' => 'unmatched-host',
+        ];
+
+        $this->withServerVariables(['REMOTE_ADDR' => '172.18.0.1'])
+            ->postJson('/api/agent/install-requests', $payload)
+            ->assertAccepted()
+            ->assertJsonPath('matched', false);
+
+        $server = DnsServer::factory()->create([
+            'organization_id' => $organization->id,
+            'hostname' => 'different.example.test',
+            'ipv4_address' => '198.51.100.242',
+            'enabled' => true,
+        ]);
+
+        $this->withServerVariables(['REMOTE_ADDR' => '198.51.100.242'])
+            ->postJson('/api/agent/install-requests', $payload)
+            ->assertAccepted()
+            ->assertJsonPath('request_id', $requestId)
+            ->assertJsonPath('matched', true);
+
+        $this->assertDatabaseCount('dns_agent_install_requests', 1);
+        $installRequest = DnsAgentInstallRequest::query()->sole();
+        $this->assertSame($server->id, $installRequest->dns_server_id);
+        $this->assertSame($organization->id, $installRequest->organization_id);
+        $this->assertSame('198.51.100.242', $installRequest->registered_ip);
+
+        $this->actingAs($admin)
+            ->get(route('servers.agent.show', $server))
+            ->assertOk()
+            ->assertSee('Instalação aguardando aprovação');
+    }
+
+    public function test_ambiguous_short_hostname_does_not_cross_organizations(): void
+    {
+        [$organization] = $this->organizationAdmin(true);
+        [$foreignOrganization] = $this->organizationAdmin(true);
+
+        DnsServer::factory()->create([
+            'organization_id' => $organization->id,
+            'hostname' => 'ns1.example.test',
+            'enabled' => true,
+        ]);
+        DnsServer::factory()->create([
+            'organization_id' => $foreignOrganization->id,
+            'hostname' => 'ns1.foreign.test',
+            'enabled' => true,
+        ]);
+
+        $this->postJson('/api/agent/install-requests', [
+            'request_id' => (string) Str::uuid(),
+            'request_token' => Str::random(64),
+            'agent_uuid' => (string) Str::uuid(),
+            'fingerprint' => str_repeat('f', 64),
+            'hostname' => 'ns1',
+        ])->assertAccepted()
+            ->assertJsonPath('matched', false);
+
+        $installRequest = DnsAgentInstallRequest::query()->sole();
+        $this->assertNull($installRequest->dns_server_id);
+        $this->assertNull($installRequest->organization_id);
+    }
+
     public function test_legacy_activation_routes_are_removed(): void
     {
         $this->postJson('/api/agent/enroll', [
