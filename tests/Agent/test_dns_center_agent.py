@@ -674,6 +674,260 @@ class AgentTests(unittest.TestCase):
             self.assertEqual(0o2770, zones.stat().st_mode & 0o7777)
             chown.assert_called_once_with(zones, 0, 1234)
 
+    def test_strip_tsig_secrets_removes_clear_text_secret(self) -> None:
+        config_text = (
+            'key "rndc-key" {\n'
+            "    algorithm hmac-sha256;\n"
+            '    secret "c3VwZXJzZWNyZXQtdmFsdWU=";\n'
+            "};\n"
+        )
+        sanitized = agent.strip_tsig_secrets(config_text)
+        self.assertNotIn("c3VwZXJzZWNyZXQ", sanitized)
+        self.assertIn('secret "[removido]"', sanitized)
+
+    def test_parse_named_conf_zones_normalizes_master_and_slave(self) -> None:
+        config_text = agent.strip_tsig_secrets(
+            'zone "legacy.example" {\n'
+            "    type master;\n"
+            '    file "/var/cache/bind/master-aut/legacy.example.hosts";\n'
+            "};\n"
+            'zone "example-secondary.com" {\n'
+            "    type slave;\n"
+            '    file "/var/cache/bind/slave/example-secondary.com";\n'
+            '    masters { 10.0.0.1; };\n'
+            "};\n"
+        )
+        zones = agent.parse_named_conf_zones(config_text)
+
+        self.assertEqual(2, len(zones))
+        self.assertEqual("legacy.example", zones[0]["name"])
+        self.assertEqual("primary", zones[0]["detected_type"])
+        self.assertEqual("master", zones[0]["detected_syntax"])
+        self.assertEqual(
+            "/var/cache/bind/master-aut/legacy.example.hosts",
+            zones[0]["file"],
+        )
+        self.assertEqual("secondary", zones[1]["detected_type"])
+        self.assertEqual("slave", zones[1]["detected_syntax"])
+        self.assertIn("10.0.0.1", zones[1]["masters"])
+
+    def test_parse_named_conf_zones_never_leaks_key_secret(self) -> None:
+        config_text = agent.strip_tsig_secrets(
+            'key "rndc-key" { algorithm hmac-sha256; secret "topsecretvalue"; };\n'
+            'zone "example.com" {\n'
+            "    type master;\n"
+            '    file "/var/cache/bind/master-aut/example.com.hosts";\n'
+            '    allow-transfer { key rndc-key; };\n'
+            "};\n"
+        )
+        zones = agent.parse_named_conf_zones(config_text)
+
+        self.assertEqual(1, len(zones))
+        self.assertIn("rndc-key", zones[0]["key_references"])
+        self.assertNotIn("topsecretvalue", json.dumps(zones))
+
+    def test_safe_file_metadata_rejects_symlink(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            real_dir = Path(directory) / "real"
+            real_dir.mkdir()
+            (real_dir / "zone.hosts").write_text("data", encoding="utf-8")
+            link_dir = Path(directory) / "link"
+            link_dir.symlink_to(real_dir)
+
+            metadata, warning = agent.safe_file_metadata(link_dir / "zone.hosts")
+
+            self.assertIsNone(metadata)
+            self.assertIsNotNone(warning)
+
+    def test_safe_file_metadata_computes_hash_and_mode(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            zonefile = Path(directory) / "zone.hosts"
+            zonefile.write_text("$ORIGIN example.com.\n", encoding="utf-8")
+            zonefile.chmod(0o640)
+
+            metadata, warning = agent.safe_file_metadata(zonefile)
+
+            self.assertIsNone(warning)
+            self.assertIsNotNone(metadata)
+            self.assertEqual(len("$ORIGIN example.com.\n".encode()), metadata["size"])
+            self.assertTrue(len(metadata["sha256"]) == 64)
+
+    def test_parse_canonical_zone_dump_handles_soa_owner_continuation_and_txt(
+        self,
+    ) -> None:
+        dump = (
+            "$ORIGIN legacy.example.\n"
+            "$TTL 3600\n"
+            "@\t\t\t3600\tIN\tSOA\tns1.legacy.example. hostmaster.legacy.example. "
+            "2026082701 3600 900 1209600 300\n"
+            "@\t\t\t3600\tIN\tNS\tns1.legacy.example.\n"
+            "@\t\t\t3600\tIN\tNS\tns2.legacy.example.\n"
+            "www\t\t\t3600\tIN\tA\t198.51.100.242\n"
+            "\t\t\t3600\tIN\tA\t198.51.100.243\n"
+            "mail\t\t\t3600\tIN\tMX\t10 mail.legacy.example.\n"
+            'txt1\t\t\t3600\tIN\tTXT\t"v=spf1 -all"\n'
+        )
+
+        parsed = agent.parse_canonical_zone_dump(dump, "legacy.example")
+
+        self.assertEqual(2026082701, parsed["soa"]["serial"])
+        self.assertEqual(300, parsed["soa"]["minimum"])
+        names = [record["name"] for record in parsed["records"]]
+        self.assertEqual(["www", "www"], [n for n in names if n == "www"])
+        mx_record = next(r for r in parsed["records"] if r["type"] == "MX")
+        self.assertEqual("10 mail.legacy.example.", mx_record["rdata"])
+        txt_record = next(r for r in parsed["records"] if r["type"] == "TXT")
+        self.assertEqual('"v=spf1 -all"', txt_record["rdata"])
+
+    def test_parse_canonical_zone_dump_preserves_unsupported_rr_without_crashing(
+        self,
+    ) -> None:
+        dump = (
+            "$ORIGIN example.com.\n"
+            "$TTL 3600\n"
+            "sip._tcp\t3600\tIN\tSRV\t10 20 5060 sip.example.com.\n"
+            "www\t3600\tIN\tA\t1.2.3.4\n"
+        )
+
+        parsed = agent.parse_canonical_zone_dump(dump, "example.com")
+
+        self.assertEqual(["SRV"], parsed["unsupported_record_types"])
+        self.assertEqual(1, len(parsed["records"]))
+        self.assertEqual("A", parsed["records"][0]["type"])
+
+    def test_parse_canonical_zone_dump_handles_ptr_and_reverse_zone(self) -> None:
+        dump = (
+            "$ORIGIN 192.0.2.in-addr.arpa.\n"
+            "$TTL 3600\n"
+            "1\t3600\tIN\tPTR\tns1.legacy.example.\n"
+            "2\t3600\tIN\tPTR\tmail.legacy.example.\n"
+        )
+
+        parsed = agent.parse_canonical_zone_dump(dump, "192.0.2.in-addr.arpa")
+
+        self.assertEqual(2, len(parsed["records"]))
+        self.assertEqual("PTR", parsed["records"][0]["type"])
+        self.assertEqual("1", parsed["records"][0]["name"])
+
+    def test_parse_canonical_zone_dump_handles_large_zone_within_limit(self) -> None:
+        lines = ["$ORIGIN big.example.com.", "$TTL 3600"]
+        for index in range(1030):
+            lines.append(f"host{index}\t3600\tIN\tA\t10.0.{index // 256}.{index % 256}")
+        dump = "\n".join(lines) + "\n"
+
+        parsed = agent.parse_canonical_zone_dump(dump, "big.example.com")
+
+        self.assertEqual(1030, len(parsed["records"]))
+
+    def test_parse_canonical_zone_dump_enforces_record_limit(self) -> None:
+        original_limit = agent.DISCOVERY_MAX_RECORDS_PER_ZONE
+        agent.DISCOVERY_MAX_RECORDS_PER_ZONE = 10
+        try:
+            lines = ["$ORIGIN example.com.", "$TTL 3600"]
+            for index in range(20):
+                lines.append(f"host{index}\t3600\tIN\tA\t10.0.0.{index}")
+            dump = "\n".join(lines) + "\n"
+
+            with self.assertRaises(agent.AgentError):
+                agent.parse_canonical_zone_dump(dump, "example.com")
+        finally:
+            agent.DISCOVERY_MAX_RECORDS_PER_ZONE = original_limit
+
+    def test_discover_bind_zones_never_calls_write_commands_and_skips_secondary_dump(
+        self,
+    ) -> None:
+        commands: list[list[str]] = []
+
+        def fake_run_command(command: list[str], timeout: int = 30):
+            commands.append(command)
+            if command[:2] == ["/usr/sbin/rndc", "status"]:
+                return Mock(returncode=0, stdout="server is up and running\nnumber of zones: 2 (0 automatic)\n", stderr="")
+            if command[:2] == ["/usr/bin/named-checkconf", "-p"]:
+                return Mock(
+                    returncode=0,
+                    stdout=(
+                        'zone "example.com" {\n    type master;\n'
+                        '    file "/var/cache/bind/master-aut/example.com.hosts";\n};\n'
+                        'zone "example-secondary.com" {\n    type slave;\n'
+                        '    file "/var/cache/bind/slave/example-secondary.com";\n};\n'
+                    ),
+                    stderr="",
+                )
+            if command[:2] == ["/usr/sbin/rndc", "zonestatus"]:
+                return Mock(
+                    returncode=0,
+                    stdout="serial: 2026082701\nnodes: 3\nsecure: no\ndynamic: no\n",
+                    stderr="",
+                )
+            if command[0] == "/usr/bin/named-checkzone":
+                return Mock(
+                    returncode=0,
+                    stdout=(
+                        "$ORIGIN example.com.\n$TTL 3600\n"
+                        "@\t3600\tIN\tSOA\tns1.example.com. hostmaster.example.com. 1 3600 900 1209600 300\n"
+                        "www\t3600\tIN\tA\t1.2.3.4\n"
+                    ),
+                    stderr="",
+                )
+            raise AssertionError(f"unexpected command: {command}")
+
+        with tempfile.TemporaryDirectory() as directory:
+            zonefile = Path(directory) / "example.com.hosts"
+            zonefile.write_text("dummy", encoding="utf-8")
+
+            with patch.object(
+                agent, "detected_binary",
+                side_effect=lambda candidates: candidates[0],
+            ), patch.object(
+                agent, "detected_named_conf", return_value="/etc/bind/named.conf",
+            ), patch.object(
+                agent, "run_command", side_effect=fake_run_command,
+            ), patch.object(
+                agent, "safe_file_metadata",
+                side_effect=lambda path: (
+                    {"size": 5, "mode": "0640", "mtime": "2026-08-27T00:00:00+00:00",
+                     "owner": "bind", "group": "bind", "sha256": "a" * 64},
+                    None,
+                ),
+            ):
+                result = agent.discover_bind_zones({})
+
+        write_tokens = ("reload", "reconfig", "freeze", "thaw", "addzone", "delzone")
+        for command in commands:
+            self.assertFalse(any(token in command for token in write_tokens))
+            self.assertNotIn("systemctl", command[0])
+
+        zone_names = {zone["name"]: zone for zone in result["zones"]}
+        self.assertIn("example.com", zone_names)
+        self.assertIn("example-secondary.com", zone_names)
+        self.assertIsNotNone(zone_names["example.com"]["records"])
+        self.assertIsNone(zone_names["example-secondary.com"]["records"])
+        self.assertFalse(
+            any(c[0] == "/usr/bin/named-checkzone" and "example-secondary.com" in c
+                for c in commands)
+        )
+
+    def test_run_authorized_operation_dispatches_discovery_without_readiness(
+        self,
+    ) -> None:
+        with patch.object(
+            agent, "request_json",
+            return_value={"operation": {
+                "id": 7, "action": "discover_bind_zones",
+                "authorization_nonce": "nonce", "authorized_at": None,
+            }},
+        ) as request, patch.object(
+            agent, "discover_bind_zones", return_value={"zones": []},
+        ) as discover, patch.object(
+            agent, "send_readiness",
+        ) as readiness:
+            result = agent.run_authorized_operation({"base_url": "https://panel.test", "token": "t"})
+
+        self.assertEqual("succeeded", result["status"])
+        discover.assert_called_once()
+        readiness.assert_not_called()
+        self.assertGreaterEqual(request.call_count, 2)
+
     def test_command_execution_disables_shell_and_has_timeout(self) -> None:
         completed = Mock(returncode=0, stdout="ok", stderr="")
 
