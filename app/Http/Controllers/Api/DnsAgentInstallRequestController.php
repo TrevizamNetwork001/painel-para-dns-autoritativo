@@ -103,10 +103,10 @@ class DnsAgentInstallRequestController extends Controller
                 $server = $this->matcher->unique($hostname, $request->ip());
             }
 
-            return DnsAgentInstallRequest::query()->create([
+            $attributes = [
+                'agent_uuid' => $validated['agent_uuid'],
                 'request_id' => $validated['request_id'],
                 'request_token_hash' => $requestTokenHash,
-                'agent_uuid' => $validated['agent_uuid'],
                 'fingerprint' => $fingerprint,
                 'reported_hostname' => $hostname,
                 'registered_ip' => $request->ip(),
@@ -120,7 +120,34 @@ class DnsAgentInstallRequestController extends Controller
                 'enrollment_source' => $code ? 'panel_code' : 'legacy',
                 'status' => 'pending',
                 'expires_at' => now()->addHours(24),
-            ]);
+                'approved_by' => null,
+                'approved_at' => null,
+                'rejected_at' => null,
+                'claimed_at' => null,
+                'agent_token' => null,
+            ];
+
+            // agent_uuid é único na tabela: um novo request_id do mesmo agente
+            // físico (ex.: código trocado, reenrollment) reaproveita a linha
+            // anterior em vez de colidir com a unique constraint.
+            $previous = DnsAgentInstallRequest::query()
+                ->where('agent_uuid', $validated['agent_uuid'])
+                ->lockForUpdate()
+                ->first();
+
+            if ($previous) {
+                abort_if(
+                    $previous->status === 'approved' && $previous->claimed_at === null,
+                    409,
+                    'Uma aprovação para este agente já está pendente de retirada; aguarde a conclusão ou revogue antes de reenviar.',
+                );
+
+                $previous->forceFill($attributes)->save();
+
+                return $previous;
+            }
+
+            return DnsAgentInstallRequest::query()->create($attributes);
         });
 
         $server = $installRequest->server;

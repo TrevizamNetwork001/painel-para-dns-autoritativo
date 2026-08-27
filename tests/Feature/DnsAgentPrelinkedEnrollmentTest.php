@@ -153,6 +153,62 @@ class DnsAgentPrelinkedEnrollmentTest extends TestCase
             ->assertDontSee(substr($installRequest->request_id, 0, 8));
     }
 
+    public function test_new_request_id_from_same_agent_supersedes_stale_pending_row(): void
+    {
+        [$organization] = $this->user('organization_admin', true);
+        $server = DnsServer::factory()->create(['organization_id' => $organization->id]);
+        $agentUuid = (string) Str::uuid();
+
+        DnsAgentInstallRequest::query()->create([
+            'request_id' => (string) Str::uuid(),
+            'request_token_hash' => hash('sha256', Str::random(64)),
+            'agent_uuid' => $agentUuid,
+            'fingerprint' => hash('sha256', str_repeat('a', 64)),
+            'reported_hostname' => 'ns1',
+            'status' => 'pending',
+            'enrollment_source' => 'legacy',
+            'expires_at' => now()->addHours(24),
+        ]);
+
+        [$code, $plain] = $this->code($server);
+        $this->postJson('/api/agent/install-requests', $this->payload($plain, $agentUuid))
+            ->assertAccepted()->assertJsonPath('matched', true);
+
+        $this->assertDatabaseCount('dns_agent_install_requests', 1);
+        $installRequest = DnsAgentInstallRequest::query()->sole();
+        $this->assertSame($agentUuid, $installRequest->agent_uuid);
+        $this->assertSame($server->id, $installRequest->dns_server_id);
+        $this->assertSame('panel_code', $installRequest->enrollment_source);
+        $this->assertSame('pending', $installRequest->status);
+    }
+
+    public function test_unclaimed_approval_blocks_new_request_for_same_agent(): void
+    {
+        [$organization] = $this->user('organization_admin', true);
+        $server = DnsServer::factory()->create(['organization_id' => $organization->id]);
+        $agentUuid = (string) Str::uuid();
+
+        DnsAgentInstallRequest::query()->create([
+            'request_id' => (string) Str::uuid(),
+            'request_token_hash' => hash('sha256', Str::random(64)),
+            'agent_uuid' => $agentUuid,
+            'fingerprint' => hash('sha256', str_repeat('a', 64)),
+            'reported_hostname' => 'ns1',
+            'status' => 'approved',
+            'claimed_at' => null,
+            'agent_token' => 'still-pending-pickup',
+            'organization_id' => $organization->id,
+            'dns_server_id' => $server->id,
+            'enrollment_source' => 'panel_code',
+            'expires_at' => now()->addHours(24),
+        ]);
+
+        [, $plain] = $this->code($server);
+        $this->postJson('/api/agent/install-requests', $this->payload($plain, $agentUuid))
+            ->assertConflict();
+        $this->assertDatabaseCount('dns_agent_install_requests', 1);
+    }
+
     private function code(DnsServer $server, $expiresAt = null): array
     {
         $plain = Str::random(48);
@@ -164,11 +220,11 @@ class DnsAgentPrelinkedEnrollmentTest extends TestCase
         return [$code, $plain];
     }
 
-    private function payload(string $code): array
+    private function payload(string $code, ?string $agentUuid = null): array
     {
         return [
             'request_id' => (string) Str::uuid(), 'request_token' => Str::random(64),
-            'agent_uuid' => (string) Str::uuid(), 'fingerprint' => str_repeat('a', 64),
+            'agent_uuid' => $agentUuid ?? (string) Str::uuid(), 'fingerprint' => str_repeat('a', 64),
             'hostname' => 'ns1', 'agent_version' => '0.6.0', 'enrollment_code' => $code,
         ];
     }
