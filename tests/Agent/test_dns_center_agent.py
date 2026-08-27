@@ -809,6 +809,58 @@ class AgentTests(unittest.TestCase):
         self.assertEqual("PTR", parsed["records"][0]["type"])
         self.assertEqual("1", parsed["records"][0]["name"])
 
+    def test_parse_canonical_zone_dump_matches_real_ipv6_reverse_zone_case(
+        self,
+    ) -> None:
+        # Golden regression fixture for the real c.b.2.5.4.0.8.2.ip6.arpa
+        # zone: two NS sharing the same apex owner (one node, two RRs) plus
+        # three PTR records with long nibble-format owners (three nodes,
+        # three RRs) — exercises the exact shape that revealed the UI bug
+        # (RDATA rendered as "—") and the nodes-vs-records distinction.
+        dump = (
+            "$ORIGIN c.b.2.5.4.0.8.2.ip6.arpa.\n"
+            "$TTL 3600\n"
+            "@\t3600\tIN\tSOA\tns1.conectanetwork.net.br. hostmaster.conectanetwork.net.br. "
+            "2026082701 900 3600 2419200 300\n"
+            "@\t3600\tIN\tNS\tns1.conectanetwork.net.br.\n"
+            "@\t3600\tIN\tNS\tns2.conectanetwork.net.br.\n"
+            "2.4.2.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.c.b.2.5.4.0.8.2.ip6.arpa."
+            "\t3600\tIN\tPTR\tns1.conectanetwork.net.br.\n"
+            "3.4.2.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.c.b.2.5.4.0.8.2.ip6.arpa."
+            "\t3600\tIN\tPTR\tns2.conectanetwork.net.br.\n"
+            "0.5.2.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.c.b.2.5.4.0.8.2.ip6.arpa."
+            "\t3600\tIN\tPTR\twww.conectanetwork.net.br.\n"
+        )
+
+        parsed = agent.parse_canonical_zone_dump(dump, "c.b.2.5.4.0.8.2.ip6.arpa")
+
+        self.assertEqual(2026082701, parsed["soa"]["serial"])
+        self.assertEqual(5, len(parsed["records"]))
+
+        ns_records = [r for r in parsed["records"] if r["type"] == "NS"]
+        self.assertEqual(2, len(ns_records))
+        self.assertEqual(
+            {"ns1.conectanetwork.net.br.", "ns2.conectanetwork.net.br."},
+            {r["rdata"] for r in ns_records},
+        )
+        self.assertTrue(all(r["name"] == "c.b.2.5.4.0.8.2.ip6.arpa." for r in ns_records))
+
+        ptr_records = [r for r in parsed["records"] if r["type"] == "PTR"]
+        self.assertEqual(3, len(ptr_records))
+        self.assertEqual(
+            {
+                "ns1.conectanetwork.net.br.",
+                "ns2.conectanetwork.net.br.",
+                "www.conectanetwork.net.br.",
+            },
+            {r["rdata"] for r in ptr_records},
+        )
+        # Long nibble-format owners must survive intact, never truncated.
+        self.assertTrue(all(
+            r["name"].endswith("c.b.2.5.4.0.8.2.ip6.arpa.") and len(r["name"]) > 40
+            for r in ptr_records
+        ))
+
     def test_parse_canonical_zone_dump_handles_large_zone_within_limit(self) -> None:
         lines = ["$ORIGIN big.example.com.", "$TTL 3600"]
         for index in range(1030):
