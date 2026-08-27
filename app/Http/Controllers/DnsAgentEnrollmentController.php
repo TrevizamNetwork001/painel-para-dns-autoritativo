@@ -70,11 +70,22 @@ class DnsAgentEnrollmentController extends Controller
             ->latest('id')
             ->first();
 
-        $discoveredZoneCount = $latestDiscoveryOperation && $latestDiscoveryOperation->status === 'succeeded'
+        $discoveredZones = $latestDiscoveryOperation && $latestDiscoveryOperation->status === 'succeeded'
             ? DnsBindDiscoveredZone::query()
                 ->where('dns_bind_operation_id', $latestDiscoveryOperation->id)
-                ->count()
-            : 0;
+                ->get(['detected_type', 'comparison_state', 'validation_status'])
+            : collect();
+
+        $discoveryStats = [
+            'total' => $discoveredZones->count(),
+            'primary' => $discoveredZones->where('detected_type', 'primary')->count(),
+            'secondary' => $discoveredZones->where('detected_type', 'secondary')->count(),
+            'imported' => $discoveredZones->where('comparison_state', 'imported')->count(),
+        ];
+
+        $pendingPublicationCount = $server->agentPublications()
+            ->whereIn('status', ['pending', 'downloaded', 'applying', 'failed'])
+            ->count();
 
         return view('servers.agent', [
             'server' => $server,
@@ -86,7 +97,9 @@ class DnsAgentEnrollmentController extends Controller
             'latestAppliedPublication' => $latestAppliedPublication,
             'latestBindOperation' => $latestBindOperation,
             'latestDiscoveryOperation' => $latestDiscoveryOperation,
-            'discoveredZoneCount' => $discoveredZoneCount,
+            'discoveredZoneCount' => $discoveryStats['total'],
+            'discoveryStats' => $discoveryStats,
+            'pendingPublicationCount' => $pendingPublicationCount,
         ]);
     }
 

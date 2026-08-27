@@ -193,7 +193,7 @@ class DnsBindReadinessTest extends TestCase
         $this->actingAs($context['admin'])
             ->get(route('servers.agent.show', $context['server']))
             ->assertOk()
-            ->assertSee('Prontidão factual')
+            ->assertSee('Estado do BIND')
             ->assertSee('Listener TCP 53')
             ->assertSee('Não detectado')
             ->assertDontSee('Saudável');

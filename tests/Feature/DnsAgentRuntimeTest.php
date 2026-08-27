@@ -134,6 +134,88 @@ class DnsAgentRuntimeTest extends TestCase
             ->assertSee('data-flash-toast-close', false);
     }
 
+    public function test_online_agent_page_shows_operational_summary_and_collapsed_details(): void
+    {
+        [$agent, , $server, $admin] = $this->registeredAgent(true);
+
+        $agent->update(['last_seen_at' => now()]);
+        $server->update([
+            'agent_status' => 'online',
+            'status' => 'online',
+            'agent_version' => '0.6.0',
+            'bind_version' => 'BIND 9.20.26',
+            'bind_readiness_at' => now(),
+            'bind_readiness' => [
+                'bind_installed' => true,
+                'bind_version' => 'BIND 9.20.26',
+                'service' => ['active' => true],
+                'listeners' => ['tcp_53' => true, 'udp_53' => true],
+                'paths' => [
+                    'named_conf' => '/etc/bind/named.conf',
+                    'include_dir' => '/etc/bind',
+                    'zones_dir' => '/etc/bind/dns-center-zones',
+                    'named_checkconf' => '/usr/bin/named-checkconf',
+                    'named_checkzone' => '/usr/bin/named-checkzone',
+                    'rndc' => '/usr/sbin/rndc',
+                ],
+            ],
+        ]);
+
+        $this->actingAs($admin)
+            ->get(route('servers.agent.show', $server))
+            ->assertOk()
+            ->assertSee('Resumo operacional')
+            ->assertSee('Gerenciamento atual: Externo / CLI')
+            ->assertSee('Nenhuma configuração ativa do BIND é modificada.')
+            ->assertSee('Descoberto')
+            ->assertSee('Importado')
+            ->assertSee('Gerenciado')
+            ->assertSee('Nenhuma publicação destinada a este servidor.')
+            ->assertDontSee('Aguardando confirmação')
+            ->assertSee('Detalhes técnicos')
+            ->assertSee($agent->agent_uuid)
+            ->assertSee('/etc/bind/named.conf')
+            ->assertSee('Zona de risco')
+            ->assertSee('Revogar credencial')
+            ->assertSee('Atualizar software do agente')
+            ->assertDontSee('Gerar vínculo');
+    }
+
+    public function test_offline_agent_page_keeps_last_known_inventory_and_contact(): void
+    {
+        [$agent, , $server, $admin] = $this->registeredAgent(true);
+        $lastContact = now()->subMinutes(8);
+        $agent->update(['last_seen_at' => $lastContact]);
+        $server->update([
+            'agent_status' => 'offline',
+            'status' => 'offline',
+            'bind_version' => 'BIND 9.20.0',
+        ]);
+
+        $this->actingAs($admin)
+            ->get(route('servers.agent.show', $server))
+            ->assertOk()
+            ->assertSee('Agente offline')
+            ->assertSee('última informação conhecida')
+            ->assertSee($lastContact->format('d/m/Y H:i:s'))
+            ->assertSee('BIND 9.20.0')
+            ->assertSee('Ver diagnóstico');
+    }
+
+    public function test_missing_readiness_warning_is_visible_at_the_top(): void
+    {
+        [$agent, , $server, $admin] = $this->registeredAgent(true);
+        $agent->update(['last_seen_at' => now()]);
+        $server->update(['agent_status' => 'online']);
+
+        $this->actingAs($admin)
+            ->get(route('servers.agent.show', $server))
+            ->assertOk()
+            ->assertSee('Atenção operacional')
+            ->assertSee('O inventário de prontidão ainda não foi recebido.')
+            ->assertSee('Readiness: WARNING');
+    }
+
     private function registeredAgent(
         bool $withAdmin = false,
     ): array {
