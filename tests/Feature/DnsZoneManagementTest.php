@@ -382,6 +382,15 @@ class DnsZoneManagementTest extends TestCase
             'enabled' => true,
         ]);
 
+        $zone->records()->create([
+            'organization_id' => $organization->id,
+            'name' => 'ns1.example.com',
+            'type' => 'A',
+            'ttl' => null,
+            'content' => '192.0.2.53',
+            'enabled' => true,
+        ]);
+
         $output = app(BindZoneRenderer::class)
             ->render(
                 $zone->fresh([
@@ -397,6 +406,16 @@ class DnsZoneManagementTest extends TestCase
 
         $this->assertStringContainsString(
             'www 300 IN A 192.0.2.20',
+            $output,
+        );
+
+        $this->assertStringContainsString(
+            'ns1.example.com. IN A 192.0.2.53',
+            $output,
+        );
+
+        $this->assertStringNotContainsString(
+            'ns1.example.com IN A 192.0.2.53',
             $output,
         );
 

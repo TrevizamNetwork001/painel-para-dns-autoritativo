@@ -127,7 +127,7 @@ class BindZoneRenderer
 
     private function renderRecord(DnsRecord $record, DnsZone $zone): string
     {
-        $name = $record->name === $zone->name ? '@' : $record->name;
+        $name = $this->owner($record->name, $zone->name);
         $ttl = $record->ttl ? ' '.$record->ttl : '';
 
         $content = match ($record->type) {
@@ -141,6 +141,22 @@ class BindZoneRenderer
         };
 
         return sprintf('%s%s IN %s %s', $name, $ttl, $record->type, $content);
+    }
+
+    private function owner(string $name, string $zoneName): string
+    {
+        $name = rtrim(strtolower(trim($name)), '.');
+        $zoneName = rtrim(strtolower(trim($zoneName)), '.');
+
+        if ($name === $zoneName) {
+            return '@';
+        }
+
+        if (str_ends_with($name, '.'.$zoneName)) {
+            return $name.'.';
+        }
+
+        return $name;
     }
 
     private function fqdn(string $value): string
