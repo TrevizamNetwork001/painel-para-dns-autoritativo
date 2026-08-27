@@ -52,7 +52,7 @@ class DnsAgentApprovalTest extends TestCase
         $this->actingAs($admin)
             ->get(route('servers.agent.show', $server))
             ->assertOk()
-            ->assertSee('Instalação aguardando aprovação')
+            ->assertSee('Solicitação recebida')
             ->assertDontSee('Código de ativação');
 
         $this->post(route(
@@ -196,7 +196,7 @@ class DnsAgentApprovalTest extends TestCase
         $this->actingAs($admin)
             ->get(route('servers.agent.show', $server))
             ->assertOk()
-            ->assertSee('Instalação aguardando aprovação');
+            ->assertSee('Solicitação recebida');
         $this->actingAs($admin)
             ->get(route('servers.agent.show', $otherServer))
             ->assertNotFound();
@@ -243,7 +243,7 @@ class DnsAgentApprovalTest extends TestCase
         $this->actingAs($admin)
             ->get(route('servers.agent.show', $server))
             ->assertOk()
-            ->assertSee('Instalação aguardando aprovação');
+            ->assertSee('Solicitação recebida');
     }
 
     public function test_ambiguous_short_hostname_does_not_cross_organizations(): void
@@ -342,12 +342,8 @@ class DnsAgentApprovalTest extends TestCase
         $this->actingAs($admin)
             ->get(route('servers.agent.show', $server))
             ->assertOk()
-            ->assertSee('Instalar o agente')
-            ->assertSee(
-                'https://dnscenter.trevizamnetwork.com.br/install/agent_install.sh',
-            )
-            ->assertSee('Copiar')
-            ->assertDontSee('Copiar comando');
+            ->assertSee('Gerar vínculo')
+            ->assertSee('Modo legado / associação manual');
 
         $this->postJson('/api/agent/install-requests', [])
             ->assertServiceUnavailable()

@@ -29,6 +29,10 @@ return [
         'grace_days' => (int) env('ADMIN_2FA_GRACE_DAYS', 14),
     ],
 
+    'agent_enrollment' => [
+        'ttl_minutes' => (int) env('AGENT_ENROLLMENT_TTL_MINUTES', 15),
+    ],
+
     /*
     |--------------------------------------------------------------------------
     | Trusted proxies

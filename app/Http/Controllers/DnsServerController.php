@@ -71,6 +71,7 @@ class DnsServerController extends Controller
         return DnsAgentInstallRequest::query()
             ->whereNull('dns_server_id')
             ->whereNull('organization_id')
+            ->where('enrollment_source', 'legacy')
             ->where('status', 'pending')
             ->where('expires_at', '>', now())
             ->latest('id')

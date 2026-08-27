@@ -18,6 +18,7 @@ class DnsAgentInstallRequest extends Model
     {
         return [
             'agent_token' => 'encrypted',
+            'review_warnings' => 'array',
             'expires_at' => 'immutable_datetime',
             'approved_at' => 'immutable_datetime',
             'rejected_at' => 'immutable_datetime',
@@ -38,5 +39,10 @@ class DnsAgentInstallRequest extends Model
     public function approver(): BelongsTo
     {
         return $this->belongsTo(User::class, 'approved_by');
+    }
+
+    public function enrollmentCode(): BelongsTo
+    {
+        return $this->belongsTo(DnsAgentEnrollmentCode::class);
     }
 }

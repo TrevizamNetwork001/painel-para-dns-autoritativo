@@ -6,6 +6,7 @@ import argparse
 import base64
 import hashlib
 import html
+import getpass
 import ipaddress
 import json
 import logging
@@ -31,7 +32,7 @@ from email.utils import parsedate_to_datetime
 from pathlib import Path
 from typing import Any
 
-AGENT_VERSION = "0.5.0"
+AGENT_VERSION = "0.6.0"
 OFFICIAL_BASE_URL = "https://dnscenter.trevizamnetwork.com.br"
 DEFAULT_CONFIG = Path("/etc/dns-center-agent/agent.json")
 DEFAULT_STATE_DIR = Path("/var/lib/dns-center-agent")
@@ -761,15 +762,65 @@ def agent_uuid(config_path: Path) -> str:
     return str(uuid.uuid5(uuid.NAMESPACE_DNS, source))
 
 
+def ensure_approval_timer() -> None:
+    unit = Path("/etc/systemd/system/dns-center-agent-approval.timer")
+    systemctl = detected_binary(("/usr/bin/systemctl", "/bin/systemctl"))
+    if os.geteuid() != 0 or not unit.is_file() or not systemctl:
+        return
+
+    enabled = run_command(
+        [systemctl, "is-enabled", "--quiet", unit.name], timeout=30
+    )
+    if enabled.returncode == 0:
+        return
+
+    result = run_command(
+        [systemctl, "enable", "--now", unit.name], timeout=30
+    )
+    if result.returncode != 0:
+        raise AgentError("Não foi possível habilitar o timer de aprovação.")
+
+
 def request_approval(args: argparse.Namespace) -> int:
     config_path = Path(args.config)
     pending_path = config_path.with_name("install-request.json")
+
+    enrollment_mode = bool(getattr(args, "enroll", False))
+    enrollment_code: str | None = None
+    if enrollment_mode:
+        if config_path.exists():
+            raise AgentError(
+                "Este agente já possui credencial ativa; use o fluxo explícito de rotação."
+            )
+        if getattr(args, "stdin", False):
+            enrollment_code = sys.stdin.readline().strip()
+        elif sys.stdin.isatty():
+            enrollment_code = getpass.getpass("Código temporário de vínculo: ").strip()
+        else:
+            raise AgentError("Use --stdin ou um terminal interativo para informar o código.")
+        if len(enrollment_code) < 32:
+            raise AgentError("Código temporário inválido.")
 
     if config_path.exists():
         raise AgentError("Este agente já possui uma credencial ativa.")
 
     if pending_path.exists():
         pending = read_json(pending_path)
+        if enrollment_code:
+            supplied_hash = hashlib.sha256(
+                enrollment_code.encode("utf-8")
+            ).hexdigest()
+            if pending.get("enrollment_code_hash") != supplied_hash:
+                archived = pending_path.with_name(
+                    "install-request.previous.json"
+                )
+                os.replace(pending_path, archived)
+                pending = {}
+
+    else:
+        pending = {}
+
+    if pending:
         base_url = normalize_base_url(
             str(pending.get("base_url", OFFICIAL_BASE_URL))
         )
@@ -786,6 +837,11 @@ def request_approval(args: argparse.Namespace) -> int:
             "base_url": base_url,
             "created_at": utc_now(),
         }
+        if enrollment_code:
+            pending["enrollment_code"] = enrollment_code
+            pending["enrollment_code_hash"] = hashlib.sha256(
+                enrollment_code.encode("utf-8")
+            ).hexdigest()
         save_config(pending_path, pending)
 
     release = os_release()
@@ -809,9 +865,14 @@ def request_approval(args: argparse.Namespace) -> int:
             "O painel não confirmou a persistência da solicitação."
         )
 
+    if "enrollment_code" in pending:
+        pending.pop("enrollment_code", None)
+        save_config(pending_path, pending)
+
     print("Solicitação enviada ao painel.")
     print(f"Identificador: {payload.get('request_id', pending['request_id'])}")
     print("Aguardando aprovação administrativa.")
+    ensure_approval_timer()
 
     wait_seconds = max(0, min(int(args.wait), 86400))
     deadline = time.monotonic() + wait_seconds
@@ -852,7 +913,7 @@ def request_approval(args: argparse.Namespace) -> int:
             }
             save_config(config_path, config)
             pending_path.unlink(missing_ok=True)
-            print("Instalação aprovada e agente registrado.")
+            print("Vínculo aprovado e agente registrado.")
             return 0
 
         if status_value in {"rejected", "expired"}:
@@ -3070,6 +3131,7 @@ def build_parser() -> argparse.ArgumentParser:
     actions = parser.add_mutually_exclusive_group(required=True)
 
     actions.add_argument("--request-approval", action="store_true")
+    actions.add_argument("--enroll", action="store_true")
     actions.add_argument("--status", action="store_true")
     actions.add_argument("--heartbeat", action="store_true")
     actions.add_argument("--inventory", action="store_true")
@@ -3079,6 +3141,11 @@ def build_parser() -> argparse.ArgumentParser:
     actions.add_argument("--observe-bind", action="store_true")
 
     parser.add_argument("--wait", type=int, default=1800)
+    parser.add_argument(
+        "--stdin",
+        action="store_true",
+        help="Lê o código temporário da entrada padrão; nunca use o código em argv.",
+    )
     parser.add_argument("--apply", action="store_true")
     parser.add_argument("--confirm")
 
@@ -3089,7 +3156,7 @@ def main() -> int:
     args = build_parser().parse_args()
 
     try:
-        if args.request_approval:
+        if args.request_approval or args.enroll:
             return request_approval(args)
 
         if args.status:

@@ -112,7 +112,7 @@
             <section class="servers-list-panel">
                 <div class="servers-list-heading">
                     <div>
-                        <p class="eyebrow">Intervenção administrativa</p>
+                        <p class="eyebrow">Modo legado / associação manual</p>
                         <h2>Solicitações de agente não associadas</h2>
                     </div>
 

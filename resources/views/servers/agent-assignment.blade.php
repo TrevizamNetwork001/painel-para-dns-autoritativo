@@ -10,7 +10,7 @@
     <main class="main-content">
         <header class="topbar servers-heading">
             <div>
-                <p class="eyebrow">Enrollment pendente</p>
+                <p class="eyebrow">Modo legado / associação manual</p>
                 <h1>Associar solicitação ao servidor</h1>
                 <p class="page-description">
                     A associação não aprova o agente nem emite credencial.
