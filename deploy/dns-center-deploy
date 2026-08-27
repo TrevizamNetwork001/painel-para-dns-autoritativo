@@ -115,8 +115,12 @@ run_security_check() {
 }
 
 run_migrations() {
-    compose run --rm app php artisan migrate:status --no-ansi
+    if ! compose run --rm app php artisan migrate:status --no-ansi; then
+        printf 'Inicializando tabela de controle de migrations.\n'
+        compose run --rm app php artisan migrate:install --no-ansi
+    fi
     compose run --rm app php artisan migrate --force --no-ansi
+    compose run --rm app php artisan migrate:status --no-ansi
 }
 
 record_success() {
