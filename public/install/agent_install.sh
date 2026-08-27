@@ -104,6 +104,8 @@ if ! {
     for unit in "${artifacts[@]:1}"; do
         install -m 0644 "${temporary_dir}/${unit}" "${SYSTEMD_DIR}/${unit}"
     done
+    DNS_CENTER_PANEL_URL="${PANEL_URL}" \
+        "${INSTALL_PATH}" --request-approval --wait 0
     systemctl daemon-reload
     systemctl enable --now \
         dns-center-agent.timer \

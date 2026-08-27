@@ -5,6 +5,7 @@ import io
 import json
 import logging
 import argparse
+import os
 import tempfile
 import unittest
 import urllib.error
@@ -349,6 +350,40 @@ class AgentTests(unittest.TestCase):
                 config_path.with_name("install-request.json").exists()
             )
             self.assertEqual(2, request.call_count)
+
+    def test_request_approval_persists_custom_panel_url(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            config_path = Path(directory) / "agent.json"
+            args = argparse.Namespace(config=str(config_path), wait=0)
+
+            with patch.dict(
+                os.environ,
+                {"DNS_CENTER_PANEL_URL": "https://panel.example.test/"},
+            ), patch.object(
+                agent,
+                "request_json",
+                return_value={"ok": True, "status": "pending"},
+            ) as request, patch.object(
+                agent,
+                "os_release",
+                return_value={"NAME": "Debian", "VERSION_ID": "13"},
+            ):
+                result = agent.request_approval(args)
+
+            self.assertEqual(0, result)
+            pending = json.loads(
+                config_path.with_name("install-request.json").read_text(
+                    encoding="utf-8"
+                )
+            )
+            self.assertEqual(
+                "https://panel.example.test",
+                pending["base_url"],
+            )
+            self.assertEqual(
+                "https://panel.example.test/api/agent/install-requests",
+                request.call_args.args[1],
+            )
 
     def test_parser_removes_legacy_activation_code(self) -> None:
         parser = agent.build_parser()

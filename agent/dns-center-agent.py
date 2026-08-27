@@ -770,13 +770,20 @@ def request_approval(args: argparse.Namespace) -> int:
 
     if pending_path.exists():
         pending = read_json(pending_path)
+        base_url = normalize_base_url(
+            str(pending.get("base_url", OFFICIAL_BASE_URL))
+        )
     else:
+        base_url = normalize_base_url(
+            os.environ.get("DNS_CENTER_PANEL_URL", OFFICIAL_BASE_URL)
+        )
         pending = {
             "request_id": str(uuid.uuid4()),
             "request_token": secrets.token_urlsafe(48),
             "agent_uuid": agent_uuid(config_path),
             "fingerprint": build_fingerprint(),
             "hostname": socket.gethostname(),
+            "base_url": base_url,
             "created_at": utc_now(),
         }
         save_config(pending_path, pending)
@@ -784,7 +791,7 @@ def request_approval(args: argparse.Namespace) -> int:
     release = os_release()
     payload = request_json(
         "POST",
-        OFFICIAL_BASE_URL + "/api/agent/install-requests",
+        base_url + "/api/agent/install-requests",
         {
             **pending,
             "agent_version": AGENT_VERSION,
@@ -803,7 +810,7 @@ def request_approval(args: argparse.Namespace) -> int:
     while wait_seconds > 0 and time.monotonic() < deadline:
         result = request_json(
             "POST",
-            OFFICIAL_BASE_URL + "/api/agent/install-requests/status",
+            base_url + "/api/agent/install-requests/status",
             {
                 "request_id": pending["request_id"],
                 "request_token": pending["request_token"],
@@ -819,7 +826,7 @@ def request_approval(args: argparse.Namespace) -> int:
                 raise AgentError("O painel não retornou a credencial permanente.")
 
             config = {
-                "base_url": OFFICIAL_BASE_URL,
+                "base_url": base_url,
                 "token": token,
                 "agent_uuid": assigned_uuid,
                 "server": result.get("server", {}),
