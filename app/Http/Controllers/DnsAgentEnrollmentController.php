@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\DnsAgent;
+use App\Models\DnsAgentEnrollmentCode;
 use App\Models\DnsAgentInstallRequest;
 use App\Models\DnsBindOperation;
 use App\Models\DnsServer;
@@ -39,6 +40,14 @@ class DnsAgentEnrollmentController extends Controller
                 ->first()
             : null;
 
+        $latestEnrollmentCode = Schema::hasTable('dns_agent_enrollment_codes')
+            ? DnsAgentEnrollmentCode::query()
+                ->where('organization_id', $organizationId)
+                ->where('dns_server_id', $server->id)
+                ->latest('id')
+                ->first()
+            : null;
+
         $latestPublication = $server->agentPublications()
             ->with('zoneVersion.zone')
             ->latest('dns_zone_version_id')
@@ -57,10 +66,67 @@ class DnsAgentEnrollmentController extends Controller
             'server' => $server,
             'agent' => $agent,
             'latestInstallRequest' => $latestInstallRequest,
+            'latestEnrollmentCode' => $latestEnrollmentCode,
+            'issuedEnrollmentCode' => $request->session()->pull('issued_enrollment_code'),
             'latestPublication' => $latestPublication,
             'latestAppliedPublication' => $latestAppliedPublication,
             'latestBindOperation' => $latestBindOperation,
         ]);
+    }
+
+    public function issueCode(Request $request, DnsServer $server): RedirectResponse
+    {
+        $organizationId = $this->authorizeServer($request, $server);
+        abort_unless($server->enabled, 409, 'O servidor está inativo.');
+        abort_unless($server->organization?->status === 'active', 409, 'A organização está inativa.');
+        abort_if(
+            DnsAgent::query()->where('dns_server_id', $server->id)->whereNull('revoked_at')->exists(),
+            409,
+            'Este servidor já possui agente ativo. Use o fluxo explícito de rotação.',
+        );
+
+        $plainCode = rtrim(strtr(base64_encode(random_bytes(32)), '+/', '-_'), '=');
+        $previousCodeIds = DnsAgentEnrollmentCode::query()
+            ->where('organization_id', $organizationId)
+            ->where('dns_server_id', $server->id)
+            ->whereNull('used_at')->whereNull('revoked_at')->pluck('id');
+        $issued = DB::transaction(function () use ($request, $server, $organizationId, $plainCode): DnsAgentEnrollmentCode {
+            DnsAgentEnrollmentCode::query()
+                ->where('organization_id', $organizationId)
+                ->where('dns_server_id', $server->id)
+                ->whereNull('used_at')
+                ->whereNull('revoked_at')
+                ->lockForUpdate()
+                ->update(['revoked_at' => now(), 'updated_at' => now()]);
+
+            return DnsAgentEnrollmentCode::query()->create([
+                'organization_id' => $organizationId,
+                'dns_server_id' => $server->id,
+                'created_by' => $request->user()->id,
+                'code_hash' => hash('sha256', $plainCode),
+                'expires_at' => now()->addMinutes(max(1, (int) config('security.agent_enrollment.ttl_minutes'))),
+            ]);
+        });
+
+        SecurityAuditLogger::record(
+            event: 'agent.enrollment_code_issued', user: $request->user(), result: 'success',
+            actor: 'user:'.$request->user()->id, source: 'web', ipAddress: $request->ip(),
+            userAgent: $request->userAgent(), organizationId: $organizationId,
+            reason: 'enrollment_code:'.$issued->id.';server:'.$server->id,
+        );
+
+        foreach ($previousCodeIds as $previousCodeId) {
+            SecurityAuditLogger::record(
+                event: 'agent.enrollment_code_revoked', user: $request->user(), result: 'superseded',
+                actor: 'user:'.$request->user()->id, source: 'web', ipAddress: $request->ip(),
+                userAgent: $request->userAgent(), organizationId: $organizationId,
+                reason: 'enrollment_code:'.$previousCodeId.';server:'.$server->id,
+            );
+        }
+
+        return redirect()->route('servers.agent.show', $server)
+            ->with('status', 'Vínculo temporário criado. O código será exibido somente uma vez.')
+            ->with('issued_enrollment_code', $plainCode);
     }
 
     public function planBind(
@@ -190,18 +256,23 @@ class DnsAgentEnrollmentController extends Controller
                 409,
                 'Este servidor já possui um agente ativo.',
             );
-            abort_if(
-                DnsAgent::query()
-                    ->where('agent_uuid', $locked->agent_uuid)
-                    ->exists(),
-                409,
-                'Este agente já foi registrado.',
-            );
-
             $plainToken = Str::random(96);
             $now = now();
+            $existingAgent = DnsAgent::query()
+                ->where('agent_uuid', $locked->agent_uuid)
+                ->lockForUpdate()
+                ->first();
+            abort_if(
+                $existingAgent && (
+                    $existingAgent->revoked_at === null
+                    || (int) $existingAgent->dns_server_id !== (int) $server->id
+                    || (int) $existingAgent->organization_id !== $organizationId
+                ),
+                409,
+                'Este agente já está registrado em outro vínculo ativo.',
+            );
 
-            DnsAgent::query()->create([
+            $agentAttributes = [
                 'organization_id' => $organizationId,
                 'dns_server_id' => $server->id,
                 'agent_uuid' => $locked->agent_uuid,
@@ -215,7 +286,14 @@ class DnsAgentEnrollmentController extends Controller
                     'agent_version' => $locked->agent_version,
                     'installation' => 'panel_approval',
                 ],
-            ]);
+                'revoked_at' => null,
+            ];
+
+            if ($existingAgent) {
+                $existingAgent->forceFill($agentAttributes)->save();
+            } else {
+                DnsAgent::query()->create($agentAttributes);
+            }
 
             $locked->forceFill([
                 'status' => 'approved',
@@ -236,7 +314,7 @@ class DnsAgentEnrollmentController extends Controller
         });
 
         SecurityAuditLogger::record(
-            event: 'agent.install_approved',
+            event: 'agent.enrollment_approved',
             user: $request->user(),
             result: 'success',
             actor: 'user:'.$request->user()->id,
@@ -247,9 +325,18 @@ class DnsAgentEnrollmentController extends Controller
             reason: 'install_request:'.$installRequest->id,
         );
 
+        if ($installRequest->enrollment_source === 'legacy') {
+            SecurityAuditLogger::record(
+                event: 'agent.install_approved', user: $request->user(), result: 'success',
+                actor: 'user:'.$request->user()->id, source: 'web', ipAddress: $request->ip(),
+                userAgent: $request->userAgent(), organizationId: $organizationId,
+                reason: 'install_request:'.$installRequest->id,
+            );
+        }
+
         return redirect()
             ->route('servers.agent.show', $server)
-            ->with('status', 'Instalação do agente aprovada.');
+            ->with('status', 'Vínculo do agente aprovado.');
     }
 
     public function reject(
@@ -326,15 +413,9 @@ class DnsAgentEnrollmentController extends Controller
                 ]);
 
             $server->forceFill([
-                'status' => 'pending',
-                'agent_uuid' => null,
-                'agent_version' => null,
-                'agent_status' => 'not_installed',
-                'agent_fingerprint' => null,
-                'agent_registered_at' => null,
+                'status' => 'warning',
+                'agent_status' => 'blocked',
                 'last_seen_at' => null,
-                'capabilities' => null,
-                'inventory' => null,
             ])->save();
         });
 

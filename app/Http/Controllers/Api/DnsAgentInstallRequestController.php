@@ -3,6 +3,8 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\DnsAgent;
+use App\Models\DnsAgentEnrollmentCode;
 use App\Models\DnsAgentInstallRequest;
 use App\Support\DnsAgentInstallRequestMatcher;
 use App\Support\SecurityAuditLogger;
@@ -38,6 +40,7 @@ class DnsAgentInstallRequestController extends Controller
             'agent_version' => ['nullable', 'string', 'max:50'],
             'operating_system' => ['nullable', 'string', 'max:80'],
             'operating_system_version' => ['nullable', 'string', 'max:80'],
+            'enrollment_code' => ['nullable', 'string', 'min:32', 'max:255'],
         ]);
 
         $hostname = Str::lower(rtrim($validated['hostname'], '.'));
@@ -73,26 +76,57 @@ class DnsAgentInstallRequestController extends Controller
             return $this->pendingResponse($existing);
         }
 
-        $server = $this->matcher->unique($hostname, $request->ip());
+        $installRequest = DB::transaction(function () use ($validated, $hostname, $fingerprint, $requestTokenHash, $request): DnsAgentInstallRequest {
+            $code = null;
+            $server = null;
+            $warnings = [];
 
-        $installRequest = DnsAgentInstallRequest::query()->create([
-            'request_id' => $validated['request_id'],
-            'request_token_hash' => $requestTokenHash,
-            'agent_uuid' => $validated['agent_uuid'],
-            'fingerprint' => $fingerprint,
-            'reported_hostname' => $hostname,
-            'registered_ip' => $request->ip(),
-            'agent_version' => $validated['agent_version'] ?? null,
-            'operating_system' => $validated['operating_system'] ?? null,
-            'operating_system_version' => $validated['operating_system_version'] ?? null,
-            'organization_id' => $server?->organization_id,
-            'dns_server_id' => $server?->id,
-            'status' => 'pending',
-            'expires_at' => now()->addHours(24),
-        ]);
+            if (isset($validated['enrollment_code'])) {
+                $code = DnsAgentEnrollmentCode::query()
+                    ->where('code_hash', hash('sha256', $validated['enrollment_code']))
+                    ->lockForUpdate()
+                    ->first();
+                abort_unless($code && ! $code->used_at && ! $code->revoked_at && $code->expires_at->isFuture(), 422, 'Código de vínculo inválido ou expirado.');
+                $server = $code->server()->with('organization')->firstOrFail();
+                abort_unless($server->enabled && $server->organization?->status === 'active', 409, 'Servidor ou organização inativo.');
+                abort_if(DnsAgent::query()->where('dns_server_id', $server->id)->whereNull('revoked_at')->lockForUpdate()->exists(), 409, 'Este servidor já possui um agente ativo.');
+
+                if (! hash_equals(Str::lower(rtrim($server->hostname, '.')), $hostname)) {
+                    $warnings[] = 'hostname_mismatch';
+                }
+                $knownAddresses = array_values(array_filter([$server->ipv4_address, $server->ipv6_address]));
+                if ($request->ip() && ! in_array($request->ip(), $knownAddresses, true)) {
+                    $warnings[] = 'ip_mismatch';
+                }
+                $code->forceFill(['used_at' => now()])->save();
+            } else {
+                $server = $this->matcher->unique($hostname, $request->ip());
+            }
+
+            return DnsAgentInstallRequest::query()->create([
+                'request_id' => $validated['request_id'],
+                'request_token_hash' => $requestTokenHash,
+                'agent_uuid' => $validated['agent_uuid'],
+                'fingerprint' => $fingerprint,
+                'reported_hostname' => $hostname,
+                'registered_ip' => $request->ip(),
+                'agent_version' => $validated['agent_version'] ?? null,
+                'operating_system' => $validated['operating_system'] ?? null,
+                'operating_system_version' => $validated['operating_system_version'] ?? null,
+                'organization_id' => $server?->organization_id,
+                'dns_server_id' => $server?->id,
+                'enrollment_code_id' => $code?->id,
+                'review_warnings' => $warnings ?: null,
+                'enrollment_source' => $code ? 'panel_code' : 'legacy',
+                'status' => 'pending',
+                'expires_at' => now()->addHours(24),
+            ]);
+        });
+
+        $server = $installRequest->server;
 
         SecurityAuditLogger::record(
-            event: 'agent.install_requested',
+            event: 'agent.enrollment_requested',
             user: null,
             result: $server ? 'matched' : 'unmatched',
             actor: 'agent-request:'.$installRequest->request_id,
@@ -102,6 +136,20 @@ class DnsAgentInstallRequestController extends Controller
             organizationId: $server?->organization_id,
             reason: 'install_request:'.$installRequest->id,
         );
+
+        if (
+            $installRequest->enrollment_source === 'panel_code'
+            && ($server?->agent_registered_at || DnsAgent::query()
+                ->where('dns_server_id', $server?->id)->whereNotNull('revoked_at')->exists())
+        ) {
+            SecurityAuditLogger::record(
+                event: 'agent.reenrollment_started', user: null, result: 'success',
+                actor: 'agent-request:'.$installRequest->request_id, source: 'agent',
+                ipAddress: $request->ip(), userAgent: $request->userAgent(),
+                organizationId: $installRequest->organization_id,
+                reason: 'install_request:'.$installRequest->id.';server:'.$server?->id,
+            );
+        }
 
         return $this->pendingResponse($installRequest);
     }
@@ -164,6 +212,13 @@ class DnsAgentInstallRequestController extends Controller
                 'claimed_at' => now(),
                 'agent_token' => null,
             ])->save();
+
+            SecurityAuditLogger::record(
+                event: 'agent.enrollment_completed', user: null, result: 'success',
+                actor: 'agent-request:'.$locked->request_id, source: 'agent',
+                organizationId: $locked->organization_id,
+                reason: 'install_request:'.$locked->id.';server:'.$server->id,
+            );
 
             return response()->json([
                 'ok' => true,

@@ -1,18 +1,35 @@
 # API do agente DNS
 
-## Solicitação de instalação
+## Instalação e enrollment
 
 O instalador formal está descrito em `DEPLOY_BASELINE_1.md`. Ele aceita
 `DNS_CENTER_PANEL_URL`, exige HTTPS fora de localhost e verifica SHA-256 do
 Python e de todas as units systemd antes de instalar. O servidor deve ser
-cadastrado previamente com hostname ou IP que permita correspondência única.
+cadastrado previamente no painel.
+
+Instalação (Python, diretórios e units systemd) e enrollment (vínculo e
+credencial) são etapas independentes. Uma instalação sem credencial é um
+estado válido e pode ser vinculada novamente sem reinstalação:
+
+```text
+sudo /usr/local/sbin/dns-center-agent --enroll --wait 0
+```
+
+O comando solicita o código no terminal sem eco. Para automação controlada,
+`--enroll --stdin` lê o código da entrada padrão; não existe argumento de CLI
+que aceite o segredo.
 
 `POST /api/agent/install-requests`
 
-O agente usa a URL oficial embutida, gera localmente uma credencial efêmera e
-envia hostname, fingerprint e inventário mínimo. O painel associa a solicitação
-a um servidor previamente cadastrado quando hostname ou IP produzem uma
-correspondência única. Não existe código ou licença de ativação digitada.
+No fluxo principal, um administrador com 2FA emite no servidor selecionado um
+código CSPRNG de uso único e curta duração. Somente SHA-256 é persistido. O
+código carrega implicitamente `organization_id` e `dns_server_id`; ao ser
+consumido sob lock, a solicitação já nasce associada. Hostname e IP observado
+geram warnings de revisão, mas nunca mudam o servidor escolhido.
+
+Sem código, o endpoint conserva o matching por hostname/IP exclusivamente como
+modo legado e recovery. Solicitações desse modo continuam na fila de associação
+manual e não são aprovadas durante a associação.
 
 O administrador da organização aprova a instalação usando a sessão
 administrativa já protegida por 2FA. O agente consulta
@@ -78,7 +95,10 @@ Exemplo:
 
 A revogação é feita pelo painel administrativo, vinculada à empresa e ao
 servidor. Após revogada, a credencial não pode mais usar heartbeat ou
-inventário. Uma nova instalação cria outra solicitação pendente.
+inventário. O histórico de instalação é preservado e um novo código inicia
+reenrollment; não é necessário reinstalar o agente. Uma credencial ainda ativa
+impede emissão e consumo de vínculo simples, exigindo revogação/rotação
+explícita.
 
 ## Ciclo persistente de publicações
 

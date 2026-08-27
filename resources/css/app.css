@@ -2920,14 +2920,26 @@ html[data-theme='light']
     color: var(--text-muted);
 }
 
-.status-active {
+.status-active,
+.status-badge.status-success {
     background: rgba(16, 185, 129, 0.12);
     color: #10b981;
 }
 
-.status-inactive {
+.status-inactive,
+.status-badge.status-neutral {
     background: rgba(100, 116, 139, 0.14);
     color: var(--text-muted);
+}
+
+.status-badge.status-warning {
+    background: rgba(245, 158, 11, 0.12);
+    color: #f59e0b;
+}
+
+.status-badge.status-danger {
+    background: rgba(239, 68, 68, 0.12);
+    color: #ef4444;
 }
 
 .users-last-access,
@@ -3624,6 +3636,34 @@ html[data-theme='light'] .users-modal-backdrop {
     font-size: 0.82rem;
 }
 
+.agent-choice-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 1rem;
+    margin-top: 1.4rem;
+}
+
+.agent-choice-card {
+    display: grid;
+    align-content: start;
+    gap: 0.6rem;
+    padding: 0.9rem;
+    border: 1px solid var(--border);
+    border-radius: 0.8rem;
+    background: var(--surface-soft);
+}
+
+.agent-choice-card h3 {
+    margin: 0;
+    font-size: 0.82rem;
+}
+
+.agent-choice-card p {
+    margin: 0;
+    color: var(--text-muted);
+    font-size: 0.72rem;
+}
+
 .agent-security-list {
     display: grid;
     gap: 0.65rem;
@@ -3657,6 +3697,10 @@ html[data-theme='light'] .users-modal-backdrop {
     .agent-command-box {
         align-items: stretch;
         flex-direction: column;
+    }
+
+    .agent-choice-grid {
+        grid-template-columns: 1fr;
     }
 }
 

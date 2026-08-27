@@ -151,7 +151,20 @@
 
                         <span>
                             Estado operacional:
-                            {{ $server->agent_status }}
+                            <span class="status-badge {{ match ($server->agent_status) {
+                                'online' => 'status-success',
+                                'warning' => 'status-warning',
+                                'blocked' => 'status-danger',
+                                default => 'status-neutral',
+                            } }}">
+                                {{ match ($server->agent_status) {
+                                    'online' => 'Online',
+                                    'warning' => 'Atenção',
+                                    'blocked' => 'Bloqueado',
+                                    'pending' => 'Aguardando primeiro contato',
+                                    default => $server->agent_status,
+                                } }}
+                            </span>
                         </span>
 
                         <span>
@@ -252,11 +265,11 @@
                     </form>
                 @else
                     <div class="agent-state">
-                        <strong>Aguardando instalação</strong>
+                        <strong>{{ $agent?->revoked_at ? 'Credencial revogada — reenrollment necessário' : 'Agente não vinculado' }}</strong>
 
                         <span>
-                            Execute o instalador no servidor correspondente.
-                            A solicitação aparecerá abaixo para aprovação.
+                            A instalação e o vínculo são etapas independentes.
+                            Gere um vínculo para instalar ou reenrolar sem tocar no BIND.
                         </span>
                     </div>
                 @endif
@@ -412,7 +425,7 @@
                 <div class="panel-card-header">
                     <div>
                         <p class="eyebrow">Aprovação administrativa</p>
-                        <h2>Instalação aguardando aprovação</h2>
+                        <h2>Solicitação recebida</h2>
                     </div>
 
                     <span class="status-badge status-warning">
@@ -423,8 +436,16 @@
                 <div class="agent-security-list">
                     <span>Hostname: {{ $latestInstallRequest->reported_hostname }}</span>
                     <span>Endereço observado: {{ $latestInstallRequest->registered_ip ?? 'não informado' }}</span>
+                    <span>Fingerprint: {{ substr($latestInstallRequest->fingerprint, 0, 16) }}…</span>
                     <span>Sistema: {{ $latestInstallRequest->operating_system ?? 'não informado' }} {{ $latestInstallRequest->operating_system_version }}</span>
                     <span>Expira em: {{ $latestInstallRequest->expires_at->format('d/m/Y H:i') }}</span>
+                    @foreach ($latestInstallRequest->review_warnings ?? [] as $warning)
+                        <span class="status-badge status-warning">
+                            {{ $warning === 'hostname_mismatch'
+                                ? 'WARNING: hostname informado diverge do servidor selecionado.'
+                                : 'WARNING: IP observado diverge dos endereços cadastrados (possível NAT).' }}
+                        </span>
+                    @endforeach
                 </div>
 
                 <div class="agent-actions">
@@ -437,7 +458,7 @@
                     >
                         @csrf
                         <button type="submit" class="button button-primary">
-                            Aprovar instalação
+                            Aprovar agente
                         </button>
                     </form>
 
@@ -457,25 +478,53 @@
             </section>
         @elseif (! $agent)
             <section class="panel-card agent-code-panel">
-                <p class="eyebrow">Instalação automática</p>
-                <h2>Instalar o agente</h2>
+                <p class="eyebrow">Enrollment pré-vinculado</p>
+                <h2>{{ $latestEnrollmentCode?->expires_at?->isPast() ? 'Vínculo expirado' : 'Gerar vínculo' }}</h2>
 
                 <p>
-                    Execute no servidor cadastrado. O agente identificará esta
-                    máquina e aparecerá aqui para aprovação.
+                    O código nascerá associado a <strong>{{ $server->hostname }}</strong>
+                    e não dependerá de matching por hostname ou IP.
                 </p>
 
-                <div class="agent-command-box">
-                    <code id="agent-install-command">curl -fsSL https://dnscenter.trevizamnetwork.com.br/install/agent_install.sh | sudo bash</code>
-
-                    <button
-                        type="button"
-                        class="button button-secondary"
-                        data-copy-agent-command
-                    >
-                        Copiar
+                <form method="POST" action="{{ route('servers.agent.enrollment-codes.store', $server) }}">
+                    @csrf
+                    <button type="submit" class="button button-primary">
+                        {{ $latestEnrollmentCode ? 'Gerar novo vínculo' : 'Gerar vínculo' }}
                     </button>
-                </div>
+                </form>
+
+                @if ($issuedEnrollmentCode)
+                    <div class="alert alert-warning">
+                        <strong>Código exibido uma única vez</strong>
+                        <code id="agent-enrollment-code">{{ $issuedEnrollmentCode }}</code>
+                        <span>Não será possível recuperá-lo ao fechar ou recarregar esta tela.</span>
+                    </div>
+
+                    <div class="agent-choice-grid">
+                        <div class="agent-choice-card">
+                            <h3>Agente já instalado</h3>
+                            <p>Execute o comando e cole o código no prompt seguro. O segredo não entra em argv nem no histórico shell.</p>
+                            <div class="agent-command-box">
+                                <code id="agent-enroll-command">sudo /usr/local/sbin/dns-center-agent --enroll --wait 0</code>
+                                <button type="button" class="button button-secondary" data-copy-target="agent-enroll-command">Copiar</button>
+                            </div>
+                        </div>
+
+                        <div class="agent-choice-card">
+                            <h3>Máquina sem agente</h3>
+                            <p>O instalador completo aceita o mesmo código e o solicita pelo terminal.</p>
+                            <div class="agent-command-box">
+                                <code id="agent-install-command">curl -fsSL https://dnscenter.trevizamnetwork.com.br/install/agent_install.sh | sudo bash -s -- --enroll</code>
+                                <button type="button" class="button button-secondary" data-copy-target="agent-install-command">Copiar</button>
+                            </div>
+                        </div>
+                    </div>
+                @elseif ($latestEnrollmentCode && ! $latestEnrollmentCode->revoked_at && ! $latestEnrollmentCode->used_at && $latestEnrollmentCode->expires_at->isFuture())
+                    <p>Vínculo gerado e aguardando solicitação. O código não pode ser exibido novamente; gere outro se ele foi perdido.</p>
+                    <span>Expira em {{ $latestEnrollmentCode->expires_at->format('d/m/Y H:i:s') }}</span>
+                @endif
+
+                <p><strong>Modo legado / associação manual:</strong> o instalador genérico continua disponível apenas para recovery.</p>
             </section>
         @endif
 
@@ -484,8 +533,9 @@
             <h2>Como funciona</h2>
 
             <div class="agent-security-list">
-                <span>A solicitação é associada por hostname/IP cadastrado.</span>
-                <span>A solicitação expira após 24 horas.</span>
+                <span>O novo vínculo é associado previamente ao servidor e à organização.</span>
+                <span>Hostname e IP são fatores de revisão, não de associação.</span>
+                <span>O código é CSPRNG, uso único, expira e só seu hash é persistido.</span>
                 <span>A aprovação reutiliza a sessão administrativa com 2FA.</span>
                 <span>A credencial da solicitação é armazenada somente como hash.</span>
                 <span>A credencial permanente aparece somente para o agente.</span>
@@ -496,19 +546,12 @@
 
     <script nonce="{{ $cspNonce ?? '' }}">
         document
-            .querySelector('[data-copy-agent-command]')
-            ?.addEventListener('click', async () => {
-                const command = document
-                    .querySelector('#agent-install-command')
-                    ?.textContent
-                    ?.trim();
-
-                if (!command) {
-                    return;
-                }
-
-                await navigator.clipboard.writeText(command);
-            });
+            .querySelectorAll('[data-copy-target]')
+            .forEach((button) => button.addEventListener('click', async () => {
+                const command = document.getElementById(button.dataset.copyTarget)
+                    ?.textContent?.trim();
+                if (command) await navigator.clipboard.writeText(command);
+            }));
     </script>
 </body>
 </html>

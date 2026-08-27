@@ -203,6 +203,11 @@ Route::middleware([
     )->name('servers.agent.show');
 
     Route::post(
+        '/servidores/{server}/agente/vinculos',
+        [DnsAgentEnrollmentController::class, 'issueCode'],
+    )->middleware('throttle:5,1')->name('servers.agent.enrollment-codes.store');
+
+    Route::post(
         '/servidores/{server}/agente/solicitacoes/{installRequest}/aprovar',
         [DnsAgentEnrollmentController::class, 'approve'],
     )->name('servers.agent.install-requests.approve');

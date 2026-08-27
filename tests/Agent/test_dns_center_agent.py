@@ -6,6 +6,8 @@ import json
 import logging
 import argparse
 import os
+import stat
+import subprocess
 import tempfile
 import unittest
 import urllib.error
@@ -423,6 +425,191 @@ class AgentTests(unittest.TestCase):
 
         with self.assertRaises(SystemExit):
             parser.parse_args(["--enroll", "--code", "legacy"])
+
+    def test_enroll_reads_code_from_stdin_without_reinstalling(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            config_path = Path(directory) / "agent.json"
+            args = argparse.Namespace(
+                config=str(config_path), wait=0, enroll=True, stdin=True
+            )
+            code = "secure-panel-code-" + "x" * 32
+
+            with patch("sys.stdin", io.StringIO(code + "\n")), patch.object(
+                agent,
+                "request_json",
+                side_effect=lambda method, url, payload: {
+                    "ok": True,
+                    "status": "pending",
+                    "request_id": payload["request_id"],
+                    "matched": True,
+                },
+            ) as request, patch.object(
+                agent,
+                "os_release",
+                return_value={"NAME": "Debian", "VERSION_ID": "13"},
+            ), patch.object(agent.subprocess, "run") as subprocess_run:
+                self.assertEqual(0, agent.request_approval(args))
+
+            sent = request.call_args.args[2]
+            self.assertEqual(code, sent["enrollment_code"])
+            self.assertFalse(subprocess_run.called)
+            pending = json.loads(
+                config_path.with_name("install-request.json").read_text()
+            )
+            self.assertNotIn("enrollment_code", pending)
+            self.assertIn("enrollment_code_hash", pending)
+            self.assertEqual(0o600, stat.S_IMODE(
+                config_path.with_name("install-request.json").stat().st_mode
+            ))
+
+    def test_enroll_refuses_active_credential_and_never_reads_code_from_argv(self) -> None:
+        parser = agent.build_parser()
+        parsed = parser.parse_args(["--enroll", "--stdin"])
+        self.assertTrue(parsed.enroll)
+        self.assertFalse(hasattr(parsed, "code"))
+
+        with tempfile.TemporaryDirectory() as directory:
+            config_path = Path(directory) / "agent.json"
+            agent.save_config(config_path, {"token": "active"})
+            args = argparse.Namespace(
+                config=str(config_path), wait=0, enroll=True, stdin=True
+            )
+            with patch("sys.stdin", io.StringIO("x" * 48 + "\n")):
+                with self.assertRaisesRegex(agent.AgentError, "credencial ativa"):
+                    agent.request_approval(args)
+
+    def test_enroll_requires_https_and_persists_request_id_for_retry(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            config_path = Path(directory) / "agent.json"
+            args = argparse.Namespace(
+                config=str(config_path), wait=0, enroll=True, stdin=True
+            )
+            with patch("sys.stdin", io.StringIO("x" * 48 + "\n")), patch.dict(
+                os.environ, {"DNS_CENTER_PANEL_URL": "http://panel.invalid"}
+            ):
+                with self.assertRaisesRegex(agent.AgentError, "localhost"):
+                    agent.request_approval(args)
+
+            self.assertFalse(config_path.exists())
+
+    def test_enroll_with_invalid_code_fails_without_persisting_credential(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            config_path = Path(directory) / "agent.json"
+            args = argparse.Namespace(
+                config=str(config_path), wait=0, enroll=True, stdin=True
+            )
+            code = "x" * 48
+
+            with patch("sys.stdin", io.StringIO(code + "\n")), patch.object(
+                agent,
+                "request_json",
+                side_effect=agent.AgentHttpError(
+                    422, "invalid_enrollment_code", "Código temporário inválido ou expirado."
+                ),
+            ), patch.object(
+                agent,
+                "os_release",
+                return_value={"NAME": "Debian", "VERSION_ID": "13"},
+            ):
+                with self.assertRaises(agent.AgentHttpError):
+                    agent.request_approval(args)
+
+            self.assertFalse(config_path.exists())
+
+    def test_enroll_with_expired_code_fails_without_persisting_credential(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            config_path = Path(directory) / "agent.json"
+            args = argparse.Namespace(
+                config=str(config_path), wait=0, enroll=True, stdin=True
+            )
+            code = "x" * 48
+
+            with patch("sys.stdin", io.StringIO(code + "\n")), patch.object(
+                agent,
+                "request_json",
+                side_effect=agent.AgentHttpError(
+                    422, "invalid_enrollment_code", "Código temporário expirado."
+                ),
+            ), patch.object(
+                agent,
+                "os_release",
+                return_value={"NAME": "Debian", "VERSION_ID": "13"},
+            ):
+                with self.assertRaisesRegex(agent.AgentHttpError, "expirado"):
+                    agent.request_approval(args)
+
+            self.assertFalse(config_path.exists())
+
+    def test_enroll_retry_with_same_code_reuses_pending_request_id(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            config_path = Path(directory) / "agent.json"
+            code = "secure-panel-code-" + "y" * 32
+
+            def pending_response(method: str, url: str, payload: dict) -> dict:
+                return {
+                    "ok": True,
+                    "status": "pending",
+                    "request_id": payload["request_id"],
+                    "matched": True,
+                }
+
+            with patch.object(
+                agent, "request_json", side_effect=pending_response
+            ) as request, patch.object(
+                agent,
+                "os_release",
+                return_value={"NAME": "Debian", "VERSION_ID": "13"},
+            ):
+                with patch("sys.stdin", io.StringIO(code + "\n")):
+                    agent.request_approval(argparse.Namespace(
+                        config=str(config_path), wait=0, enroll=True, stdin=True
+                    ))
+                first_request_id = request.call_args.args[2]["request_id"]
+
+                with patch("sys.stdin", io.StringIO(code + "\n")):
+                    agent.request_approval(argparse.Namespace(
+                        config=str(config_path), wait=0, enroll=True, stdin=True
+                    ))
+                second_request_id = request.call_args.args[2]["request_id"]
+
+            self.assertEqual(first_request_id, second_request_id)
+
+    def test_enroll_enables_approval_timer_when_root_and_unit_present(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            config_path = Path(directory) / "agent.json"
+            args = argparse.Namespace(
+                config=str(config_path), wait=0, enroll=True, stdin=True
+            )
+            code = "secure-panel-code-" + "z" * 32
+            not_enabled = subprocess.CompletedProcess([], returncode=1)
+            enabled = subprocess.CompletedProcess([], returncode=0)
+
+            with patch("sys.stdin", io.StringIO(code + "\n")), patch.object(
+                agent,
+                "request_json",
+                side_effect=lambda method, url, payload: {
+                    "ok": True,
+                    "status": "pending",
+                    "request_id": payload["request_id"],
+                    "matched": True,
+                },
+            ), patch.object(
+                agent, "os_release", return_value={"NAME": "Debian", "VERSION_ID": "13"}
+            ), patch.object(
+                agent.os, "geteuid", return_value=0
+            ), patch.object(
+                Path, "is_file", return_value=True
+            ), patch.object(
+                agent, "detected_binary", return_value="/usr/bin/systemctl"
+            ), patch.object(
+                agent, "run_command", side_effect=[not_enabled, enabled]
+            ) as run_command:
+                self.assertEqual(0, agent.request_approval(args))
+
+            run_command.assert_any_call(
+                ["/usr/bin/systemctl", "enable", "--now", "dns-center-agent-approval.timer"],
+                timeout=30,
+            )
 
     def test_apply_requires_environment_and_confirmation(self) -> None:
         config = {

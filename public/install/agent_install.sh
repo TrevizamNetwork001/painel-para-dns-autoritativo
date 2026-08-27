@@ -2,7 +2,8 @@
 
 set -euo pipefail
 
-readonly INSTALLER_VERSION="1.0.0"
+readonly INSTALLER_VERSION="1.1.0"
+ENROLL_MODE="${1:-}"
 PANEL_URL="${DNS_CENTER_PANEL_URL:-https://dnscenter.trevizamnetwork.com.br}"
 PANEL_URL="${PANEL_URL%/}"
 INSTALL_PATH="/usr/local/sbin/dns-center-agent"
@@ -98,14 +99,32 @@ rollback_installation() {
     systemctl daemon-reload
 }
 
+request_enrollment() {
+    if [ "${ENROLL_MODE}" = "--enroll" ]; then
+        printf 'Código temporário de vínculo: ' > /dev/tty
+        IFS= read -rs enrollment_code < /dev/tty
+        printf '\n' > /dev/tty
+        if [ "${#enrollment_code}" -lt 32 ]; then
+            echo "Código temporário inválido." >&2
+            return 1
+        fi
+        printf '%s\n' "${enrollment_code}" \
+            | DNS_CENTER_PANEL_URL="${PANEL_URL}" \
+                "${INSTALL_PATH}" --enroll --stdin --wait 0
+        unset enrollment_code
+    else
+        DNS_CENTER_PANEL_URL="${PANEL_URL}" \
+            "${INSTALL_PATH}" --request-approval --wait 0
+    fi
+}
+
 if ! {
     install -d -m 0750 "${CONFIG_DIR}" "${STATE_DIR}"
     install -m 0750 "${temporary_dir}/dns-center-agent.py" "${INSTALL_PATH}"
     for unit in "${artifacts[@]:1}"; do
         install -m 0644 "${temporary_dir}/${unit}" "${SYSTEMD_DIR}/${unit}"
     done
-    DNS_CENTER_PANEL_URL="${PANEL_URL}" \
-        "${INSTALL_PATH}" --request-approval --wait 0
+    request_enrollment
     systemctl daemon-reload
     systemctl enable --now \
         dns-center-agent.timer \

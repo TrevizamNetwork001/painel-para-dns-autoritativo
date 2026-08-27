@@ -66,6 +66,7 @@ class EnsureAdminTwoFactor
             'servers.update',
             'servers.status',
             'servers.agent.install-requests.*',
+            'servers.agent.enrollment-codes.*',
             'servers.agent.revoke',
             'servers.bind.*',
             'nameservers.*',
