@@ -209,6 +209,47 @@ class DnsAgentPrelinkedEnrollmentTest extends TestCase
         $this->assertDatabaseCount('dns_agent_install_requests', 1);
     }
 
+    public function test_admin_can_cancel_unclaimed_approval_to_unblock_new_enrollment(): void
+    {
+        [$organization, $admin] = $this->user('organization_admin', true);
+        $server = DnsServer::factory()->create(['organization_id' => $organization->id]);
+        $agentUuid = (string) Str::uuid();
+
+        $installRequest = DnsAgentInstallRequest::query()->create([
+            'request_id' => (string) Str::uuid(),
+            'request_token_hash' => hash('sha256', Str::random(64)),
+            'agent_uuid' => $agentUuid,
+            'fingerprint' => hash('sha256', str_repeat('a', 64)),
+            'reported_hostname' => 'ns1',
+            'status' => 'approved',
+            'approved_at' => now(),
+            'claimed_at' => null,
+            'agent_token' => 'still-pending-pickup',
+            'organization_id' => $organization->id,
+            'dns_server_id' => $server->id,
+            'enrollment_source' => 'panel_code',
+            'expires_at' => now()->addHours(24),
+        ]);
+
+        $this->actingAs($admin)
+            ->get(route('servers.agent.show', $server))
+            ->assertOk()
+            ->assertSee('Aguardando retirada pelo agente')
+            ->assertSee('Cancelar aprovação');
+
+        $this->actingAs($admin)
+            ->post(route('servers.agent.install-requests.reject', [$server, $installRequest]))
+            ->assertRedirect(route('servers.agent.show', $server));
+
+        $this->assertSame('rejected', $installRequest->fresh()->status);
+
+        [, $plain] = $this->code($server);
+        $this->postJson('/api/agent/install-requests', $this->payload($plain, $agentUuid))
+            ->assertSuccessful();
+        $this->assertDatabaseCount('dns_agent_install_requests', 1);
+        $this->assertSame('pending', $installRequest->fresh()->status);
+    }
+
     private function code(DnsServer $server, $expiresAt = null): array
     {
         $plain = Str::random(48);
