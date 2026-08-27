@@ -309,8 +309,10 @@ class DnsAgentPublicationTest extends TestCase
             ->get(route('servers.agent.show', $context['server']))
             ->assertOk()
             ->assertSee('Versão desejada')
-            ->assertSee('Versão instalada confirmada')
-            ->assertSee('Estado da aplicação');
+            ->assertSee('Versão instalada')
+            ->assertSee('Serial esperado')
+            ->assertSee('Serial observado')
+            ->assertSee('Aplicada');
 
         $this->actingAs($context['admin'])
             ->get(route('zones.show', $context['zone']))

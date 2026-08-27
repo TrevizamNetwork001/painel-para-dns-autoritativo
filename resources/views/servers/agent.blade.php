@@ -33,10 +33,11 @@
         <header class="agent-onboarding-header">
             <div>
                 <p class="eyebrow">Servidores DNS</p>
-                <h1>Onboarding do agente</h1>
+                <h1>{{ $agent && $agent->revoked_at === null ? $server->hostname : 'Onboarding do agente' }}</h1>
                 <p>
-                    Vincule o agente local ao servidor
-                    <strong>{{ $server->name }}</strong>.
+                    {{ $agent && $agent->revoked_at === null
+                        ? 'Operação e observabilidade do agente DNS.'
+                        : 'Vincule o agente local ao servidor '.$server->name.'.' }}
                 </p>
             </div>
 
@@ -70,6 +71,9 @@
             </div>
         @endif
 
+        @if ($agent && $agent->revoked_at === null)
+            @include('servers.partials.agent-operational')
+        @else
         <section class="agent-onboarding-grid">
             <article class="panel-card">
                 <div class="panel-card-header">
@@ -119,380 +123,16 @@
                     </div>
                 </div>
 
-                @if ($agent && $agent->revoked_at === null)
-                    <div class="agent-state agent-state-connected">
-                        <strong>Agente registrado</strong>
+                <div class="agent-state">
+                    <strong>{{ $agent?->revoked_at ? 'Credencial revogada — novo vínculo necessário' : 'Agente não vinculado' }}</strong>
 
-                        <span>
-                            UUID: {{ $agent->agent_uuid }}
-                        </span>
-
-                        <span>
-                            Host reportado:
-                            {{ $agent->reported_hostname }}
-                        </span>
-
-                        <span>
-                            Registrado em:
-                            {{ $agent->registered_at?->format('d/m/Y H:i') }}
-                        </span>
-
-                        <span>
-                            IP de registro:
-                            {{ $agent->registered_ip ?: 'Não disponível' }}
-                        </span>
-
-                        <span>
-                            Último contato:
-                            {{ $agent->last_seen_at
-                                ? $agent->last_seen_at->format('d/m/Y H:i')
-                                : 'Ainda não recebido' }}
-                        </span>
-
-                        <span>
-                            Estado operacional:
-                            <span class="status-badge {{ match ($server->agent_status) {
-                                'online' => 'status-success',
-                                'warning' => 'status-warning',
-                                'blocked' => 'status-danger',
-                                default => 'status-neutral',
-                            } }}">
-                                {{ match ($server->agent_status) {
-                                    'online' => 'Online',
-                                    'warning' => 'Atenção',
-                                    'blocked' => 'Bloqueado',
-                                    'pending' => 'Aguardando primeiro contato',
-                                    default => $server->agent_status,
-                                } }}
-                            </span>
-                        </span>
-
-                        <span>
-                            Versão desejada:
-                            {{ $latestPublication?->zoneVersion?->version
-                                ?? 'Nenhuma publicação destinada' }}
-                        </span>
-
-                        <span>
-                            Versão instalada confirmada:
-                            {{ $latestAppliedPublication?->installed_version
-                                ?? 'Ainda não confirmada' }}
-                        </span>
-
-                        <span>
-                            Serial SOA observado no BIND:
-                            {{ $latestAppliedPublication?->reported_serial
-                                ?? 'Ainda não confirmado' }}
-                        </span>
-
-                        <span>
-                            Estado da aplicação:
-                            {{ $latestPublication?->status
-                                ?? 'Sem publicação' }}
-                        </span>
-
-                        @if (
-                            $latestAppliedPublication
-                            && $latestPublication
-                            && $latestAppliedPublication->installed_version
-                                < $latestPublication->zoneVersion->version
-                        )
-                            <span>
-                                A versão instalada é anterior à desejada.
-                            </span>
-                        @endif
-
-                        <span>
-                            Última confirmação:
-                            {{ $latestPublication?->last_apply_at
-                                ?->format('d/m/Y H:i')
-                                ?? 'Ainda não recebida' }}
-                        </span>
-
-                        @if ($latestPublication?->last_apply_error)
-                            <span>
-                                Erro informado:
-                                {{ $latestPublication->last_apply_error }}
-                            </span>
-                        @endif
-
-                        @if ($latestPublication?->zoneVersion?->zone)
-                            <span>
-                                Publicação:
-                                <a href="{{ route(
-                                    'zones.show',
-                                    $latestPublication->zoneVersion->zone
-                                ) }}">
-                                    {{ $latestPublication
-                                        ->zoneVersion->zone->name }}
-                                    · versão
-                                    {{ $latestPublication
-                                        ->zoneVersion->version }}
-                                </a>
-                            </span>
-                        @endif
-
-                        <span>
-                            Versão do agente:
-                            {{ $agent->metadata['agent_version'] ?? $server->agent_version ?? 'Não informado' }}
-                        </span>
-
-                        <span>
-                            Sistema:
-                            {{ $server->operating_system ?: 'Não informado' }}
-                            {{ $server->operating_system_version }}
-                        </span>
-
-                        <span>
-                            BIND:
-                            {{ $server->bind_version ?: 'Não informado' }}
-                        </span>
-                    </div>
-
-                    <div class="agent-actions">
-                        <button
-                            type="button"
-                            class="button button-primary"
-                            data-agent-upgrade-start
-                            data-agent-upgrade-store-url="{{ route('servers.agent.upgrade', $server) }}"
-                            data-agent-upgrade-status-url="{{ route('servers.agent.upgrade.status', $server) }}"
-                            data-agent-upgrade-csrf="{{ csrf_token() }}"
-                        >
-                            Atualizar agente
-                        </button>
-
-                        <form
-                            method="POST"
-                            action="{{ route(
-                                'servers.agent.revoke',
-                                $server
-                            ) }}"
-                            onsubmit="return confirm(
-                                'Revogar a credencial deste agente?'
-                            )"
-                        >
-                            @csrf
-
-                            <button
-                                type="submit"
-                                class="button button-secondary"
-                            >
-                                Revogar credencial
-                            </button>
-                        </form>
-                    </div>
-                @else
-                    <div class="agent-state">
-                        <strong>{{ $agent?->revoked_at ? 'Credencial revogada — reenrollment necessário' : 'Agente não vinculado' }}</strong>
-
-                        <span>
-                            A instalação e o vínculo são etapas independentes.
-                            Gere um vínculo para instalar ou reenrolar sem tocar no BIND.
-                        </span>
-                    </div>
-                @endif
-            </article>
-        </section>
-
-        @if ($agent && $agent->revoked_at === null)
-            <section class="panel-card">
-                <div class="panel-card-header">
-                    <div>
-                        <p class="eyebrow">BIND autoritativo</p>
-                        <h2>Prontidão factual</h2>
-                    </div>
-
-                    <span class="status-badge">
-                        {{ $server->bind_readiness_at
-                            ? 'Inventário recebido'
-                            : 'Aguardando inventário' }}
+                    <span>
+                        A instalação e o vínculo são etapas independentes.
+                        Gere um vínculo para instalar ou vincular novamente sem tocar no BIND.
                     </span>
                 </div>
-
-                @if ($server->bind_readiness_at)
-                    @php
-                        $readiness = $server->bind_readiness ?? [];
-                        $bindInstalled = (bool) data_get(
-                            $readiness,
-                            'bind_installed',
-                            false
-                        );
-                        $osFamily = data_get(
-                            $readiness,
-                            'os_family',
-                            'unsupported'
-                        );
-                        $packages = match ($osFamily) {
-                            'debian' => 'bind9, bind9-utils',
-                            'rhel' => 'bind, bind-utils',
-                            default => 'Distribuição não suportada',
-                        };
-                    @endphp
-
-                    <dl class="agent-server-details">
-                        <div>
-                            <dt>BIND instalado</dt>
-                            <dd>{{ $bindInstalled ? 'Sim' : 'Não' }}</dd>
-                        </div>
-                        <div>
-                            <dt>Versão detectada</dt>
-                            <dd>{{ data_get($readiness, 'bind_version')
-                                ?: 'Não detectada' }}</dd>
-                        </div>
-                        <div>
-                            <dt>Configuração principal</dt>
-                            <dd>{{ data_get($readiness, 'paths.named_conf')
-                                ?: 'Não detectada' }}</dd>
-                        </div>
-                        <div>
-                            <dt>Include gerenciado</dt>
-                            <dd>{{ data_get($readiness, 'paths.include_dir')
-                                ?: 'Não detectado' }}</dd>
-                        </div>
-                        <div>
-                            <dt>Diretório de zonas gerenciadas</dt>
-                            <dd>{{ data_get($readiness, 'paths.zones_dir') }}</dd>
-                        </div>
-                        <div>
-                            <dt>Serviço ativo</dt>
-                            <dd>{{ data_get($readiness, 'service.active')
-                                ? 'Sim'
-                                : 'Não' }}</dd>
-                        </div>
-                        <div>
-                            <dt>Listener TCP 53</dt>
-                            <dd>{{ data_get($readiness, 'listeners.tcp_53')
-                                ? 'Detectado'
-                                : 'Não detectado' }}</dd>
-                        </div>
-                        <div>
-                            <dt>Listener UDP 53</dt>
-                            <dd>{{ data_get($readiness, 'listeners.udp_53')
-                                ? 'Detectado'
-                                : 'Não detectado' }}</dd>
-                        </div>
-                    </dl>
-
-                    <p>
-                        Plano local allowlisted:
-                        {{ $bindInstalled
-                            ? 'integrar o include gerenciado sem apagar a configuração existente'
-                            : 'instalar '.$packages.' e integrar o include gerenciado' }}.
-                    </p>
-
-                    @if (! $latestBindOperation)
-                        <form
-                            method="POST"
-                            action="{{ route('servers.bind.plan', $server) }}"
-                        >
-                            @csrf
-                            <button type="submit" class="button button-secondary">
-                                Preparar plano BIND
-                            </button>
-                        </form>
-                    @else
-                        <p>
-                            Operação {{ $latestBindOperation->action }}
-                            · estado {{ $latestBindOperation->status }}
-                        </p>
-
-                        @if ($latestBindOperation->error)
-                            <p>Erro sanitizado: {{ $latestBindOperation->error }}</p>
-                        @endif
-
-                        @if ($latestBindOperation->status === 'planned')
-                            <form
-                                method="POST"
-                                action="{{ route(
-                                    'servers.bind.authorize',
-                                    [$server, $latestBindOperation]
-                                ) }}"
-                            >
-                                @csrf
-                                <label>
-                                    Confirmação forte
-                                    <input
-                                        name="confirmation"
-                                        required
-                                        autocomplete="off"
-                                        placeholder="AUTORIZAR BIND {{ Str::upper($server->name) }}"
-                                    >
-                                </label>
-                                <button type="submit" class="button button-primary">
-                                    Autorizar operação
-                                </button>
-                            </form>
-                        @endif
-                    @endif
-                @else
-                    <p>
-                        O agente ainda não enviou a detecção factual do BIND,
-                        ferramentas, serviço, listeners e permissões.
-                    </p>
-                @endif
-            </section>
-
-            @if ($server->bind_readiness_at)
-                <section class="panel-card">
-                    <div class="panel-card-header">
-                        <div>
-                            <p class="eyebrow">BIND existente</p>
-                            <h2>Descoberta somente leitura</h2>
-                        </div>
-
-                        <span class="status-badge {{ $latestDiscoveryOperation ? 'status-success' : 'status-neutral' }}">
-                            {{ $latestDiscoveryOperation ? 'Detectado' : 'Nunca executada' }}
-                        </span>
-                    </div>
-
-                    <p>
-                        Inventaria zonas, seriais e metadados do BIND já
-                        existente, sem escrever em <code>/etc/bind</code>,
-                        sem <code>rndc reload/reconfig</code> e sem publicar
-                        nada. Servidores e reversas podem ser revisados e
-                        importados manualmente depois.
-                    </p>
-
-                    @if ($latestDiscoveryOperation)
-                        <p>
-                            Última descoberta:
-                            {{ $latestDiscoveryOperation->completed_at?->format('d/m/Y H:i')
-                                ?? $latestDiscoveryOperation->authorized_at?->format('d/m/Y H:i') }}
-                            · estado {{ $latestDiscoveryOperation->status }}
-                            @if ($latestDiscoveryOperation->status === 'succeeded')
-                                · {{ $discoveredZoneCount }} zona(s) encontrada(s)
-                            @endif
-                        </p>
-
-                        @if ($latestDiscoveryOperation->error)
-                            <p>Erro sanitizado: {{ $latestDiscoveryOperation->error }}</p>
-                        @endif
-
-                        @if ($latestDiscoveryOperation->status === 'succeeded')
-                            <a
-                                href="{{ route('servers.bind.discovery.show', $server) }}"
-                                class="button button-secondary"
-                            >
-                                Ver zonas encontradas
-                            </a>
-                        @endif
-                    @endif
-
-                    <button
-                        type="button"
-                        class="button button-primary"
-                        data-discovery-start
-                        data-discovery-store-url="{{ route('servers.bind.discover', $server) }}"
-                        data-discovery-status-url="{{ route('servers.bind.discovery.status', $server) }}"
-                        data-discovery-show-url="{{ route('servers.bind.discovery.show', $server) }}"
-                        data-discovery-csrf="{{ csrf_token() }}"
-                        data-discovery-initial-status="{{ $latestDiscoveryOperation?->status }}"
-                        @disabled($latestDiscoveryOperation && in_array($latestDiscoveryOperation->status, ['authorized', 'running'], true))
-                    >
-                        Executar nova descoberta
-                    </button>
-                </section>
-            @endif
+            </article>
+        </section>
         @endif
 
         @if (
@@ -552,6 +192,58 @@
                         @csrf
                         <button type="submit" class="button button-danger-soft">
                             Rejeitar
+                        </button>
+                    </form>
+                </div>
+            </section>
+        @elseif (
+            $latestInstallRequest
+            && $latestInstallRequest->status === 'approved'
+            && $latestInstallRequest->claimed_at === null
+            && ! $agent
+        )
+            <section class="panel-card agent-code-panel">
+                <div class="panel-card-header">
+                    <div>
+                        <p class="eyebrow">Aprovação administrativa</p>
+                        <h2>Aguardando retirada pelo agente</h2>
+                    </div>
+
+                    <span class="status-badge status-warning">
+                        Aprovado, credencial não retirada
+                    </span>
+                </div>
+
+                <div class="agent-security-list">
+                    <span>Hostname: {{ $latestInstallRequest->reported_hostname }}</span>
+                    <span>Endereço observado: {{ $latestInstallRequest->registered_ip ?? 'não informado' }}</span>
+                    <span>Aprovado em: {{ $latestInstallRequest->approved_at?->format('d/m/Y H:i') }}</span>
+                </div>
+
+                <p>
+                    Esta solicitação foi aprovada, mas o agente ainda não
+                    retirou a credencial (o timer de aprovação roda a cada 5
+                    minutos). Se o agente foi reenrolado com um novo código
+                    antes de retirar esta credencial, a solicitação anterior
+                    fica presa neste estado — o painel bloqueia reenvios
+                    automáticos para não sobrescrever uma aprovação já
+                    concedida. Cancele abaixo para liberar um novo vínculo.
+                </p>
+
+                <div class="agent-actions">
+                    <form
+                        method="POST"
+                        action="{{ route(
+                            'servers.agent.install-requests.reject',
+                            [$server, $latestInstallRequest]
+                        ) }}"
+                        onsubmit="return confirm(
+                            'Cancelar esta aprovação e liberar um novo vínculo?'
+                        )"
+                    >
+                        @csrf
+                        <button type="submit" class="button button-danger-soft">
+                            Cancelar aprovação
                         </button>
                     </form>
                 </div>
@@ -616,6 +308,7 @@
             </section>
         @endif
 
+        @if (! $agent || $agent->revoked_at !== null)
         <section class="panel-card">
             <p class="eyebrow">Segurança</p>
             <h2>Como funciona</h2>
@@ -630,6 +323,7 @@
                 <span>O agente não recebe acesso ao painel administrativo.</span>
             </div>
         </section>
+        @endif
     </main>
 
     <div class="servers-modal" data-discovery-modal aria-hidden="true">
@@ -640,7 +334,7 @@
             aria-label="Fechar"
         ></button>
 
-        <section class="servers-modal-dialog discovery-modal-dialog">
+        <section class="servers-modal-dialog discovery-modal-dialog agent-process-modal">
             <header class="servers-modal-header">
                 <div>
                     <p class="eyebrow">BIND existente</p>
@@ -651,6 +345,8 @@
                     type="button"
                     class="users-modal-close"
                     data-discovery-modal-close
+                    aria-label="Fechar janela"
+                    title="Fechar"
                 >
                     ×
                 </button>
@@ -660,9 +356,9 @@
                 <div class="discovery-spinner" data-discovery-spinner></div>
 
                 <p data-discovery-modal-message>
-                    Solicitação enviada. O agente executa a descoberta somente
-                    leitura no próximo ciclo do timer (normalmente até 5
-                    minutos) — esta janela atualiza sozinha.
+                    Solicitação enviada ao agente. A descoberta será iniciada
+                    no próximo ciclo de comunicação, normalmente em até cinco
+                    minutos. Esta janela será atualizada automaticamente.
                 </p>
 
                 <div data-discovery-summary hidden>
@@ -794,9 +490,9 @@
                 summaryBlock.hidden = true;
                 reviewLink.hidden = true;
                 message.hidden = false;
-                message.textContent = 'Solicitação enviada. O agente executa a descoberta '
-                    + 'somente leitura no próximo ciclo do timer (normalmente até 5 '
-                    + 'minutos) — esta janela atualiza sozinha.';
+                message.textContent = 'Solicitação enviada ao agente. A descoberta será '
+                    + 'iniciada no próximo ciclo de comunicação, normalmente em até cinco '
+                    + 'minutos. Esta janela será atualizada automaticamente.';
             };
 
             const showRunning = () => {
@@ -805,8 +501,8 @@
                 summaryBlock.hidden = true;
                 reviewLink.hidden = true;
                 message.hidden = false;
-                message.textContent = 'O agente está lendo rndc status, named-checkconf e as '
-                    + 'zonas do BIND. Nada é escrito no servidor.';
+                message.textContent = 'O agente está consultando o status, a configuração e '
+                    + 'as zonas do BIND. Nenhuma alteração será feita no servidor.';
             };
 
             const showFailed = (errorText) => {

@@ -108,6 +108,39 @@ class DnsBindDiscoveryTest extends TestCase
         $this->assertDatabaseCount('dns_bind_discovered_zones', 1);
     }
 
+    public function test_agent_page_shows_factual_discovery_and_import_stages(): void
+    {
+        $context = $this->context();
+        $operation = $this->authorizedDiscoveryOperation($context);
+        $this->markOperationRunning($operation, $context['token']);
+
+        $this->withToken($context['token'])->postJson(
+            route('api.agent.bind.operations.report', $operation),
+            $this->reportDiscoveryPayload($operation, 'succeeded', [
+                $this->sampleZone(['name' => 'primary.example.com']),
+                $this->sampleZone([
+                    'name' => 'secondary.example.com',
+                    'detected_type' => 'secondary',
+                    'records' => null,
+                ]),
+            ]),
+        )->assertOk();
+
+        $this->actingAs($context['admin'])
+            ->get(route('servers.agent.show', $context['server']))
+            ->assertOk()
+            ->assertSee('2 zonas')
+            ->assertSee('Primary')
+            ->assertSee('Secondary')
+            ->assertSee('Descoberto')
+            ->assertSee('Concluído')
+            ->assertSee('Importado')
+            ->assertSee('Não iniciado')
+            ->assertSee('Gerenciado')
+            ->assertSee('Alterações externas')
+            ->assertSee('Não verificado');
+    }
+
     public function test_import_creates_zone_and_records_preserving_serial_and_ttl(): void
     {
         $context = $this->context();
