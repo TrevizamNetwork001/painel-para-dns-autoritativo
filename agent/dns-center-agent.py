@@ -800,6 +800,15 @@ def request_approval(args: argparse.Namespace) -> int:
         },
     )
 
+    if (
+        payload.get("ok") is not True
+        or payload.get("status") != "pending"
+        or payload.get("request_id") != pending["request_id"]
+    ):
+        raise AgentError(
+            "O painel não confirmou a persistência da solicitação."
+        )
+
     print("Solicitação enviada ao painel.")
     print(f"Identificador: {payload.get('request_id', pending['request_id'])}")
     print("Aguardando aprovação administrativa.")

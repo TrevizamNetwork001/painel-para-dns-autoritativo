@@ -51,24 +51,25 @@ class DnsAgentInstallRequestController extends Controller
                 409,
             );
 
+            if (
+                $existing->status === 'pending'
+                && $existing->dns_server_id === null
+            ) {
+                $server = $this->matchingServer($hostname, $request->ip());
+
+                if ($server) {
+                    $existing->forceFill([
+                        'organization_id' => $server->organization_id,
+                        'dns_server_id' => $server->id,
+                        'registered_ip' => $request->ip(),
+                    ])->save();
+                }
+            }
+
             return $this->pendingResponse($existing);
         }
 
-        $matches = DnsServer::query()
-            ->where('enabled', true)
-            ->whereDoesntHave('agent', fn ($query) => $query->whereNull('revoked_at'))
-            ->where(function ($query) use ($hostname, $request): void {
-                $query->whereRaw('LOWER(hostname) = ?', [$hostname]);
-
-                if ($request->ip()) {
-                    $query->orWhere('ipv4_address', $request->ip())
-                        ->orWhere('ipv6_address', $request->ip());
-                }
-            })
-            ->limit(2)
-            ->get();
-
-        $server = $matches->count() === 1 ? $matches->first() : null;
+        $server = $this->matchingServer($hostname, $request->ip());
 
         $installRequest = DnsAgentInstallRequest::query()->create([
             'request_id' => $validated['request_id'],
@@ -195,5 +196,34 @@ class DnsAgentInstallRequestController extends Controller
             'error' => 'installation_unavailable',
             'message' => 'O fluxo de instalação ainda não está disponível.',
         ], 503);
+    }
+
+    private function matchingServer(string $hostname, ?string $ip): ?DnsServer
+    {
+        $matches = DnsServer::query()
+            ->where('enabled', true)
+            ->whereDoesntHave(
+                'agent',
+                fn ($query) => $query->whereNull('revoked_at'),
+            )
+            ->where(function ($query) use ($hostname, $ip): void {
+                $query->whereRaw('LOWER(hostname) = ?', [$hostname]);
+
+                if (! str_contains($hostname, '.')) {
+                    $query->orWhereRaw(
+                        'LOWER(hostname) LIKE ?',
+                        [$hostname.'.%'],
+                    );
+                }
+
+                if ($ip) {
+                    $query->orWhere('ipv4_address', $ip)
+                        ->orWhere('ipv6_address', $ip);
+                }
+            })
+            ->limit(2)
+            ->get();
+
+        return $matches->count() === 1 ? $matches->first() : null;
     }
 }
