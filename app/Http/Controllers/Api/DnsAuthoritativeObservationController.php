@@ -30,7 +30,7 @@ class DnsAuthoritativeObservationController extends Controller
             'server.available' => ['required', 'boolean'],
             'server.last_reload_at' => ['nullable', 'date'],
             'server.load_error' => ['nullable', 'string', 'max:1000'],
-            'zones' => ['required', 'array', 'max:200'],
+            'zones' => ['present', 'array', 'max:200'],
             'zones.*' => ['required', 'array'],
             'zones.*.zone_id' => ['required', 'integer'],
             'zones.*.role' => ['required', Rule::in(['primary', 'secondary'])],

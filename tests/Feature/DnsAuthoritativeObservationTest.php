@@ -51,6 +51,23 @@ class DnsAuthoritativeObservationTest extends TestCase
         $this->assertDatabaseCount('dns_authoritative_observation_events', 1);
     }
 
+    public function test_agent_records_server_runtime_before_any_zone_is_assigned(): void
+    {
+        [$token, $server, $zone] = $this->authoritativeAgent();
+        $payload = $this->payload($zone);
+        $payload['zones'] = [];
+
+        $this->withToken($token)
+            ->postJson('/api/agent/bind/observations', $payload)
+            ->assertOk()
+            ->assertJsonPath('ok', true);
+
+        $server->refresh();
+        $this->assertSame(1, $server->authoritative_sequence);
+        $this->assertTrue($server->authoritative_runtime['available']);
+        $this->assertDatabaseCount('dns_authoritative_observations', 0);
+    }
+
     public function test_agent_cannot_reuse_event_id_with_another_payload(): void
     {
         [$token, , $zone] = $this->authoritativeAgent();
