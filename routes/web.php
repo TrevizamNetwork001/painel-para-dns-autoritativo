@@ -224,6 +224,16 @@ Route::middleware([
     )->name('servers.agent.revoke');
 
     Route::post(
+        '/servidores/{server}/agente/atualizar',
+        [DnsAgentEnrollmentController::class, 'upgradeAgent'],
+    )->middleware('throttle:5,1')->name('servers.agent.upgrade');
+
+    Route::get(
+        '/servidores/{server}/agente/atualizar/status',
+        [DnsAgentEnrollmentController::class, 'upgradeAgentStatus'],
+    )->name('servers.agent.upgrade.status');
+
+    Route::post(
         '/servidores/{server}/bind/plano',
         [DnsAgentEnrollmentController::class, 'planBind'],
     )->name('servers.bind.plan');

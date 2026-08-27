@@ -582,6 +582,10 @@ class DnsBindRuntimeController extends Controller
                 'tcp_53',
                 'udp_53',
                 'rolled_back',
+                'binary_changed',
+                'units_changed',
+                'changed',
+                'previous_version',
             ])
             ->map(fn ($value) => is_bool($value)
                 ? $value
