@@ -460,19 +460,19 @@
                         @endif
                     @endif
 
-                    <form
-                        method="POST"
-                        action="{{ route('servers.bind.discover', $server) }}"
+                    <button
+                        type="button"
+                        class="button button-primary"
+                        data-discovery-start
+                        data-discovery-store-url="{{ route('servers.bind.discover', $server) }}"
+                        data-discovery-status-url="{{ route('servers.bind.discovery.status', $server) }}"
+                        data-discovery-show-url="{{ route('servers.bind.discovery.show', $server) }}"
+                        data-discovery-csrf="{{ csrf_token() }}"
+                        data-discovery-initial-status="{{ $latestDiscoveryOperation?->status }}"
+                        @disabled($latestDiscoveryOperation && in_array($latestDiscoveryOperation->status, ['authorized', 'running'], true))
                     >
-                        @csrf
-                        <button
-                            type="submit"
-                            class="button button-primary"
-                            @disabled($latestDiscoveryOperation && in_array($latestDiscoveryOperation->status, ['authorized', 'running'], true))
-                        >
-                            Executar nova descoberta
-                        </button>
-                    </form>
+                        Executar nova descoberta
+                    </button>
                 </section>
             @endif
         @endif
@@ -614,6 +614,67 @@
         </section>
     </main>
 
+    <div class="servers-modal" data-discovery-modal aria-hidden="true">
+        <button
+            type="button"
+            class="servers-modal-backdrop"
+            data-discovery-modal-close
+            aria-label="Fechar"
+        ></button>
+
+        <section class="servers-modal-dialog discovery-modal-dialog">
+            <header class="servers-modal-header">
+                <div>
+                    <p class="eyebrow">BIND existente</p>
+                    <h2 data-discovery-modal-title>Buscando zonas no servidor…</h2>
+                </div>
+
+                <button
+                    type="button"
+                    class="users-modal-close"
+                    data-discovery-modal-close
+                >
+                    ×
+                </button>
+            </header>
+
+            <div data-discovery-modal-body>
+                <div class="discovery-spinner" data-discovery-spinner></div>
+
+                <p data-discovery-modal-message>
+                    Solicitação enviada. O agente executa a descoberta somente
+                    leitura no próximo ciclo do timer (normalmente até 5
+                    minutos) — esta janela atualiza sozinha.
+                </p>
+
+                <div data-discovery-summary hidden>
+                    <dl class="agent-server-details" data-discovery-summary-counts></dl>
+
+                    <div class="agent-security-list" data-discovery-summary-list></div>
+                </div>
+            </div>
+
+            <div class="agent-actions" data-discovery-modal-actions>
+                <a
+                    class="button button-primary"
+                    data-discovery-review-link
+                    href="#"
+                    hidden
+                >
+                    Revisar zonas encontradas
+                </a>
+
+                <button
+                    type="button"
+                    class="button button-secondary"
+                    data-discovery-modal-close
+                >
+                    Fechar
+                </button>
+            </div>
+        </section>
+    </div>
+
     <script nonce="{{ $cspNonce ?? '' }}">
         document
             .querySelectorAll('[data-copy-target]')
@@ -622,6 +683,202 @@
                     ?.textContent?.trim();
                 if (command) await navigator.clipboard.writeText(command);
             }));
+
+        (() => {
+            const startButton = document.querySelector('[data-discovery-start]');
+            const modal = document.querySelector('[data-discovery-modal]');
+            if (!startButton || !modal) return;
+
+            const title = modal.querySelector('[data-discovery-modal-title]');
+            const message = modal.querySelector('[data-discovery-modal-message]');
+            const spinner = modal.querySelector('[data-discovery-spinner]');
+            const summaryBlock = modal.querySelector('[data-discovery-summary]');
+            const summaryCounts = modal.querySelector('[data-discovery-summary-counts]');
+            const summaryList = modal.querySelector('[data-discovery-summary-list]');
+            const reviewLink = modal.querySelector('[data-discovery-review-link]');
+
+            const stateLabels = {
+                new: 'Novo', exists: 'Já existe', conflict: 'Conflito',
+                secondary_external: 'Secondary externo', not_supported: 'Não suportado',
+                imported: 'Importado',
+            };
+
+            let pollTimer = null;
+            let pollAttempts = 0;
+            const maxPollAttempts = 200; // ~10min a cada 3s
+
+            const openModal = () => {
+                modal.classList.add('is-open');
+                modal.setAttribute('aria-hidden', 'false');
+                document.body.style.overflow = 'hidden';
+            };
+
+            const closeModal = () => {
+                modal.classList.remove('is-open');
+                modal.setAttribute('aria-hidden', 'true');
+                document.body.style.overflow = '';
+                if (pollTimer) clearTimeout(pollTimer);
+            };
+
+            modal.querySelectorAll('[data-discovery-modal-close]')
+                .forEach((button) => button.addEventListener('click', closeModal));
+
+            const showWaiting = () => {
+                title.textContent = 'Buscando zonas no servidor…';
+                spinner.hidden = false;
+                summaryBlock.hidden = true;
+                reviewLink.hidden = true;
+                message.hidden = false;
+                message.textContent = 'Solicitação enviada. O agente executa a descoberta '
+                    + 'somente leitura no próximo ciclo do timer (normalmente até 5 '
+                    + 'minutos) — esta janela atualiza sozinha.';
+            };
+
+            const showRunning = () => {
+                title.textContent = 'Descoberta em andamento…';
+                spinner.hidden = false;
+                summaryBlock.hidden = true;
+                reviewLink.hidden = true;
+                message.hidden = false;
+                message.textContent = 'O agente está lendo rndc status, named-checkconf e as '
+                    + 'zonas do BIND. Nada é escrito no servidor.';
+            };
+
+            const showFailed = (errorText) => {
+                title.textContent = 'A descoberta falhou';
+                spinner.hidden = true;
+                summaryBlock.hidden = true;
+                reviewLink.hidden = true;
+                message.hidden = false;
+                message.textContent = errorText || 'O agente reportou uma falha. Tente novamente.';
+            };
+
+            const showTimeout = () => {
+                title.textContent = 'Ainda aguardando o agente';
+                spinner.hidden = false;
+                message.hidden = false;
+                message.textContent = 'Isso está levando mais tempo que o normal. Pode fechar '
+                    + 'esta janela — a descoberta continua em segundo plano e o card na tela '
+                    + 'atualiza quando você recarregar a página.';
+            };
+
+            const showSucceeded = (summary, discoveryUrl) => {
+                title.textContent = 'Descoberta concluída';
+                spinner.hidden = true;
+                message.hidden = true;
+
+                if (summary) {
+                    summaryBlock.hidden = false;
+                    summaryCounts.innerHTML = '';
+                    const counts = [
+                        ['Zonas encontradas', summary.total],
+                        ['Primary', summary.primary],
+                        ['Secondary', summary.secondary],
+                        ['Novas (importáveis)', summary.new],
+                        ['Já existentes', summary.exists],
+                        ['Em conflito', summary.conflict],
+                        ['Não suportadas', summary.not_supported],
+                    ];
+                    counts.forEach(([label, value]) => {
+                        const row = document.createElement('div');
+                        row.innerHTML = `<dt>${label}</dt><dd>${value}</dd>`;
+                        summaryCounts.appendChild(row);
+                    });
+
+                    summaryList.innerHTML = '';
+                    (summary.zones || []).forEach((zone) => {
+                        const span = document.createElement('span');
+                        span.textContent = `${zone.name} — ${stateLabels[zone.state] || zone.state}`;
+                        summaryList.appendChild(span);
+                    });
+                }
+
+                if (discoveryUrl) {
+                    reviewLink.href = discoveryUrl;
+                    reviewLink.hidden = false;
+                }
+            };
+
+            const poll = async (statusUrl) => {
+                pollAttempts += 1;
+
+                if (pollAttempts > maxPollAttempts) {
+                    showTimeout();
+                    return;
+                }
+
+                let payload;
+                try {
+                    const response = await fetch(statusUrl, {
+                        headers: { Accept: 'application/json' },
+                    });
+                    payload = await response.json();
+                } catch (error) {
+                    pollTimer = setTimeout(() => poll(statusUrl), 5000);
+                    return;
+                }
+
+                if (payload.status === 'succeeded') {
+                    showSucceeded(payload.summary, payload.discovery_url);
+                    return;
+                }
+
+                if (payload.status === 'failed') {
+                    showFailed(payload.error);
+                    return;
+                }
+
+                if (payload.status === 'running') {
+                    showRunning();
+                } else {
+                    showWaiting();
+                }
+
+                pollTimer = setTimeout(() => poll(statusUrl), 3000);
+            };
+
+            startButton.addEventListener('click', async () => {
+                if (startButton.disabled) return;
+
+                const storeUrl = startButton.dataset.discoveryStoreUrl;
+                const statusUrl = startButton.dataset.discoveryStatusUrl;
+                const csrfToken = startButton.dataset.discoveryCsrf;
+
+                pollAttempts = 0;
+                showWaiting();
+                openModal();
+
+                try {
+                    const response = await fetch(storeUrl, {
+                        method: 'POST',
+                        headers: {
+                            Accept: 'application/json',
+                            'Content-Type': 'application/json',
+                            'X-CSRF-TOKEN': csrfToken,
+                        },
+                    });
+
+                    if (!response.ok && response.status !== 409) {
+                        showFailed('Não foi possível solicitar a descoberta.');
+                        return;
+                    }
+                } catch (error) {
+                    showFailed('Não foi possível conectar ao painel.');
+                    return;
+                }
+
+                startButton.disabled = true;
+                poll(statusUrl);
+            });
+
+            const initialStatus = startButton.dataset.discoveryInitialStatus;
+            if (initialStatus === 'authorized' || initialStatus === 'running') {
+                pollAttempts = 0;
+                openModal();
+                initialStatus === 'running' ? showRunning() : showWaiting();
+                poll(startButton.dataset.discoveryStatusUrl);
+            }
+        })();
     </script>
 </body>
 </html>

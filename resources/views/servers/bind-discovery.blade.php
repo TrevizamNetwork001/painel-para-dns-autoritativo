@@ -76,8 +76,8 @@
                 <form method="POST" action="{{ route('servers.bind.discovery.import', $server) }}">
                     @csrf
 
-                    <div class="servers-list-panel" style="overflow-x: auto;">
-                        <table class="agent-server-details" style="width: 100%;">
+                    <div class="discovery-table-wrap">
+                        <table class="discovery-table">
                             <thead>
                                 <tr>
                                     <th></th>

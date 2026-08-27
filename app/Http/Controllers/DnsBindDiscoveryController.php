@@ -8,6 +8,7 @@ use App\Models\DnsRecord;
 use App\Models\DnsServer;
 use App\Models\DnsZone;
 use App\Support\SecurityAuditLogger;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -16,7 +17,7 @@ use Illuminate\View\View;
 
 class DnsBindDiscoveryController extends Controller
 {
-    public function store(Request $request, DnsServer $server): RedirectResponse
+    public function store(Request $request, DnsServer $server): RedirectResponse|JsonResponse
     {
         $organizationId = $this->authorizeServer($request, $server);
 
@@ -31,7 +32,7 @@ class DnsBindDiscoveryController extends Controller
 
         abort_if($inFlight, 409, 'Já existe uma descoberta em andamento para este servidor.');
 
-        DnsBindOperation::query()->create([
+        $operation = DnsBindOperation::query()->create([
             'organization_id' => $organizationId,
             'dns_server_id' => $server->id,
             'dns_agent_id' => $agent->id,
@@ -42,9 +43,63 @@ class DnsBindDiscoveryController extends Controller
             'authorized_at' => now(),
         ]);
 
+        if ($request->wantsJson()) {
+            return response()->json([
+                'ok' => true,
+                'operation_id' => $operation->id,
+                'status' => $operation->status,
+            ]);
+        }
+
         return redirect()
             ->route('servers.agent.show', $server)
             ->with('status', 'Descoberta de BIND solicitada. O agente executa na próxima janela do timer, somente leitura.');
+    }
+
+    public function status(Request $request, DnsServer $server): JsonResponse
+    {
+        $this->authorizeServer($request, $server);
+
+        $operation = DnsBindOperation::query()
+            ->where('dns_server_id', $server->id)
+            ->where('action', 'discover_bind_zones')
+            ->latest('id')
+            ->first();
+
+        if (! $operation) {
+            return response()->json(['ok' => true, 'status' => null]);
+        }
+
+        $summary = null;
+
+        if ($operation->status === 'succeeded') {
+            $zones = DnsBindDiscoveredZone::query()
+                ->where('dns_bind_operation_id', $operation->id)
+                ->get(['name', 'detected_type', 'comparison_state']);
+
+            $summary = [
+                'total' => $zones->count(),
+                'primary' => $zones->where('detected_type', 'primary')->count(),
+                'secondary' => $zones->where('detected_type', 'secondary')->count(),
+                'new' => $zones->where('comparison_state', 'new')->count(),
+                'exists' => $zones->where('comparison_state', 'exists')->count(),
+                'conflict' => $zones->where('comparison_state', 'conflict')->count(),
+                'not_supported' => $zones->where('comparison_state', 'not_supported')->count(),
+                'zones' => $zones->take(20)->map(fn ($zone) => [
+                    'name' => $zone->name,
+                    'state' => $zone->comparison_state,
+                ])->values(),
+            ];
+        }
+
+        return response()->json([
+            'ok' => true,
+            'operation_id' => $operation->id,
+            'status' => $operation->status,
+            'error' => $operation->status === 'failed' ? $operation->error : null,
+            'summary' => $summary,
+            'discovery_url' => route('servers.bind.discovery.show', $server),
+        ]);
     }
 
     public function show(Request $request, DnsServer $server): View

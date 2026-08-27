@@ -244,6 +244,11 @@ Route::middleware([
     )->name('servers.bind.discovery.show');
 
     Route::get(
+        '/servidores/{server}/bind/descoberta/status',
+        [DnsBindDiscoveryController::class, 'status'],
+    )->name('servers.bind.discovery.status');
+
+    Route::get(
         '/servidores/{server}/bind/descoberta/zonas/{zone}',
         [DnsBindDiscoveryController::class, 'showZone'],
     )->name('servers.bind.discovery.zone');
