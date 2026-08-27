@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import importlib.util
 import io
 import json
@@ -1061,6 +1062,276 @@ class AgentTests(unittest.TestCase):
         discover.assert_called_once()
         readiness.assert_not_called()
         self.assertGreaterEqual(request.call_count, 2)
+
+    @staticmethod
+    def _install_artifact_opener(content_map: dict[str, bytes]):
+        def opener(request, timeout=30):
+            url = request.full_url
+            name_and_suffix = url.rsplit("/install/", 1)[1]
+            response = Mock()
+            response.__enter__ = Mock(return_value=response)
+            response.__exit__ = Mock(return_value=False)
+
+            if name_and_suffix.endswith(".sha256"):
+                name = name_and_suffix[: -len(".sha256")]
+                digest = hashlib.sha256(content_map[name]).hexdigest()
+                response.read.side_effect = [f"{digest}  {name}\n".encode()]
+            else:
+                name = name_and_suffix
+                response.read.side_effect = [content_map[name], b""]
+
+            return response
+
+        return opener
+
+    def _self_upgrade_artifacts(self, agent_py_content: bytes) -> dict[str, bytes]:
+        return {
+            "dns-center-agent.py": agent_py_content,
+            "dns-center-agent.service": b"[Unit]\n",
+            "dns-center-agent.timer": b"[Unit]\n",
+            "dns-center-agent-operation.service": b"[Unit]\n",
+            "dns-center-agent-approval.service": b"[Unit]\n",
+            "dns-center-agent-approval.timer": b"[Unit]\n",
+        }
+
+    def test_download_public_artifact_rejects_checksum_mismatch(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            destination = Path(directory) / "artifact"
+            content_map = {"artifact": b"real content"}
+            # Corrupt the checksum served for the content.
+            bad_map = {"artifact": b"tampered"}
+
+            def opener(request, timeout=30):
+                url = request.full_url
+                if url.endswith(".sha256"):
+                    digest = hashlib.sha256(bad_map["artifact"]).hexdigest()
+                    response = Mock()
+                    response.read.side_effect = [f"{digest}  artifact\n".encode()]
+                else:
+                    response = Mock()
+                    response.read.side_effect = [content_map["artifact"], b""]
+                response.__enter__ = Mock(return_value=response)
+                response.__exit__ = Mock(return_value=False)
+                return response
+
+            with patch.object(agent.urllib.request, "urlopen", side_effect=opener):
+                with self.assertRaisesRegex(agent.AgentError, "Checksum"):
+                    agent.download_public_artifact(
+                        "https://panel.test", "artifact", destination, 1_000_000
+                    )
+
+            self.assertFalse(destination.exists())
+
+    def test_upgrade_agent_self_requires_root(self) -> None:
+        with patch.object(agent.os, "geteuid", return_value=1000):
+            with self.assertRaisesRegex(agent.AgentError, "root"):
+                agent.upgrade_agent_self({"base_url": "https://panel.test"})
+
+    def test_upgrade_agent_self_is_idempotent_when_binary_and_units_unchanged(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            install_path = Path(directory) / "dns-center-agent"
+            binary_content = b"#!/usr/bin/env python3\nprint('same')\n"
+            install_path.write_bytes(binary_content)
+            install_path.chmod(0o750)
+
+            systemd_dir = Path(directory) / "systemd"
+            systemd_dir.mkdir()
+            artifacts = self._self_upgrade_artifacts(binary_content)
+            for unit in agent.SELF_UPGRADE_ARTIFACTS[1:]:
+                (systemd_dir / unit).write_bytes(artifacts[unit])
+
+            opener = self._install_artifact_opener(artifacts)
+
+            with patch.object(agent.os, "geteuid", return_value=0), patch.object(
+                agent, "DEFAULT_INSTALL_PATH", install_path,
+            ), patch.object(
+                agent, "DEFAULT_SYSTEMD_DIR", systemd_dir,
+            ), patch.object(
+                agent.urllib.request, "urlopen", side_effect=opener,
+            ), patch.object(
+                agent, "run_command",
+                return_value=Mock(returncode=0, stdout="", stderr=""),
+            ) as run_command:
+                result = agent.upgrade_agent_self({"base_url": "https://panel.test"})
+
+            self.assertFalse(result["binary_changed"])
+            self.assertFalse(result["units_changed"])
+            self.assertFalse(result["changed"])
+            # py_compile sanity check still runs, but no --version/--help
+            # validation or daemon-reload since nothing actually changed.
+            called_commands = [call.args[0] for call in run_command.call_args_list]
+            self.assertFalse(any("--version" in cmd for cmd in called_commands))
+            self.assertFalse(any("daemon-reload" in cmd for cmd in called_commands))
+
+    def test_upgrade_agent_self_replaces_binary_after_validation(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            install_path = Path(directory) / "dns-center-agent"
+            install_path.write_bytes(b"old content\n")
+            install_path.chmod(0o750)
+
+            systemd_dir = Path(directory) / "systemd"
+            systemd_dir.mkdir()
+            new_content = b"#!/usr/bin/env python3\nprint('new')\n"
+            artifacts = self._self_upgrade_artifacts(new_content)
+            for unit in agent.SELF_UPGRADE_ARTIFACTS[1:]:
+                (systemd_dir / unit).write_bytes(artifacts[unit])
+
+            opener = self._install_artifact_opener(artifacts)
+
+            def fake_run_command(command, timeout=30):
+                if "--version" in command or "--help" in command:
+                    return Mock(returncode=0, stdout="--enroll available", stderr="")
+                return Mock(returncode=0, stdout="", stderr="")
+
+            with patch.object(agent.os, "geteuid", return_value=0), patch.object(
+                agent, "DEFAULT_INSTALL_PATH", install_path,
+            ), patch.object(
+                agent, "DEFAULT_SYSTEMD_DIR", systemd_dir,
+            ), patch.object(
+                agent.urllib.request, "urlopen", side_effect=opener,
+            ), patch.object(
+                agent, "run_command", side_effect=fake_run_command,
+            ):
+                result = agent.upgrade_agent_self({"base_url": "https://panel.test"})
+
+            self.assertTrue(result["binary_changed"])
+            self.assertEqual(new_content, install_path.read_bytes())
+
+    def test_upgrade_agent_self_rolls_back_when_validation_fails(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            install_path = Path(directory) / "dns-center-agent"
+            old_content = b"old content, still good\n"
+            install_path.write_bytes(old_content)
+            install_path.chmod(0o750)
+
+            systemd_dir = Path(directory) / "systemd"
+            systemd_dir.mkdir()
+            new_content = b"#!/usr/bin/env python3\nprint('broken')\n"
+            artifacts = self._self_upgrade_artifacts(new_content)
+            for unit in agent.SELF_UPGRADE_ARTIFACTS[1:]:
+                (systemd_dir / unit).write_bytes(artifacts[unit])
+
+            opener = self._install_artifact_opener(artifacts)
+
+            def fake_run_command(command, timeout=30):
+                if "--help" in command:
+                    # Simulates a broken/older build lacking --enroll.
+                    return Mock(returncode=0, stdout="no enroll flag here", stderr="")
+                return Mock(returncode=0, stdout="", stderr="")
+
+            with patch.object(agent.os, "geteuid", return_value=0), patch.object(
+                agent, "DEFAULT_INSTALL_PATH", install_path,
+            ), patch.object(
+                agent, "DEFAULT_SYSTEMD_DIR", systemd_dir,
+            ), patch.object(
+                agent.urllib.request, "urlopen", side_effect=opener,
+            ), patch.object(
+                agent, "run_command", side_effect=fake_run_command,
+            ):
+                with self.assertRaisesRegex(agent.AgentError, "restaurado"):
+                    agent.upgrade_agent_self({"base_url": "https://panel.test"})
+
+            self.assertEqual(old_content, install_path.read_bytes())
+
+    def test_upgrade_agent_self_never_calls_bind_or_zone_commands(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            install_path = Path(directory) / "dns-center-agent"
+            install_path.write_bytes(b"old\n")
+            install_path.chmod(0o750)
+            systemd_dir = Path(directory) / "systemd"
+            systemd_dir.mkdir()
+            artifacts = self._self_upgrade_artifacts(b"new\n")
+            opener = self._install_artifact_opener(artifacts)
+
+            commands: list[list[str]] = []
+
+            def fake_run_command(command, timeout=30):
+                commands.append(command)
+                return Mock(returncode=0, stdout="--enroll", stderr="")
+
+            with patch.object(agent.os, "geteuid", return_value=0), patch.object(
+                agent, "DEFAULT_INSTALL_PATH", install_path,
+            ), patch.object(
+                agent, "DEFAULT_SYSTEMD_DIR", systemd_dir,
+            ), patch.object(
+                agent.urllib.request, "urlopen", side_effect=opener,
+            ), patch.object(
+                agent, "run_command", side_effect=fake_run_command,
+            ), patch.object(
+                agent, "detected_binary", return_value="/usr/bin/systemctl",
+            ):
+                agent.upgrade_agent_self({"base_url": "https://panel.test"})
+
+            forbidden_binaries = ("rndc", "named-checkzone", "named-checkconf", "named")
+            for command in commands:
+                self.assertNotIn(
+                    Path(command[0]).name, forbidden_binaries,
+                    f"unexpected BIND-related command: {command}",
+                )
+                # The only systemctl subcommand allowed here is
+                # daemon-reload for the agent's own units — never a BIND
+                # service restart/reload.
+                if "systemctl" in command[0]:
+                    self.assertEqual(["daemon-reload"], command[1:])
+
+    def test_upgrade_agent_self_reloads_daemon_only_when_units_change(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            install_path = Path(directory) / "dns-center-agent"
+            binary_content = b"same content\n"
+            install_path.write_bytes(binary_content)
+            install_path.chmod(0o750)
+
+            systemd_dir = Path(directory) / "systemd"
+            systemd_dir.mkdir()
+            artifacts = self._self_upgrade_artifacts(binary_content)
+            artifacts["dns-center-agent.timer"] = b"[Unit]\nchanged\n"
+            for unit in agent.SELF_UPGRADE_ARTIFACTS[1:]:
+                (systemd_dir / unit).write_bytes(b"[Unit]\n")
+
+            opener = self._install_artifact_opener(artifacts)
+            commands: list[list[str]] = []
+
+            def fake_run_command(command, timeout=30):
+                commands.append(command)
+                return Mock(returncode=0, stdout="", stderr="")
+
+            with patch.object(agent.os, "geteuid", return_value=0), patch.object(
+                agent, "DEFAULT_INSTALL_PATH", install_path,
+            ), patch.object(
+                agent, "DEFAULT_SYSTEMD_DIR", systemd_dir,
+            ), patch.object(
+                agent.urllib.request, "urlopen", side_effect=opener,
+            ), patch.object(
+                agent, "run_command", side_effect=fake_run_command,
+            ), patch.object(
+                agent, "detected_binary", return_value="/usr/bin/systemctl",
+            ):
+                result = agent.upgrade_agent_self({"base_url": "https://panel.test"})
+
+            self.assertFalse(result["binary_changed"])
+            self.assertTrue(result["units_changed"])
+            self.assertTrue(
+                any("daemon-reload" in cmd for cmd in commands)
+            )
+
+    def test_run_authorized_operation_dispatches_upgrade_agent(self) -> None:
+        with patch.object(
+            agent, "request_json",
+            return_value={"operation": {
+                "id": 9, "action": "upgrade_agent",
+                "authorization_nonce": "nonce", "authorized_at": None,
+            }},
+        ), patch.object(
+            agent, "upgrade_agent_self",
+            return_value={"binary_changed": True, "units_changed": False, "changed": True},
+        ) as upgrade, patch.object(
+            agent, "send_readiness",
+        ) as readiness:
+            result = agent.run_authorized_operation({"base_url": "https://panel.test", "token": "t"})
+
+        self.assertEqual("succeeded", result["status"])
+        upgrade.assert_called_once()
+        readiness.assert_not_called()
 
     def test_command_execution_disables_shell_and_has_timeout(self) -> None:
         completed = Mock(returncode=0, stdout="ok", stderr="")
