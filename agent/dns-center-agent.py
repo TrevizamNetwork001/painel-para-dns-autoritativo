@@ -1263,6 +1263,498 @@ def reject_symlink(path: Path) -> None:
         current = current.parent
 
 
+DISCOVERY_MAX_ZONEFILE_BYTES = DEFAULT_MAX_ARTIFACT_BYTES
+DISCOVERY_MAX_RECORDS_PER_ZONE = 20000
+DISCOVERY_MAX_ZONES = 200
+
+SUPPORTED_DISCOVERY_RECORD_TYPES = {
+    "A", "AAAA", "CNAME", "MX", "TXT", "CAA", "NS", "PTR",
+}
+
+
+def strip_tsig_secrets(text: str) -> str:
+    """Remove BIND `secret "...";` clauses before any further processing.
+
+    named-checkconf -p echoes the effective configuration, including TSIG
+    key blocks with the secret in clear text. This must run before the text
+    touches any log, error message, or outgoing payload — sanitize_message
+    alone does not recognize this syntax.
+    """
+    return re.sub(
+        r'secret\s+"[^"]*"\s*;',
+        'secret "[removido]";',
+        text,
+        flags=re.IGNORECASE,
+    )
+
+
+def parse_rndc_status_summary(output: str) -> dict[str, Any]:
+    summary: dict[str, Any] = {}
+    match = re.search(
+        r"number of zones:\s*(\d+)\s*\((\d+)\s*automatic\)",
+        output,
+        re.IGNORECASE,
+    )
+    if match:
+        summary["zones_loaded"] = int(match.group(1))
+        summary["zones_automatic"] = int(match.group(2))
+    summary["server_running"] = "server is up and running" in output.lower()
+    return summary
+
+
+def parse_named_conf_zones(checkconf_output: str) -> list[dict[str, Any]]:
+    """Parse `zone "name" { ... };` stanzas from named-checkconf -p output.
+
+    Caller must strip TSIG secrets from the input beforehand. Brace-depth
+    and quote-aware, matching the style of _options_block_bounds above.
+    """
+    zones: list[dict[str, Any]] = []
+    pattern = re.compile(r'zone\s+"([^"]*)"(?:\s+\S+)?\s*\{', re.IGNORECASE)
+    length = len(checkconf_output)
+    index = 0
+
+    while True:
+        match = pattern.search(checkconf_output, index)
+        if not match:
+            break
+
+        name = match.group(1).rstrip(".")
+        cursor = match.end()
+        depth = 1
+        quote = False
+        escaped = False
+
+        while cursor < length and depth > 0:
+            character = checkconf_output[cursor]
+            if quote:
+                if escaped:
+                    escaped = False
+                elif character == "\\":
+                    escaped = True
+                elif character == '"':
+                    quote = False
+            elif character == '"':
+                quote = True
+            elif character == "{":
+                depth += 1
+            elif character == "}":
+                depth -= 1
+            cursor += 1
+
+        body = checkconf_output[match.end():max(match.end(), cursor - 1)]
+        index = cursor
+
+        type_match = re.search(r"\btype\s+(\S+?)\s*;", body, re.IGNORECASE)
+        file_match = re.search(r'\bfile\s+"([^"]*)"\s*;', body, re.IGNORECASE)
+        masters_blocks = re.findall(
+            r"\b(?:masters|primaries)\s*\{([^}]*)\}", body, re.IGNORECASE
+        )
+        allow_transfer = re.search(
+            r"\ballow-transfer\s*\{([^}]*)\}", body, re.IGNORECASE
+        )
+        also_notify = re.search(
+            r"\balso-notify\s*\{([^}]*)\}", body, re.IGNORECASE
+        )
+        key_references = sorted(set(
+            re.findall(r"\bkey\s+([A-Za-z0-9_.-]+)\s*;", body)
+        ))
+
+        raw_type = (type_match.group(1) if type_match else "").lower()
+        detected_type = {
+            "master": "primary",
+            "primary": "primary",
+            "slave": "secondary",
+            "secondary": "secondary",
+        }.get(raw_type)
+
+        masters = [
+            address.strip().rstrip(";")
+            for group in masters_blocks
+            for address in group.split(";")
+            if address.strip()
+        ]
+
+        zones.append({
+            "name": name,
+            "detected_syntax": raw_type or None,
+            "detected_type": detected_type,
+            "file": file_match.group(1) if file_match else None,
+            "masters": masters,
+            "allow_transfer": bool(
+                allow_transfer and allow_transfer.group(1).strip()
+            ),
+            "also_notify": bool(
+                also_notify and also_notify.group(1).strip()
+            ),
+            "key_references": key_references,
+        })
+
+    return zones
+
+
+def safe_file_metadata(
+    path: Path,
+) -> tuple[dict[str, Any] | None, str | None]:
+    try:
+        reject_symlink(path)
+    except AgentError:
+        return None, "Caminho ignorado por segurança (link simbólico)."
+
+    try:
+        info = path.stat()
+    except OSError:
+        return None, "Arquivo de zona não encontrado."
+
+    if not path.is_file():
+        return None, "Caminho de zona não é um arquivo regular."
+
+    metadata: dict[str, Any] = {
+        "size": info.st_size,
+        "mode": oct(stat.S_IMODE(info.st_mode)),
+        "mtime": datetime.fromtimestamp(
+            info.st_mtime, tz=timezone.utc
+        ).isoformat(),
+    }
+
+    try:
+        metadata["owner"] = pwd.getpwuid(info.st_uid).pw_name
+    except KeyError:
+        metadata["owner"] = str(info.st_uid)
+
+    try:
+        metadata["group"] = grp.getgrgid(info.st_gid).gr_name
+    except KeyError:
+        metadata["group"] = str(info.st_gid)
+
+    if info.st_size <= DISCOVERY_MAX_ZONEFILE_BYTES:
+        try:
+            digest = hashlib.sha256()
+            with path.open("rb") as handle:
+                for chunk in iter(lambda: handle.read(65536), b""):
+                    digest.update(chunk)
+            metadata["sha256"] = digest.hexdigest()
+        except OSError:
+            pass
+
+    return metadata, None
+
+
+def parse_discovery_zonestatus(output: str) -> dict[str, Any]:
+    facts: dict[str, Any] = {}
+
+    for raw_line in output.splitlines():
+        if ":" not in raw_line:
+            continue
+        label, value = raw_line.split(":", 1)
+        label = label.strip().lower()
+        value = value.strip()
+        if not value:
+            continue
+        if label == "serial":
+            match = re.search(r"\d+", value)
+            if match:
+                facts["serial"] = int(match.group())
+        elif label == "nodes":
+            match = re.search(r"\d+", value)
+            if match:
+                facts["node_count"] = int(match.group())
+        elif label == "secure":
+            facts["secure"] = value.lower().startswith("yes")
+        elif label == "dynamic":
+            facts["dynamic"] = value.lower().startswith("yes")
+
+    return facts
+
+
+def _tokenize_zone_line(line: str) -> list[str]:
+    tokens: list[str] = []
+    current = ""
+    quote = False
+    escaped = False
+
+    for character in line:
+        if quote:
+            current += character
+            if escaped:
+                escaped = False
+            elif character == "\\":
+                escaped = True
+            elif character == '"':
+                quote = False
+            continue
+        if character == '"':
+            quote = True
+            current += character
+            continue
+        if character.isspace():
+            if current:
+                tokens.append(current)
+                current = ""
+            continue
+        current += character
+
+    if current:
+        tokens.append(current)
+
+    return tokens
+
+
+def _parse_soa_rdata(tokens: list[str]) -> dict[str, Any] | None:
+    if len(tokens) < 7:
+        return None
+    try:
+        return {
+            "mname": tokens[0],
+            "rname": tokens[1],
+            "serial": int(tokens[2]),
+            "refresh": int(tokens[3]),
+            "retry": int(tokens[4]),
+            "expire": int(tokens[5]),
+            "minimum": int(tokens[6]),
+        }
+    except ValueError:
+        return None
+
+
+def parse_canonical_zone_dump(
+    text: str,
+    zone_name: str,
+) -> dict[str, Any]:
+    """Parse the canonical, fully-resolved output of `named-checkzone -D`.
+
+    This is deliberately NOT a raw zonefile parser: named-checkzone already
+    resolved $ORIGIN/$TTL, multi-line parentheses and comments, so the
+    grammar left to handle here is far smaller (one logical record per
+    line, owner may be blank to mean "same as previous record").
+    """
+    origin = zone_name.rstrip(".") + "."
+    default_ttl: int | None = None
+    last_owner: str | None = None
+    records: list[dict[str, Any]] = []
+    unsupported_types: set[str] = set()
+    soa: dict[str, Any] | None = None
+
+    # (content, owner_omitted) — owner_omitted is decided from the leading
+    # whitespace of the FIRST physical line of each logical record, which is
+    # how master-file format actually distinguishes "blank owner, same as
+    # previous" from an explicit owner: an owner name can itself be a pure
+    # number (common in reverse zones), so digit-based heuristics are wrong.
+    joined_lines: list[tuple[str, bool]] = []
+    buffer = ""
+    depth = 0
+    first_raw_of_record: str | None = None
+    for raw_line in text.splitlines():
+        if first_raw_of_record is None:
+            first_raw_of_record = raw_line
+        buffer += (" " if buffer else "") + raw_line
+        depth += raw_line.count("(") - raw_line.count(")")
+        if depth <= 0:
+            stripped_buffer = buffer.strip()
+            if stripped_buffer:
+                owner_omitted = bool(first_raw_of_record) and first_raw_of_record[:1] in (" ", "\t")
+                joined_lines.append((stripped_buffer, owner_omitted))
+            buffer = ""
+            depth = 0
+            first_raw_of_record = None
+    if buffer.strip():
+        owner_omitted = bool(first_raw_of_record) and first_raw_of_record[:1] in (" ", "\t")
+        joined_lines.append((buffer.strip(), owner_omitted))
+
+    for stripped, owner_omitted in joined_lines:
+        if not stripped or stripped.startswith(";"):
+            continue
+        if stripped.startswith("$ORIGIN"):
+            parts = stripped.split()
+            if len(parts) >= 2:
+                origin = parts[1] if parts[1].endswith(".") else parts[1] + "."
+            continue
+        if stripped.startswith("$TTL"):
+            parts = stripped.split()
+            if len(parts) >= 2 and parts[1].isdigit():
+                default_ttl = int(parts[1])
+            continue
+        if stripped.startswith("$"):
+            continue
+
+        tokens = _tokenize_zone_line(stripped)
+        if not tokens:
+            continue
+
+        cursor = 0
+        owner = last_owner
+        if not owner_omitted:
+            owner = tokens[0]
+            cursor = 1
+        if owner is None:
+            continue
+        last_owner = owner
+
+        ttl = default_ttl
+        if cursor < len(tokens) and tokens[cursor].isdigit():
+            ttl = int(tokens[cursor])
+            cursor += 1
+
+        if cursor < len(tokens) and tokens[cursor].upper() in {"IN", "CH", "HS"}:
+            cursor += 1
+
+        if cursor >= len(tokens):
+            continue
+
+        rr_type = tokens[cursor].upper()
+        cursor += 1
+        rdata_tokens = tokens[cursor:]
+
+        normalized_owner = origin if owner == "@" else owner
+
+        if rr_type == "SOA":
+            soa = _parse_soa_rdata(rdata_tokens)
+            continue
+
+        if rr_type not in SUPPORTED_DISCOVERY_RECORD_TYPES:
+            unsupported_types.add(rr_type)
+            continue
+
+        records.append({
+            "name": normalized_owner,
+            "ttl": ttl,
+            "type": rr_type,
+            "rdata": " ".join(rdata_tokens),
+        })
+
+        if len(records) > DISCOVERY_MAX_RECORDS_PER_ZONE:
+            raise AgentError(
+                f"Zona {zone_name} excede o limite de registros para descoberta."
+            )
+
+    return {
+        "origin": origin,
+        "default_ttl": default_ttl,
+        "soa": soa,
+        "records": records,
+        "unsupported_record_types": sorted(unsupported_types),
+    }
+
+
+def discover_bind_zones(config: dict[str, Any]) -> dict[str, Any]:
+    """Read-only inventory of an existing BIND install. Never writes."""
+    rndc = detected_binary(("/usr/sbin/rndc", "/usr/bin/rndc"))
+    named_checkconf = detected_binary(
+        ("/usr/bin/named-checkconf", "/usr/sbin/named-checkconf")
+    )
+    named_checkzone = detected_binary(
+        ("/usr/bin/named-checkzone", "/usr/sbin/named-checkzone")
+    )
+    named_conf = detected_named_conf()
+
+    if not (rndc and named_checkconf and named_conf):
+        raise AgentError(
+            "Ferramentas BIND necessárias para descoberta não encontradas."
+        )
+
+    reject_symlink(Path(named_conf))
+
+    status_result = run_command([rndc, "status"], timeout=15)
+    bind_status = parse_rndc_status_summary(
+        sanitize_message(status_result.stdout)
+    )
+
+    checkconf_result = run_command(
+        [named_checkconf, "-p", named_conf], timeout=30
+    )
+    if checkconf_result.returncode != 0:
+        raise AgentError(
+            "named-checkconf falhou ao expandir a configuração: "
+            + sanitize_message(
+                checkconf_result.stderr or checkconf_result.stdout
+            )
+        )
+
+    sanitized_config_text = strip_tsig_secrets(checkconf_result.stdout)
+    declared_zones = parse_named_conf_zones(
+        sanitized_config_text
+    )[:DISCOVERY_MAX_ZONES]
+
+    zones: list[dict[str, Any]] = []
+
+    for declared in declared_zones:
+        zone_name = declared["name"]
+        zone_report: dict[str, Any] = {
+            **declared,
+            "warnings": [],
+            "records": None,
+            "soa": None,
+            "unsupported_record_types": [],
+            "validation_status": "ok",
+            "validation_message": None,
+            "file_metadata": None,
+        }
+
+        if rndc:
+            zonestatus_result = run_command(
+                [rndc, "zonestatus", zone_name], timeout=15
+            )
+            if zonestatus_result.returncode == 0:
+                zone_report.update(
+                    parse_discovery_zonestatus(zonestatus_result.stdout)
+                )
+
+        file_path = declared.get("file")
+        file_meta = None
+        if file_path:
+            file_meta, file_warning = safe_file_metadata(Path(file_path))
+            zone_report["file_metadata"] = file_meta
+            if file_warning:
+                zone_report["warnings"].append(file_warning)
+
+        is_primary = declared.get("detected_type") == "primary"
+        within_limit = bool(
+            file_meta and file_meta.get("size", 0) <= DISCOVERY_MAX_ZONEFILE_BYTES
+        )
+
+        if is_primary and file_path and named_checkzone and within_limit:
+            dump_result = run_command(
+                [named_checkzone, "-D", zone_name, file_path], timeout=30
+            )
+            if dump_result.returncode != 0:
+                zone_report["validation_status"] = "error"
+                zone_report["validation_message"] = sanitize_message(
+                    dump_result.stderr or dump_result.stdout
+                )
+            else:
+                parsed = parse_canonical_zone_dump(
+                    strip_tsig_secrets(dump_result.stdout), zone_name
+                )
+                zone_report["soa"] = parsed["soa"]
+                zone_report["records"] = parsed["records"]
+                zone_report["unsupported_record_types"] = (
+                    parsed["unsupported_record_types"]
+                )
+                if not zone_report.get("node_count"):
+                    zone_report["node_count"] = len(parsed["records"])
+                if parsed["unsupported_record_types"]:
+                    zone_report["warnings"].append(
+                        "Contém tipos de registro que o DNS Center ainda "
+                        "não consegue editar: "
+                        + ", ".join(parsed["unsupported_record_types"])
+                    )
+        elif is_primary and file_meta and not within_limit:
+            zone_report["validation_status"] = "warning"
+            zone_report["validation_message"] = (
+                "Zonefile excede o limite de tamanho para leitura de "
+                "conteúdo nesta descoberta."
+            )
+
+        zones.append(zone_report)
+
+    return {
+        "event_id": str(uuid.uuid4()),
+        "discovered_at": utc_now(),
+        "config_source": named_conf,
+        "bind_status": bind_status,
+        "zones": zones,
+    }
+
+
 def configure_bind(action: str) -> dict[str, Any]:
     if os.geteuid() != 0:
         raise AgentError("Operação BIND autorizada exige root.")
@@ -1469,20 +1961,26 @@ def run_authorized_operation(
 
     action = operation.get("action")
 
-    if action not in {"install_bind", "configure_bind"}:
+    if action not in {"install_bind", "configure_bind", "discover_bind_zones"}:
         raise AgentError("Operação não pertence ao catálogo local.")
 
     report_operation(config, operation, "running")
 
     try:
-        result = configure_bind(str(action))
+        if action == "discover_bind_zones":
+            result = discover_bind_zones(config)
+        else:
+            result = configure_bind(str(action))
+
         report_operation(
             config,
             operation,
             "succeeded",
             result=result,
         )
-        send_readiness(config)
+
+        if action != "discover_bind_zones":
+            send_readiness(config)
 
         return {"status": "succeeded", "result": result}
     except AgentError as exception:

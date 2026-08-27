@@ -5,8 +5,11 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\DnsAgent;
 use App\Models\DnsAgentBindReadinessEvent;
+use App\Models\DnsBindDiscoveredZone;
 use App\Models\DnsBindOperation;
 use App\Models\DnsBindOperationEvent;
+use App\Models\DnsRecord;
+use App\Models\DnsZone;
 use App\Support\SecurityAuditLogger;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -174,7 +177,7 @@ class DnsBindRuntimeController extends Controller
             'event_id' => ['required', 'uuid'],
             'authorization_nonce' => ['required', 'uuid'],
             'status' => ['required', Rule::in(['running', 'succeeded', 'failed'])],
-            'result' => ['nullable', 'array', 'max:50'],
+            'result' => ['nullable', 'array'],
             'error' => ['nullable', 'string', 'max:2000'],
         ]);
 
@@ -201,14 +204,25 @@ class DnsBindRuntimeController extends Controller
             ], 404);
         }
 
+        $isDiscovery = $target->action === 'discover_bind_zones';
         $error = $this->sanitize($validated['error'] ?? null);
-        $result = $this->sanitizeResult($validated['result'] ?? null);
-        $payloadHash = hash('sha256', json_encode([
+        $discoveredZones = $isDiscovery
+            ? $this->sanitizeDiscoveryZones($validated['result']['zones'] ?? null)
+            : null;
+        $result = $isDiscovery
+            ? $this->sanitizeDiscoverySummary($discoveredZones)
+            : $this->sanitizeResult($validated['result'] ?? null);
+
+        $hashPayload = [
             'operation' => $target->id,
             'status' => $validated['status'],
             'result' => $result,
             'error' => $error,
-        ], JSON_THROW_ON_ERROR));
+        ];
+        if ($isDiscovery) {
+            $hashPayload['zones'] = $discoveredZones;
+        }
+        $payloadHash = hash('sha256', json_encode($hashPayload, JSON_THROW_ON_ERROR));
 
         $outcome = DB::transaction(function () use (
             $target,
@@ -217,6 +231,8 @@ class DnsBindRuntimeController extends Controller
             $payloadHash,
             $result,
             $error,
+            $isDiscovery,
+            $discoveredZones,
         ): string {
             $locked = DnsBindOperation::query()->whereKey($target->id)
                 ->lockForUpdate()->firstOrFail();
@@ -271,6 +287,10 @@ class DnsBindRuntimeController extends Controller
                 'error' => $validated['status'] === 'failed' ? $error : null,
             ])->save();
 
+            if ($isDiscovery && $validated['status'] === 'succeeded' && $discoveredZones !== null) {
+                $this->ingestDiscoveredZones($locked, $agent, $discoveredZones);
+            }
+
             return 'updated';
         });
 
@@ -295,6 +315,14 @@ class DnsBindRuntimeController extends Controller
                 'agent.bind_operation_'.$validated['status'],
                 $validated['status'] === 'failed' ? 'failed' : 'success',
             );
+
+            if ($isDiscovery) {
+                if ($validated['status'] === 'running') {
+                    $this->audit($request, $agent, 'dns.bind_discovery_started', 'success');
+                } elseif ($validated['status'] === 'succeeded') {
+                    $this->audit($request, $agent, 'dns.bind_discovery_completed', 'success');
+                }
+            }
         }
 
         return response()->json([
@@ -302,6 +330,220 @@ class DnsBindRuntimeController extends Controller
             'idempotent' => $outcome !== 'updated',
             'status' => $target->fresh()->status,
         ]);
+    }
+
+    /**
+     * @return list<array<string, mixed>>
+     */
+    private function sanitizeDiscoveryZones(mixed $zones): array
+    {
+        if (! is_array($zones)) {
+            return [];
+        }
+
+        $sanitized = [];
+
+        foreach (array_slice($zones, 0, 200) as $zone) {
+            if (! is_array($zone) || ! is_string($zone['name'] ?? null) || $zone['name'] === '') {
+                continue;
+            }
+
+            $fileMeta = is_array($zone['file_metadata'] ?? null) ? $zone['file_metadata'] : [];
+            $records = is_array($zone['records'] ?? null)
+                ? array_values(array_filter(array_map(
+                    fn ($record) => $this->sanitizeDiscoveredRecord($record),
+                    array_slice($zone['records'], 0, 20000),
+                )))
+                : null;
+
+            $sanitized[] = [
+                'name' => Str::limit($zone['name'], 255, ''),
+                'detected_type' => in_array($zone['detected_type'] ?? null, ['primary', 'secondary'], true)
+                    ? $zone['detected_type'] : null,
+                'detected_syntax' => is_string($zone['detected_syntax'] ?? null)
+                    ? Str::limit($zone['detected_syntax'], 20, '') : null,
+                'file_path' => is_string($zone['file'] ?? null)
+                    ? Str::limit($zone['file'], 500, '') : null,
+                'serial' => is_int($zone['serial'] ?? null) ? $zone['serial'] : null,
+                'node_count' => is_int($zone['node_count'] ?? null) ? $zone['node_count'] : null,
+                'dynamic' => (bool) ($zone['dynamic'] ?? false),
+                'secure' => (bool) ($zone['secure'] ?? false),
+                'file_owner' => is_string($fileMeta['owner'] ?? null) ? Str::limit($fileMeta['owner'], 80, '') : null,
+                'file_group' => is_string($fileMeta['group'] ?? null) ? Str::limit($fileMeta['group'], 80, '') : null,
+                'file_mode' => is_string($fileMeta['mode'] ?? null) ? Str::limit($fileMeta['mode'], 10, '') : null,
+                'file_size' => is_int($fileMeta['size'] ?? null) ? $fileMeta['size'] : null,
+                'file_mtime' => is_string($fileMeta['mtime'] ?? null) ? $fileMeta['mtime'] : null,
+                'file_sha256' => is_string($fileMeta['sha256'] ?? null)
+                    && preg_match('/\A[0-9a-f]{64}\z/', $fileMeta['sha256'])
+                    ? $fileMeta['sha256'] : null,
+                'validation_status' => in_array($zone['validation_status'] ?? null, ['ok', 'warning', 'error'], true)
+                    ? $zone['validation_status'] : 'ok',
+                'validation_message' => is_string($zone['validation_message'] ?? null)
+                    ? $this->sanitize(Str::limit($zone['validation_message'], 500, '')) : null,
+                'unsupported_record_types' => is_array($zone['unsupported_record_types'] ?? null)
+                    ? array_values(array_slice(array_map('strval', $zone['unsupported_record_types']), 0, 20))
+                    : [],
+                'soa' => $this->sanitizeSoa($zone['soa'] ?? null),
+                'records' => $records,
+                'warnings' => is_array($zone['warnings'] ?? null)
+                    ? array_values(array_map(
+                        fn ($warning) => $this->sanitize((string) $warning),
+                        array_slice($zone['warnings'], 0, 20),
+                    ))
+                    : [],
+            ];
+        }
+
+        return $sanitized;
+    }
+
+    private function sanitizeDiscoveredRecord(mixed $record): ?array
+    {
+        if (! is_array($record)) {
+            return null;
+        }
+
+        $name = $record['name'] ?? null;
+        $type = $record['type'] ?? null;
+        $content = $record['rdata'] ?? null;
+
+        if (! is_string($name) || $name === '' || ! is_string($type) || ! is_string($content)) {
+            return null;
+        }
+
+        if (! in_array($type, DnsRecord::TYPES, true)) {
+            return null;
+        }
+
+        if (preg_match('/[\x00-\x1F\x7F]/', $content)) {
+            return null;
+        }
+
+        return [
+            'name' => Str::limit($name, 255, ''),
+            'ttl' => is_int($record['ttl'] ?? null) ? $record['ttl'] : null,
+            'type' => $type,
+            'content' => Str::limit($content, 4096, ''),
+        ];
+    }
+
+    private function sanitizeSoa(mixed $soa): ?array
+    {
+        if (! is_array($soa)) {
+            return null;
+        }
+
+        foreach (['mname', 'rname'] as $key) {
+            if (! is_string($soa[$key] ?? null)) {
+                return null;
+            }
+        }
+        foreach (['serial', 'refresh', 'retry', 'expire', 'minimum'] as $key) {
+            if (! is_int($soa[$key] ?? null)) {
+                return null;
+            }
+        }
+
+        return [
+            'mname' => Str::limit($soa['mname'], 255, ''),
+            'rname' => Str::limit($soa['rname'], 255, ''),
+            'serial' => $soa['serial'],
+            'refresh' => $soa['refresh'],
+            'retry' => $soa['retry'],
+            'expire' => $soa['expire'],
+            'minimum' => $soa['minimum'],
+        ];
+    }
+
+    /**
+     * @param  list<array<string, mixed>>  $zones
+     */
+    private function sanitizeDiscoverySummary(array $zones): array
+    {
+        return [
+            'zones_total' => count($zones),
+            'zones_primary' => count(array_filter($zones, fn ($zone) => $zone['detected_type'] === 'primary')),
+            'zones_secondary' => count(array_filter($zones, fn ($zone) => $zone['detected_type'] === 'secondary')),
+            'discovered_at' => now()->toIso8601String(),
+        ];
+    }
+
+    /**
+     * @param  list<array<string, mixed>>  $zones
+     */
+    private function ingestDiscoveredZones(DnsBindOperation $operation, DnsAgent $agent, array $zones): void
+    {
+        foreach ($zones as $zone) {
+            $existing = DnsZone::query()
+                ->where('organization_id', $operation->organization_id)
+                ->where('name', $zone['name'])
+                ->first();
+
+            $comparisonState = $this->computeComparisonState($existing, $zone);
+
+            DnsBindDiscoveredZone::query()->create([
+                'organization_id' => $operation->organization_id,
+                'dns_server_id' => $operation->dns_server_id,
+                'dns_agent_id' => $agent->id,
+                'dns_bind_operation_id' => $operation->id,
+                'name' => $zone['name'],
+                'detected_type' => $zone['detected_type'],
+                'detected_syntax' => $zone['detected_syntax'],
+                'file_path' => $zone['file_path'],
+                'serial' => $zone['serial'],
+                'node_count' => $zone['node_count'],
+                'dynamic' => $zone['dynamic'],
+                'secure' => $zone['secure'],
+                'file_owner' => $zone['file_owner'],
+                'file_group' => $zone['file_group'],
+                'file_mode' => $zone['file_mode'],
+                'file_size' => $zone['file_size'],
+                'file_mtime' => $zone['file_mtime'],
+                'file_sha256' => $zone['file_sha256'],
+                'validation_status' => $zone['validation_status'],
+                'validation_message' => $zone['validation_message'],
+                'comparison_state' => $comparisonState,
+                'unsupported_record_types' => $zone['unsupported_record_types'] ?: null,
+                'soa' => $zone['soa'],
+                'records' => $zone['records'],
+                'warnings' => $zone['warnings'] ?: null,
+            ]);
+
+            SecurityAuditLogger::record(
+                event: 'dns.bind_zone_discovered',
+                user: null,
+                result: $comparisonState,
+                actor: 'dns_agent:'.$agent->id,
+                source: 'agent_api',
+                organizationId: $operation->organization_id,
+                reason: 'dns_bind_operation:'.$operation->id.';zone:'.$zone['name'],
+            );
+        }
+    }
+
+    private function computeComparisonState(?DnsZone $existing, array $zone): string
+    {
+        if ($zone['detected_type'] === 'secondary') {
+            return 'secondary_external';
+        }
+
+        if (! empty($zone['unsupported_record_types']) || $zone['validation_status'] === 'error') {
+            return 'not_supported';
+        }
+
+        if (! $existing) {
+            return 'new';
+        }
+
+        if ($existing->origin === 'bind_import') {
+            return 'imported';
+        }
+
+        $recordCount = is_array($zone['records']) ? count($zone['records']) : null;
+        $sameSerial = $zone['serial'] !== null && (int) $zone['serial'] === (int) $existing->serial;
+        $sameCount = $recordCount !== null && $recordCount === $existing->records()->count();
+
+        return ($sameSerial && $sameCount) ? 'exists' : 'conflict';
     }
 
     private function sanitize(?string $value): ?string

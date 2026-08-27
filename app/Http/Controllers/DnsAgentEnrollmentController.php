@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\DnsAgent;
 use App\Models\DnsAgentEnrollmentCode;
 use App\Models\DnsAgentInstallRequest;
+use App\Models\DnsBindDiscoveredZone;
 use App\Models\DnsBindOperation;
 use App\Models\DnsServer;
 use App\Support\SecurityAuditLogger;
@@ -59,8 +60,20 @@ class DnsAgentEnrollmentController extends Controller
             ->first();
 
         $latestBindOperation = $server->bindOperations()
+            ->whereIn('action', ['install_bind', 'configure_bind'])
             ->latest('id')
             ->first();
+
+        $latestDiscoveryOperation = $server->bindOperations()
+            ->where('action', 'discover_bind_zones')
+            ->latest('id')
+            ->first();
+
+        $discoveredZoneCount = $latestDiscoveryOperation && $latestDiscoveryOperation->status === 'succeeded'
+            ? DnsBindDiscoveredZone::query()
+                ->where('dns_bind_operation_id', $latestDiscoveryOperation->id)
+                ->count()
+            : 0;
 
         return view('servers.agent', [
             'server' => $server,
@@ -71,6 +84,8 @@ class DnsAgentEnrollmentController extends Controller
             'latestPublication' => $latestPublication,
             'latestAppliedPublication' => $latestAppliedPublication,
             'latestBindOperation' => $latestBindOperation,
+            'latestDiscoveryOperation' => $latestDiscoveryOperation,
+            'discoveredZoneCount' => $discoveredZoneCount,
         ]);
     }
 
