@@ -5,6 +5,7 @@ use App\Http\Controllers\Auth\ForgotPasswordController;
 use App\Http\Controllers\Auth\ResetPasswordController;
 use App\Http\Controllers\DnsAgentEnrollmentController;
 use App\Http\Controllers\DnsAgentInstallAssignmentController;
+use App\Http\Controllers\DnsBindDiscoveryController;
 use App\Http\Controllers\DnsNameserverController;
 use App\Http\Controllers\DnsServerController;
 use App\Http\Controllers\DnsTsigKeyController;
@@ -231,6 +232,26 @@ Route::middleware([
         '/servidores/{server}/bind/operacoes/{operation}/autorizar',
         [DnsAgentEnrollmentController::class, 'authorizeBind'],
     )->name('servers.bind.authorize');
+
+    Route::post(
+        '/servidores/{server}/bind/descoberta',
+        [DnsBindDiscoveryController::class, 'store'],
+    )->middleware('throttle:5,1')->name('servers.bind.discover');
+
+    Route::get(
+        '/servidores/{server}/bind/descoberta',
+        [DnsBindDiscoveryController::class, 'show'],
+    )->name('servers.bind.discovery.show');
+
+    Route::get(
+        '/servidores/{server}/bind/descoberta/zonas/{zone}',
+        [DnsBindDiscoveryController::class, 'showZone'],
+    )->name('servers.bind.discovery.zone');
+
+    Route::post(
+        '/servidores/{server}/bind/descoberta/importar',
+        [DnsBindDiscoveryController::class, 'import'],
+    )->name('servers.bind.discovery.import');
 });
 
 Route::middleware([

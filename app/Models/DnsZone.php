@@ -32,7 +32,14 @@ class DnsZone extends Model
         'version',
         'enabled',
         'notes',
+        'origin',
+        'imported_at',
+        'imported_by',
+        'import_source_id',
+        'import_batch_id',
     ];
+
+    public const ORIGINS = ['managed', 'bind_import'];
 
     protected function casts(): array
     {
@@ -45,6 +52,7 @@ class DnsZone extends Model
             'soa_minimum' => 'integer',
             'version' => 'integer',
             'enabled' => 'boolean',
+            'imported_at' => 'immutable_datetime',
         ];
     }
 
@@ -86,6 +94,16 @@ class DnsZone extends Model
     public function authoritativeObservations(): HasMany
     {
         return $this->hasMany(DnsAuthoritativeObservation::class, 'dns_zone_id');
+    }
+
+    public function importSource(): BelongsTo
+    {
+        return $this->belongsTo(DnsBindDiscoveredZone::class, 'import_source_id');
+    }
+
+    public function isImportedUnmanaged(): bool
+    {
+        return $this->origin === 'bind_import';
     }
 
     public function scopeForOrganization(

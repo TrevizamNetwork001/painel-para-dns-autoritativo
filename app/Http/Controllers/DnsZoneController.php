@@ -629,6 +629,12 @@ class DnsZoneController extends Controller
         $this->authorizeWrite($request);
         $this->authorizeZone($request, $zone);
 
+        abort_if(
+            $zone->origin === 'bind_import',
+            409,
+            'Conclua a adoção do gerenciamento antes de publicar esta zona.',
+        );
+
         try {
             $published = DB::transaction(function () use (
                 $request,

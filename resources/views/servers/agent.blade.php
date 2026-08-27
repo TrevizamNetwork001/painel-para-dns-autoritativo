@@ -413,6 +413,68 @@
                     </p>
                 @endif
             </section>
+
+            @if ($server->bind_readiness_at)
+                <section class="panel-card">
+                    <div class="panel-card-header">
+                        <div>
+                            <p class="eyebrow">BIND existente</p>
+                            <h2>Descoberta somente leitura</h2>
+                        </div>
+
+                        <span class="status-badge {{ $latestDiscoveryOperation ? 'status-success' : 'status-neutral' }}">
+                            {{ $latestDiscoveryOperation ? 'Detectado' : 'Nunca executada' }}
+                        </span>
+                    </div>
+
+                    <p>
+                        Inventaria zonas, seriais e metadados do BIND já
+                        existente, sem escrever em <code>/etc/bind</code>,
+                        sem <code>rndc reload/reconfig</code> e sem publicar
+                        nada. Servidores e reversas podem ser revisados e
+                        importados manualmente depois.
+                    </p>
+
+                    @if ($latestDiscoveryOperation)
+                        <p>
+                            Última descoberta:
+                            {{ $latestDiscoveryOperation->completed_at?->format('d/m/Y H:i')
+                                ?? $latestDiscoveryOperation->authorized_at?->format('d/m/Y H:i') }}
+                            · estado {{ $latestDiscoveryOperation->status }}
+                            @if ($latestDiscoveryOperation->status === 'succeeded')
+                                · {{ $discoveredZoneCount }} zona(s) encontrada(s)
+                            @endif
+                        </p>
+
+                        @if ($latestDiscoveryOperation->error)
+                            <p>Erro sanitizado: {{ $latestDiscoveryOperation->error }}</p>
+                        @endif
+
+                        @if ($latestDiscoveryOperation->status === 'succeeded')
+                            <a
+                                href="{{ route('servers.bind.discovery.show', $server) }}"
+                                class="button button-secondary"
+                            >
+                                Ver zonas encontradas
+                            </a>
+                        @endif
+                    @endif
+
+                    <form
+                        method="POST"
+                        action="{{ route('servers.bind.discover', $server) }}"
+                    >
+                        @csrf
+                        <button
+                            type="submit"
+                            class="button button-primary"
+                            @disabled($latestDiscoveryOperation && in_array($latestDiscoveryOperation->status, ['authorized', 'running'], true))
+                        >
+                            Executar nova descoberta
+                        </button>
+                    </form>
+                </section>
+            @endif
         @endif
 
         @if (
