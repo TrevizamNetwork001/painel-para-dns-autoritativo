@@ -233,6 +233,11 @@
                         @endif
 
                         <span>
+                            Versão do agente:
+                            {{ $agent->metadata['agent_version'] ?? $server->agent_version ?? 'Não informado' }}
+                        </span>
+
+                        <span>
                             Sistema:
                             {{ $server->operating_system ?: 'Não informado' }}
                             {{ $server->operating_system_version }}
@@ -244,25 +249,38 @@
                         </span>
                     </div>
 
-                    <form
-                        method="POST"
-                        action="{{ route(
-                            'servers.agent.revoke',
-                            $server
-                        ) }}"
-                        onsubmit="return confirm(
-                            'Revogar a credencial deste agente?'
-                        )"
-                    >
-                        @csrf
-
+                    <div class="agent-actions">
                         <button
-                            type="submit"
-                            class="button button-secondary"
+                            type="button"
+                            class="button button-primary"
+                            data-agent-upgrade-start
+                            data-agent-upgrade-store-url="{{ route('servers.agent.upgrade', $server) }}"
+                            data-agent-upgrade-status-url="{{ route('servers.agent.upgrade.status', $server) }}"
+                            data-agent-upgrade-csrf="{{ csrf_token() }}"
                         >
-                            Revogar credencial
+                            Atualizar agente
                         </button>
-                    </form>
+
+                        <form
+                            method="POST"
+                            action="{{ route(
+                                'servers.agent.revoke',
+                                $server
+                            ) }}"
+                            onsubmit="return confirm(
+                                'Revogar a credencial deste agente?'
+                            )"
+                        >
+                            @csrf
+
+                            <button
+                                type="submit"
+                                class="button button-secondary"
+                            >
+                                Revogar credencial
+                            </button>
+                        </form>
+                    </div>
                 @else
                     <div class="agent-state">
                         <strong>{{ $agent?->revoked_at ? 'Credencial revogada — reenrollment necessário' : 'Agente não vinculado' }}</strong>
@@ -675,6 +693,53 @@
         </section>
     </div>
 
+    <div class="servers-modal" data-agent-upgrade-modal aria-hidden="true">
+        <button
+            type="button"
+            class="servers-modal-backdrop"
+            data-agent-upgrade-modal-close
+            aria-label="Fechar"
+        ></button>
+
+        <section class="servers-modal-dialog discovery-modal-dialog">
+            <header class="servers-modal-header">
+                <div>
+                    <p class="eyebrow">Agente</p>
+                    <h2 data-agent-upgrade-modal-title>Atualizando agente…</h2>
+                </div>
+
+                <button
+                    type="button"
+                    class="users-modal-close"
+                    data-agent-upgrade-modal-close
+                >
+                    ×
+                </button>
+            </header>
+
+            <div data-agent-upgrade-modal-body>
+                <div class="discovery-spinner" data-agent-upgrade-spinner></div>
+
+                <p data-agent-upgrade-modal-message>
+                    Solicitação enviada. O agente baixa, valida e substitui o
+                    binário no próximo ciclo do timer (normalmente até 5
+                    minutos) — nenhum serviço do BIND é tocado. Esta janela
+                    atualiza sozinha.
+                </p>
+            </div>
+
+            <div class="agent-actions">
+                <button
+                    type="button"
+                    class="button button-secondary"
+                    data-agent-upgrade-modal-close
+                >
+                    Fechar
+                </button>
+            </div>
+        </section>
+    </div>
+
     <script nonce="{{ $cspNonce ?? '' }}">
         document
             .querySelectorAll('[data-copy-target]')
@@ -878,6 +943,151 @@
                 initialStatus === 'running' ? showRunning() : showWaiting();
                 poll(startButton.dataset.discoveryStatusUrl);
             }
+        })();
+
+        (() => {
+            const startButton = document.querySelector('[data-agent-upgrade-start]');
+            const modal = document.querySelector('[data-agent-upgrade-modal]');
+            if (!startButton || !modal) return;
+
+            const title = modal.querySelector('[data-agent-upgrade-modal-title]');
+            const message = modal.querySelector('[data-agent-upgrade-modal-message]');
+            const spinner = modal.querySelector('[data-agent-upgrade-spinner]');
+
+            let pollTimer = null;
+            let pollAttempts = 0;
+            const maxPollAttempts = 200; // ~10min a cada 3s
+
+            const openModal = () => {
+                modal.classList.add('is-open');
+                modal.setAttribute('aria-hidden', 'false');
+                document.body.style.overflow = 'hidden';
+            };
+
+            const closeModal = () => {
+                modal.classList.remove('is-open');
+                modal.setAttribute('aria-hidden', 'true');
+                document.body.style.overflow = '';
+                if (pollTimer) clearTimeout(pollTimer);
+            };
+
+            modal.querySelectorAll('[data-agent-upgrade-modal-close]')
+                .forEach((button) => button.addEventListener('click', closeModal));
+
+            const showWaiting = () => {
+                title.textContent = 'Atualizando agente…';
+                spinner.hidden = false;
+                message.textContent = 'Solicitação enviada. O agente baixa, valida e substitui '
+                    + 'o binário no próximo ciclo do timer (normalmente até 5 minutos) — nenhum '
+                    + 'serviço do BIND é tocado. Esta janela atualiza sozinha.';
+            };
+
+            const showRunning = () => {
+                title.textContent = 'Atualização em andamento…';
+                spinner.hidden = false;
+                message.textContent = 'Baixando e validando o novo binário (checksum, sintaxe, '
+                    + '--version/--help) antes de substituir. O binário anterior é restaurado '
+                    + 'automaticamente se a validação falhar.';
+            };
+
+            const showFailed = (errorText) => {
+                title.textContent = 'A atualização falhou';
+                spinner.hidden = true;
+                message.textContent = errorText
+                    || 'O agente reportou uma falha; o binário anterior foi preservado.';
+            };
+
+            const showTimeout = () => {
+                title.textContent = 'Ainda aguardando o agente';
+                spinner.hidden = false;
+                message.textContent = 'Isso está levando mais tempo que o normal. Pode fechar '
+                    + 'esta janela — a atualização continua em segundo plano.';
+            };
+
+            const showSucceeded = (result) => {
+                spinner.hidden = true;
+                if (result && result.changed === false) {
+                    title.textContent = 'Agente já está atualizado';
+                    message.textContent = 'Nada precisou ser alterado — binário e units já '
+                        + 'estavam na versão mais recente.';
+                } else {
+                    title.textContent = 'Agente atualizado';
+                    const parts = [];
+                    if (result && result.binary_changed) parts.push('binário substituído');
+                    if (result && result.units_changed) parts.push('units systemd atualizadas');
+                    message.textContent = (parts.length ? parts.join(', ') + '. ' : '')
+                        + 'A nova versão vale a partir do próximo ciclo do agente. Recarregue a '
+                        + 'página para ver a versão atualizada.';
+                }
+            };
+
+            const poll = async (statusUrl) => {
+                pollAttempts += 1;
+                if (pollAttempts > maxPollAttempts) {
+                    showTimeout();
+                    return;
+                }
+
+                let payload;
+                try {
+                    const response = await fetch(statusUrl, {
+                        headers: { Accept: 'application/json' },
+                    });
+                    payload = await response.json();
+                } catch (error) {
+                    pollTimer = setTimeout(() => poll(statusUrl), 5000);
+                    return;
+                }
+
+                if (payload.status === 'succeeded') {
+                    showSucceeded(payload.result);
+                    return;
+                }
+                if (payload.status === 'failed') {
+                    showFailed(payload.error);
+                    return;
+                }
+                if (payload.status === 'running') {
+                    showRunning();
+                } else {
+                    showWaiting();
+                }
+
+                pollTimer = setTimeout(() => poll(statusUrl), 3000);
+            };
+
+            startButton.addEventListener('click', async () => {
+                if (startButton.disabled) return;
+
+                const storeUrl = startButton.dataset.agentUpgradeStoreUrl;
+                const statusUrl = startButton.dataset.agentUpgradeStatusUrl;
+                const csrfToken = startButton.dataset.agentUpgradeCsrf;
+
+                pollAttempts = 0;
+                showWaiting();
+                openModal();
+
+                try {
+                    const response = await fetch(storeUrl, {
+                        method: 'POST',
+                        headers: {
+                            Accept: 'application/json',
+                            'Content-Type': 'application/json',
+                            'X-CSRF-TOKEN': csrfToken,
+                        },
+                    });
+
+                    if (!response.ok && response.status !== 409) {
+                        showFailed('Não foi possível solicitar a atualização.');
+                        return;
+                    }
+                } catch (error) {
+                    showFailed('Não foi possível conectar ao painel.');
+                    return;
+                }
+
+                poll(statusUrl);
+            });
         })();
     </script>
 </body>

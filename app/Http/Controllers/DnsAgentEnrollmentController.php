@@ -9,6 +9,7 @@ use App\Models\DnsBindDiscoveredZone;
 use App\Models\DnsBindOperation;
 use App\Models\DnsServer;
 use App\Support\SecurityAuditLogger;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -440,6 +441,80 @@ class DnsAgentEnrollmentController extends Controller
                 'status',
                 'Credencial do agente revogada com sucesso.',
             );
+    }
+
+    public function upgradeAgent(Request $request, DnsServer $server): RedirectResponse|JsonResponse
+    {
+        $organizationId = $this->authorizeServer($request, $server);
+
+        $agent = DnsAgent::query()
+            ->where('organization_id', $organizationId)
+            ->where('dns_server_id', $server->id)
+            ->whereNull('revoked_at')
+            ->first();
+
+        abort_unless($agent, 409, 'Agente não vinculado ou revogado.');
+
+        $inFlight = DnsBindOperation::query()
+            ->where('dns_server_id', $server->id)
+            ->where('action', 'upgrade_agent')
+            ->whereIn('status', ['authorized', 'running'])
+            ->exists();
+
+        abort_if($inFlight, 409, 'Já existe uma atualização de agente em andamento para este servidor.');
+
+        DnsBindOperation::query()->create([
+            'organization_id' => $organizationId,
+            'dns_server_id' => $server->id,
+            'dns_agent_id' => $agent->id,
+            'action' => 'upgrade_agent',
+            'status' => 'authorized',
+            'authorization_nonce' => (string) Str::uuid(),
+            'authorized_by' => $request->user()->id,
+            'authorized_at' => now(),
+        ]);
+
+        SecurityAuditLogger::record(
+            event: 'agent.upgrade_requested',
+            user: $request->user(),
+            result: 'success',
+            actor: 'user:'.$request->user()->id,
+            source: 'web',
+            ipAddress: $request->ip(),
+            userAgent: $request->userAgent(),
+            organizationId: $organizationId,
+            reason: 'dns_server:'.$server->id,
+        );
+
+        if ($request->wantsJson()) {
+            return response()->json(['ok' => true]);
+        }
+
+        return redirect()
+            ->route('servers.agent.show', $server)
+            ->with('status', 'Atualização do agente solicitada. Ele aplica no próximo ciclo do timer.');
+    }
+
+    public function upgradeAgentStatus(Request $request, DnsServer $server): JsonResponse
+    {
+        $this->authorizeServer($request, $server);
+
+        $operation = DnsBindOperation::query()
+            ->where('dns_server_id', $server->id)
+            ->where('action', 'upgrade_agent')
+            ->latest('id')
+            ->first();
+
+        if (! $operation) {
+            return response()->json(['ok' => true, 'status' => null]);
+        }
+
+        return response()->json([
+            'ok' => true,
+            'status' => $operation->status,
+            'error' => $operation->status === 'failed' ? $operation->error : null,
+            'result' => $operation->status === 'succeeded' ? $operation->result : null,
+        ]);
     }
 
     private function authorizeServer(

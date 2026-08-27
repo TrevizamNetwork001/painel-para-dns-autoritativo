@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import base64
+import filecmp
 import hashlib
 import html
 import getpass
@@ -1778,6 +1779,191 @@ def discover_bind_zones(config: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+SELF_UPGRADE_ARTIFACTS = (
+    "dns-center-agent.py",
+    "dns-center-agent.service",
+    "dns-center-agent.timer",
+    "dns-center-agent-operation.service",
+    "dns-center-agent-approval.service",
+    "dns-center-agent-approval.timer",
+)
+
+DEFAULT_INSTALL_PATH = Path("/usr/local/sbin/dns-center-agent")
+DEFAULT_SYSTEMD_DIR = Path("/etc/systemd/system")
+
+
+def download_public_artifact(
+    base_url: str,
+    name: str,
+    destination: Path,
+    max_bytes: int,
+    timeout: int = 30,
+) -> str:
+    """Download a public /install/<name> artifact, verifying its .sha256
+    sidecar. Mirrors the checksum-then-atomic-write pattern already used by
+    request_artifact, but for the unauthenticated installer endpoints."""
+    checksum_request = urllib.request.Request(
+        f"{base_url}/install/{name}.sha256",
+        method="GET",
+        headers={"User-Agent": f"dns-center-agent/{AGENT_VERSION}"},
+    )
+    with urllib.request.urlopen(checksum_request, timeout=timeout) as response:
+        checksum_body = response.read(1024).decode("utf-8", errors="replace")
+
+    expected = checksum_body.strip().split()[0].lower() if checksum_body.strip() else ""
+    if not re.fullmatch(r"[0-9a-f]{64}", expected):
+        raise AgentError(f"Checksum inválido recebido para {name}.")
+
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    reject_symlink(destination)
+    descriptor, temporary_name = tempfile.mkstemp(
+        prefix=f".{destination.name}.", dir=str(destination.parent)
+    )
+    temporary = Path(temporary_name)
+    digest = hashlib.sha256()
+    size = 0
+
+    try:
+        request = urllib.request.Request(
+            f"{base_url}/install/{name}",
+            method="GET",
+            headers={"User-Agent": f"dns-center-agent/{AGENT_VERSION}"},
+        )
+        with urllib.request.urlopen(request, timeout=timeout) as response:
+            with os.fdopen(descriptor, "wb") as handle:
+                while True:
+                    chunk = response.read(65536)
+                    if not chunk:
+                        break
+                    size += len(chunk)
+                    if size > max_bytes:
+                        raise AgentError(
+                            f"Artefato {name} excede o tamanho máximo."
+                        )
+                    digest.update(chunk)
+                    handle.write(chunk)
+                handle.flush()
+                os.fsync(handle.fileno())
+
+        actual = digest.hexdigest()
+        if actual != expected:
+            raise AgentError(f"Checksum não confere para {name}.")
+
+        os.chmod(temporary, 0o750)
+        os.replace(temporary, destination)
+        return actual
+    finally:
+        temporary.unlink(missing_ok=True)
+
+
+def upgrade_agent_self(config: dict[str, Any]) -> dict[str, Any]:
+    """Download and install a newer agent binary/units in place.
+
+    Never touches BIND, never touches /etc/bind or zone files. Reuses the
+    exact safety model already audited in
+    public/install/agent_install.sh --upgrade-agent (checksum verification,
+    backup, atomic replace, validate --version/--help before accepting,
+    restore on failure) but is triggered by the panel-authorized operation
+    poll instead of a manual shell invocation, so it can run unattended.
+    """
+    if os.geteuid() != 0:
+        raise AgentError("Auto-atualização do agente exige root.")
+
+    install_path = DEFAULT_INSTALL_PATH
+    if not install_path.is_file():
+        raise AgentError(
+            "Instalação do agente não encontrada em "
+            f"{install_path}; use a instalação completa."
+        )
+    reject_symlink(install_path)
+
+    base_url = normalize_base_url(str(config["base_url"]))
+    binary_changed = False
+    units_changed = False
+
+    with tempfile.TemporaryDirectory(
+        prefix="dns-center-agent-selfupgrade-"
+    ) as tmp_name:
+        tmp_dir = Path(tmp_name)
+        downloaded: dict[str, Path] = {}
+
+        for artifact in SELF_UPGRADE_ARTIFACTS:
+            destination = tmp_dir / artifact
+            download_public_artifact(
+                base_url, artifact, destination, DISCOVERY_MAX_ZONEFILE_BYTES
+            )
+            downloaded[artifact] = destination
+
+        new_binary = downloaded["dns-center-agent.py"]
+        compile_check = run_command(
+            [sys.executable, "-m", "py_compile", str(new_binary)],
+            timeout=30,
+        )
+        if compile_check.returncode != 0:
+            raise AgentError(
+                "Novo binário do agente falhou na validação de sintaxe."
+            )
+
+        backup_binary = tmp_dir / "dns-center-agent.previous"
+        shutil.copy2(install_path, backup_binary)
+
+        if not filecmp.cmp(new_binary, install_path, shallow=False):
+            binary_changed = True
+            os.chmod(new_binary, 0o750)
+            os.replace(new_binary, install_path)
+
+            version_check = run_command(
+                [str(install_path), "--version"], timeout=10
+            )
+            help_check = run_command(
+                [str(install_path), "--help"], timeout=10
+            )
+            if (
+                version_check.returncode != 0
+                or help_check.returncode != 0
+                or "--enroll" not in help_check.stdout
+            ):
+                os.chmod(backup_binary, 0o750)
+                os.replace(backup_binary, install_path)
+                raise AgentError(
+                    "Falha na validação do novo agente; binário anterior "
+                    "restaurado."
+                )
+
+        systemd_dir = DEFAULT_SYSTEMD_DIR
+        for unit in SELF_UPGRADE_ARTIFACTS[1:]:
+            destination = systemd_dir / unit
+            if destination.is_file() and filecmp.cmp(
+                downloaded[unit], destination, shallow=False
+            ):
+                continue
+            reject_symlink(destination)
+            os.chmod(downloaded[unit], 0o644)
+            shutil.copy2(downloaded[unit], destination)
+            units_changed = True
+
+        if units_changed:
+            systemctl = detected_binary(
+                ("/usr/bin/systemctl", "/bin/systemctl")
+            )
+            if systemctl:
+                reload_result = run_command(
+                    [systemctl, "daemon-reload"], timeout=30
+                )
+                if reload_result.returncode != 0:
+                    raise AgentError(
+                        "systemctl daemon-reload falhou após atualizar "
+                        "as units."
+                    )
+
+    return {
+        "binary_changed": binary_changed,
+        "units_changed": units_changed,
+        "previous_version": AGENT_VERSION,
+        "changed": binary_changed or units_changed,
+    }
+
+
 def configure_bind(action: str) -> dict[str, Any]:
     if os.geteuid() != 0:
         raise AgentError("Operação BIND autorizada exige root.")
@@ -1984,7 +2170,9 @@ def run_authorized_operation(
 
     action = operation.get("action")
 
-    if action not in {"install_bind", "configure_bind", "discover_bind_zones"}:
+    if action not in {
+        "install_bind", "configure_bind", "discover_bind_zones", "upgrade_agent",
+    }:
         raise AgentError("Operação não pertence ao catálogo local.")
 
     report_operation(config, operation, "running")
@@ -1992,6 +2180,8 @@ def run_authorized_operation(
     try:
         if action == "discover_bind_zones":
             result = discover_bind_zones(config)
+        elif action == "upgrade_agent":
+            result = upgrade_agent_self(config)
         else:
             result = configure_bind(str(action))
 
@@ -2002,7 +2192,7 @@ def run_authorized_operation(
             result=result,
         )
 
-        if action != "discover_bind_zones":
+        if action not in {"discover_bind_zones", "upgrade_agent"}:
             send_readiness(config)
 
         return {"status": "succeeded", "result": result}
