@@ -78,8 +78,8 @@
             @if ($records->isEmpty())
                 <p>Nenhum registro capturado para esta zona (secondary, não suportada ou fora do limite de tamanho).</p>
             @else
-                <div style="overflow-x: auto;">
-                    <table class="agent-server-details" style="width: 100%;">
+                <div class="discovery-table-wrap">
+                    <table class="discovery-table">
                         <thead>
                             <tr>
                                 <th>Nome</th>
