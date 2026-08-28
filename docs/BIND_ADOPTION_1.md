@@ -123,3 +123,114 @@ por comando, saída de comando truncada. Excedentes viram aviso
 - Não altera `named.conf`, include, TSIG ou topologia.
 - Não adota gerenciamento automaticamente — isso é uma fase futura separada,
   autorizada explicitamente por zona.
+
+## Homologação em servidor real — DISCOVER
+
+**Status: DISCOVER homologado em servidor real. IMPORT não executado. ADOPT
+fora de escopo.**
+
+Servidor: `ns1.legacy.example` (BIND `9.20.26-1~deb13u1-Debian`,
+gerenciamento atual externo/CLI, agente `0.6.0`). Descoberta real executada e
+concluída em 2026-08-27, via operação assíncrona (`discover_bind_zones`),
+usando `named-checkconf -p`, `rndc zonestatus` e `named-checkzone -D` reais
+contra a configuração e as zonas de produção do servidor.
+
+### Resultado da descoberta
+
+6 zonas encontradas, todas `primary`, 0 `secondary`:
+
+| Zona | Serial | Nodes (BIND) | Registros parseados |
+|---|---|---|---|
+| `legacy.example` | 2026082701 | 1030 | 1038 |
+| `192.0.2.in-addr.arpa` | 2026082701 | 257 | 258 |
+| `197.162.45.in-addr.arpa` | 2026082701 | 257 | 258 |
+| `198.162.45.in-addr.arpa` | 2026082701 | 257 | 258 |
+| `199.162.45.in-addr.arpa` | 2026082701 | 257 | 258 |
+| `8.b.d.0.1.0.0.2.ip6.arpa` | 2026082701 | 4 | 5 |
+
+Todas as 6 zonas ficaram com `comparison_state=new` (não existem no painel) e
+`validation_status=ok`. A diferença entre "nodes" (contagem que o próprio
+`rndc zonestatus` reporta, por nome de owner) e "registros parseados"
+(contagem de RRs individuais extraídos do dump canônico) é esperada e
+intencional — um mesmo owner pode ter múltiplos RRs (ex. múltiplos `NS` ou
+`A`/`AAAA` na mesma zona) — e a tela distingue as duas contagens
+explicitamente para não confundir o operador.
+
+A preview real confirmou preservação correta de SOA (MNAME, RNAME, serial,
+refresh, retry, expire, minimum), TTL, NS, PTR e conteúdo/RDATA de cada
+registro, na zona forward com mais de 1000 registros e nas quatro reversas
+IPv4 e na reversa IPv6.
+
+### Bugs corrigidos antes desta homologação
+
+- **Conteúdo "—" na preview**: a view lia a chave `rdata` do payload, mas o
+  formato persistido usa `content`. A zona `legacy.example` real foi o
+  caso que expôs o bug (registros NS/PTR apareciam sem conteúdo). Corrigido
+  lendo a chave certa; regressão coberta em teste.
+- **Truncamento silencioso do dump do BIND**: `run_command()` no agente tinha
+  um limite fixo de 8000 caracteres, cortando o dump de `named-checkzone -D`
+  no meio de uma zona grande sem avisar — a mesma zona `legacy.example`
+  chegou a ser descoberta com ~110 registros (fragmento truncado) antes da
+  correção, em vez dos 1038 reais. Corrigido com detecção explícita de
+  truncamento (`stdout_truncated`) e recusa a parsear um dump incompleto, em
+  vez de silenciosamente processar um fragmento.
+
+Depois das duas correções, a mesma zona real passou a ser descoberta por
+completo (1038 registros), confirmando o fim do truncamento.
+
+### Critério de fechamento do DISCOVER
+
+Comprovado em servidor real, não apenas em teste automatizado: agente real,
+BIND real, `named-checkconf`/`rndc`/`named-checkzone -D` reais, zona forward
+com mais de 1000 registros, quatro reversas IPv4 reais, uma reversa IPv6
+real, SOA/NS/PTR/serial reais, paths reais, preview real, operação
+assíncrona real ponta a ponta — sem nenhuma alteração no BIND.
+
+### IMPORT e ADOPT — pendentes, por decisão explícita
+
+**IMPORT não foi executado nesta rodada.** Nenhuma zona (nem as reversas, nem
+`legacy.example`) foi importada. Isso é proposital: o servidor
+continua administrado por CLI, e importar uma zona real apenas para "fechar
+cobertura de teste" criaria uma zona `bind_import` sem necessidade
+operacional real. O próximo IMPORT — quando decidido explicitamente — deve
+começar por uma zona piloto pequena (candidata natural: a reversa IPv6,
+5 registros), autorizada separadamente desta homologação.
+
+**ADOPT continua fora de escopo** — não há fluxo implementado para o DNS
+Center assumir gerenciamento ativo de uma zona.
+
+Estado atual do servidor, sem ambiguidade:
+
+- Descoberto: concluído.
+- Importado: não iniciado.
+- Gerenciado: não iniciado.
+- Gerenciamento: Externo / CLI (inalterado).
+
+### Confirmações
+
+Nenhuma zona foi importada. Nenhuma publicação foi criada. Nenhuma escrita,
+reload, reconfig ou restart do BIND ocorreu — a fase DISCOVER só executa os
+comandos de leitura listados em "Garantias read-only da descoberta" acima;
+nenhum comando adicional foi executado no servidor real só para gerar
+evidência desta homologação.
+
+### Riscos restantes
+
+- O BIND continua administrado por CLI em paralelo — uma alteração externa
+  (novo serial, zona nova, registro alterado) só aparece no painel na próxima
+  descoberta manual; não há detecção automática de drift nesta fase.
+- IMPORT ainda não foi exercitado em servidor real (só em teste automatizado)
+  — o primeiro IMPORT real deve ser tratado como piloto, com uma zona
+  pequena, não com a zona forward de 1038 registros.
+- ADOPT não existe; qualquer expectativa de gerenciamento ativo continua
+  dependendo 100% do CLI até essa fase futura ser implementada e homologada.
+
+## Roadmap (futuro, não iniciado)
+
+1. **IMPORT-PILOT** — importar uma zona pequena (candidata: a reversa IPv6)
+   como `bind_import`/não gerenciada.
+2. Validação de round-trip do conteúdo importado no banco.
+3. Confirmação do bloqueio de publicação em zona importada, em servidor real.
+4. Comparação de alteração externa (drift) após um import.
+5. **ADOPT** — fluxo explícito e protegido para o DNS Center assumir
+   gerenciamento de uma zona, autorizado separadamente por zona.
