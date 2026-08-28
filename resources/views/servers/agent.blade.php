@@ -326,68 +326,50 @@
         @endif
     </main>
 
-    <div class="servers-modal" data-discovery-modal aria-hidden="true">
-        <button
-            type="button"
-            class="servers-modal-backdrop"
-            data-discovery-modal-close
-            aria-label="Fechar"
-        ></button>
-
-        <section class="servers-modal-dialog discovery-modal-dialog agent-process-modal">
-            <header class="servers-modal-header">
+    <x-async-operation-modal
+        name="discovery"
+        eyebrow="BIND existente"
+        title="Descoberta do BIND"
+        badge="Somente leitura"
+    >
+        <div class="async-operation-body" data-discovery-modal-body>
+            <div class="async-operation-status" aria-live="polite" aria-atomic="true">
+                <span class="discovery-spinner" data-discovery-spinner aria-hidden="true"></span>
                 <div>
-                    <p class="eyebrow">BIND existente</p>
-                    <h2 data-discovery-modal-title>Buscando zonas no servidor…</h2>
-                </div>
-
-                <button
-                    type="button"
-                    class="users-modal-close"
-                    data-discovery-modal-close
-                    aria-label="Fechar janela"
-                    title="Fechar"
-                >
-                    ×
-                </button>
-            </header>
-
-            <div data-discovery-modal-body>
-                <div class="discovery-spinner" data-discovery-spinner></div>
-
-                <p data-discovery-modal-message>
-                    Solicitação enviada ao agente. A descoberta será iniciada
-                    no próximo ciclo de comunicação, normalmente em até cinco
-                    minutos. Esta janela será atualizada automaticamente.
-                </p>
-
-                <div data-discovery-summary hidden>
-                    <dl class="agent-server-details" data-discovery-summary-counts></dl>
-
-                    <div class="agent-security-list" data-discovery-summary-list></div>
+                    <strong data-discovery-current-status>Aguardando execução do agente</strong>
+                    <p data-discovery-modal-message>Solicitação criada e aguardando o próximo contato do agente.</p>
                 </div>
             </div>
 
-            <div class="agent-actions" data-discovery-modal-actions>
-                <a
-                    class="button button-primary"
-                    data-discovery-review-link
-                    href="#"
-                    hidden
-                >
-                    Revisar zonas encontradas
-                </a>
+            <ol class="async-operation-timeline" data-discovery-timeline aria-label="Progresso da descoberta">
+                <li data-discovery-step="request"><span aria-hidden="true">✓</span><strong>Solicitação</strong><small>Enviada</small></li>
+                <li data-discovery-step="agent"><span aria-hidden="true">●</span><strong>Agente</strong><small>Aguardando</small></li>
+                <li data-discovery-step="execution"><span aria-hidden="true">○</span><strong>Execução</strong><small>Pendente</small></li>
+                <li data-discovery-step="result"><span aria-hidden="true">○</span><strong>Resultado</strong><small>Pendente</small></li>
+            </ol>
 
-                <button
-                    type="button"
-                    class="button button-secondary"
-                    data-discovery-modal-close
-                >
-                    Fechar
-                </button>
+            <div class="async-operation-meta" data-discovery-progress-meta>
+                <span>Tempo decorrido <strong data-discovery-elapsed>00:00</strong></span>
+                <span data-discovery-agent-note>Agente online</span>
             </div>
-        </section>
-    </div>
+
+            <p class="async-operation-background-note" data-discovery-background-note>
+                Você pode fechar esta janela. A operação continuará em segundo plano.
+            </p>
+
+            <div class="async-operation-summary" data-discovery-summary hidden>
+                <p class="async-operation-total"><strong data-discovery-summary-total>0 zonas encontradas</strong></p>
+                <dl class="async-operation-metrics" data-discovery-summary-counts></dl>
+                <p class="async-operation-result-note" data-discovery-result-note></p>
+                <div class="async-operation-zone-preview" data-discovery-summary-list></div>
+            </div>
+        </div>
+
+        <footer class="async-operation-actions" data-discovery-modal-actions>
+            <a class="button button-primary" data-discovery-review-link href="#" hidden>Revisar zonas encontradas</a>
+            <button type="button" class="button button-secondary" data-discovery-modal-close data-discovery-close-label>Continuar em segundo plano</button>
+        </footer>
+    </x-async-operation-modal>
 
     <div class="servers-modal" data-agent-upgrade-modal aria-hidden="true">
         <button
@@ -446,199 +428,242 @@
             }));
 
         (() => {
-            const startButton = document.querySelector('[data-discovery-start]');
+            const button = document.querySelector('[data-discovery-start]');
             const modal = document.querySelector('[data-discovery-modal]');
-            if (!startButton || !modal) return;
+            if (!button || !modal) return;
 
-            const title = modal.querySelector('[data-discovery-modal-title]');
-            const message = modal.querySelector('[data-discovery-modal-message]');
-            const spinner = modal.querySelector('[data-discovery-spinner]');
-            const summaryBlock = modal.querySelector('[data-discovery-summary]');
-            const summaryCounts = modal.querySelector('[data-discovery-summary-counts]');
-            const summaryList = modal.querySelector('[data-discovery-summary-list]');
-            const reviewLink = modal.querySelector('[data-discovery-review-link]');
-
-            const stateLabels = {
-                new: 'Novo', exists: 'Já existe', conflict: 'Conflito',
-                secondary_external: 'Secondary externo', not_supported: 'Não suportado',
-                imported: 'Importado',
+            const find = (selector) => modal.querySelector(selector);
+            const title = find('[data-discovery-modal-title]');
+            const status = find('[data-discovery-current-status]');
+            const message = find('[data-discovery-modal-message]');
+            const spinner = find('[data-discovery-spinner]');
+            const summary = find('[data-discovery-summary]');
+            const summaryTotal = find('[data-discovery-summary-total]');
+            const counts = find('[data-discovery-summary-counts]');
+            const zones = find('[data-discovery-summary-list]');
+            const resultNote = find('[data-discovery-result-note]');
+            const review = find('[data-discovery-review-link]');
+            const closeLabel = find('[data-discovery-close-label]');
+            const meta = find('[data-discovery-progress-meta]');
+            const backgroundNote = find('[data-discovery-background-note]');
+            const elapsed = find('[data-discovery-elapsed]');
+            const agentNote = find('[data-discovery-agent-note]');
+            const steps = Object.fromEntries([...modal.querySelectorAll('[data-discovery-step]')]
+                .map((step) => [step.dataset.discoveryStep, step]));
+            const card = {
+                status: document.querySelector('[data-discovery-card-status]'),
+                time: document.querySelector('[data-discovery-card-time]'),
+                total: document.querySelector('[data-discovery-card-total]'),
+                primary: document.querySelector('[data-discovery-card-primary]'),
+                secondary: document.querySelector('[data-discovery-card-secondary]'),
             };
+            const labels = { new: 'Nova', exists: 'Existente', conflict: 'Conflito', secondary_external: 'Secondary externo', not_supported: 'Não suportada', imported: 'Importada' };
+            const statusUrl = button.dataset.discoveryStatusUrl;
+            let pollTimer;
+            let elapsedTimer;
+            let polling = false;
+            let submitting = false;
+            let attempts = 0;
+            let requestedAt = button.dataset.discoveryRequestedAt ? new Date(button.dataset.discoveryRequestedAt) : null;
 
-            let pollTimer = null;
-            let pollAttempts = 0;
-            const maxPollAttempts = 200; // ~10min a cada 3s
-
-            const openModal = () => {
+            const setStep = (name, state, detail) => {
+                const step = steps[name];
+                step.className = `is-${state}`;
+                step.querySelector('span').textContent = state === 'complete' ? '✓' : state === 'current' ? '●' : state === 'failed' ? '!' : '○';
+                step.querySelector('small').textContent = detail;
+            };
+            const timeline = (state) => {
+                setStep('request', 'complete', 'Enviada');
+                setStep('agent', state === 'waiting' ? 'current' : 'complete', state === 'waiting' ? 'Aguardando' : 'Conectado');
+                setStep('execution', state === 'running' ? 'current' : ['succeeded', 'failed'].includes(state) ? 'complete' : 'pending', state === 'running' ? 'Em andamento' : ['succeeded', 'failed'].includes(state) ? 'Concluída' : 'Pendente');
+                setStep('result', state === 'succeeded' ? 'complete' : state === 'failed' ? 'failed' : 'pending', state === 'succeeded' ? 'Recebido' : state === 'failed' ? 'Falha' : 'Pendente');
+            };
+            const tick = () => {
+                if (!requestedAt || Number.isNaN(requestedAt.getTime())) return;
+                const seconds = Math.max(0, Math.floor((Date.now() - requestedAt.getTime()) / 1000));
+                elapsed.textContent = `${Math.floor(seconds / 60).toString().padStart(2, '0')}:${(seconds % 60).toString().padStart(2, '0')}`;
+            };
+            const startClock = () => {
+                clearInterval(elapsedTimer);
+                tick();
+                elapsedTimer = setInterval(tick, 1000);
+            };
+            const open = () => {
                 modal.classList.add('is-open');
                 modal.setAttribute('aria-hidden', 'false');
                 document.body.style.overflow = 'hidden';
+                find('.users-modal-close')?.focus();
             };
-
-            const closeModal = () => {
+            const close = () => {
                 modal.classList.remove('is-open');
                 modal.setAttribute('aria-hidden', 'true');
                 document.body.style.overflow = '';
-                if (pollTimer) clearTimeout(pollTimer);
+                button.focus();
             };
+            modal.querySelectorAll('[data-discovery-modal-close]').forEach((item) => item.addEventListener('click', close));
 
-            modal.querySelectorAll('[data-discovery-modal-close]')
-                .forEach((button) => button.addEventListener('click', closeModal));
-
-            const showWaiting = () => {
-                title.textContent = 'Buscando zonas no servidor…';
+            const progress = () => {
                 spinner.hidden = false;
-                summaryBlock.hidden = true;
-                reviewLink.hidden = true;
+                summary.hidden = true;
+                review.hidden = true;
+                meta.hidden = false;
+                backgroundNote.hidden = false;
                 message.hidden = false;
-                message.textContent = 'Solicitação enviada ao agente. A descoberta será '
-                    + 'iniciada no próximo ciclo de comunicação, normalmente em até cinco '
-                    + 'minutos. Esta janela será atualizada automaticamente.';
+                closeLabel.textContent = 'Continuar em segundo plano';
             };
-
-            const showRunning = () => {
-                title.textContent = 'Descoberta em andamento…';
-                spinner.hidden = false;
-                summaryBlock.hidden = true;
-                reviewLink.hidden = true;
-                message.hidden = false;
-                message.textContent = 'O agente está consultando o status, a configuração e '
-                    + 'as zonas do BIND. Nenhuma alteração será feita no servidor.';
+            const waiting = (online = true, lastSeen = null) => {
+                progress();
+                title.textContent = 'Descoberta do BIND em andamento';
+                status.textContent = online ? 'Aguardando execução do agente' : 'Aguardando agente';
+                message.textContent = online ? 'A solicitação será coletada no próximo ciclo de comunicação.' : 'A operação será processada quando o agente voltar a se comunicar.';
+                agentNote.textContent = online ? 'Agente online' : 'Agente offline';
+                if (!online && lastSeen) agentNote.textContent += ` · último contato há ${Math.max(0, Math.floor((Date.now() - new Date(lastSeen).getTime()) / 60000))} min`;
+                timeline('waiting');
             };
-
-            const showFailed = (errorText) => {
-                title.textContent = 'A descoberta falhou';
+            const running = () => {
+                progress();
+                title.textContent = 'Descoberta do BIND em andamento';
+                status.textContent = 'Executando descoberta';
+                message.textContent = 'O agente está analisando a configuração e as zonas do BIND.';
+                agentNote.textContent = 'Agente online';
+                timeline('running');
+            };
+            const failed = () => {
+                title.textContent = 'Descoberta não concluída';
+                status.textContent = 'A operação falhou';
                 spinner.hidden = true;
-                summaryBlock.hidden = true;
-                reviewLink.hidden = true;
+                summary.hidden = true;
+                review.hidden = true;
+                meta.hidden = true;
+                backgroundNote.hidden = true;
                 message.hidden = false;
-                message.textContent = errorText || 'O agente reportou uma falha. Tente novamente.';
+                message.textContent = 'O agente retornou uma falha durante a descoberta. Tente novamente com uma nova solicitação.';
+                closeLabel.textContent = 'Fechar';
+                timeline('failed');
+                clearInterval(elapsedTimer);
+                button.disabled = false;
+                button.textContent = 'Tentar nova descoberta';
+                button.dataset.discoveryActive = 'false';
             };
-
-            const showTimeout = () => {
-                title.textContent = 'Ainda aguardando o agente';
-                spinner.hidden = false;
-                message.hidden = false;
-                message.textContent = 'Isso está levando mais tempo que o normal. Pode fechar '
-                    + 'esta janela — a descoberta continua em segundo plano e o card na tela '
-                    + 'atualiza quando você recarregar a página.';
-            };
-
-            const showSucceeded = (summary, discoveryUrl) => {
+            const succeeded = (data, url) => {
                 title.textContent = 'Descoberta concluída';
+                status.textContent = 'Resultado recebido com sucesso';
                 spinner.hidden = true;
                 message.hidden = true;
-
-                if (summary) {
-                    summaryBlock.hidden = false;
-                    summaryCounts.innerHTML = '';
-                    const counts = [
-                        ['Zonas encontradas', summary.total],
-                        ['Primary', summary.primary],
-                        ['Secondary', summary.secondary],
-                        ['Novas (importáveis)', summary.new],
-                        ['Já existentes', summary.exists],
-                        ['Em conflito', summary.conflict],
-                        ['Não suportadas', summary.not_supported],
-                    ];
-                    counts.forEach(([label, value]) => {
+                meta.hidden = true;
+                backgroundNote.hidden = true;
+                summary.hidden = false;
+                closeLabel.textContent = 'Fechar';
+                timeline('succeeded');
+                clearInterval(elapsedTimer);
+                summaryTotal.textContent = `${data.total} zona${data.total === 1 ? '' : 's'} encontrada${data.total === 1 ? '' : 's'}`;
+                counts.innerHTML = '';
+                [['Primary', data.primary], ['Secondary', data.secondary], ['Novas', data.new], ['Existentes', data.exists], ['Conflitos', data.conflict], ['Não suportadas', data.not_supported]]
+                    .filter(([, value], index) => index < 3 || value > 0)
+                    .forEach(([label, value]) => {
                         const row = document.createElement('div');
-                        row.innerHTML = `<dt>${label}</dt><dd>${value}</dd>`;
-                        summaryCounts.appendChild(row);
+                        const term = document.createElement('dt');
+                        const description = document.createElement('dd');
+                        term.textContent = label;
+                        description.textContent = value;
+                        row.append(term, description);
+                        counts.appendChild(row);
                     });
-
-                    summaryList.innerHTML = '';
-                    (summary.zones || []).forEach((zone) => {
-                        const span = document.createElement('span');
-                        span.textContent = `${zone.name} — ${stateLabels[zone.state] || zone.state}`;
-                        summaryList.appendChild(span);
+                const hasWarning = data.not_supported > 0 || data.conflict > 0;
+                resultNote.className = `async-operation-result-note ${hasWarning ? 'is-warning' : 'is-success'}`;
+                resultNote.textContent = data.not_supported > 0 ? `${data.not_supported} zona(s) requerem atenção por incompatibilidade.` : data.conflict > 0 ? `${data.conflict} conflito(s) requerem revisão.` : 'Nenhum conflito ou incompatibilidade detectado.';
+                zones.innerHTML = '';
+                if (data.total <= 6) {
+                    (data.zones || []).forEach((zone) => {
+                        const item = document.createElement('span');
+                        item.textContent = `${zone.name} · ${labels[zone.state] || zone.state}`;
+                        zones.appendChild(item);
                     });
+                } else {
+                    zones.textContent = 'A lista completa está disponível na revisão da descoberta.';
                 }
-
-                if (discoveryUrl) {
-                    reviewLink.href = discoveryUrl;
-                    reviewLink.hidden = false;
-                }
+                review.href = url;
+                review.hidden = false;
+                card.status.textContent = 'Descoberta concluída';
+                card.status.className = 'status-badge status-success';
+                card.time.textContent = 'agora';
+                card.total.textContent = `${data.total} zonas`;
+                card.primary.textContent = data.primary;
+                card.secondary.textContent = data.secondary;
+                button.disabled = false;
+                button.textContent = 'Executar nova descoberta';
+                button.dataset.discoveryActive = 'false';
             };
-
-            const poll = async (statusUrl) => {
-                pollAttempts += 1;
-
-                if (pollAttempts > maxPollAttempts) {
-                    showTimeout();
+            const schedule = (delay = 3000) => {
+                clearTimeout(pollTimer);
+                pollTimer = setTimeout(poll, delay);
+            };
+            const poll = async () => {
+                if (polling) return;
+                if (document.hidden) return schedule(10000);
+                if (++attempts > 200) {
+                    status.textContent = 'Ainda aguardando o agente';
+                    message.textContent = 'A operação continua em segundo plano e será processada quando o agente se comunicar.';
                     return;
                 }
-
+                polling = true;
                 let payload;
                 try {
-                    const response = await fetch(statusUrl, {
-                        headers: { Accept: 'application/json' },
-                    });
-                    payload = await response.json();
+                    payload = await (await fetch(statusUrl, { headers: { Accept: 'application/json' } })).json();
                 } catch (error) {
-                    pollTimer = setTimeout(() => poll(statusUrl), 5000);
-                    return;
+                    polling = false;
+                    return schedule(5000);
                 }
-
-                if (payload.status === 'succeeded') {
-                    showSucceeded(payload.summary, payload.discovery_url);
-                    return;
+                polling = false;
+                if (payload.requested_at) {
+                    requestedAt = new Date(payload.requested_at);
+                    startClock();
                 }
-
-                if (payload.status === 'failed') {
-                    showFailed(payload.error);
-                    return;
-                }
-
-                if (payload.status === 'running') {
-                    showRunning();
-                } else {
-                    showWaiting();
-                }
-
-                pollTimer = setTimeout(() => poll(statusUrl), 3000);
+                if (payload.status === 'succeeded') return succeeded(payload.summary, payload.discovery_url);
+                if (payload.status === 'failed') return failed();
+                payload.status === 'running' ? running() : waiting(payload.agent_online, payload.agent_last_seen_at);
+                schedule();
             };
-
-            startButton.addEventListener('click', async () => {
-                if (startButton.disabled) return;
-
-                const storeUrl = startButton.dataset.discoveryStoreUrl;
-                const statusUrl = startButton.dataset.discoveryStatusUrl;
-                const csrfToken = startButton.dataset.discoveryCsrf;
-
-                pollAttempts = 0;
-                showWaiting();
-                openModal();
-
-                try {
-                    const response = await fetch(storeUrl, {
-                        method: 'POST',
-                        headers: {
-                            Accept: 'application/json',
-                            'Content-Type': 'application/json',
-                            'X-CSRF-TOKEN': csrfToken,
-                        },
-                    });
-
-                    if (!response.ok && response.status !== 409) {
-                        showFailed('Não foi possível solicitar a descoberta.');
-                        return;
-                    }
-                } catch (error) {
-                    showFailed('Não foi possível conectar ao painel.');
+            button.addEventListener('click', async () => {
+                if (submitting) return;
+                if (button.dataset.discoveryActive === 'true') {
+                    open();
+                    if (!pollTimer) poll();
                     return;
                 }
-
-                startButton.disabled = true;
-                poll(statusUrl);
+                submitting = true;
+                button.disabled = true;
+                requestedAt = new Date();
+                attempts = 0;
+                startClock();
+                waiting(button.dataset.discoveryAgentOnline === 'true');
+                open();
+                try {
+                    const response = await fetch(button.dataset.discoveryStoreUrl, { method: 'POST', headers: { Accept: 'application/json', 'Content-Type': 'application/json', 'X-CSRF-TOKEN': button.dataset.discoveryCsrf } });
+                    if (!response.ok && response.status !== 409) return failed();
+                } catch (error) {
+                    return failed();
+                } finally {
+                    submitting = false;
+                }
+                button.disabled = false;
+                button.dataset.discoveryActive = 'true';
+                button.textContent = 'Acompanhar descoberta';
+                card.status.textContent = 'Descoberta em andamento';
+                card.status.className = 'status-badge status-warning';
+                poll();
             });
-
-            const initialStatus = startButton.dataset.discoveryInitialStatus;
-            if (initialStatus === 'authorized' || initialStatus === 'running') {
-                pollAttempts = 0;
-                openModal();
-                initialStatus === 'running' ? showRunning() : showWaiting();
-                poll(startButton.dataset.discoveryStatusUrl);
+            if (button.dataset.discoveryActive === 'true') {
+                button.dataset.discoveryInitialStatus === 'running' ? running() : waiting(button.dataset.discoveryAgentOnline === 'true');
+                startClock();
+                poll();
             }
+            document.addEventListener('visibilitychange', () => {
+                if (!document.hidden && button.dataset.discoveryActive === 'true') poll();
+            });
+            document.addEventListener('keydown', (event) => {
+                if (event.key === 'Escape' && modal.classList.contains('is-open')) close();
+            });
         })();
 
         (() => {

@@ -17,6 +17,8 @@ use Illuminate\View\View;
 
 class DnsBindDiscoveryController extends Controller
 {
+    private const MODAL_ZONE_PREVIEW_LIMIT = 6;
+
     public function store(Request $request, DnsServer $server): RedirectResponse|JsonResponse
     {
         $organizationId = $this->authorizeServer($request, $server);
@@ -85,7 +87,7 @@ class DnsBindDiscoveryController extends Controller
                 'exists' => $zones->where('comparison_state', 'exists')->count(),
                 'conflict' => $zones->where('comparison_state', 'conflict')->count(),
                 'not_supported' => $zones->where('comparison_state', 'not_supported')->count(),
-                'zones' => $zones->take(20)->map(fn ($zone) => [
+                'zones' => $zones->take(self::MODAL_ZONE_PREVIEW_LIMIT)->map(fn ($zone) => [
                     'name' => $zone->name,
                     'state' => $zone->comparison_state,
                 ])->values(),
@@ -96,7 +98,10 @@ class DnsBindDiscoveryController extends Controller
             'ok' => true,
             'operation_id' => $operation->id,
             'status' => $operation->status,
-            'error' => $operation->status === 'failed' ? $operation->error : null,
+            'error' => $operation->status === 'failed' ? 'A descoberta não foi concluída.' : null,
+            'requested_at' => $operation->authorized_at?->toIso8601String(),
+            'agent_online' => $server->agent_status === 'online',
+            'agent_last_seen_at' => $server->agent?->last_seen_at?->toIso8601String(),
             'summary' => $summary,
             'discovery_url' => route('servers.bind.discovery.show', $server),
         ]);

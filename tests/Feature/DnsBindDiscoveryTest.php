@@ -326,6 +326,98 @@ class DnsBindDiscoveryTest extends TestCase
         $this->assertStringNotContainsString('198.51.100.10', $reasons);
     }
 
+    public function test_agent_page_renders_compact_async_discovery_states_without_fake_percentage(): void
+    {
+        $context = $this->context();
+        $operation = $this->authorizedDiscoveryOperation($context);
+
+        $this->actingAs($context['admin'])
+            ->get(route('servers.agent.show', $context['server']))
+            ->assertOk()
+            ->assertSee('Descoberta do BIND')
+            ->assertSee('Aguardando execução do agente')
+            ->assertSee('Solicitação')
+            ->assertSee('Execução')
+            ->assertSee('Resultado')
+            ->assertSee('Tempo decorrido')
+            ->assertSee('Continuar em segundo plano')
+            ->assertSee('Somente leitura')
+            ->assertSee('Acompanhar descoberta')
+            ->assertSee('data-discovery-active="true"', false)
+            ->assertDontSee('data-discovery-percent', false);
+
+        $operation->update(['status' => 'running']);
+
+        $this->actingAs($context['admin'])
+            ->get(route('servers.agent.show', $context['server']))
+            ->assertOk()
+            ->assertSee("payload.status === 'running'", false)
+            ->assertSee("status.textContent = 'Executando descoberta'", false);
+    }
+
+    public function test_discovery_status_exposes_factual_timing_and_agent_connectivity(): void
+    {
+        $context = $this->context();
+        $operation = $this->authorizedDiscoveryOperation($context);
+
+        $this->actingAs($context['admin'])
+            ->getJson(route('servers.bind.discovery.status', $context['server']))
+            ->assertOk()
+            ->assertJsonPath('status', 'authorized')
+            ->assertJsonPath('agent_online', true)
+            ->assertJsonPath('requested_at', $operation->authorized_at->toIso8601String())
+            ->assertJsonPath('agent_last_seen_at', $context['agent']->last_seen_at->toIso8601String());
+    }
+
+    public function test_succeeded_status_limits_modal_preview_and_keeps_compact_summary(): void
+    {
+        $context = $this->context();
+        $operation = $this->authorizedDiscoveryOperation($context);
+        $operation->update(['status' => 'succeeded', 'completed_at' => now()]);
+
+        foreach (range(1, 8) as $index) {
+            DnsBindDiscoveredZone::query()->create([
+                'organization_id' => $context['organization']->id,
+                'dns_server_id' => $context['server']->id,
+                'dns_agent_id' => $context['agent']->id,
+                'dns_bind_operation_id' => $operation->id,
+                'name' => "zone-{$index}.example.com",
+                'detected_type' => 'primary',
+                'detected_syntax' => 'master',
+                'validation_status' => 'ok',
+                'comparison_state' => 'new',
+            ]);
+        }
+
+        $response = $this->actingAs($context['admin'])
+            ->getJson(route('servers.bind.discovery.status', $context['server']))
+            ->assertOk()
+            ->assertJsonPath('status', 'succeeded')
+            ->assertJsonPath('summary.total', 8)
+            ->assertJsonPath('summary.primary', 8)
+            ->assertJsonPath('summary.new', 8);
+
+        $this->assertCount(6, $response->json('summary.zones'));
+    }
+
+    public function test_failed_state_uses_sanitized_modal_copy_and_cross_tenant_status_is_hidden(): void
+    {
+        $context = $this->context();
+        $foreign = $this->context('Tenant estrangeiro');
+        $operation = $this->authorizedDiscoveryOperation($context);
+        $operation->update(['status' => 'failed', 'error' => 'stack trace: segredo interno']);
+
+        $this->actingAs($context['admin'])
+            ->get(route('servers.agent.show', $context['server']))
+            ->assertOk()
+            ->assertSee('O agente retornou uma falha durante a descoberta.')
+            ->assertDontSee('stack trace: segredo interno');
+
+        $this->actingAs($foreign['admin'])
+            ->getJson(route('servers.bind.discovery.status', $context['server']))
+            ->assertNotFound();
+    }
+
     private function markOperationRunning(DnsBindOperation $operation, string $token): void
     {
         $this->withToken($token)->postJson(
