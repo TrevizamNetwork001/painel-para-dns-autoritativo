@@ -14,6 +14,25 @@
     $discoverySucceeded = $latestDiscoveryOperation?->status === 'succeeded';
     $discoveryInFlight = $latestDiscoveryOperation && in_array($latestDiscoveryOperation->status, ['authorized', 'running'], true);
     $upgradeInFlight = $latestAgentUpgradeOperation && in_array($latestAgentUpgradeOperation->status, ['authorized', 'running'], true);
+    $upgradeStatusLabel = match (true) {
+        $upgradeInFlight => 'Atualização em andamento',
+        $installedAgentVersion === null => 'Versão instalada desconhecida',
+        $agentUpdateAvailable => 'Atualização disponível',
+        default => 'Atualizado',
+    };
+    $upgradeStatusBadgeClass = match (true) {
+        $upgradeInFlight => 'status-warning',
+        $installedAgentVersion === null => 'status-neutral',
+        $agentUpdateAvailable => 'status-warning',
+        default => 'status-success',
+    };
+    $upgradeButtonLabel = match (true) {
+        $upgradeInFlight => 'Acompanhar atualização',
+        $installedAgentVersion === null => 'Atualizar software do agente',
+        $agentUpdateAvailable => 'Atualizar para '.$availableAgentVersion,
+        default => 'Reinstalar versão atual',
+    };
+    $upgradeButtonClass = (! $upgradeInFlight && $agentUpdateAvailable) ? 'button-primary' : 'button-secondary';
     $imported = $discoveryStats['imported'] > 0;
     $publicationStatus = match ($latestPublication?->status) {
         'pending' => 'Pendente', 'downloaded' => 'Baixada', 'applying' => 'Aplicando',
@@ -133,7 +152,17 @@
 
 <details class="panel-card agent-collapsible">
     <summary><span><span class="eyebrow">Acesso secundário</span><strong>Software e segurança</strong></span><small>Atualização do agente e detalhes do modelo de segurança</small></summary>
-    <div class="agent-collapsible-body"><section class="agent-software-row"><div><h3>Software do agente</h3><p><strong>Instalada:</strong> <span data-agent-upgrade-installed-version>{{ $agentVersion }}</span></p><p>Nenhuma versão disponível foi informada pelo backend.</p></div><button type="button" class="button button-secondary" data-agent-upgrade-start data-agent-upgrade-store-url="{{ route('servers.agent.upgrade', $server) }}" data-agent-upgrade-status-url="{{ route('servers.agent.upgrade.status', $server) }}" data-agent-upgrade-csrf="{{ csrf_token() }}" data-agent-upgrade-requested-at="{{ $latestAgentUpgradeOperation?->authorized_at?->toIso8601String() }}" data-agent-upgrade-agent-online="{{ $server->agent_status === 'online' ? 'true' : 'false' }}" data-agent-upgrade-active="{{ $upgradeInFlight ? 'true' : 'false' }}" data-agent-upgrade-initial-status="{{ $latestAgentUpgradeOperation?->status }}">{{ $upgradeInFlight ? 'Acompanhar atualização' : 'Atualizar software do agente' }}</button></section>
+    <div class="agent-collapsible-body"><section class="agent-software-row">
+        <div>
+            <h3>Software do agente</h3>
+            <dl class="agent-ops-quick-list">
+                <div><dt>Instalada</dt><dd data-agent-upgrade-installed-version>{{ $installedAgentVersion ?? 'Não informada' }}</dd></div>
+                <div><dt data-agent-upgrade-available-label>{{ $upgradeInFlight ? 'Alvo' : 'Disponível' }}</dt><dd data-agent-upgrade-available-version>{{ $availableAgentVersion ?? 'Não informada' }}</dd></div>
+            </dl>
+            <span class="status-badge {{ $upgradeStatusBadgeClass }}" data-agent-upgrade-card-status>{{ $upgradeStatusLabel }}</span>
+        </div>
+        <button type="button" class="button {{ $upgradeButtonClass }}" data-agent-upgrade-start data-agent-upgrade-store-url="{{ route('servers.agent.upgrade', $server) }}" data-agent-upgrade-status-url="{{ route('servers.agent.upgrade.status', $server) }}" data-agent-upgrade-csrf="{{ csrf_token() }}" data-agent-upgrade-requested-at="{{ $latestAgentUpgradeOperation?->authorized_at?->toIso8601String() }}" data-agent-upgrade-agent-online="{{ $server->agent_status === 'online' ? 'true' : 'false' }}" data-agent-upgrade-active="{{ $upgradeInFlight ? 'true' : 'false' }}" data-agent-upgrade-initial-status="{{ $latestAgentUpgradeOperation?->status }}" data-agent-upgrade-available="{{ $availableAgentVersion }}">{{ $upgradeButtonLabel }}</button>
+    </section>
         <details class="agent-nested-details"><summary>Detalhes de segurança</summary><div class="agent-security-list"><span>O vínculo é associado previamente ao servidor e à organização.</span><span>Hostname e IP são fatores de revisão, não de associação.</span><span>O código é de uso único, expira e somente seu hash é persistido.</span><span>A credencial permanente aparece somente para o agente.</span><span>O agente não recebe acesso ao painel administrativo.</span></div></details>
     </div>
 </details>

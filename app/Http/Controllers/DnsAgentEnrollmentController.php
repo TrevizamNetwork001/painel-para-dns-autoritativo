@@ -8,6 +8,7 @@ use App\Models\DnsAgentInstallRequest;
 use App\Models\DnsBindDiscoveredZone;
 use App\Models\DnsBindOperation;
 use App\Models\DnsServer;
+use App\Support\AgentArtifact;
 use App\Support\SecurityAuditLogger;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -92,6 +93,9 @@ class DnsAgentEnrollmentController extends Controller
             ->whereIn('status', ['pending', 'downloaded', 'applying', 'failed'])
             ->count();
 
+        $installedAgentVersion = $agent?->metadata['agent_version'] ?? $server->agent_version;
+        $availableAgentVersion = AgentArtifact::availableVersion();
+
         return view('servers.agent', [
             'server' => $server,
             'agent' => $agent,
@@ -103,6 +107,9 @@ class DnsAgentEnrollmentController extends Controller
             'latestBindOperation' => $latestBindOperation,
             'latestDiscoveryOperation' => $latestDiscoveryOperation,
             'latestAgentUpgradeOperation' => $latestAgentUpgradeOperation,
+            'installedAgentVersion' => $installedAgentVersion,
+            'availableAgentVersion' => $availableAgentVersion,
+            'agentUpdateAvailable' => AgentArtifact::isNewerThan($installedAgentVersion, $availableAgentVersion),
             'discoveredZoneCount' => $discoveryStats['total'],
             'discoveryStats' => $discoveryStats,
             'pendingPublicationCount' => $pendingPublicationCount,
@@ -518,6 +525,10 @@ class DnsAgentEnrollmentController extends Controller
     {
         $this->authorizeServer($request, $server);
 
+        $installedVersion = $server->agent?->metadata['agent_version'] ?? $server->agent_version;
+        $availableVersion = AgentArtifact::availableVersion();
+        $versionConfirmed = $installedVersion !== null && $installedVersion === $availableVersion;
+
         $operation = DnsBindOperation::query()
             ->where('dns_server_id', $server->id)
             ->where('action', 'upgrade_agent')
@@ -525,19 +536,31 @@ class DnsAgentEnrollmentController extends Controller
             ->first();
 
         if (! $operation) {
-            return response()->json(['ok' => true, 'status' => null]);
+            return response()->json([
+                'ok' => true,
+                'status' => null,
+                'installed_version' => $installedVersion,
+                'available_version' => $availableVersion,
+                'update_available' => AgentArtifact::isNewerThan($installedVersion, $availableVersion),
+            ]);
         }
+
+        $result = $operation->status === 'succeeded' ? $operation->result : null;
+        $changed = $result['changed'] ?? null;
 
         return response()->json([
             'ok' => true,
             'operation_id' => $operation->id,
             'status' => $operation->status,
             'error' => $operation->status === 'failed' ? 'O agente não conseguiu concluir a atualização.' : null,
-            'result' => $operation->status === 'succeeded' ? $operation->result : null,
+            'result' => $result,
             'requested_at' => $operation->authorized_at?->toIso8601String(),
             'agent_online' => $server->agent_status === 'online',
             'agent_last_seen_at' => $server->agent?->last_seen_at?->toIso8601String(),
-            'current_agent_version' => $server->agent?->metadata['agent_version'] ?? $server->agent_version,
+            'installed_version' => $installedVersion,
+            'available_version' => $availableVersion,
+            'target_version' => $availableVersion,
+            'version_confirmed' => $changed === false ? true : $versionConfirmed,
         ]);
     }
 

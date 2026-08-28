@@ -7,6 +7,7 @@ use App\Models\DnsBindOperation;
 use App\Models\DnsServer;
 use App\Models\Organization;
 use App\Models\User;
+use App\Support\AgentArtifact;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Str;
 use Tests\TestCase;
@@ -170,9 +171,10 @@ class DnsAgentUpgradeTest extends TestCase
         $this->assertNotNull($response->json('agent_last_seen_at'));
     }
 
-    public function test_upgrade_succeeded_status_reports_version_change_when_confirmed(): void
+    public function test_upgrade_succeeded_without_new_heartbeat_awaits_confirmation(): void
     {
         $context = $this->context();
+        $availableVersion = AgentArtifact::availableVersion();
         $operation = DnsBindOperation::query()->create([
             'organization_id' => $context['organization']->id,
             'dns_server_id' => $context['server']->id,
@@ -190,7 +192,7 @@ class DnsAgentUpgradeTest extends TestCase
                 'changed' => true,
             ],
         ]);
-        $context['agent']->update(['metadata' => ['agent_version' => '0.6.0']]);
+        $context['agent']->update(['metadata' => ['agent_version' => '0.5.0']]);
 
         $this->actingAs($context['admin'])
             ->getJson(route('servers.agent.upgrade.status', $context['server']))
@@ -198,9 +200,119 @@ class DnsAgentUpgradeTest extends TestCase
             ->assertJsonPath('status', 'succeeded')
             ->assertJsonPath('result.previous_version', '0.5.0')
             ->assertJsonPath('result.binary_changed', true)
-            ->assertJsonPath('current_agent_version', '0.6.0');
+            ->assertJsonPath('installed_version', '0.5.0')
+            ->assertJsonPath('target_version', $availableVersion)
+            ->assertJsonPath('version_confirmed', false);
 
         $this->assertSame('succeeded', $operation->fresh()->status);
+    }
+
+    public function test_upgrade_succeeded_status_confirms_once_heartbeat_matches_target(): void
+    {
+        $context = $this->context();
+        $availableVersion = AgentArtifact::availableVersion();
+        DnsBindOperation::query()->create([
+            'organization_id' => $context['organization']->id,
+            'dns_server_id' => $context['server']->id,
+            'dns_agent_id' => $context['agent']->id,
+            'action' => 'upgrade_agent',
+            'status' => 'succeeded',
+            'authorization_nonce' => (string) Str::uuid(),
+            'authorized_by' => $context['admin']->id,
+            'authorized_at' => now()->subMinute(),
+            'completed_at' => now(),
+            'result' => [
+                'binary_changed' => true,
+                'units_changed' => false,
+                'previous_version' => '0.5.0',
+                'changed' => true,
+            ],
+        ]);
+        $context['agent']->update(['metadata' => ['agent_version' => $availableVersion]]);
+
+        $this->actingAs($context['admin'])
+            ->getJson(route('servers.agent.upgrade.status', $context['server']))
+            ->assertOk()
+            ->assertJsonPath('installed_version', $availableVersion)
+            ->assertJsonPath('target_version', $availableVersion)
+            ->assertJsonPath('version_confirmed', true);
+    }
+
+    public function test_upgrade_no_op_reinstall_is_confirmed_without_waiting_for_heartbeat(): void
+    {
+        $context = $this->context();
+        $availableVersion = AgentArtifact::availableVersion();
+        DnsBindOperation::query()->create([
+            'organization_id' => $context['organization']->id,
+            'dns_server_id' => $context['server']->id,
+            'dns_agent_id' => $context['agent']->id,
+            'action' => 'upgrade_agent',
+            'status' => 'succeeded',
+            'authorization_nonce' => (string) Str::uuid(),
+            'authorized_by' => $context['admin']->id,
+            'authorized_at' => now()->subMinute(),
+            'completed_at' => now(),
+            'result' => [
+                'binary_changed' => false,
+                'units_changed' => false,
+                'previous_version' => $availableVersion,
+                'changed' => false,
+            ],
+        ]);
+        $context['agent']->update(['metadata' => ['agent_version' => $availableVersion]]);
+
+        $this->actingAs($context['admin'])
+            ->getJson(route('servers.agent.upgrade.status', $context['server']))
+            ->assertOk()
+            ->assertJsonPath('result.changed', false)
+            ->assertJsonPath('version_confirmed', true);
+    }
+
+    public function test_agent_page_shows_up_to_date_status_without_primary_cta(): void
+    {
+        $context = $this->context();
+        $availableVersion = AgentArtifact::availableVersion();
+        $context['agent']->update(['metadata' => ['agent_version' => $availableVersion]]);
+
+        $this->actingAs($context['admin'])
+            ->get(route('servers.agent.show', $context['server']))
+            ->assertOk()
+            ->assertSee('Atualizado')
+            ->assertSee('Reinstalar versão atual')
+            ->assertDontSee('Nenhuma versão disponível foi informada pelo backend')
+            ->assertDontSee('button button-primary" data-agent-upgrade-start', false);
+    }
+
+    public function test_agent_page_shows_update_available_with_target_version_cta(): void
+    {
+        $context = $this->context();
+        $context['agent']->update(['metadata' => ['agent_version' => '0.1.0']]);
+        $availableVersion = AgentArtifact::availableVersion();
+
+        $this->actingAs($context['admin'])
+            ->get(route('servers.agent.show', $context['server']))
+            ->assertOk()
+            ->assertSee('Atualização disponível')
+            ->assertSee("Atualizar para {$availableVersion}")
+            ->assertSee('button button-primary" data-agent-upgrade-start', false);
+    }
+
+    public function test_target_version_cannot_be_manipulated_by_the_client(): void
+    {
+        $context = $this->context();
+
+        $this->actingAs($context['admin'])
+            ->postJson(route('servers.agent.upgrade', $context['server']), [
+                'target_version' => '99.0.0',
+                'available_version' => '99.0.0',
+            ])
+            ->assertOk();
+
+        $this->actingAs($context['admin'])
+            ->getJson(route('servers.agent.upgrade.status', $context['server']))
+            ->assertOk()
+            ->assertJsonPath('target_version', AgentArtifact::availableVersion())
+            ->assertJsonPath('available_version', AgentArtifact::availableVersion());
     }
 
     public function test_upgrade_failed_state_uses_sanitized_modal_copy_and_cross_tenant_status_is_hidden(): void
