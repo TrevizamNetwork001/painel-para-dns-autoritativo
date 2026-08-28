@@ -128,78 +128,7 @@
                 @endif
             </div>
 
-            @forelse ($zones as $zone)
-                @php
-                    $primary = $zone->servers->first(
-                        fn ($server) => $server->pivot?->role === 'primary'
-                    );
-
-                    $secondary = $zone->servers->first(
-                        fn ($server) => $server->pivot?->role === 'secondary'
-                    );
-                @endphp
-
-                @if ($loop->first)
-                    <div class="domains-table" data-domains-list>
-                        <div class="domains-table-header">
-                            <span>Domínio</span>
-                            <span>Primary</span>
-                            <span>Secondary</span>
-                            <span>Registros</span>
-                            <span>Estado</span>
-                            <span></span>
-                        </div>
-                @endif
-
-                <a
-                    href="{{ route('zones.show', $zone) }}"
-                    class="domains-table-row"
-                    data-domain-row
-                    data-domain-name="{{ mb_strtolower($zone->name) }}"
-                >
-                    <div class="domains-name-cell">
-                        <span class="domains-domain-icon" aria-hidden="true">◎</span>
-
-                        <div>
-                            <strong>{{ $zone->name }}</strong>
-
-                            <small>
-                                Serial {{ $zone->serial }}
-                                · versão {{ $zone->version }}
-                            </small>
-                        </div>
-                    </div>
-
-                    <div class="domains-server-cell">
-                        <strong>{{ $primary?->name ?? 'Não definido' }}</strong>
-                        <small>{{ $primary?->hostname ?? 'Selecione o primary' }}</small>
-                    </div>
-
-                    <div class="domains-server-cell">
-                        <strong>{{ $secondary?->name ?? 'Sem secondary' }}</strong>
-                        <small>{{ $secondary?->hostname ?? 'Opcional' }}</small>
-                    </div>
-
-                    <div class="domains-record-count">
-                        {{ $zone->records_count }}
-                    </div>
-
-                    <div>
-                        <span class="domains-status domains-status-{{ $zone->status }}">
-                            {{ $statusLabels[$zone->status] ?? $zone->status }}
-                        </span>
-                    </div>
-
-                    <div class="domains-open-cell">
-                        Abrir
-                        <span aria-hidden="true">›</span>
-                    </div>
-                </a>
-
-                @if ($loop->last)
-                    </div>
-                @endif
-            @empty
+            @if ($zones->isEmpty())
                 <div class="domains-empty-state">
                     <div class="domains-empty-icon" aria-hidden="true">◎</div>
 
@@ -220,7 +149,103 @@
                         </button>
                     @endif
                 </div>
-            @endforelse
+            @else
+                @php
+                    $groupedZones = $zones->groupBy(fn ($zone) => $zone->client ?: '');
+                    $groupKeys = $groupedZones->keys()->sort(function ($a, $b) {
+                        if ($a === $b) {
+                            return 0;
+                        }
+
+                        if ($a === '') {
+                            return 1;
+                        }
+
+                        if ($b === '') {
+                            return -1;
+                        }
+
+                        return strcasecmp($a, $b);
+                    })->values();
+                @endphp
+
+                <div class="domains-table" data-domains-list>
+                    <div class="domains-table-header">
+                        <span>Domínio</span>
+                        <span>Primary</span>
+                        <span>Secondary</span>
+                        <span>Registros</span>
+                        <span>Estado</span>
+                        <span></span>
+                    </div>
+
+                    @foreach ($groupKeys as $groupKey)
+                        <div class="domains-group" data-domain-group>
+                            <div class="domains-group-heading">
+                                <span>{{ $groupKey === '' ? 'Sem cliente definido' : $groupKey }}</span>
+                                <span>{{ $groupedZones[$groupKey]->count() }}</span>
+                            </div>
+
+                            @foreach ($groupedZones[$groupKey] as $zone)
+                                @php
+                                    $primary = $zone->servers->first(
+                                        fn ($server) => $server->pivot?->role === 'primary'
+                                    );
+
+                                    $secondary = $zone->servers->first(
+                                        fn ($server) => $server->pivot?->role === 'secondary'
+                                    );
+                                @endphp
+
+                                <a
+                                    href="{{ route('zones.show', $zone) }}"
+                                    class="domains-table-row"
+                                    data-domain-row
+                                    data-domain-name="{{ mb_strtolower($zone->name) }}"
+                                >
+                                    <div class="domains-name-cell">
+                                        <span class="domains-domain-icon" aria-hidden="true">◎</span>
+
+                                        <div>
+                                            <strong>{{ $zone->name }}</strong>
+
+                                            <small>
+                                                Serial {{ $zone->serial }}
+                                                · versão {{ $zone->version }}
+                                            </small>
+                                        </div>
+                                    </div>
+
+                                    <div class="domains-server-cell">
+                                        <strong>{{ $primary?->name ?? 'Não definido' }}</strong>
+                                        <small>{{ $primary?->hostname ?? 'Selecione o primary' }}</small>
+                                    </div>
+
+                                    <div class="domains-server-cell">
+                                        <strong>{{ $secondary?->name ?? 'Sem secondary' }}</strong>
+                                        <small>{{ $secondary?->hostname ?? 'Opcional' }}</small>
+                                    </div>
+
+                                    <div class="domains-record-count">
+                                        {{ $zone->records_count }}
+                                    </div>
+
+                                    <div>
+                                        <span class="domains-status domains-status-{{ $zone->status }}">
+                                            {{ $statusLabels[$zone->status] ?? $zone->status }}
+                                        </span>
+                                    </div>
+
+                                    <div class="domains-open-cell">
+                                        Abrir
+                                        <span aria-hidden="true">›</span>
+                                    </div>
+                                </a>
+                            @endforeach
+                        </div>
+                    @endforeach
+                </div>
+            @endif
 
             <div class="domains-no-results" data-domains-no-results hidden>
                 Nenhum domínio corresponde à pesquisa.
@@ -287,6 +312,25 @@
                             Informe somente o domínio, sem “http://” ou “www”.
                         </small>
                     </label>
+
+                    <label class="domains-field domains-field-full">
+                        <span>Cliente</span>
+
+                        <input
+                            type="text"
+                            name="client"
+                            list="zone-client-options"
+                            maxlength="255"
+                            placeholder="Ex.: Cliente Exemplo Networks"
+                            value="{{ old('client') }}"
+                        >
+                    </label>
+
+                    <datalist id="zone-client-options">
+                        @foreach ($clients as $clientOption)
+                            <option value="{{ $clientOption }}"></option>
+                        @endforeach
+                    </datalist>
 
                     <input type="hidden" name="kind" value="primary">
 
@@ -855,6 +899,8 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
+    const groups = document.querySelectorAll('[data-domain-group]');
+
     search?.addEventListener('input', () => {
         const query = search.value.trim().toLocaleLowerCase('pt-BR');
         let visible = 0;
@@ -866,6 +912,14 @@ document.addEventListener('DOMContentLoaded', () => {
             if (matches) {
                 visible++;
             }
+        });
+
+        groups.forEach((group) => {
+            const hasVisibleRow = Array.from(
+                group.querySelectorAll('[data-domain-row]')
+            ).some((row) => !row.hidden);
+
+            group.hidden = !hasVisibleRow;
         });
 
         if (noResults) {
