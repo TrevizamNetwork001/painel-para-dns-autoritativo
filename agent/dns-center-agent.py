@@ -28,6 +28,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 import uuid
+from collections.abc import Callable
 from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
 from pathlib import Path
@@ -204,12 +205,16 @@ def atomic_write(
             temporary.unlink(missing_ok=True)
 
 
-def save_config(path: Path, payload: dict[str, Any]) -> None:
+def write_json_state(path: Path, payload: dict[str, Any], mode: int = 0o600) -> None:
     atomic_write(
         path,
         json.dumps(payload, indent=2, ensure_ascii=False) + "\n",
-        0o600,
+        mode,
     )
+
+
+def save_config(path: Path, payload: dict[str, Any]) -> None:
+    write_json_state(path, payload)
 
 
 def request_json(
@@ -321,6 +326,64 @@ def http_error(exception: urllib.error.HTTPError) -> AgentHttpError:
     )
 
 
+def _download_stream_to_file(
+    response: Any,
+    destination: Path,
+    max_bytes: int,
+    file_mode: int,
+    declared_length: int | None,
+    expected_checksum: str | None = None,
+) -> tuple[str, int]:
+    """Shared checksum-then-atomic-write core for a single already-open
+    response, used by both request_artifact (authenticated, header-driven)
+    and download_public_artifact (public installer endpoint, sidecar
+    checksum). Returns (sha256_hex, size). If expected_checksum is given,
+    it's verified before the file is moved into place."""
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    reject_symlink(destination)
+    descriptor, temporary_name = tempfile.mkstemp(
+        prefix=f".{destination.name}.",
+        dir=str(destination.parent),
+    )
+    temporary = Path(temporary_name)
+    digest = hashlib.sha256()
+    size = 0
+
+    try:
+        with os.fdopen(descriptor, "wb") as handle:
+            while True:
+                chunk = response.read(min(65536, max_bytes + 1 - size))
+
+                if not chunk:
+                    break
+
+                size += len(chunk)
+
+                if size > max_bytes:
+                    raise AgentError("Artefato excede o tamanho máximo.")
+
+                digest.update(chunk)
+                handle.write(chunk)
+
+            handle.flush()
+            os.fsync(handle.fileno())
+
+        if declared_length is not None and size != declared_length:
+            raise AgentError("Download truncado do artefato.")
+
+        checksum = digest.hexdigest()
+
+        if expected_checksum is not None and checksum != expected_checksum:
+            raise AgentError("Checksum não confere para o artefato baixado.")
+
+        os.chmod(temporary, file_mode)
+        os.replace(temporary, destination)
+    finally:
+        temporary.unlink(missing_ok=True)
+
+    return digest.hexdigest(), size
+
+
 def request_artifact(
     url: str,
     token: str,
@@ -340,8 +403,6 @@ def request_artifact(
     )
 
     for attempt in range(retries):
-        temporary: Path | None = None
-
         try:
             with urllib.request.urlopen(request, timeout=timeout) as response:
                 content_type = (
@@ -357,6 +418,7 @@ def request_artifact(
                     raise AgentError("Content-Type do artefato inválido.")
 
                 content_length = response.headers.get("Content-Length")
+                declared_length = None
 
                 if content_length is not None:
                     try:
@@ -371,44 +433,12 @@ def request_artifact(
                             "Artefato excede o tamanho máximo."
                         )
 
-                destination.parent.mkdir(parents=True, exist_ok=True)
-                reject_symlink(destination)
-                descriptor, temporary_name = tempfile.mkstemp(
-                    prefix=f".{destination.name}.",
-                    dir=str(destination.parent),
+                checksum, size = _download_stream_to_file(
+                    response, destination, max_bytes, 0o640, declared_length
                 )
-                temporary = Path(temporary_name)
-                digest = hashlib.sha256()
-                size = 0
-
-                with os.fdopen(descriptor, "wb") as handle:
-                    while True:
-                        chunk = response.read(min(65536, max_bytes + 1 - size))
-
-                        if not chunk:
-                            break
-
-                        size += len(chunk)
-
-                        if size > max_bytes:
-                            raise AgentError(
-                                "Artefato excede o tamanho máximo."
-                            )
-
-                        digest.update(chunk)
-                        handle.write(chunk)
-
-                    handle.flush()
-                    os.fsync(handle.fileno())
-
-                if content_length is not None and size != declared_length:
-                    raise AgentError("Download truncado do artefato.")
-
-                os.chmod(temporary, 0o640)
-                os.replace(temporary, destination)
 
                 return {
-                    "checksum": digest.hexdigest(),
+                    "checksum": checksum,
                     "size": size,
                     "content_type": content_type,
                     "publication_id": response.headers.get(
@@ -437,9 +467,6 @@ def request_artifact(
                 ) from exception
 
             bounded_backoff(attempt)
-        finally:
-            if temporary is not None:
-                temporary.unlink(missing_ok=True)
 
     raise AgentError("Tentativas de download esgotadas.")
 
@@ -572,6 +599,20 @@ def os_family() -> str:
     return "unsupported"
 
 
+SYSTEMCTL_CANDIDATES = ("/usr/bin/systemctl", "/bin/systemctl")
+NAMED_CANDIDATES = ("/usr/sbin/named", "/usr/bin/named")
+RNDC_CANDIDATES = ("/usr/sbin/rndc", "/usr/bin/rndc")
+DIG_CANDIDATES = ("/usr/bin/dig", "/usr/local/bin/dig")
+NAMED_CHECKCONF_CANDIDATES = (
+    "/usr/bin/named-checkconf",
+    "/usr/sbin/named-checkconf",
+)
+NAMED_CHECKZONE_CANDIDATES = (
+    "/usr/bin/named-checkzone",
+    "/usr/sbin/named-checkzone",
+)
+
+
 def detected_binary(candidates: tuple[str, ...]) -> str | None:
     for candidate in candidates:
         path = Path(candidate)
@@ -616,7 +657,7 @@ def port_53_listeners() -> dict[str, bool]:
 
 def service_details(family: str) -> dict[str, Any]:
     service_name = "bind9" if family == "debian" else "named"
-    systemctl = detected_binary(("/usr/bin/systemctl", "/bin/systemctl"))
+    systemctl = detected_binary(SYSTEMCTL_CANDIDATES)
     active = False
 
     if systemctl and family != "unsupported":
@@ -682,14 +723,10 @@ def security_modules() -> dict[str, str]:
 
 def readiness_report() -> dict[str, Any]:
     family = os_family()
-    named = detected_binary(("/usr/sbin/named", "/usr/bin/named"))
-    named_checkconf = detected_binary(
-        ("/usr/bin/named-checkconf", "/usr/sbin/named-checkconf")
-    )
-    named_checkzone = detected_binary(
-        ("/usr/bin/named-checkzone", "/usr/sbin/named-checkzone")
-    )
-    rndc = detected_binary(("/usr/sbin/rndc", "/usr/bin/rndc"))
+    named = detected_binary(NAMED_CANDIDATES)
+    named_checkconf = detected_binary(NAMED_CHECKCONF_CANDIDATES)
+    named_checkzone = detected_binary(NAMED_CHECKZONE_CANDIDATES)
+    rndc = detected_binary(RNDC_CANDIDATES)
     named_conf = detected_named_conf()
     zones_dir = (
         "/etc/bind/dns-center-zones"
@@ -782,7 +819,7 @@ def agent_uuid(config_path: Path) -> str:
 
 def ensure_approval_timer() -> None:
     unit = Path("/etc/systemd/system/dns-center-agent-approval.timer")
-    systemctl = detected_binary(("/usr/bin/systemctl", "/bin/systemctl"))
+    systemctl = detected_binary(SYSTEMCTL_CANDIDATES)
     if os.geteuid() != 0 or not unit.is_file() or not systemctl:
         return
 
@@ -969,13 +1006,9 @@ def status(args: argparse.Namespace) -> int:
 
 
 def heartbeat(config: dict[str, Any]) -> dict[str, Any]:
-    named = detected_binary(("/usr/sbin/named", "/usr/bin/named"))
-    named_checkzone = detected_binary(
-        ("/usr/bin/named-checkzone", "/usr/sbin/named-checkzone")
-    )
-    named_checkconf = detected_binary(
-        ("/usr/bin/named-checkconf", "/usr/sbin/named-checkconf")
-    )
+    named = detected_binary(NAMED_CANDIDATES)
+    named_checkzone = detected_binary(NAMED_CHECKZONE_CANDIDATES)
+    named_checkconf = detected_binary(NAMED_CHECKCONF_CANDIDATES)
 
     return request_json(
         "POST",
@@ -1655,13 +1688,9 @@ def parse_canonical_zone_dump(
 
 def discover_bind_zones(config: dict[str, Any]) -> dict[str, Any]:
     """Read-only inventory of an existing BIND install. Never writes."""
-    rndc = detected_binary(("/usr/sbin/rndc", "/usr/bin/rndc"))
-    named_checkconf = detected_binary(
-        ("/usr/bin/named-checkconf", "/usr/sbin/named-checkconf")
-    )
-    named_checkzone = detected_binary(
-        ("/usr/bin/named-checkzone", "/usr/sbin/named-checkzone")
-    )
+    rndc = detected_binary(RNDC_CANDIDATES)
+    named_checkconf = detected_binary(NAMED_CHECKCONF_CANDIDATES)
+    named_checkzone = detected_binary(NAMED_CHECKZONE_CANDIDATES)
     named_conf = detected_named_conf()
 
     if not (rndc and named_checkconf and named_conf):
@@ -1802,9 +1831,10 @@ def download_public_artifact(
     destination: Path,
     max_bytes: int,
     timeout: int = 30,
+    retries: int = DEFAULT_RETRIES,
 ) -> str:
     """Download a public /install/<name> artifact, verifying its .sha256
-    sidecar. Mirrors the checksum-then-atomic-write pattern already used by
+    sidecar. Shares the checksum-then-atomic-write core with
     request_artifact, but for the unauthenticated installer endpoints."""
     checksum_request = urllib.request.Request(
         f"{base_url}/install/{name}.sha256",
@@ -1818,46 +1848,38 @@ def download_public_artifact(
     if not re.fullmatch(r"[0-9a-f]{64}", expected):
         raise AgentError(f"Checksum inválido recebido para {name}.")
 
-    destination.parent.mkdir(parents=True, exist_ok=True)
-    reject_symlink(destination)
-    descriptor, temporary_name = tempfile.mkstemp(
-        prefix=f".{destination.name}.", dir=str(destination.parent)
+    request = urllib.request.Request(
+        f"{base_url}/install/{name}",
+        method="GET",
+        headers={"User-Agent": f"dns-center-agent/{AGENT_VERSION}"},
     )
-    temporary = Path(temporary_name)
-    digest = hashlib.sha256()
-    size = 0
 
-    try:
-        request = urllib.request.Request(
-            f"{base_url}/install/{name}",
-            method="GET",
-            headers={"User-Agent": f"dns-center-agent/{AGENT_VERSION}"},
-        )
-        with urllib.request.urlopen(request, timeout=timeout) as response:
-            with os.fdopen(descriptor, "wb") as handle:
-                while True:
-                    chunk = response.read(65536)
-                    if not chunk:
-                        break
-                    size += len(chunk)
-                    if size > max_bytes:
-                        raise AgentError(
-                            f"Artefato {name} excede o tamanho máximo."
-                        )
-                    digest.update(chunk)
-                    handle.write(chunk)
-                handle.flush()
-                os.fsync(handle.fileno())
+    for attempt in range(retries):
+        try:
+            with urllib.request.urlopen(request, timeout=timeout) as response:
+                checksum, _size = _download_stream_to_file(
+                    response, destination, max_bytes, 0o750, None, expected
+                )
 
-        actual = digest.hexdigest()
-        if actual != expected:
-            raise AgentError(f"Checksum não confere para {name}.")
+                return checksum
+        except urllib.error.HTTPError as exception:
+            error = http_error(exception)
 
-        os.chmod(temporary, 0o750)
-        os.replace(temporary, destination)
-        return actual
-    finally:
-        temporary.unlink(missing_ok=True)
+            if (
+                error.status not in RETRYABLE_HTTP_CODES
+                or attempt == retries - 1
+            ):
+                raise error from exception
+
+            bounded_backoff(attempt, error.retry_after)
+        except urllib.error.URLError as exception:
+            if attempt == retries - 1:
+                raise AgentError(
+                    "Falha de conexão: "
+                    + sanitize_message(exception.reason)
+                ) from exception
+
+            bounded_backoff(attempt)
 
 
 def upgrade_agent_self(config: dict[str, Any]) -> dict[str, Any]:
@@ -2011,7 +2033,7 @@ def upgrade_agent_self(config: dict[str, Any]) -> dict[str, Any]:
                 except OSError:
                     pass
 
-            systemctl = detected_binary(("/usr/bin/systemctl", "/bin/systemctl"))
+            systemctl = detected_binary(SYSTEMCTL_CANDIDATES)
             if systemctl:
                 try:
                     run_command([systemctl, "daemon-reload"], timeout=30)
@@ -2038,10 +2060,10 @@ def configure_bind(action: str) -> dict[str, Any]:
     for path in paths.values():
         reject_symlink(path)
 
-    systemctl = detected_binary(("/usr/bin/systemctl", "/bin/systemctl"))
+    systemctl = detected_binary(SYSTEMCTL_CANDIDATES)
     service = bind_service_name(family)
     was_installed = (
-        detected_binary(("/usr/sbin/named", "/usr/bin/named"))
+        detected_binary(NAMED_CANDIDATES)
         is not None
     )
 
@@ -2071,9 +2093,7 @@ def configure_bind(action: str) -> dict[str, Any]:
                     + (result.stderr.strip() or "sem detalhe")
                 )
 
-        named_checkconf = detected_binary(
-            ("/usr/bin/named-checkconf", "/usr/sbin/named-checkconf")
-        )
+        named_checkconf = detected_binary(NAMED_CHECKCONF_CANDIDATES)
 
         if not named_checkconf or not paths["named_conf"].is_file():
             raise AgentError("BIND instalado sem configuração validável.")
@@ -2353,11 +2373,22 @@ def save_publication_state(
     if isinstance(events, dict) and len(events) > 256:
         payload["events"] = dict(list(events.items())[-256:])
 
-    atomic_write(
-        state_dir / "state.json",
-        json.dumps(payload, indent=2, ensure_ascii=False) + "\n",
-        0o600,
-    )
+    write_json_state(state_dir / "state.json", payload)
+
+
+def _require_positive_int(
+    value: object,
+    message: str,
+    *,
+    max_value: int | None = None,
+) -> None:
+    if (
+        not isinstance(value, int)
+        or isinstance(value, bool)
+        or value < 1
+        or (max_value is not None and value > max_value)
+    ):
+        raise AgentError(message)
 
 
 def validate_manifest_item(item: object) -> dict[str, Any]:
@@ -2369,34 +2400,23 @@ def validate_manifest_item(item: object) -> dict[str, Any]:
     installed_version = item.get("installed_version")
     serial = item.get("serial")
 
-    if (
-        not isinstance(publication_id, int)
-        or isinstance(publication_id, bool)
-        or publication_id < 1
-    ):
-        raise AgentError("publication_id inválido no manifesto.")
+    _require_positive_int(
+        publication_id, "publication_id inválido no manifesto."
+    )
+    _require_positive_int(
+        desired_version, "Versão desejada inválida no manifesto."
+    )
 
-    if (
-        not isinstance(desired_version, int)
-        or isinstance(desired_version, bool)
-        or desired_version < 1
-    ):
-        raise AgentError("Versão desejada inválida no manifesto.")
+    if installed_version is not None:
+        _require_positive_int(
+            installed_version, "Versão instalada inválida no manifesto."
+        )
 
-    if installed_version is not None and (
-        not isinstance(installed_version, int)
-        or isinstance(installed_version, bool)
-        or installed_version < 1
-    ):
-        raise AgentError("Versão instalada inválida no manifesto.")
-
-    if (
-        not isinstance(serial, int)
-        or isinstance(serial, bool)
-        or serial < 1
-        or serial > 4294967295
-    ):
-        raise AgentError("Serial SOA inválido no manifesto.")
+    _require_positive_int(
+        serial,
+        "Serial SOA inválido no manifesto.",
+        max_value=4294967295,
+    )
 
     name = str(item.get("name", ""))
     safe_zone_filename(name)
@@ -2974,6 +2994,13 @@ def build_staging(
     return manifest, updates, staging_dir, include_path, state
 
 
+_BIND_CONFIG_BACKUP_FILES = (
+    ("dns-center-managed.conf", "managed_include"),
+    ("bind-options.conf", "options_config"),
+    ("dns-center-options.conf", "managed_options_include"),
+)
+
+
 def backup_current(paths: dict[str, Path]) -> Path:
     for path in (
         paths["backup_dir"],
@@ -2989,21 +3016,9 @@ def backup_current(paths: dict[str, Path]) -> Path:
     )
     backup_dir.mkdir(parents=True, exist_ok=False)
 
-    if paths["managed_include"].exists():
-        shutil.copy2(
-            paths["managed_include"],
-            backup_dir / "dns-center-managed.conf",
-        )
-    if paths["options_config"].exists():
-        shutil.copy2(
-            paths["options_config"],
-            backup_dir / "bind-options.conf",
-        )
-    if paths["managed_options_include"].exists():
-        shutil.copy2(
-            paths["managed_options_include"],
-            backup_dir / "dns-center-options.conf",
-        )
+    for filename, key in _BIND_CONFIG_BACKUP_FILES:
+        if paths[key].exists():
+            shutil.copy2(paths[key], backup_dir / filename)
 
     zones_backup = backup_dir / "zones"
     zones_backup.mkdir()
@@ -3031,25 +3046,13 @@ def restore_backup(
     ):
         reject_symlink(path)
 
-    include_backup = backup_dir / "dns-center-managed.conf"
+    for filename, key in _BIND_CONFIG_BACKUP_FILES:
+        backup_file = backup_dir / filename
 
-    if include_backup.exists():
-        shutil.copy2(include_backup, paths["managed_include"])
-    else:
-        paths["managed_include"].unlink(missing_ok=True)
-    options_backup = backup_dir / "bind-options.conf"
-    if options_backup.exists():
-        shutil.copy2(options_backup, paths["options_config"])
-    else:
-        paths["options_config"].unlink(missing_ok=True)
-    managed_options_backup = backup_dir / "dns-center-options.conf"
-    if managed_options_backup.exists():
-        shutil.copy2(
-            managed_options_backup,
-            paths["managed_options_include"],
-        )
-    else:
-        paths["managed_options_include"].unlink(missing_ok=True)
+        if backup_file.exists():
+            shutil.copy2(backup_file, paths[key])
+        else:
+            paths[key].unlink(missing_ok=True)
 
     paths["zones_dir"].mkdir(parents=True, exist_ok=True)
 
@@ -3536,15 +3539,11 @@ def load_observation_state(state_dir: Path) -> dict[str, Any]:
 
 
 def save_observation_state(state_dir: Path, state: dict[str, Any]) -> None:
-    atomic_write(
-        state_dir / "observability.json",
-        json.dumps(state, indent=2, ensure_ascii=False) + "\n",
-        0o600,
-    )
+    write_json_state(state_dir / "observability.json", state)
 
 
 def recursion_flag(config: dict[str, Any], addresses: list[str]) -> bool | None:
-    dig = detected_binary(("/usr/bin/dig", "/usr/local/bin/dig"))
+    dig = detected_binary(DIG_CANDIDATES)
     if not dig or not addresses:
         return None
     result = run_command(
@@ -3563,7 +3562,7 @@ def local_soa_serial(
     zone_name: str,
     addresses: list[str],
 ) -> int | None:
-    dig = detected_binary(("/usr/bin/dig", "/usr/local/bin/dig"))
+    dig = detected_binary(DIG_CANDIDATES)
     if not dig:
         return None
 
@@ -4020,69 +4019,25 @@ def main() -> int:
 
         config = read_json(Path(args.config))
 
-        if args.heartbeat:
-            print(
-                json.dumps(
-                    heartbeat(config),
-                    indent=2,
-                    ensure_ascii=False,
-                )
-            )
-            return 0
+        handlers: list[tuple[bool, Callable[[], dict[str, Any]]]] = [
+            (args.heartbeat, lambda: heartbeat(config)),
+            (args.inventory, lambda: inventory(config)),
+            (args.readiness, lambda: send_readiness(config)),
+            (
+                args.run_authorized_operation,
+                lambda: run_authorized_operation(config),
+            ),
+            (
+                args.sync_zones,
+                lambda: sync_zones(config, args.apply, args.confirm),
+            ),
+            (args.observe_bind, lambda: send_authoritative_observation(config)),
+        ]
 
-        if args.inventory:
-            print(
-                json.dumps(
-                    inventory(config),
-                    indent=2,
-                    ensure_ascii=False,
-                )
-            )
-            return 0
-
-        if args.readiness:
-            print(
-                json.dumps(
-                    send_readiness(config),
-                    indent=2,
-                    ensure_ascii=False,
-                )
-            )
-            return 0
-
-        if args.run_authorized_operation:
-            print(
-                json.dumps(
-                    run_authorized_operation(config),
-                    indent=2,
-                    ensure_ascii=False,
-                )
-            )
-            return 0
-
-        if args.sync_zones:
-            print(
-                json.dumps(
-                    sync_zones(
-                        config,
-                        args.apply,
-                        args.confirm,
-                    ),
-                    indent=2,
-                    ensure_ascii=False,
-                )
-            )
-            return 0
-
-        if args.observe_bind:
-            print(
-                json.dumps(
-                    send_authoritative_observation(config),
-                    indent=2,
-                    ensure_ascii=False,
-                )
-            )
-            return 0
+        for selected, handler in handlers:
+            if selected:
+                print(json.dumps(handler(), indent=2, ensure_ascii=False))
+                return 0
 
         raise AgentError("Operação não reconhecida.")
     except AgentError as exception:
