@@ -832,6 +832,25 @@
                         </div>
 
                         <label class="domain-field domain-field-full">
+                            <span>Cliente</span>
+
+                            <input
+                                type="text"
+                                name="client"
+                                list="zone-client-options"
+                                maxlength="255"
+                                placeholder="Ex.: União Networks"
+                                value="{{ old('client', $zone->client) }}"
+                            >
+                        </label>
+
+                        <datalist id="zone-client-options">
+                            @foreach ($clients as $clientOption)
+                                <option value="{{ $clientOption }}"></option>
+                            @endforeach
+                        </datalist>
+
+                        <label class="domain-field domain-field-full">
                             <span>Observações internas</span>
 
                             <textarea

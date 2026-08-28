@@ -35,6 +35,12 @@ class DnsZoneController extends Controller
                 ->with('servers')
                 ->orderBy('name')
                 ->get(),
+            'clients' => DnsZone::query()
+                ->forOrganization($organizationId)
+                ->whereNotNull('client')
+                ->distinct()
+                ->orderBy('client')
+                ->pluck('client'),
             'servers' => DnsServer::query()
                 ->forOrganization($organizationId)
                 ->enabled()
@@ -70,6 +76,11 @@ class DnsZoneController extends Controller
                 'regex:/^(?=.{1,253}\\.?$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\\.)+[a-z]{2,63}\\.?$/i',
                 Rule::unique('dns_zones', 'name')
                     ->where('organization_id', $organizationId),
+            ],
+            'client' => [
+                'nullable',
+                'string',
+                'max:255',
             ],
             'kind' => [
                 'required',
@@ -182,6 +193,9 @@ class DnsZoneController extends Controller
                 'organization_id' => $organizationId,
                 'dns_nameserver_profile_id' => $nameserverProfile->id,
                 'name' => $zoneName,
+                'client' => isset($validated['client'])
+                    ? trim($validated['client']) ?: null
+                    : null,
                 'kind' => $validated['kind'],
                 'serial' => $this->nextSerial(),
                 'default_ttl' => $validated['default_ttl'],
@@ -278,6 +292,7 @@ class DnsZoneController extends Controller
         $this->authorizeZone($request, $zone);
 
         $validated = $request->validate([
+            'client' => ['nullable', 'string', 'max:255'],
             'kind' => ['required', Rule::in(DnsZone::KINDS)],
             'dns_nameserver_profile_id' => [
                 'required',
@@ -352,6 +367,9 @@ class DnsZoneController extends Controller
             $nameserverProfile,
         ): void {
             $zone->forceFill([
+                'client' => isset($validated['client'])
+                    ? trim($validated['client']) ?: null
+                    : null,
                 'kind' => $validated['kind'],
                 'dns_nameserver_profile_id' => $nameserverProfile->id,
                 'default_ttl' => $validated['default_ttl'],
@@ -451,6 +469,12 @@ class DnsZoneController extends Controller
             'preview' => $renderer->render($zone),
             'validation' => $validator->validate($zone),
             'lastPublication' => $lastPublication,
+            'clients' => DnsZone::query()
+                ->forOrganization($zone->organization_id)
+                ->whereNotNull('client')
+                ->distinct()
+                ->orderBy('client')
+                ->pluck('client'),
             'servers' => DnsServer::query()
                 ->forOrganization($zone->organization_id)
                 ->enabled()

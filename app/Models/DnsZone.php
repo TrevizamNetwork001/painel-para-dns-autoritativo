@@ -19,6 +19,7 @@ class DnsZone extends Model
         'dns_nameserver_profile_id',
         'dns_tsig_key_id',
         'name',
+        'client',
         'kind',
         'serial',
         'default_ttl',

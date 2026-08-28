@@ -1,0 +1,24 @@
+<?php
+
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
+
+return new class extends Migration
+{
+    public function up(): void
+    {
+        Schema::table('dns_zones', function (Blueprint $table): void {
+            $table->string('client', 255)->nullable()->after('name');
+            $table->index(['organization_id', 'client']);
+        });
+    }
+
+    public function down(): void
+    {
+        Schema::table('dns_zones', function (Blueprint $table): void {
+            $table->dropIndex(['organization_id', 'client']);
+            $table->dropColumn('client');
+        });
+    }
+};
