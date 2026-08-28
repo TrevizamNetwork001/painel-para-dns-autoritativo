@@ -30,7 +30,7 @@
         $upgradeInFlight => 'Acompanhar atualização',
         $installedAgentVersion === null => 'Atualizar software do agente',
         $agentUpdateAvailable => 'Atualizar para '.$availableAgentVersion,
-        default => 'Reinstalar versão atual',
+        default => 'Atualizar agente',
     };
     $upgradeButtonClass = (! $upgradeInFlight && $agentUpdateAvailable) ? 'button-primary' : 'button-secondary';
     $imported = $discoveryStats['imported'] > 0;
