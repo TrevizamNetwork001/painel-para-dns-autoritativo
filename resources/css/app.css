@@ -331,17 +331,22 @@ a:hover {
 
 .button {
     display: inline-flex;
-    min-height: 42px;
+    width: fit-content;
+    min-height: 40px;
     align-items: center;
     justify-content: center;
-    padding: 0.7rem 1rem;
+    gap: 0.4rem;
+    padding: 0.5rem 1.05rem;
     border: 1px solid transparent;
-    border-radius: 10px;
-    font-weight: 800;
+    border-radius: 8px;
+    font-size: 0.875rem;
+    font-weight: 600;
+    line-height: 1.2;
     cursor: pointer;
     transition:
         background 150ms ease,
         border-color 150ms ease,
+        color 150ms ease,
         transform 150ms ease;
 }
 
@@ -355,7 +360,6 @@ a:hover {
 }
 
 .button-primary {
-    min-height: 50px;
     background: var(--accent);
     color: var(--accent-text);
 }
@@ -370,8 +374,21 @@ a:hover {
     color: var(--text);
 }
 
-.button-secondary:hover {
+.button-secondary:hover:not(:disabled) {
+    border-color: var(--border-strong);
     background: var(--surface-soft);
+}
+
+.button-tertiary {
+    border-color: var(--border);
+    background: transparent;
+    color: var(--text-soft);
+}
+
+.button-tertiary:hover:not(:disabled) {
+    border-color: var(--border-strong);
+    background: var(--surface-soft);
+    color: var(--text);
 }
 
 .alert {
@@ -2960,10 +2977,20 @@ html[data-theme='light']
     color: #ef4444;
 }
 
+.button-danger-soft:hover:not(:disabled) {
+    border-color: rgba(239, 68, 68, 0.4);
+    background: rgba(239, 68, 68, 0.12);
+}
+
 .button-success-soft {
     border: 1px solid rgba(16, 185, 129, 0.22);
     background: rgba(16, 185, 129, 0.08);
     color: #10b981;
+}
+
+.button-success-soft:hover:not(:disabled) {
+    border-color: rgba(16, 185, 129, 0.4);
+    background: rgba(16, 185, 129, 0.14);
 }
 
 .users-empty-state,
