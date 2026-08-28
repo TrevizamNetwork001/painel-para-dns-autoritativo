@@ -620,6 +620,23 @@ class DnsZoneController extends Controller
         );
     }
 
+    public function adopt(
+        Request $request,
+        DnsZone $zone,
+    ): RedirectResponse {
+        $this->authorizeWrite($request);
+        $this->authorizeZone($request, $zone);
+
+        abort_unless($zone->isImportedUnmanaged(), 404);
+
+        $zone->forceFill(['origin' => 'managed'])->save();
+
+        return back()->with(
+            'status',
+            'Adoção concluída. A zona agora pode ser publicada normalmente.',
+        );
+    }
+
     public function publish(
         Request $request,
         DnsZone $zone,

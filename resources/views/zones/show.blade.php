@@ -1049,7 +1049,41 @@
                         </div>
                     @endif
 
-                    @if ($canManageDomain)
+                    @if ($zone->isImportedUnmanaged())
+                        <div class="domain-validation-warnings">
+                            <strong>Zona importada do BIND</strong>
+
+                            <p>
+                                Esta zona veio de uma descoberta de servidor
+                                existente e ainda não está sob gerenciamento
+                                completo. Conclua a adoção para liberar a
+                                publicação.
+                            </p>
+                        </div>
+
+                        @if ($canManageDomain)
+                            <form
+                                method="POST"
+                                action="{{ route('zones.adopt', $zone) }}"
+                                class="domain-publication-action"
+                                onsubmit="return confirm('Concluir a adoção do gerenciamento desta zona?')"
+                            >
+                                @csrf
+
+                                <button
+                                    type="submit"
+                                    class="button button-primary"
+                                >
+                                    Concluir adoção
+                                </button>
+
+                                <small>
+                                    Depois de adotada, a zona poderá ser
+                                    publicada normalmente.
+                                </small>
+                            </form>
+                        @endif
+                    @elseif ($canManageDomain)
                         <form
                             method="POST"
                             action="{{ route('zones.publish', $zone) }}"
