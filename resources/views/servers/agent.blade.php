@@ -825,7 +825,7 @@
                         button.textContent = `Atualizar para ${available}`;
                         button.classList.add('button-primary');
                     } else {
-                        button.textContent = 'Reinstalar versão atual';
+                        button.textContent = 'Atualizar agente';
                         button.classList.add('button-secondary');
                     }
                 }

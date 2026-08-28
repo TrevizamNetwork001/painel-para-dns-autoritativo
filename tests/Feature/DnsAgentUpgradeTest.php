@@ -345,7 +345,7 @@ class DnsAgentUpgradeTest extends TestCase
             ->get(route('servers.agent.show', $context['server']))
             ->assertOk()
             ->assertSee('Atualizado')
-            ->assertSee('Reinstalar versão atual')
+            ->assertSee('Atualizar agente')
             ->assertDontSee('Nenhuma versão disponível foi informada pelo backend')
             ->assertDontSee('button button-primary" data-agent-upgrade-start', false);
     }
