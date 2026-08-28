@@ -70,6 +70,11 @@ class DnsAgentEnrollmentController extends Controller
             ->latest('id')
             ->first();
 
+        $latestAgentUpgradeOperation = $server->bindOperations()
+            ->where('action', 'upgrade_agent')
+            ->latest('id')
+            ->first();
+
         $discoveredZones = $latestDiscoveryOperation && $latestDiscoveryOperation->status === 'succeeded'
             ? DnsBindDiscoveredZone::query()
                 ->where('dns_bind_operation_id', $latestDiscoveryOperation->id)
@@ -97,6 +102,7 @@ class DnsAgentEnrollmentController extends Controller
             'latestAppliedPublication' => $latestAppliedPublication,
             'latestBindOperation' => $latestBindOperation,
             'latestDiscoveryOperation' => $latestDiscoveryOperation,
+            'latestAgentUpgradeOperation' => $latestAgentUpgradeOperation,
             'discoveredZoneCount' => $discoveryStats['total'],
             'discoveryStats' => $discoveryStats,
             'pendingPublicationCount' => $pendingPublicationCount,
@@ -524,9 +530,14 @@ class DnsAgentEnrollmentController extends Controller
 
         return response()->json([
             'ok' => true,
+            'operation_id' => $operation->id,
             'status' => $operation->status,
-            'error' => $operation->status === 'failed' ? $operation->error : null,
+            'error' => $operation->status === 'failed' ? 'O agente não conseguiu concluir a atualização.' : null,
             'result' => $operation->status === 'succeeded' ? $operation->result : null,
+            'requested_at' => $operation->authorized_at?->toIso8601String(),
+            'agent_online' => $server->agent_status === 'online',
+            'agent_last_seen_at' => $server->agent?->last_seen_at?->toIso8601String(),
+            'current_agent_version' => $server->agent?->metadata['agent_version'] ?? $server->agent_version,
         ]);
     }
 

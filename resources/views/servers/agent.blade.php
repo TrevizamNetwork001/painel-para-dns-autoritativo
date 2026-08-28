@@ -371,52 +371,49 @@
         </footer>
     </x-async-operation-modal>
 
-    <div class="servers-modal" data-agent-upgrade-modal aria-hidden="true">
-        <button
-            type="button"
-            class="servers-modal-backdrop"
-            data-agent-upgrade-modal-close
-            aria-label="Fechar"
-        ></button>
-
-        <section class="servers-modal-dialog discovery-modal-dialog">
-            <header class="servers-modal-header">
+    <x-async-operation-modal
+        name="agent-upgrade"
+        eyebrow="Agente"
+        title="Atualização do agente"
+        badge="Sem tocar no BIND"
+    >
+        <div class="async-operation-body" data-agent-upgrade-modal-body>
+            <div class="async-operation-status" aria-live="polite" aria-atomic="true">
+                <span class="discovery-spinner" data-agent-upgrade-spinner aria-hidden="true"></span>
                 <div>
-                    <p class="eyebrow">Agente</p>
-                    <h2 data-agent-upgrade-modal-title>Atualizando agente…</h2>
+                    <strong data-agent-upgrade-current-status>Aguardando o próximo ciclo do agente</strong>
+                    <p data-agent-upgrade-modal-message>Solicitação registrada com sucesso. A atualização será executada no próximo ciclo de comunicação do agente.</p>
                 </div>
-
-                <button
-                    type="button"
-                    class="users-modal-close"
-                    data-agent-upgrade-modal-close
-                >
-                    ×
-                </button>
-            </header>
-
-            <div data-agent-upgrade-modal-body>
-                <div class="discovery-spinner" data-agent-upgrade-spinner></div>
-
-                <p data-agent-upgrade-modal-message>
-                    Solicitação enviada. O agente baixa, valida e substitui o
-                    binário no próximo ciclo do timer (normalmente até 5
-                    minutos) — nenhum serviço do BIND é tocado. Esta janela
-                    atualiza sozinha.
-                </p>
             </div>
 
-            <div class="agent-actions">
-                <button
-                    type="button"
-                    class="button button-secondary"
-                    data-agent-upgrade-modal-close
-                >
-                    Fechar
-                </button>
+            <ol class="async-operation-timeline" data-agent-upgrade-timeline aria-label="Progresso da atualização">
+                <li data-agent-upgrade-step="request"><span aria-hidden="true">✓</span><strong>Solicitação</strong><small>Enviada</small></li>
+                <li data-agent-upgrade-step="agent"><span aria-hidden="true">●</span><strong>Agente</strong><small>Aguardando</small></li>
+                <li data-agent-upgrade-step="execution"><span aria-hidden="true">○</span><strong>Download/validação</strong><small>Pendente</small></li>
+                <li data-agent-upgrade-step="result"><span aria-hidden="true">○</span><strong>Resultado</strong><small>Pendente</small></li>
+            </ol>
+
+            <div class="async-operation-meta" data-agent-upgrade-progress-meta>
+                <span>Tempo decorrido <strong data-agent-upgrade-elapsed>00:00</strong></span>
+                <span data-agent-upgrade-agent-note>Agente online</span>
             </div>
-        </section>
-    </div>
+
+            <p class="async-operation-background-note" data-agent-upgrade-background-note>
+                Você pode fechar esta janela. A operação continuará em segundo plano.
+            </p>
+
+            <div class="async-operation-summary" data-agent-upgrade-summary hidden>
+                <p class="async-operation-total" data-agent-upgrade-summary-title></p>
+                <dl class="async-operation-metrics" data-agent-upgrade-summary-counts></dl>
+                <p class="async-operation-result-note is-success" data-agent-upgrade-result-note></p>
+            </div>
+        </div>
+
+        <footer class="async-operation-actions" data-agent-upgrade-modal-actions>
+            <button type="button" class="button button-primary" data-agent-upgrade-retry hidden>Tentar novamente</button>
+            <button type="button" class="button button-secondary" data-agent-upgrade-modal-close data-agent-upgrade-close-label>Continuar em segundo plano</button>
+        </footer>
+    </x-async-operation-modal>
 
     <script nonce="{{ $cspNonce ?? '' }}">
         document
@@ -667,147 +664,231 @@
         })();
 
         (() => {
-            const startButton = document.querySelector('[data-agent-upgrade-start]');
+            const button = document.querySelector('[data-agent-upgrade-start]');
             const modal = document.querySelector('[data-agent-upgrade-modal]');
-            if (!startButton || !modal) return;
+            if (!button || !modal) return;
 
-            const title = modal.querySelector('[data-agent-upgrade-modal-title]');
-            const message = modal.querySelector('[data-agent-upgrade-modal-message]');
-            const spinner = modal.querySelector('[data-agent-upgrade-spinner]');
+            const find = (selector) => modal.querySelector(selector);
+            const title = find('[data-agent-upgrade-modal-title]');
+            const status = find('[data-agent-upgrade-current-status]');
+            const message = find('[data-agent-upgrade-modal-message]');
+            const spinner = find('[data-agent-upgrade-spinner]');
+            const summary = find('[data-agent-upgrade-summary]');
+            const summaryTitle = find('[data-agent-upgrade-summary-title]');
+            const counts = find('[data-agent-upgrade-summary-counts]');
+            const resultNote = find('[data-agent-upgrade-result-note]');
+            const retry = find('[data-agent-upgrade-retry]');
+            const closeLabel = find('[data-agent-upgrade-close-label]');
+            const meta = find('[data-agent-upgrade-progress-meta]');
+            const backgroundNote = find('[data-agent-upgrade-background-note]');
+            const elapsed = find('[data-agent-upgrade-elapsed]');
+            const agentNote = find('[data-agent-upgrade-agent-note]');
+            const cardVersion = document.querySelector('[data-agent-upgrade-card-version]');
+            const installedVersion = document.querySelector('[data-agent-upgrade-installed-version]');
+            const steps = Object.fromEntries([...modal.querySelectorAll('[data-agent-upgrade-step]')]
+                .map((step) => [step.dataset.agentUpgradeStep, step]));
+            const statusUrl = button.dataset.agentUpgradeStatusUrl;
+            let pollTimer;
+            let elapsedTimer;
+            let polling = false;
+            let submitting = false;
+            let attempts = 0;
+            let requestedAt = button.dataset.agentUpgradeRequestedAt ? new Date(button.dataset.agentUpgradeRequestedAt) : null;
 
-            let pollTimer = null;
-            let pollAttempts = 0;
-            const maxPollAttempts = 200; // ~10min a cada 3s
-
-            const openModal = () => {
+            const setStep = (name, state, detail) => {
+                const step = steps[name];
+                step.className = `is-${state}`;
+                step.querySelector('span').textContent = state === 'complete' ? '✓' : state === 'current' ? '●' : state === 'failed' ? '!' : '○';
+                step.querySelector('small').textContent = detail;
+            };
+            const timeline = (state) => {
+                setStep('request', 'complete', 'Enviada');
+                setStep('agent', state === 'waiting' ? 'current' : 'complete', state === 'waiting' ? 'Aguardando' : 'Conectado');
+                setStep('execution', state === 'running' ? 'current' : ['succeeded', 'failed'].includes(state) ? 'complete' : 'pending', state === 'running' ? 'Em andamento' : ['succeeded', 'failed'].includes(state) ? 'Concluída' : 'Pendente');
+                setStep('result', state === 'succeeded' ? 'complete' : state === 'failed' ? 'failed' : 'pending', state === 'succeeded' ? 'Recebido' : state === 'failed' ? 'Falha' : 'Pendente');
+            };
+            const tick = () => {
+                if (!requestedAt || Number.isNaN(requestedAt.getTime())) return;
+                const seconds = Math.max(0, Math.floor((Date.now() - requestedAt.getTime()) / 1000));
+                elapsed.textContent = `${Math.floor(seconds / 60).toString().padStart(2, '0')}:${(seconds % 60).toString().padStart(2, '0')}`;
+            };
+            const startClock = () => {
+                clearInterval(elapsedTimer);
+                tick();
+                elapsedTimer = setInterval(tick, 1000);
+            };
+            const open = () => {
                 modal.classList.add('is-open');
                 modal.setAttribute('aria-hidden', 'false');
                 document.body.style.overflow = 'hidden';
+                find('.users-modal-close')?.focus();
             };
-
-            const closeModal = () => {
+            const close = () => {
                 modal.classList.remove('is-open');
                 modal.setAttribute('aria-hidden', 'true');
                 document.body.style.overflow = '';
-                if (pollTimer) clearTimeout(pollTimer);
+                button.focus();
             };
+            modal.querySelectorAll('[data-agent-upgrade-modal-close]').forEach((item) => item.addEventListener('click', close));
 
-            modal.querySelectorAll('[data-agent-upgrade-modal-close]')
-                .forEach((button) => button.addEventListener('click', closeModal));
-
-            const showWaiting = () => {
-                title.textContent = 'Atualizando agente…';
+            const progress = () => {
                 spinner.hidden = false;
-                message.textContent = 'Solicitação enviada. O agente baixa, valida e substitui '
-                    + 'o binário no próximo ciclo do timer (normalmente até 5 minutos) — nenhum '
-                    + 'serviço do BIND é tocado. Esta janela atualiza sozinha.';
+                summary.hidden = true;
+                retry.hidden = true;
+                meta.hidden = false;
+                backgroundNote.hidden = false;
+                message.hidden = false;
+                closeLabel.textContent = 'Continuar em segundo plano';
             };
-
-            const showRunning = () => {
-                title.textContent = 'Atualização em andamento…';
-                spinner.hidden = false;
-                message.textContent = 'Baixando e validando o novo binário (checksum, sintaxe, '
-                    + '--version/--help) antes de substituir. O binário anterior é restaurado '
-                    + 'automaticamente se a validação falhar.';
+            const waiting = (online = true, lastSeen = null) => {
+                progress();
+                title.textContent = 'Atualização do agente';
+                status.textContent = online ? 'Aguardando o próximo ciclo do agente' : 'Aguardando agente';
+                message.textContent = online ? 'Solicitação registrada com sucesso. A atualização será executada no próximo ciclo de comunicação do agente.' : 'A operação será processada quando o agente voltar a se comunicar.';
+                agentNote.textContent = online ? 'Agente online' : 'Agente offline';
+                if (!online && lastSeen) agentNote.textContent += ` · último contato há ${Math.max(0, Math.floor((Date.now() - new Date(lastSeen).getTime()) / 60000))} min`;
+                timeline('waiting');
             };
-
-            const showFailed = (errorText) => {
-                title.textContent = 'A atualização falhou';
+            const running = () => {
+                progress();
+                title.textContent = 'Atualização do agente';
+                status.textContent = 'Atualização em andamento';
+                message.textContent = 'O agente está processando o pacote e aplicando a nova versão.';
+                agentNote.textContent = 'Agente online';
+                timeline('running');
+            };
+            const failed = (errorText) => {
+                title.textContent = 'Atualização do agente';
+                status.textContent = 'Falha na atualização';
                 spinner.hidden = true;
-                message.textContent = errorText
-                    || 'O agente reportou uma falha; o binário anterior foi preservado.';
+                summary.hidden = true;
+                meta.hidden = true;
+                backgroundNote.hidden = true;
+                message.hidden = false;
+                message.textContent = `${errorText || 'O agente não conseguiu concluir a atualização.'} Revise o status e tente novamente.`;
+                closeLabel.textContent = 'Fechar';
+                retry.hidden = false;
+                timeline('failed');
+                clearInterval(elapsedTimer);
+                button.disabled = false;
+                button.textContent = 'Atualizar software do agente';
+                button.dataset.agentUpgradeActive = 'false';
             };
-
-            const showTimeout = () => {
-                title.textContent = 'Ainda aguardando o agente';
-                spinner.hidden = false;
-                message.textContent = 'Isso está levando mais tempo que o normal. Pode fechar '
-                    + 'esta janela — a atualização continua em segundo plano.';
-            };
-
-            const showSucceeded = (result) => {
+            const succeeded = (result, currentVersion) => {
+                const changed = result?.changed !== false;
+                title.textContent = 'Atualização do agente';
+                status.textContent = changed ? 'Atualização concluída' : 'Nenhuma alteração necessária';
                 spinner.hidden = true;
-                if (result && result.changed === false) {
-                    title.textContent = 'Agente já está atualizado';
-                    message.textContent = 'Nada precisou ser alterado — binário e units já '
-                        + 'estavam na versão mais recente.';
-                } else {
-                    title.textContent = 'Agente atualizado';
-                    const parts = [];
-                    if (result && result.binary_changed) parts.push('binário substituído');
-                    if (result && result.units_changed) parts.push('units systemd atualizadas');
-                    message.textContent = (parts.length ? parts.join(', ') + '. ' : '')
-                        + 'A nova versão vale a partir do próximo ciclo do agente. Recarregue a '
-                        + 'página para ver a versão atualizada.';
+                message.hidden = true;
+                meta.hidden = true;
+                backgroundNote.hidden = true;
+                summary.hidden = false;
+                retry.hidden = true;
+                closeLabel.textContent = 'Fechar';
+                timeline('succeeded');
+                clearInterval(elapsedTimer);
+                summaryTitle.textContent = 'Software do agente atualizado com sucesso.';
+                counts.innerHTML = '';
+                const previousVersion = result?.previous_version;
+                const versionConfirmed = currentVersion && currentVersion !== previousVersion;
+                const rows = changed
+                    ? [
+                        ['Versão anterior', previousVersion || '—'],
+                        ['Versão atual', versionConfirmed ? currentVersion : 'aguardando confirmação'],
+                        ['Binário', result?.binary_changed ? 'substituído' : 'inalterado'],
+                        ['Units systemd', result?.units_changed ? 'atualizadas' : 'inalteradas'],
+                    ]
+                    : [['Versão instalada', previousVersion || currentVersion || '—']];
+                rows.forEach(([label, value]) => {
+                    const row = document.createElement('div');
+                    const term = document.createElement('dt');
+                    const description = document.createElement('dd');
+                    term.textContent = label;
+                    description.textContent = value;
+                    row.append(term, description);
+                    counts.appendChild(row);
+                });
+                resultNote.textContent = changed
+                    ? 'A comunicação com o painel foi preservada.'
+                    : 'Binário e units já estavam na versão mais recente.';
+                if (versionConfirmed) {
+                    if (cardVersion) cardVersion.textContent = currentVersion;
+                    if (installedVersion) installedVersion.textContent = currentVersion;
                 }
+                button.disabled = false;
+                button.textContent = 'Atualizar software do agente';
+                button.dataset.agentUpgradeActive = 'false';
             };
-
-            const poll = async (statusUrl) => {
-                pollAttempts += 1;
-                if (pollAttempts > maxPollAttempts) {
-                    showTimeout();
+            const schedule = (delay = 3000) => {
+                clearTimeout(pollTimer);
+                pollTimer = setTimeout(poll, delay);
+            };
+            const poll = async () => {
+                if (polling) return;
+                if (document.hidden) return schedule(10000);
+                if (++attempts > 200) {
+                    status.textContent = 'Ainda aguardando o agente';
+                    message.textContent = 'A operação continua em segundo plano e será processada quando o agente se comunicar.';
                     return;
                 }
-
+                polling = true;
                 let payload;
                 try {
-                    const response = await fetch(statusUrl, {
-                        headers: { Accept: 'application/json' },
-                    });
-                    payload = await response.json();
+                    payload = await (await fetch(statusUrl, { headers: { Accept: 'application/json' } })).json();
                 } catch (error) {
-                    pollTimer = setTimeout(() => poll(statusUrl), 5000);
-                    return;
+                    polling = false;
+                    return schedule(5000);
                 }
-
-                if (payload.status === 'succeeded') {
-                    showSucceeded(payload.result);
-                    return;
+                polling = false;
+                if (payload.requested_at) {
+                    requestedAt = new Date(payload.requested_at);
+                    startClock();
                 }
-                if (payload.status === 'failed') {
-                    showFailed(payload.error);
-                    return;
-                }
-                if (payload.status === 'running') {
-                    showRunning();
-                } else {
-                    showWaiting();
-                }
-
-                pollTimer = setTimeout(() => poll(statusUrl), 3000);
+                if (payload.status === 'succeeded') return succeeded(payload.result, payload.current_agent_version);
+                if (payload.status === 'failed') return failed(payload.error);
+                payload.status === 'running' ? running() : waiting(payload.agent_online, payload.agent_last_seen_at);
+                schedule();
             };
-
-            startButton.addEventListener('click', async () => {
-                if (startButton.disabled) return;
-
-                const storeUrl = startButton.dataset.agentUpgradeStoreUrl;
-                const statusUrl = startButton.dataset.agentUpgradeStatusUrl;
-                const csrfToken = startButton.dataset.agentUpgradeCsrf;
-
-                pollAttempts = 0;
-                showWaiting();
-                openModal();
-
-                try {
-                    const response = await fetch(storeUrl, {
-                        method: 'POST',
-                        headers: {
-                            Accept: 'application/json',
-                            'Content-Type': 'application/json',
-                            'X-CSRF-TOKEN': csrfToken,
-                        },
-                    });
-
-                    if (!response.ok && response.status !== 409) {
-                        showFailed('Não foi possível solicitar a atualização.');
-                        return;
-                    }
-                } catch (error) {
-                    showFailed('Não foi possível conectar ao painel.');
+            const start = async () => {
+                if (submitting) return;
+                if (button.dataset.agentUpgradeActive === 'true') {
+                    open();
+                    if (!pollTimer) poll();
                     return;
                 }
-
-                poll(statusUrl);
+                submitting = true;
+                button.disabled = true;
+                requestedAt = new Date();
+                attempts = 0;
+                startClock();
+                retry.hidden = true;
+                waiting(button.dataset.agentUpgradeAgentOnline === 'true');
+                open();
+                try {
+                    const response = await fetch(button.dataset.agentUpgradeStoreUrl, { method: 'POST', headers: { Accept: 'application/json', 'Content-Type': 'application/json', 'X-CSRF-TOKEN': button.dataset.agentUpgradeCsrf } });
+                    if (!response.ok && response.status !== 409) return failed('Não foi possível solicitar a atualização.');
+                } catch (error) {
+                    return failed('Não foi possível conectar ao painel.');
+                } finally {
+                    submitting = false;
+                }
+                button.disabled = false;
+                button.dataset.agentUpgradeActive = 'true';
+                button.textContent = 'Acompanhar atualização';
+                poll();
+            };
+            button.addEventListener('click', start);
+            retry.addEventListener('click', start);
+            if (button.dataset.agentUpgradeActive === 'true') {
+                button.dataset.agentUpgradeInitialStatus === 'running' ? running() : waiting(button.dataset.agentUpgradeAgentOnline === 'true');
+                startClock();
+                poll();
+            }
+            document.addEventListener('visibilitychange', () => {
+                if (!document.hidden && button.dataset.agentUpgradeActive === 'true') poll();
+            });
+            document.addEventListener('keydown', (event) => {
+                if (event.key === 'Escape' && modal.classList.contains('is-open')) close();
             });
         })();
     </script>

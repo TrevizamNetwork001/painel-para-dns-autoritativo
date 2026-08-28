@@ -13,6 +13,7 @@
     $discoveryAt = $latestDiscoveryOperation?->completed_at ?? $latestDiscoveryOperation?->authorized_at;
     $discoverySucceeded = $latestDiscoveryOperation?->status === 'succeeded';
     $discoveryInFlight = $latestDiscoveryOperation && in_array($latestDiscoveryOperation->status, ['authorized', 'running'], true);
+    $upgradeInFlight = $latestAgentUpgradeOperation && in_array($latestAgentUpgradeOperation->status, ['authorized', 'running'], true);
     $imported = $discoveryStats['imported'] > 0;
     $publicationStatus = match ($latestPublication?->status) {
         'pending' => 'Pendente', 'downloaded' => 'Baixada', 'applying' => 'Aplicando',
@@ -71,7 +72,7 @@
     <article class="panel-card agent-bind-overview">
         <header class="agent-section-header"><div><p class="eyebrow">Estado do BIND</p><h2>{{ $bindActive ? 'Serviço ativo' : 'Requer atenção' }}</h2></div><span class="status-badge {{ $bindActive && $tcpReady && $udpReady ? 'status-success' : 'status-warning' }}">{{ $bindActive && $tcpReady && $udpReady ? 'Operacional' : 'Atenção' }}</span></header>
         <dl class="agent-ops-quick-list">
-            <div><dt>Agente</dt><dd>{{ $agentVersion }}</dd></div><div><dt>BIND</dt><dd>{{ $bindVersion }}</dd></div>
+            <div><dt>Agente</dt><dd data-agent-upgrade-card-version>{{ $agentVersion }}</dd></div><div><dt>BIND</dt><dd>{{ $bindVersion }}</dd></div>
             <div><dt>Listeners</dt><dd>TCP 53 {{ $tcpReady ? '✓' : '—' }} · UDP 53 {{ $udpReady ? '✓' : '—' }}</dd></div><div><dt>Readiness</dt><dd>{{ strtoupper($readinessState) }}</dd></div>
         </dl>
     </article>
@@ -132,7 +133,7 @@
 
 <details class="panel-card agent-collapsible">
     <summary><span><span class="eyebrow">Acesso secundário</span><strong>Software e segurança</strong></span><small>Atualização do agente e detalhes do modelo de segurança</small></summary>
-    <div class="agent-collapsible-body"><section class="agent-software-row"><div><h3>Software do agente</h3><p><strong>Instalada:</strong> {{ $agentVersion }}</p><p>Nenhuma versão disponível foi informada pelo backend.</p></div><button type="button" class="button button-secondary" data-agent-upgrade-start data-agent-upgrade-store-url="{{ route('servers.agent.upgrade', $server) }}" data-agent-upgrade-status-url="{{ route('servers.agent.upgrade.status', $server) }}" data-agent-upgrade-csrf="{{ csrf_token() }}">Atualizar software do agente</button></section>
+    <div class="agent-collapsible-body"><section class="agent-software-row"><div><h3>Software do agente</h3><p><strong>Instalada:</strong> <span data-agent-upgrade-installed-version>{{ $agentVersion }}</span></p><p>Nenhuma versão disponível foi informada pelo backend.</p></div><button type="button" class="button button-secondary" data-agent-upgrade-start data-agent-upgrade-store-url="{{ route('servers.agent.upgrade', $server) }}" data-agent-upgrade-status-url="{{ route('servers.agent.upgrade.status', $server) }}" data-agent-upgrade-csrf="{{ csrf_token() }}" data-agent-upgrade-requested-at="{{ $latestAgentUpgradeOperation?->authorized_at?->toIso8601String() }}" data-agent-upgrade-agent-online="{{ $server->agent_status === 'online' ? 'true' : 'false' }}" data-agent-upgrade-active="{{ $upgradeInFlight ? 'true' : 'false' }}" data-agent-upgrade-initial-status="{{ $latestAgentUpgradeOperation?->status }}">{{ $upgradeInFlight ? 'Acompanhar atualização' : 'Atualizar software do agente' }}</button></section>
         <details class="agent-nested-details"><summary>Detalhes de segurança</summary><div class="agent-security-list"><span>O vínculo é associado previamente ao servidor e à organização.</span><span>Hostname e IP são fatores de revisão, não de associação.</span><span>O código é de uso único, expira e somente seu hash é persistido.</span><span>A credencial permanente aparece somente para o agente.</span><span>O agente não recebe acesso ao painel administrativo.</span></div></details>
     </div>
 </details>

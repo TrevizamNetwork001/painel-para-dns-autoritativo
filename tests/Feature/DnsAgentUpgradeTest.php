@@ -105,6 +105,131 @@ class DnsAgentUpgradeTest extends TestCase
         $response->assertOk()->assertJsonPath('status', 'authorized');
     }
 
+    public function test_agent_page_renders_compact_async_upgrade_states_without_fake_percentage(): void
+    {
+        $context = $this->context();
+
+        $this->actingAs($context['admin'])
+            ->get(route('servers.agent.show', $context['server']))
+            ->assertOk()
+            ->assertSee('Atualização do agente')
+            ->assertSee('Aguardando o próximo ciclo do agente')
+            ->assertSee('Solicitação')
+            ->assertSee('Download/validação')
+            ->assertSee('Resultado')
+            ->assertSee('Tempo decorrido')
+            ->assertSee('Continuar em segundo plano')
+            ->assertSee('Sem tocar no BIND')
+            ->assertDontSee('data-agent-upgrade-percent', false);
+    }
+
+    public function test_upgrade_status_exposes_factual_timing_and_agent_connectivity(): void
+    {
+        $context = $this->context();
+        $operation = DnsBindOperation::query()->create([
+            'organization_id' => $context['organization']->id,
+            'dns_server_id' => $context['server']->id,
+            'dns_agent_id' => $context['agent']->id,
+            'action' => 'upgrade_agent',
+            'status' => 'authorized',
+            'authorization_nonce' => (string) Str::uuid(),
+            'authorized_by' => $context['admin']->id,
+            'authorized_at' => now(),
+        ]);
+
+        $this->actingAs($context['admin'])
+            ->getJson(route('servers.agent.upgrade.status', $context['server']))
+            ->assertOk()
+            ->assertJsonPath('status', 'authorized')
+            ->assertJsonPath('agent_online', true)
+            ->assertJsonPath('requested_at', $operation->authorized_at->toIso8601String())
+            ->assertJsonPath('agent_last_seen_at', $context['agent']->last_seen_at->toIso8601String());
+    }
+
+    public function test_upgrade_status_shows_offline_agent_without_faking_progress(): void
+    {
+        $context = $this->context();
+        DnsBindOperation::query()->create([
+            'organization_id' => $context['organization']->id,
+            'dns_server_id' => $context['server']->id,
+            'dns_agent_id' => $context['agent']->id,
+            'action' => 'upgrade_agent',
+            'status' => 'authorized',
+            'authorization_nonce' => (string) Str::uuid(),
+            'authorized_by' => $context['admin']->id,
+            'authorized_at' => now(),
+        ]);
+        $context['server']->update(['agent_status' => 'offline']);
+        $context['agent']->update(['last_seen_at' => now()->subMinutes(9)]);
+
+        $response = $this->actingAs($context['admin'])
+            ->getJson(route('servers.agent.upgrade.status', $context['server']))
+            ->assertOk()
+            ->assertJsonPath('agent_online', false);
+
+        $this->assertNotNull($response->json('agent_last_seen_at'));
+    }
+
+    public function test_upgrade_succeeded_status_reports_version_change_when_confirmed(): void
+    {
+        $context = $this->context();
+        $operation = DnsBindOperation::query()->create([
+            'organization_id' => $context['organization']->id,
+            'dns_server_id' => $context['server']->id,
+            'dns_agent_id' => $context['agent']->id,
+            'action' => 'upgrade_agent',
+            'status' => 'succeeded',
+            'authorization_nonce' => (string) Str::uuid(),
+            'authorized_by' => $context['admin']->id,
+            'authorized_at' => now()->subMinute(),
+            'completed_at' => now(),
+            'result' => [
+                'binary_changed' => true,
+                'units_changed' => false,
+                'previous_version' => '0.5.0',
+                'changed' => true,
+            ],
+        ]);
+        $context['agent']->update(['metadata' => ['agent_version' => '0.6.0']]);
+
+        $this->actingAs($context['admin'])
+            ->getJson(route('servers.agent.upgrade.status', $context['server']))
+            ->assertOk()
+            ->assertJsonPath('status', 'succeeded')
+            ->assertJsonPath('result.previous_version', '0.5.0')
+            ->assertJsonPath('result.binary_changed', true)
+            ->assertJsonPath('current_agent_version', '0.6.0');
+
+        $this->assertSame('succeeded', $operation->fresh()->status);
+    }
+
+    public function test_upgrade_failed_state_uses_sanitized_modal_copy_and_cross_tenant_status_is_hidden(): void
+    {
+        $context = $this->context();
+        $foreign = $this->context('Tenant estrangeiro');
+        DnsBindOperation::query()->create([
+            'organization_id' => $context['organization']->id,
+            'dns_server_id' => $context['server']->id,
+            'dns_agent_id' => $context['agent']->id,
+            'action' => 'upgrade_agent',
+            'status' => 'failed',
+            'authorization_nonce' => (string) Str::uuid(),
+            'authorized_by' => $context['admin']->id,
+            'authorized_at' => now(),
+            'error' => 'Traceback: /usr/local/sbin/dns-center-agent segredo interno',
+        ]);
+
+        $this->actingAs($context['admin'])
+            ->getJson(route('servers.agent.upgrade.status', $context['server']))
+            ->assertOk()
+            ->assertJsonPath('status', 'failed')
+            ->assertJsonPath('error', 'O agente não conseguiu concluir a atualização.');
+
+        $this->actingAs($foreign['admin'])
+            ->getJson(route('servers.agent.upgrade.status', $context['server']))
+            ->assertNotFound();
+    }
+
     public function test_agent_report_processes_upgrade_agent_action(): void
     {
         $context = $this->context();
