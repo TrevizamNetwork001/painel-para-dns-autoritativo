@@ -369,6 +369,66 @@ class DnsBindDiscoveryTest extends TestCase
             ->assertJsonPath('agent_last_seen_at', $context['agent']->last_seen_at->toIso8601String());
     }
 
+    public function test_in_flight_discovery_blocks_duplicate_request(): void
+    {
+        $context = $this->context();
+
+        $this->actingAs($context['admin'])->post(route('servers.bind.discover', $context['server']))->assertRedirect();
+        $this->actingAs($context['admin'])
+            ->post(route('servers.bind.discover', $context['server']))
+            ->assertStatus(409);
+
+        $this->assertDatabaseCount('dns_bind_operations', 1);
+    }
+
+    public function test_discovery_status_shows_offline_agent_without_faking_progress(): void
+    {
+        $context = $this->context();
+        $this->authorizedDiscoveryOperation($context);
+        $context['server']->update(['agent_status' => 'offline']);
+        $context['agent']->update(['last_seen_at' => now()->subMinutes(12)]);
+
+        $response = $this->actingAs($context['admin'])
+            ->getJson(route('servers.bind.discovery.status', $context['server']))
+            ->assertOk()
+            ->assertJsonPath('agent_online', false);
+
+        $this->assertNotNull($response->json('agent_last_seen_at'));
+    }
+
+    public function test_small_zone_list_is_returned_in_full_in_modal_summary(): void
+    {
+        $context = $this->context();
+        $operation = $this->authorizedDiscoveryOperation($context);
+        $operation->update(['status' => 'succeeded', 'completed_at' => now()]);
+
+        foreach (['alpha.example.com', 'beta.example.com'] as $name) {
+            DnsBindDiscoveredZone::query()->create([
+                'organization_id' => $context['organization']->id,
+                'dns_server_id' => $context['server']->id,
+                'dns_agent_id' => $context['agent']->id,
+                'dns_bind_operation_id' => $operation->id,
+                'name' => $name,
+                'detected_type' => 'primary',
+                'detected_syntax' => 'master',
+                'validation_status' => 'ok',
+                'comparison_state' => 'new',
+            ]);
+        }
+
+        $response = $this->actingAs($context['admin'])
+            ->getJson(route('servers.bind.discovery.status', $context['server']))
+            ->assertOk()
+            ->assertJsonPath('summary.total', 2)
+            ->assertJsonPath('discovery_url', route('servers.bind.discovery.show', $context['server']));
+
+        $this->assertCount(2, $response->json('summary.zones'));
+        $this->assertSame(
+            ['alpha.example.com', 'beta.example.com'],
+            collect($response->json('summary.zones'))->pluck('name')->sort()->values()->all(),
+        );
+    }
+
     public function test_succeeded_status_limits_modal_preview_and_keeps_compact_summary(): void
     {
         $context = $this->context();
