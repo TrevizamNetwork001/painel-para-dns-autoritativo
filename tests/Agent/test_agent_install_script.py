@@ -19,6 +19,12 @@ class AgentInstallUpgradeModeTest(unittest.TestCase):
         self.assertIn('[ ! -e "${INSTALL_PATH}" ]', self.upgrade_body)
         self.assertIn("use a instalação completa", self.upgrade_body)
 
+    def test_installer_bootstraps_curl_with_supported_package_managers(self) -> None:
+        self.assertIn("install_curl_if_missing", self.script)
+        self.assertIn("apt-get install -y --no-install-recommends curl ca-certificates", self.script)
+        self.assertIn("dnf install -y curl ca-certificates", self.script)
+        self.assertIn("yum install -y curl ca-certificates", self.script)
+
     def test_upgrade_mode_rejects_symlink_target(self) -> None:
         self.assertIn('[ -L "${INSTALL_PATH}" ]', self.upgrade_body)
 

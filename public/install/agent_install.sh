@@ -2,7 +2,7 @@
 
 set -euo pipefail
 
-readonly INSTALLER_VERSION="1.2.0"
+readonly INSTALLER_VERSION="1.3.0"
 ENROLL_MODE="${1:-}"
 PANEL_URL="${DNS_CENTER_PANEL_URL:-https://dnscenter.trevizamnetwork.com.br}"
 PANEL_URL="${PANEL_URL%/}"
@@ -26,6 +26,27 @@ if [ "$(id -u)" -ne 0 ]; then
     echo "Execute o instalador com privilégios de root." >&2
     exit 1
 fi
+
+install_curl_if_missing() {
+    if command -v curl >/dev/null 2>&1; then
+        return
+    fi
+
+    echo "curl não encontrado; instalando o pré-requisito automaticamente..."
+    if command -v apt-get >/dev/null 2>&1; then
+        DEBIAN_FRONTEND=noninteractive apt-get update
+        DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends curl ca-certificates
+    elif command -v dnf >/dev/null 2>&1; then
+        dnf install -y curl ca-certificates
+    elif command -v yum >/dev/null 2>&1; then
+        yum install -y curl ca-certificates
+    else
+        echo "Não foi possível instalar curl automaticamente: gerenciador de pacotes não suportado." >&2
+        exit 1
+    fi
+}
+
+install_curl_if_missing
 
 for command in curl python3 sha256sum systemctl install mktemp cmp; do
     if ! command -v "${command}" >/dev/null 2>&1; then

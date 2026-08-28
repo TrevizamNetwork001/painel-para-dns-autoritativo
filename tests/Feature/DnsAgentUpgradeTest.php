@@ -95,6 +95,73 @@ class DnsAgentUpgradeTest extends TestCase
         $this->assertDatabaseCount('dns_bind_operations', 1);
     }
 
+    public function test_offline_agent_is_rejected_immediately(): void
+    {
+        $context = $this->context();
+        $context['server']->update(['agent_status' => 'offline']);
+
+        $this->actingAs($context['admin'])
+            ->postJson(route('servers.agent.upgrade', $context['server']))
+            ->assertStatus(409)
+            ->assertJsonPath('message', 'O agente está offline. Restabeleça a comunicação antes de solicitar a atualização.');
+
+        $this->assertDatabaseCount('dns_bind_operations', 0);
+    }
+
+    public function test_uncollected_upgrade_expires_and_allows_a_new_request(): void
+    {
+        config()->set('security.agent_upgrade.ttl_minutes', 10);
+        $context = $this->context();
+        $expired = DnsBindOperation::query()->create([
+            'organization_id' => $context['organization']->id,
+            'dns_server_id' => $context['server']->id,
+            'dns_agent_id' => $context['agent']->id,
+            'action' => 'upgrade_agent',
+            'status' => 'authorized',
+            'authorization_nonce' => (string) Str::uuid(),
+            'authorized_by' => $context['admin']->id,
+            'authorized_at' => now()->subMinutes(11),
+        ]);
+
+        $this->actingAs($context['admin'])
+            ->getJson(route('servers.agent.upgrade.status', $context['server']))
+            ->assertOk()
+            ->assertJsonPath('status', 'expired')
+            ->assertJsonPath('error', 'A solicitação expirou porque o agente não a coletou dentro do prazo.');
+
+        $this->assertSame('expired', $expired->fresh()->status);
+        $this->assertNotNull($expired->fresh()->completed_at);
+
+        $this->actingAs($context['admin'])
+            ->post(route('servers.agent.upgrade', $context['server']))
+            ->assertRedirect();
+
+        $this->assertDatabaseCount('dns_bind_operations', 2);
+    }
+
+    public function test_agent_cannot_collect_an_expired_upgrade(): void
+    {
+        config()->set('security.agent_upgrade.ttl_minutes', 10);
+        $context = $this->context();
+        DnsBindOperation::query()->create([
+            'organization_id' => $context['organization']->id,
+            'dns_server_id' => $context['server']->id,
+            'dns_agent_id' => $context['agent']->id,
+            'action' => 'upgrade_agent',
+            'status' => 'authorized',
+            'authorization_nonce' => (string) Str::uuid(),
+            'authorized_by' => $context['admin']->id,
+            'authorized_at' => now()->subMinutes(11),
+        ]);
+
+        $this->withToken($context['token'])
+            ->getJson(route('api.agent.bind.operations.next'))
+            ->assertOk()
+            ->assertJsonPath('operation', null);
+
+        $this->assertDatabaseHas('dns_bind_operations', ['status' => 'expired']);
+    }
+
     public function test_status_endpoint_reflects_operation_lifecycle(): void
     {
         $context = $this->context();

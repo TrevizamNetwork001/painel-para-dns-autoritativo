@@ -29,6 +29,8 @@ class DnsAgentEnrollmentController extends Controller
             $server,
         );
 
+        DnsBindOperation::expireStaleAgentUpgrades($server->id);
+
         $agent = DnsAgent::query()
             ->where('organization_id', $organizationId)
             ->where('dns_server_id', $server->id)
@@ -208,6 +210,34 @@ class DnsAgentEnrollmentController extends Controller
         return redirect()
             ->route('servers.agent.show', $server)
             ->with('status', 'Plano BIND preparado. Nenhuma ação foi executada.');
+    }
+
+    public function installRequestStatus(
+        Request $request,
+        DnsServer $server,
+    ): JsonResponse {
+        $organizationId = $this->authorizeServer($request, $server);
+
+        $installRequest = DnsAgentInstallRequest::query()
+            ->where('organization_id', $organizationId)
+            ->where('dns_server_id', $server->id)
+            ->latest('id')
+            ->first();
+
+        $actionable = $installRequest !== null && (
+            ($installRequest->status === 'pending' && $installRequest->expires_at->isFuture())
+            || ($installRequest->status === 'approved' && $installRequest->claimed_at === null)
+        );
+
+        return response()->json([
+            'ok' => true,
+            'request' => $installRequest ? [
+                'id' => $installRequest->id,
+                'status' => $installRequest->status,
+                'actionable' => $actionable,
+                'updated_at' => $installRequest->updated_at?->toIso8601String(),
+            ] : null,
+        ]);
     }
 
     public function authorizeBind(
@@ -473,6 +503,8 @@ class DnsAgentEnrollmentController extends Controller
     {
         $organizationId = $this->authorizeServer($request, $server);
 
+        DnsBindOperation::expireStaleAgentUpgrades($server->id);
+
         $agent = DnsAgent::query()
             ->where('organization_id', $organizationId)
             ->where('dns_server_id', $server->id)
@@ -480,6 +512,11 @@ class DnsAgentEnrollmentController extends Controller
             ->first();
 
         abort_unless($agent, 409, 'Agente não vinculado ou revogado.');
+        abort_if(
+            $server->agent_status !== 'online',
+            409,
+            'O agente está offline. Restabeleça a comunicação antes de solicitar a atualização.',
+        );
 
         $inFlight = DnsBindOperation::query()
             ->where('dns_server_id', $server->id)
@@ -525,6 +562,8 @@ class DnsAgentEnrollmentController extends Controller
     {
         $this->authorizeServer($request, $server);
 
+        DnsBindOperation::expireStaleAgentUpgrades($server->id);
+
         $installedVersion = $server->agent?->metadata['agent_version'] ?? $server->agent_version;
         $availableVersion = AgentArtifact::availableVersion();
         $versionConfirmed = $installedVersion !== null && $installedVersion === $availableVersion;
@@ -552,9 +591,17 @@ class DnsAgentEnrollmentController extends Controller
             'ok' => true,
             'operation_id' => $operation->id,
             'status' => $operation->status,
-            'error' => $operation->status === 'failed' ? 'O agente não conseguiu concluir a atualização.' : null,
+            'error' => match ($operation->status) {
+                'failed' => 'O agente não conseguiu concluir a atualização.',
+                'expired' => 'A solicitação expirou porque o agente não a coletou dentro do prazo.',
+                default => null,
+            },
             'result' => $result,
             'requested_at' => $operation->authorized_at?->toIso8601String(),
+            'expires_at' => $operation->authorized_at?->addMinutes(max(
+                1,
+                (int) config('security.agent_upgrade.ttl_minutes', 10),
+            ))->toIso8601String(),
             'agent_online' => $server->agent_status === 'online',
             'agent_last_seen_at' => $server->agent?->last_seen_at?->toIso8601String(),
             'installed_version' => $installedVersion,

@@ -117,17 +117,18 @@ class DnsBindDiscoveryController extends Controller
             ->latest('id')
             ->first();
 
+        $discoveredZones = DnsBindDiscoveredZone::query()
+            ->where('dns_bind_operation_id', $lastOperation?->id ?? 0);
+
         $zones = $lastOperation && $lastOperation->status === 'succeeded'
-            ? DnsBindDiscoveredZone::query()
-                ->where('dns_bind_operation_id', $lastOperation->id)
-                ->orderBy('name')
-                ->paginate(20)
+            ? (clone $discoveredZones)->orderBy('name')->paginate(20)
             : DnsBindDiscoveredZone::query()->whereRaw('1 = 0')->paginate(20);
 
         $summary = [
             'total' => $zones->total(),
-            'primary' => (clone $zones->getCollection())->where('detected_type', 'primary')->count(),
-            'secondary' => (clone $zones->getCollection())->where('detected_type', 'secondary')->count(),
+            'primary' => (clone $discoveredZones)->where('detected_type', 'primary')->count(),
+            'secondary' => (clone $discoveredZones)->where('detected_type', 'secondary')->count(),
+            'new' => (clone $discoveredZones)->where('comparison_state', 'new')->count(),
         ];
 
         return view('servers.bind-discovery', [

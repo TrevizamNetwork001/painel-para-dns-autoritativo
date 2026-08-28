@@ -139,7 +139,7 @@
             $latestInstallRequest
             && $latestInstallRequest->status === 'pending'
             && $latestInstallRequest->expires_at->isFuture()
-            && ! $agent
+            && (! $agent || $agent->revoked_at !== null)
         )
             <section class="panel-card agent-code-panel">
                 <div class="panel-card-header">
@@ -200,7 +200,7 @@
             $latestInstallRequest
             && $latestInstallRequest->status === 'approved'
             && $latestInstallRequest->claimed_at === null
-            && ! $agent
+            && (! $agent || $agent->revoked_at !== null)
         )
             <section class="panel-card agent-code-panel">
                 <div class="panel-card-header">
@@ -248,7 +248,7 @@
                     </form>
                 </div>
             </section>
-        @elseif (! $agent)
+        @elseif (! $agent || $agent->revoked_at !== null)
             <section class="panel-card agent-code-panel">
                 <p class="eyebrow">Enrollment pré-vinculado</p>
                 <h2>{{ $latestEnrollmentCode?->expires_at?->isPast() ? 'Vínculo expirado' : 'Gerar vínculo' }}</h2>
@@ -292,9 +292,9 @@
 
                         <div class="agent-choice-card">
                             <h3>Máquina sem agente</h3>
-                            <p>O instalador completo aceita o mesmo código e o solicita pelo terminal.</p>
+                            <p>Execute o comando abaixo. O instalador completo solicitará o código de vínculo pelo terminal.</p>
                             <div class="agent-command-box">
-                                <code id="agent-install-command">curl -fsSL https://dnscenter.trevizamnetwork.com.br/install/agent_install.sh | sudo bash -s -- --enroll</code>
+                                <code id="agent-install-command">wget -qO- https://dnscenter.trevizamnetwork.com.br/install/agent_install.sh | sudo bash -s -- --enroll</code>
                                 <button type="button" class="button button-secondary" data-copy-target="agent-install-command">Copiar</button>
                             </div>
                         </div>
@@ -309,6 +309,13 @@
         @endif
 
         @if (! $agent || $agent->revoked_at !== null)
+        <div
+            hidden
+            data-agent-install-request-watcher
+            data-status-url="{{ route('servers.agent.install-requests.status', $server) }}"
+            data-current-request-id="{{ $latestInstallRequest?->id }}"
+            data-current-request-status="{{ $latestInstallRequest?->status }}"
+        ></div>
         <section class="panel-card">
             <p class="eyebrow">Segurança</p>
             <h2>Como funciona</h2>
@@ -416,6 +423,47 @@
     </x-async-operation-modal>
 
     <script nonce="{{ $cspNonce ?? '' }}">
+        (() => {
+            const watcher = document.querySelector('[data-agent-install-request-watcher]');
+            if (!watcher) return;
+
+            const currentId = watcher.dataset.currentRequestId || null;
+            const currentStatus = watcher.dataset.currentRequestStatus || null;
+            let checking = false;
+
+            const check = async () => {
+                if (checking || document.hidden) return;
+                checking = true;
+                try {
+                    const response = await fetch(watcher.dataset.statusUrl, {
+                        headers: { Accept: 'application/json' },
+                    });
+                    if (!response.ok) return;
+                    const request = (await response.json()).request;
+                    if (
+                        request?.actionable
+                        && (
+                            String(request.id) !== currentId
+                            || request.status !== currentStatus
+                        )
+                    ) {
+                        window.location.reload();
+                    }
+                } catch (error) {
+                    // Uma falha transitória será tentada novamente no próximo ciclo.
+                } finally {
+                    checking = false;
+                }
+            };
+
+            const timer = window.setInterval(check, 3000);
+            document.addEventListener('visibilitychange', () => {
+                if (!document.hidden) check();
+            });
+            window.addEventListener('pagehide', () => window.clearInterval(timer));
+            check();
+        })();
+
         document
             .querySelectorAll('[data-copy-target]')
             .forEach((button) => button.addEventListener('click', async () => {
@@ -716,9 +764,9 @@
             };
             const timeline = (state) => {
                 setStep('request', 'complete', 'Enviada');
-                setStep('agent', state === 'waiting' ? 'current' : 'complete', state === 'waiting' ? 'Aguardando' : 'Conectado');
+                setStep('agent', state === 'waiting' ? 'current' : state === 'expired' ? 'failed' : 'complete', state === 'waiting' ? 'Aguardando' : state === 'expired' ? 'Não coletada' : 'Conectado');
                 setStep('execution', state === 'running' ? 'current' : ['awaiting', 'succeeded', 'failed'].includes(state) ? 'complete' : 'pending', state === 'running' ? 'Em andamento' : ['awaiting', 'succeeded', 'failed'].includes(state) ? 'Concluída' : 'Pendente');
-                setStep('result', state === 'succeeded' ? 'complete' : state === 'failed' ? 'failed' : state === 'awaiting' ? 'current' : 'pending', state === 'succeeded' ? 'Recebido' : state === 'failed' ? 'Falha' : state === 'awaiting' ? 'Confirmando' : 'Pendente');
+                setStep('result', state === 'succeeded' ? 'complete' : ['failed', 'expired'].includes(state) ? 'failed' : state === 'awaiting' ? 'current' : 'pending', state === 'succeeded' ? 'Recebido' : state === 'failed' ? 'Falha' : state === 'expired' ? 'Expirada' : state === 'awaiting' ? 'Confirmando' : 'Pendente');
             };
             const tick = () => {
                 if (!requestedAt || Number.isNaN(requestedAt.getTime())) return;
@@ -834,6 +882,42 @@
                 button.dataset.agentUpgradeActive = 'false';
                 renderCard(installed ?? (isVersion(cardInstalled?.textContent) ? cardInstalled.textContent : null), available ?? targetVersion, false);
             };
+            const requestRejected = (errorText) => {
+                title.textContent = 'Atualização não solicitada';
+                status.textContent = 'Não foi possível enviar a solicitação';
+                spinner.hidden = true;
+                summary.hidden = true;
+                meta.hidden = true;
+                backgroundNote.hidden = true;
+                message.hidden = false;
+                message.textContent = errorText;
+                closeLabel.textContent = 'Fechar';
+                retry.hidden = false;
+                setStep('request', 'failed', 'Não enviada');
+                setStep('agent', 'failed', 'Indisponível');
+                setStep('execution', 'pending', 'Pendente');
+                setStep('result', 'failed', 'Interrompida');
+                clearInterval(elapsedTimer);
+                button.disabled = false;
+                button.dataset.agentUpgradeActive = 'false';
+            };
+            const expired = (errorText, installed, available) => {
+                title.textContent = 'Solicitação expirada';
+                status.textContent = 'O agente não coletou a atualização';
+                spinner.hidden = true;
+                summary.hidden = true;
+                meta.hidden = true;
+                backgroundNote.hidden = true;
+                message.hidden = false;
+                message.textContent = errorText || 'A solicitação expirou antes de o agente voltar a se comunicar. Verifique o agente e tente novamente.';
+                closeLabel.textContent = 'Fechar';
+                retry.hidden = false;
+                timeline('expired');
+                clearInterval(elapsedTimer);
+                button.disabled = false;
+                button.dataset.agentUpgradeActive = 'false';
+                renderCard(installed ?? (isVersion(cardInstalled?.textContent) ? cardInstalled.textContent : null), available ?? targetVersion, false);
+            };
             const succeeded = (result, installedVersionConfirmed, targetVersionKnown) => {
                 const changed = result?.changed !== false;
                 const finalVersion = installedVersionConfirmed || targetVersionKnown || result?.previous_version;
@@ -902,6 +986,7 @@
                     startClock();
                 }
                 if (payload.target_version) targetVersion = payload.target_version;
+                if (payload.status === 'expired') return expired(payload.error, payload.installed_version, payload.target_version);
                 if (payload.status === 'failed') return failed(payload.error, payload.installed_version, payload.target_version);
                 if (payload.status === 'succeeded') {
                     if (payload.version_confirmed) return succeeded(payload.result, payload.installed_version, payload.target_version);
@@ -930,9 +1015,12 @@
                 open();
                 try {
                     const response = await fetch(button.dataset.agentUpgradeStoreUrl, { method: 'POST', headers: { Accept: 'application/json', 'Content-Type': 'application/json', 'X-CSRF-TOKEN': button.dataset.agentUpgradeCsrf } });
-                    if (!response.ok && response.status !== 409) return failed('Não foi possível solicitar a atualização.');
+                    if (!response.ok) {
+                        const payload = await response.json().catch(() => ({}));
+                        return requestRejected(payload.message || 'Não foi possível solicitar a atualização.');
+                    }
                 } catch (error) {
-                    return failed('Não foi possível conectar ao painel.');
+                    return requestRejected('Não foi possível conectar ao painel.');
                 } finally {
                     submitting = false;
                 }

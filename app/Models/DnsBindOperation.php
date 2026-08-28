@@ -15,6 +15,7 @@ class DnsBindOperation extends Model
         'running',
         'succeeded',
         'failed',
+        'expired',
     ];
 
     protected $guarded = [];
@@ -34,5 +35,27 @@ class DnsBindOperation extends Model
     public function server(): BelongsTo
     {
         return $this->belongsTo(DnsServer::class, 'dns_server_id');
+    }
+
+    public static function expireStaleAgentUpgrades(
+        ?int $serverId = null,
+        ?int $agentId = null,
+    ): int {
+        $ttlMinutes = max(
+            1,
+            (int) config('security.agent_upgrade.ttl_minutes', 10),
+        );
+
+        return self::query()
+            ->where('action', 'upgrade_agent')
+            ->where('status', 'authorized')
+            ->where('authorized_at', '<=', now()->subMinutes($ttlMinutes))
+            ->when($serverId !== null, fn ($query) => $query->where('dns_server_id', $serverId))
+            ->when($agentId !== null, fn ($query) => $query->where('dns_agent_id', $agentId))
+            ->update([
+                'status' => 'expired',
+                'completed_at' => now(),
+                'updated_at' => now(),
+            ]);
     }
 }

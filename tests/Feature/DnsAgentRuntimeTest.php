@@ -87,6 +87,13 @@ class DnsAgentRuntimeTest extends TestCase
 
         $this->assertNotNull($agent->fresh()->revoked_at);
 
+        $this->get(route('servers.agent.show', $server))
+            ->assertOk()
+            ->assertSee('Credencial revogada — novo vínculo necessário')
+            ->assertSee('Gerar vínculo')
+            ->assertSee('Máquina sem agente')
+            ->assertSee('wget -qO-', false);
+
         $this->withToken($token)
             ->postJson('/api/agent/heartbeat')
             ->assertForbidden()
