@@ -97,7 +97,16 @@ return [
             'prefix_indexes' => true,
             'search_path' => 'public',
             'sslmode' => env('DB_SSLMODE', 'prefer'),
-            'timezone' => env('DB_TIMEZONE', 'UTC'),
+            // Must track APP_TIMEZONE: Eloquent formats dates for storage
+            // using PHP's default timezone (set from app.timezone), not
+            // UTC. Pointing this connection at a different zone than
+            // app.timezone makes every write silently wrong by the offset
+            // between them (a naive local-time string gets stored as if
+            // it were already in the connection's zone).
+            'timezone' => env(
+                'DB_TIMEZONE',
+                env('APP_TIMEZONE', 'UTC'),
+            ),
         ],
 
         'sqlsrv' => [
