@@ -123,7 +123,7 @@
 <details class="panel-card agent-collapsible">
     <summary><span><span class="eyebrow">Configuração avançada</span><strong>Adoção e gerenciamento do BIND</strong></span><small>O servidor permanece sob gerenciamento externo até uma ação explícita</small></summary>
     <div class="agent-collapsible-body"><p>Preparar um plano apenas registra a proposta local. Não executa alterações por si só. O fluxo de adoção completa ainda não possui evidência factual nesta tela.</p>
-        @if (! $latestBindOperation)<form method="POST" action="{{ route('servers.bind.plan', $server) }}">@csrf<button type="submit" class="button button-secondary">Preparar plano de configuração BIND</button></form>
+        @if (! $latestBindOperation)<form method="POST" action="{{ route('servers.bind.plan', $server) }}">@csrf<button type="submit" class="button button-tertiary">Preparar plano de configuração BIND</button></form>
         @else<p class="agent-operation-state">Operação {{ $latestBindOperation->action }} · estado {{ $latestBindOperation->status }}</p>@if ($latestBindOperation->error)<p class="agent-inline-error">{{ $latestBindOperation->error }}</p>@endif
             @if ($latestBindOperation->status === 'planned')<form class="agent-strong-confirmation" method="POST" action="{{ route('servers.bind.authorize', [$server, $latestBindOperation]) }}">@csrf<label>Confirmação forte<input name="confirmation" required autocomplete="off" placeholder="AUTORIZAR BIND {{ Str::upper($server->name) }}"></label><button type="submit" class="button button-secondary">Autorizar operação</button></form>@endif
         @endif
