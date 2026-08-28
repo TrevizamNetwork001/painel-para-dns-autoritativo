@@ -37,6 +37,10 @@ return [
         'ttl_minutes' => (int) env('AGENT_UPGRADE_TTL_MINUTES', 10),
     ],
 
+    'agent_operations' => [
+        'ttl_minutes' => (int) env('AGENT_OPERATION_TTL_MINUTES', 20),
+    ],
+
     /*
     |--------------------------------------------------------------------------
     | Trusted proxies

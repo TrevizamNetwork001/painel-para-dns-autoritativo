@@ -29,7 +29,7 @@ class DnsAgentEnrollmentController extends Controller
             $server,
         );
 
-        DnsBindOperation::expireStaleAgentUpgrades($server->id);
+        DnsBindOperation::expireStaleOperations($server->id);
 
         $agent = DnsAgent::query()
             ->where('organization_id', $organizationId)
@@ -185,6 +185,8 @@ class DnsAgentEnrollmentController extends Controller
             ->firstOrFail();
 
         abort_unless($server->bind_readiness_at !== null, 409, 'Aguarde o inventário de prontidão do agente.');
+
+        DnsBindOperation::expireStaleOperations($server->id);
 
         $action = data_get($server->bind_readiness, 'bind_installed', false)
             ? 'configure_bind'
@@ -503,7 +505,7 @@ class DnsAgentEnrollmentController extends Controller
     {
         $organizationId = $this->authorizeServer($request, $server);
 
-        DnsBindOperation::expireStaleAgentUpgrades($server->id);
+        DnsBindOperation::expireStaleOperations($server->id);
 
         $agent = DnsAgent::query()
             ->where('organization_id', $organizationId)
@@ -562,7 +564,7 @@ class DnsAgentEnrollmentController extends Controller
     {
         $this->authorizeServer($request, $server);
 
-        DnsBindOperation::expireStaleAgentUpgrades($server->id);
+        DnsBindOperation::expireStaleOperations($server->id);
 
         $installedVersion = $server->agent?->metadata['agent_version'] ?? $server->agent_version;
         $availableVersion = AgentArtifact::availableVersion();

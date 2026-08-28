@@ -1630,7 +1630,8 @@ options {
                     "content_type": "text/plain",
                     "publication_id": "20",
                     "version": "7",
-                    "server_checksum": None,
+                    # The panel always sends this header in practice.
+                    "server_checksum": "a" * 64,
                 }
 
             with patch.object(
@@ -2128,7 +2129,10 @@ options {
             "content_type": "text/plain",
             "publication_id": "20",
             "version": "7",
-            "server_checksum": None,
+            # The panel always sends this header in practice (see
+            # DnsZoneArtifactController); a real download response never
+            # omits it, so the fixture shouldn't either.
+            "server_checksum": "a" * 64,
         }
 
     @staticmethod
