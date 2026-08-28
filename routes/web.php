@@ -359,6 +359,11 @@ Route::middleware([
         '/{zone}/publicar',
         [DnsZoneController::class, 'publish'],
     )->name('publish');
+
+    Route::post(
+        '/{zone}/adotar',
+        [DnsZoneController::class, 'adopt'],
+    )->name('adopt');
 });
 
 Route::middleware([
