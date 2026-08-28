@@ -12,6 +12,7 @@
     $lastContact = $agent->last_seen_at ?? $server->last_seen_at;
     $discoveryAt = $latestDiscoveryOperation?->completed_at ?? $latestDiscoveryOperation?->authorized_at;
     $discoverySucceeded = $latestDiscoveryOperation?->status === 'succeeded';
+    $discoveryInFlight = $latestDiscoveryOperation && in_array($latestDiscoveryOperation->status, ['authorized', 'running'], true);
     $imported = $discoveryStats['imported'] > 0;
     $publicationStatus = match ($latestPublication?->status) {
         'pending' => 'Pendente', 'downloaded' => 'Baixada', 'applying' => 'Aplicando',
@@ -77,15 +78,15 @@
 </section>
 
 <section class="panel-card agent-discovery-card">
-    <header class="agent-section-header"><div><p class="eyebrow">Descoberta somente leitura</p><h2>Inventário de zonas</h2></div><span class="status-badge {{ $discoverySucceeded ? 'status-success' : 'status-neutral' }}">{{ $discoverySucceeded ? 'Detectado' : 'Não iniciado' }}</span></header>
+    <header class="agent-section-header"><div><p class="eyebrow">Descoberta somente leitura</p><h2>Inventário de zonas</h2></div><span class="status-badge {{ $discoveryInFlight ? 'status-warning' : ($discoverySucceeded ? 'status-success' : 'status-neutral') }}" data-discovery-card-status>{{ $discoveryInFlight ? 'Descoberta em andamento' : ($discoverySucceeded ? 'Detectado' : 'Não iniciado') }}</span></header>
     <dl class="agent-discovery-metrics">
-        <div><dt>Última descoberta</dt><dd>{{ $discoveryAt ? $discoveryAt->diffForHumans() : 'Não executada' }}</dd></div><div><dt>Resultado</dt><dd>{{ $discoverySucceeded ? $discoveryStats['total'].' zonas' : 'Não disponível' }}</dd></div>
-        <div><dt>Primary</dt><dd>{{ $discoverySucceeded ? $discoveryStats['primary'] : '—' }}</dd></div><div><dt>Secondary</dt><dd>{{ $discoverySucceeded ? $discoveryStats['secondary'] : '—' }}</dd></div><div><dt>Alterações externas</dt><dd>Não verificado</dd></div>
+        <div><dt>Última descoberta</dt><dd data-discovery-card-time>{{ $discoveryAt ? $discoveryAt->diffForHumans() : 'Não executada' }}</dd></div><div><dt>Resultado</dt><dd data-discovery-card-total>{{ $discoverySucceeded ? $discoveryStats['total'].' zonas' : 'Não disponível' }}</dd></div>
+        <div><dt>Primary</dt><dd data-discovery-card-primary>{{ $discoverySucceeded ? $discoveryStats['primary'] : '—' }}</dd></div><div><dt>Secondary</dt><dd data-discovery-card-secondary>{{ $discoverySucceeded ? $discoveryStats['secondary'] : '—' }}</dd></div><div><dt>Alterações externas</dt><dd>Não verificado</dd></div>
     </dl>
-    @if ($latestDiscoveryOperation?->error)<p class="agent-inline-error" role="alert">Falha na última descoberta: {{ $latestDiscoveryOperation->error }}</p>@endif
+    @if ($latestDiscoveryOperation?->status === 'failed')<p class="agent-inline-error" role="alert">A última descoberta não foi concluída. Tente novamente ou consulte os registros administrativos.</p>@endif
     <div class="agent-primary-actions">
         @if ($discoverySucceeded)<a href="{{ route('servers.bind.discovery.show', $server) }}" class="button button-primary">Ver zonas encontradas</a>@endif
-        <button type="button" class="button button-secondary" data-discovery-start data-discovery-store-url="{{ route('servers.bind.discover', $server) }}" data-discovery-status-url="{{ route('servers.bind.discovery.status', $server) }}" data-discovery-show-url="{{ route('servers.bind.discovery.show', $server) }}" data-discovery-csrf="{{ csrf_token() }}" data-discovery-initial-status="{{ $latestDiscoveryOperation?->status }}" @disabled($latestDiscoveryOperation && in_array($latestDiscoveryOperation->status, ['authorized', 'running'], true))>Executar nova descoberta</button>
+        <button type="button" class="button button-secondary" data-discovery-start data-discovery-store-url="{{ route('servers.bind.discover', $server) }}" data-discovery-status-url="{{ route('servers.bind.discovery.status', $server) }}" data-discovery-show-url="{{ route('servers.bind.discovery.show', $server) }}" data-discovery-csrf="{{ csrf_token() }}" data-discovery-initial-status="{{ $latestDiscoveryOperation?->status }}" data-discovery-requested-at="{{ $latestDiscoveryOperation?->authorized_at?->toIso8601String() }}" data-discovery-agent-online="{{ $server->agent_status === 'online' ? 'true' : 'false' }}" data-discovery-active="{{ $discoveryInFlight ? 'true' : 'false' }}">{{ $discoveryInFlight ? 'Acompanhar descoberta' : 'Executar nova descoberta' }}</button>
     </div>
 </section>
 
