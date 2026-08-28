@@ -77,8 +77,12 @@ def sanitize_message(message: object) -> str:
     sanitized = re.sub(r"<[^>]*>", " ", sanitized)
     sanitized = re.sub(r"[\x00-\x1f\x7f]", " ", sanitized)
     sanitized = re.sub(
-        r"\b(token|secret|password|authorization|api[_-]?key)"
-        r"\s*[:=]\s*\S+",
+        # Consume the rest of the line, not just one whitespace-delimited
+        # token — "Authorization: Bearer <jwt>" has the scheme and the
+        # actual credential as two separate tokens, and a bare \S+ here
+        # would redact only "Bearer", leaking the credential itself.
+        r"\b(token|secret|password|authorization|api[_-]?key)\b"
+        r"\s*[:=]?\s*\S.*",
         r"\1=[removido]",
         sanitized,
         flags=re.IGNORECASE,
@@ -1881,8 +1885,13 @@ def upgrade_agent_self(config: dict[str, Any]) -> dict[str, Any]:
     binary_changed = False
     units_changed = False
 
+    # dir= pins the temp dir to install_path's own filesystem so the
+    # os.replace() swaps below are guaranteed atomic renames. The default
+    # system temp dir (often a separate tmpfs mount) does not guarantee
+    # this and os.replace() across filesystems raises OSError (EXDEV).
     with tempfile.TemporaryDirectory(
-        prefix="dns-center-agent-selfupgrade-"
+        prefix="dns-center-agent-selfupgrade-",
+        dir=str(install_path.parent),
     ) as tmp_name:
         tmp_dir = Path(tmp_name)
         downloaded: dict[str, Path] = {}
@@ -1910,7 +1919,12 @@ def upgrade_agent_self(config: dict[str, Any]) -> dict[str, Any]:
         if not filecmp.cmp(new_binary, install_path, shallow=False):
             binary_changed = True
             os.chmod(new_binary, 0o750)
-            os.replace(new_binary, install_path)
+            try:
+                os.replace(new_binary, install_path)
+            except OSError as exception:
+                raise AgentError(
+                    f"Falha ao instalar o novo binário: {exception}"
+                ) from exception
 
             version_check = run_command(
                 [str(install_path), "--version"], timeout=10
@@ -1923,30 +1937,58 @@ def upgrade_agent_self(config: dict[str, Any]) -> dict[str, Any]:
                 or help_check.returncode != 0
                 or "--enroll" not in help_check.stdout
             ):
-                os.chmod(backup_binary, 0o750)
-                os.replace(backup_binary, install_path)
+                try:
+                    os.chmod(backup_binary, 0o750)
+                    os.replace(backup_binary, install_path)
+                except OSError as exception:
+                    raise AgentError(
+                        "Falha na validação do novo agente e falha ao "
+                        f"restaurar o binário anterior: {exception}"
+                    ) from exception
                 raise AgentError(
                     "Falha na validação do novo agente; binário anterior "
                     "restaurado."
                 )
 
         systemd_dir = DEFAULT_SYSTEMD_DIR
-        for unit in SELF_UPGRADE_ARTIFACTS[1:]:
-            destination = systemd_dir / unit
-            if destination.is_file() and filecmp.cmp(
-                downloaded[unit], destination, shallow=False
-            ):
-                continue
-            reject_symlink(destination)
-            os.chmod(downloaded[unit], 0o644)
-            shutil.copy2(downloaded[unit], destination)
-            units_changed = True
+        unit_backups: dict[Path, Path] = {}
+        units_replaced: list[Path] = []
 
-        if units_changed:
-            systemctl = detected_binary(
-                ("/usr/bin/systemctl", "/bin/systemctl")
-            )
-            if systemctl:
+        try:
+            for unit in SELF_UPGRADE_ARTIFACTS[1:]:
+                destination = systemd_dir / unit
+                if destination.is_file() and filecmp.cmp(
+                    downloaded[unit], destination, shallow=False
+                ):
+                    continue
+                reject_symlink(destination)
+
+                try:
+                    if destination.is_file():
+                        backup_unit = tmp_dir / f"{unit}.previous"
+                        shutil.copy2(destination, backup_unit)
+                        unit_backups[destination] = backup_unit
+
+                    os.chmod(downloaded[unit], 0o644)
+                    shutil.copy2(downloaded[unit], destination)
+                except OSError as exception:
+                    raise AgentError(
+                        f"Falha ao atualizar a unit {unit}: {exception}"
+                    ) from exception
+
+                units_replaced.append(destination)
+                units_changed = True
+
+            if units_changed:
+                systemctl = detected_binary(
+                    ("/usr/bin/systemctl", "/bin/systemctl")
+                )
+                if not systemctl:
+                    raise AgentError(
+                        "systemctl não foi detectado; não é possível "
+                        "recarregar as units atualizadas."
+                    )
+
                 reload_result = run_command(
                     [systemctl, "daemon-reload"], timeout=30
                 )
@@ -1955,6 +1997,28 @@ def upgrade_agent_self(config: dict[str, Any]) -> dict[str, Any]:
                         "systemctl daemon-reload falhou após atualizar "
                         "as units."
                     )
+        except Exception:
+            # Restore every unit file this run touched before propagating,
+            # so a failed upgrade never leaves a mixed/unknown set of units
+            # on disk — mirrors the binary's own restore-on-failure above.
+            for destination in units_replaced:
+                backup_unit = unit_backups.get(destination)
+                try:
+                    if backup_unit is not None:
+                        shutil.copy2(backup_unit, destination)
+                    else:
+                        destination.unlink(missing_ok=True)
+                except OSError:
+                    pass
+
+            systemctl = detected_binary(("/usr/bin/systemctl", "/bin/systemctl"))
+            if systemctl:
+                try:
+                    run_command([systemctl, "daemon-reload"], timeout=30)
+                except AgentError:
+                    pass
+
+            raise
 
     return {
         "binary_changed": binary_changed,
@@ -2173,6 +2237,16 @@ def run_authorized_operation(
     if action not in {
         "install_bind", "configure_bind", "discover_bind_zones", "upgrade_agent",
     }:
+        # Tell the panel immediately instead of leaving the operation stuck
+        # in "authorized" until its TTL sweep expires it — an older agent
+        # that predates a newly-added action would otherwise go silent.
+        report_operation(config, operation, "running")
+        report_operation(
+            config,
+            operation,
+            "failed",
+            error="Ação não suportada por esta versão do agente.",
+        )
         raise AgentError("Operação não pertence ao catálogo local.")
 
     report_operation(config, operation, "running")
@@ -2184,18 +2258,6 @@ def run_authorized_operation(
             result = upgrade_agent_self(config)
         else:
             result = configure_bind(str(action))
-
-        report_operation(
-            config,
-            operation,
-            "succeeded",
-            result=result,
-        )
-
-        if action not in {"discover_bind_zones", "upgrade_agent"}:
-            send_readiness(config)
-
-        return {"status": "succeeded", "result": result}
     except AgentError as exception:
         message = sanitize_message(exception)
         rolled_back = (
@@ -2211,6 +2273,18 @@ def run_authorized_operation(
             error=message,
         )
         raise
+
+    # The action itself already succeeded at this point. Reporting that to
+    # the panel is now best-effort: if this call fails (network blip), we
+    # must NOT report "failed" for work that actually succeeded — leave the
+    # operation "running" for the panel's TTL sweep to notice instead of
+    # lying about the outcome.
+    report_operation(config, operation, "succeeded", result=result)
+
+    if action not in {"discover_bind_zones", "upgrade_agent"}:
+        send_readiness(config)
+
+    return {"status": "succeeded", "result": result}
 
 
 def safe_zone_filename(name: str) -> str:
@@ -2571,6 +2645,26 @@ def render_managed_include(
     return "\n".join(lines)
 
 
+def current_zone_serial(zonefile: Path) -> int | None:
+    """Best-effort SOA serial read from an on-disk zone file.
+
+    Used only to guard against writing a regressed serial; a file that
+    doesn't exist yet or can't be parsed is treated as "no prior serial"
+    (first deployment), not as a block.
+    """
+    if not zonefile.is_file():
+        return None
+
+    try:
+        content = zonefile.read_text(encoding="ascii", errors="ignore")
+    except OSError:
+        return None
+
+    match = re.search(r"\bSOA\b[^0-9]*?(\d{1,10})", content)
+
+    return int(match.group(1)) if match else None
+
+
 def validate_staging(
     config: dict[str, Any],
     manifest: list[dict[str, Any]],
@@ -2587,6 +2681,7 @@ def validate_staging(
         "named_checkconf",
         "/usr/bin/named-checkconf",
     )
+    zones_dir = config_paths(config)["zones_dir"]
 
     for item in manifest:
         if item.get("type") != "primary":
@@ -2604,6 +2699,20 @@ def validate_staging(
                 f"{name}: {result.stderr.strip()}"
             )
 
+        deployed_serial = current_zone_serial(
+            zones_dir / safe_zone_filename(name)
+        )
+        new_serial = item.get("serial")
+        if (
+            deployed_serial is not None
+            and isinstance(new_serial, int)
+            and new_serial <= deployed_serial
+        ):
+            raise AgentError(
+                f"Serial SOA regressivo para {name}: recebido "
+                f"{new_serial}, servidor já tem {deployed_serial}."
+            )
+
     result = run_command([named_checkconf, str(include_path)])
 
     if result.returncode != 0:
@@ -2616,6 +2725,7 @@ def validate_staging(
 
 def build_staging(
     config: dict[str, Any],
+    apply: bool = False,
 ) -> tuple[
     list[dict[str, Any]],
     list[dict[str, Any]],
@@ -2735,6 +2845,12 @@ def build_staging(
                 expected_checksum = item.get("artifact_checksum")
                 server_checksum = metadata["server_checksum"]
 
+                if expected_checksum is None and server_checksum is None:
+                    raise AgentError(
+                        "Nenhum checksum de referência disponível para "
+                        "verificar o artefato baixado."
+                    )
+
                 if (
                     expected_checksum is not None
                     and str(expected_checksum).lower()
@@ -2757,7 +2873,11 @@ def build_staging(
                 state["last_apply_error"] = error
                 save_publication_state(state_dir, state)
 
-                if not (
+                # A dry run (apply=False) must have no externally visible
+                # side effects: never tell the panel a real "failed"
+                # publication attempt happened just because a preview-only
+                # download/checksum check found a problem.
+                if apply and not (
                     isinstance(exception, AgentHttpError)
                     and exception.status in {401, 403}
                 ):
@@ -2822,26 +2942,30 @@ def build_staging(
         state["last_apply_at"] = utc_now()
         state["last_apply_error"] = error
 
-        for item in updates:
-            try:
-                report_publication(
-                    config,
-                    state,
-                    item["publication_id"],
-                    str(attempt_id),
-                    publication_event_payload(
-                        "failed",
-                        checksum=state["artifacts"]
-                        .get(str(item["publication_id"]), {})
-                        .get("checksum"),
-                        error=error,
-                    ),
-                )
-            except AgentError as report_error:
-                safe_log(
-                    "Falha ao confirmar staging inválido da publicação "
-                    f"{item['publication_id']}: {report_error}"
-                )
+        # Same dry-run contract as the download/checksum failure above:
+        # a preview-only run must never report a real "failed" publication
+        # event to the panel.
+        if apply:
+            for item in updates:
+                try:
+                    report_publication(
+                        config,
+                        state,
+                        item["publication_id"],
+                        str(attempt_id),
+                        publication_event_payload(
+                            "failed",
+                            checksum=state["artifacts"]
+                            .get(str(item["publication_id"]), {})
+                            .get("checksum"),
+                            error=error,
+                        ),
+                    )
+                except AgentError as report_error:
+                    safe_log(
+                        "Falha ao confirmar staging inválido da publicação "
+                        f"{item['publication_id']}: {report_error}"
+                    )
 
         state["attempt_id"] = None
         save_publication_state(state_dir, state)
@@ -2916,6 +3040,8 @@ def restore_backup(
     options_backup = backup_dir / "bind-options.conf"
     if options_backup.exists():
         shutil.copy2(options_backup, paths["options_config"])
+    else:
+        paths["options_config"].unlink(missing_ok=True)
     managed_options_backup = backup_dir / "dns-center-options.conf"
     if managed_options_backup.exists():
         shutil.copy2(
@@ -3073,6 +3199,25 @@ def apply_staging(
         try:
             rndc = command_path(config, "rndc", "/usr/sbin/rndc")
             run_command([rndc, "reconfig"])
+
+            # "rndc reconfig" alone does not force BIND to re-read the
+            # content of a zone it already has loaded — only
+            # "rndc reload <zone>" does. Any zone that successfully
+            # reloaded to the NEW content before this failure would
+            # otherwise keep serving it from memory even though its
+            # on-disk file was just reverted above, silently diverging
+            # disk, memory and the panel's recorded status. Best-effort:
+            # a failure here must not mask the original exception.
+            for item in manifest:
+                if item.get("type") != "primary":
+                    continue
+
+                try:
+                    run_command(
+                        [rndc, "reload", str(item["name"]).rstrip(".")]
+                    )
+                except AgentError:
+                    pass
         except AgentError:
             pass
 
@@ -3618,7 +3763,7 @@ def sync_zones(
         staging_dir,
         include_path,
         state,
-    ) = build_staging(config)
+    ) = build_staging(config, apply=apply)
     paths = config_paths(config)
 
     if not updates:

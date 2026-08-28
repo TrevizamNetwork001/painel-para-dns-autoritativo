@@ -26,6 +26,8 @@ class DnsBindDiscoveryController extends Controller
         $agent = $server->agent;
         abort_unless($agent && $agent->revoked_at === null, 409, 'Agente não vinculado ou revogado.');
 
+        DnsBindOperation::expireStaleOperations($server->id);
+
         $inFlight = DnsBindOperation::query()
             ->where('dns_server_id', $server->id)
             ->where('action', 'discover_bind_zones')

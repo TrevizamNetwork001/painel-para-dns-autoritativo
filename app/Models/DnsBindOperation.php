@@ -37,25 +37,50 @@ class DnsBindOperation extends Model
         return $this->belongsTo(DnsServer::class, 'dns_server_id');
     }
 
-    public static function expireStaleAgentUpgrades(
+    private static function ttlMinutesFor(string $action): int
+    {
+        return max(1, (int) match ($action) {
+            'upgrade_agent' => config('security.agent_upgrade.ttl_minutes', 10),
+            default => config('security.agent_operations.ttl_minutes', 20),
+        });
+    }
+
+    /**
+     * Expire any operation of any action type that has been sitting in
+     * 'authorized' (never collected by the agent) or 'running' (collected
+     * but never reported a terminal status) for longer than its TTL. Called
+     * on every agent poll (DnsBindRuntimeController::nextOperation) so a
+     * server self-heals without manual database intervention.
+     */
+    public static function expireStaleOperations(
         ?int $serverId = null,
         ?int $agentId = null,
     ): int {
-        $ttlMinutes = max(
-            1,
-            (int) config('security.agent_upgrade.ttl_minutes', 10),
-        );
+        $expired = 0;
 
-        return self::query()
-            ->where('action', 'upgrade_agent')
-            ->where('status', 'authorized')
-            ->where('authorized_at', '<=', now()->subMinutes($ttlMinutes))
-            ->when($serverId !== null, fn ($query) => $query->where('dns_server_id', $serverId))
-            ->when($agentId !== null, fn ($query) => $query->where('dns_agent_id', $agentId))
-            ->update([
-                'status' => 'expired',
-                'completed_at' => now(),
-                'updated_at' => now(),
-            ]);
+        foreach (self::ACTIONS as $action) {
+            $cutoff = now()->subMinutes(self::ttlMinutesFor($action));
+
+            $expired += self::query()
+                ->where('action', $action)
+                ->where(function ($query) use ($cutoff): void {
+                    $query->where(function ($query) use ($cutoff): void {
+                        $query->where('status', 'authorized')
+                            ->where('authorized_at', '<=', $cutoff);
+                    })->orWhere(function ($query) use ($cutoff): void {
+                        $query->where('status', 'running')
+                            ->where('started_at', '<=', $cutoff);
+                    });
+                })
+                ->when($serverId !== null, fn ($query) => $query->where('dns_server_id', $serverId))
+                ->when($agentId !== null, fn ($query) => $query->where('dns_agent_id', $agentId))
+                ->update([
+                    'status' => 'expired',
+                    'completed_at' => now(),
+                    'updated_at' => now(),
+                ]);
+        }
+
+        return $expired;
     }
 }

@@ -150,7 +150,7 @@ class DnsBindRuntimeController extends Controller
         /** @var DnsAgent $agent */
         $agent = $request->attributes->get('dns_agent');
 
-        DnsBindOperation::expireStaleAgentUpgrades(
+        DnsBindOperation::expireStaleOperations(
             $agent->dns_server_id,
             $agent->id,
         );
