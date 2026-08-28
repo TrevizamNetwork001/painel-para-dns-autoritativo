@@ -683,17 +683,30 @@
             const backgroundNote = find('[data-agent-upgrade-background-note]');
             const elapsed = find('[data-agent-upgrade-elapsed]');
             const agentNote = find('[data-agent-upgrade-agent-note]');
-            const cardVersion = document.querySelector('[data-agent-upgrade-card-version]');
-            const installedVersion = document.querySelector('[data-agent-upgrade-installed-version]');
+            const cardStatus = document.querySelector('[data-agent-upgrade-card-status]');
+            const cardInstalled = document.querySelector('[data-agent-upgrade-installed-version]');
+            const cardAvailable = document.querySelector('[data-agent-upgrade-available-version]');
+            const cardAvailableLabel = document.querySelector('[data-agent-upgrade-available-label]');
+            const cardBindVersion = document.querySelector('[data-agent-upgrade-card-version]');
             const steps = Object.fromEntries([...modal.querySelectorAll('[data-agent-upgrade-step]')]
                 .map((step) => [step.dataset.agentUpgradeStep, step]));
             const statusUrl = button.dataset.agentUpgradeStatusUrl;
+            const isVersion = (value) => typeof value === 'string' && /^\d+\.\d+\.\d+$/.test(value);
+            const compareVersions = (a, b) => {
+                const pa = a.split('.').map(Number);
+                const pb = b.split('.').map(Number);
+                for (let index = 0; index < 3; index++) {
+                    if (pa[index] !== pb[index]) return pa[index] - pb[index];
+                }
+                return 0;
+            };
             let pollTimer;
             let elapsedTimer;
             let polling = false;
             let submitting = false;
             let attempts = 0;
             let requestedAt = button.dataset.agentUpgradeRequestedAt ? new Date(button.dataset.agentUpgradeRequestedAt) : null;
+            let targetVersion = isVersion(button.dataset.agentUpgradeAvailable) ? button.dataset.agentUpgradeAvailable : null;
 
             const setStep = (name, state, detail) => {
                 const step = steps[name];
@@ -704,8 +717,8 @@
             const timeline = (state) => {
                 setStep('request', 'complete', 'Enviada');
                 setStep('agent', state === 'waiting' ? 'current' : 'complete', state === 'waiting' ? 'Aguardando' : 'Conectado');
-                setStep('execution', state === 'running' ? 'current' : ['succeeded', 'failed'].includes(state) ? 'complete' : 'pending', state === 'running' ? 'Em andamento' : ['succeeded', 'failed'].includes(state) ? 'Concluída' : 'Pendente');
-                setStep('result', state === 'succeeded' ? 'complete' : state === 'failed' ? 'failed' : 'pending', state === 'succeeded' ? 'Recebido' : state === 'failed' ? 'Falha' : 'Pendente');
+                setStep('execution', state === 'running' ? 'current' : ['awaiting', 'succeeded', 'failed'].includes(state) ? 'complete' : 'pending', state === 'running' ? 'Em andamento' : ['awaiting', 'succeeded', 'failed'].includes(state) ? 'Concluída' : 'Pendente');
+                setStep('result', state === 'succeeded' ? 'complete' : state === 'failed' ? 'failed' : state === 'awaiting' ? 'current' : 'pending', state === 'succeeded' ? 'Recebido' : state === 'failed' ? 'Falha' : state === 'awaiting' ? 'Confirmando' : 'Pendente');
             };
             const tick = () => {
                 if (!requestedAt || Number.isNaN(requestedAt.getTime())) return;
@@ -731,6 +744,45 @@
             };
             modal.querySelectorAll('[data-agent-upgrade-modal-close]').forEach((item) => item.addEventListener('click', close));
 
+            const renderCard = (installed, available, inFlight) => {
+                if (cardInstalled) cardInstalled.textContent = installed || 'Não informada';
+                if (cardAvailableLabel) cardAvailableLabel.textContent = inFlight ? 'Alvo' : 'Disponível';
+                if (cardAvailable) cardAvailable.textContent = available || 'Não informada';
+                if (cardBindVersion && installed) cardBindVersion.textContent = installed;
+
+                const updateAvailable = !inFlight && isVersion(installed) && isVersion(available) && compareVersions(available, installed) > 0;
+                let statusLabel = 'Atualizado';
+                let statusClass = 'status-success';
+                if (inFlight) {
+                    statusLabel = 'Atualização em andamento';
+                    statusClass = 'status-warning';
+                } else if (!installed) {
+                    statusLabel = 'Versão instalada desconhecida';
+                    statusClass = 'status-neutral';
+                } else if (updateAvailable) {
+                    statusLabel = 'Atualização disponível';
+                    statusClass = 'status-warning';
+                }
+                if (cardStatus) {
+                    cardStatus.textContent = statusLabel;
+                    cardStatus.className = `status-badge ${statusClass}`;
+                }
+
+                if (!inFlight) {
+                    button.classList.remove('button-primary', 'button-secondary');
+                    if (!installed) {
+                        button.textContent = 'Atualizar software do agente';
+                        button.classList.add('button-secondary');
+                    } else if (updateAvailable) {
+                        button.textContent = `Atualizar para ${available}`;
+                        button.classList.add('button-primary');
+                    } else {
+                        button.textContent = 'Reinstalar versão atual';
+                        button.classList.add('button-secondary');
+                    }
+                }
+            };
+
             const progress = () => {
                 spinner.hidden = false;
                 summary.hidden = true;
@@ -742,7 +794,7 @@
             };
             const waiting = (online = true, lastSeen = null) => {
                 progress();
-                title.textContent = 'Atualização do agente';
+                title.textContent = targetVersion ? `Atualizar para ${targetVersion}` : 'Atualização do agente';
                 status.textContent = online ? 'Aguardando o próximo ciclo do agente' : 'Aguardando agente';
                 message.textContent = online ? 'Solicitação registrada com sucesso. A atualização será executada no próximo ciclo de comunicação do agente.' : 'A operação será processada quando o agente voltar a se comunicar.';
                 agentNote.textContent = online ? 'Agente online' : 'Agente offline';
@@ -751,33 +803,42 @@
             };
             const running = () => {
                 progress();
-                title.textContent = 'Atualização do agente';
+                title.textContent = targetVersion ? `Atualizando para ${targetVersion}` : 'Atualização do agente';
                 status.textContent = 'Atualização em andamento';
                 message.textContent = 'O agente está processando o pacote e aplicando a nova versão.';
                 agentNote.textContent = 'Agente online';
                 timeline('running');
             };
-            const failed = (errorText) => {
-                title.textContent = 'Atualização do agente';
+            const awaitingConfirmation = () => {
+                progress();
+                title.textContent = targetVersion ? `Atualizando para ${targetVersion}` : 'Atualização do agente';
+                status.textContent = 'Aguardando confirmação da nova versão';
+                message.textContent = 'O binário foi substituído. Aguardando o próximo contato do agente confirmar a versão instalada.';
+                agentNote.textContent = 'Agente online';
+                timeline('awaiting');
+            };
+            const failed = (errorText, installed, available) => {
+                title.textContent = 'Falha na atualização';
                 status.textContent = 'Falha na atualização';
                 spinner.hidden = true;
                 summary.hidden = true;
                 meta.hidden = true;
                 backgroundNote.hidden = true;
                 message.hidden = false;
-                message.textContent = `${errorText || 'O agente não conseguiu concluir a atualização.'} Revise o status e tente novamente.`;
+                message.textContent = `Versão instalada permanece: ${installed || 'não confirmada'}. ${errorText || 'O agente não conseguiu concluir a atualização.'} Revise o status e tente novamente.`;
                 closeLabel.textContent = 'Fechar';
                 retry.hidden = false;
                 timeline('failed');
                 clearInterval(elapsedTimer);
                 button.disabled = false;
-                button.textContent = 'Atualizar software do agente';
                 button.dataset.agentUpgradeActive = 'false';
+                renderCard(installed ?? (isVersion(cardInstalled?.textContent) ? cardInstalled.textContent : null), available ?? targetVersion, false);
             };
-            const succeeded = (result, currentVersion) => {
+            const succeeded = (result, installedVersionConfirmed, targetVersionKnown) => {
                 const changed = result?.changed !== false;
-                title.textContent = 'Atualização do agente';
-                status.textContent = changed ? 'Atualização concluída' : 'Nenhuma alteração necessária';
+                const finalVersion = installedVersionConfirmed || targetVersionKnown || result?.previous_version;
+                title.textContent = changed ? `Atualizado para ${finalVersion || '—'}` : 'Software revalidado';
+                status.textContent = changed ? 'Atualização concluída' : 'Versão reinstalada com sucesso';
                 spinner.hidden = true;
                 message.hidden = true;
                 meta.hidden = true;
@@ -787,18 +848,18 @@
                 closeLabel.textContent = 'Fechar';
                 timeline('succeeded');
                 clearInterval(elapsedTimer);
-                summaryTitle.textContent = 'Software do agente atualizado com sucesso.';
+                summaryTitle.textContent = changed
+                    ? 'Software do agente atualizado com sucesso.'
+                    : `Versão ${finalVersion || 'atual'} reinstalada com sucesso.`;
                 counts.innerHTML = '';
-                const previousVersion = result?.previous_version;
-                const versionConfirmed = currentVersion && currentVersion !== previousVersion;
                 const rows = changed
                     ? [
-                        ['Versão anterior', previousVersion || '—'],
-                        ['Versão atual', versionConfirmed ? currentVersion : 'aguardando confirmação'],
+                        ['Versão anterior', result?.previous_version || '—'],
+                        ['Versão atual', installedVersionConfirmed || '—'],
                         ['Binário', result?.binary_changed ? 'substituído' : 'inalterado'],
                         ['Units systemd', result?.units_changed ? 'atualizadas' : 'inalteradas'],
                     ]
-                    : [['Versão instalada', previousVersion || currentVersion || '—']];
+                    : [['Versão instalada', finalVersion || '—']];
                 rows.forEach(([label, value]) => {
                     const row = document.createElement('div');
                     const term = document.createElement('dt');
@@ -811,13 +872,9 @@
                 resultNote.textContent = changed
                     ? 'A comunicação com o painel foi preservada.'
                     : 'Binário e units já estavam na versão mais recente.';
-                if (versionConfirmed) {
-                    if (cardVersion) cardVersion.textContent = currentVersion;
-                    if (installedVersion) installedVersion.textContent = currentVersion;
-                }
                 button.disabled = false;
-                button.textContent = 'Atualizar software do agente';
                 button.dataset.agentUpgradeActive = 'false';
+                renderCard(installedVersionConfirmed || finalVersion, targetVersionKnown || targetVersion, false);
             };
             const schedule = (delay = 3000) => {
                 clearTimeout(pollTimer);
@@ -844,8 +901,14 @@
                     requestedAt = new Date(payload.requested_at);
                     startClock();
                 }
-                if (payload.status === 'succeeded') return succeeded(payload.result, payload.current_agent_version);
-                if (payload.status === 'failed') return failed(payload.error);
+                if (payload.target_version) targetVersion = payload.target_version;
+                if (payload.status === 'failed') return failed(payload.error, payload.installed_version, payload.target_version);
+                if (payload.status === 'succeeded') {
+                    if (payload.version_confirmed) return succeeded(payload.result, payload.installed_version, payload.target_version);
+                    awaitingConfirmation();
+                    schedule();
+                    return;
+                }
                 payload.status === 'running' ? running() : waiting(payload.agent_online, payload.agent_last_seen_at);
                 schedule();
             };
@@ -862,6 +925,7 @@
                 attempts = 0;
                 startClock();
                 retry.hidden = true;
+                targetVersion = isVersion(button.dataset.agentUpgradeAvailable) ? button.dataset.agentUpgradeAvailable : targetVersion;
                 waiting(button.dataset.agentUpgradeAgentOnline === 'true');
                 open();
                 try {
@@ -874,7 +938,7 @@
                 }
                 button.disabled = false;
                 button.dataset.agentUpgradeActive = 'true';
-                button.textContent = 'Acompanhar atualização';
+                renderCard(isVersion(cardInstalled?.textContent) ? cardInstalled.textContent : null, targetVersion, true);
                 poll();
             };
             button.addEventListener('click', start);

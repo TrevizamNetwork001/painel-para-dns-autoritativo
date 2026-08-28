@@ -171,13 +171,12 @@ class DnsAgentRuntimeTest extends TestCase
             ->assertSee('Importado')
             ->assertSee('Gerenciado')
             ->assertSee('Nenhuma publicação destinada a este servidor.')
-            ->assertDontSee('Aguardando confirmação')
             ->assertSee('Detalhes técnicos')
             ->assertSee($agent->agent_uuid)
             ->assertSee('/etc/bind/named.conf')
             ->assertSee('Zona de risco')
             ->assertSee('Revogar credencial')
-            ->assertSee('Atualizar software do agente')
+            ->assertSee('Software do agente')
             ->assertDontSee('Gerar vínculo');
     }
 
