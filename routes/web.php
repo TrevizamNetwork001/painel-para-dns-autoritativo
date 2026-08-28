@@ -203,6 +203,11 @@ Route::middleware([
         [DnsAgentEnrollmentController::class, 'show'],
     )->name('servers.agent.show');
 
+    Route::get(
+        '/servidores/{server}/agente/solicitacoes/status',
+        [DnsAgentEnrollmentController::class, 'installRequestStatus'],
+    )->name('servers.agent.install-requests.status');
+
     Route::post(
         '/servidores/{server}/agente/vinculos',
         [DnsAgentEnrollmentController::class, 'issueCode'],

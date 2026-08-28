@@ -150,6 +150,11 @@ class DnsBindRuntimeController extends Controller
         /** @var DnsAgent $agent */
         $agent = $request->attributes->get('dns_agent');
 
+        DnsBindOperation::expireStaleAgentUpgrades(
+            $agent->dns_server_id,
+            $agent->id,
+        );
+
         $operation = DnsBindOperation::query()
             ->where('organization_id', $agent->organization_id)
             ->where('dns_server_id', $agent->dns_server_id)
@@ -248,7 +253,7 @@ class DnsBindRuntimeController extends Controller
                     : 'replay';
             }
 
-            if (in_array($locked->status, ['succeeded', 'failed'], true)) {
+            if (in_array($locked->status, ['succeeded', 'failed', 'expired'], true)) {
                 return 'late';
             }
 

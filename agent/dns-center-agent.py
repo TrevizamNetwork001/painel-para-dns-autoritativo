@@ -872,7 +872,7 @@ def request_approval(args: argparse.Namespace) -> int:
 
     if (
         payload.get("ok") is not True
-        or payload.get("status") != "pending"
+        or payload.get("status") not in {"pending", "approved"}
         or payload.get("request_id") != pending["request_id"]
     ):
         raise AgentError(

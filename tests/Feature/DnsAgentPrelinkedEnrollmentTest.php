@@ -124,6 +124,37 @@ class DnsAgentPrelinkedEnrollmentTest extends TestCase
         $this->assertDatabaseCount('dns_agents', 1);
     }
 
+    public function test_onboarding_poll_detects_new_request_for_approval(): void
+    {
+        [$organization, $admin] = $this->user('organization_admin', true);
+        $server = DnsServer::factory()->create(['organization_id' => $organization->id]);
+        [, $plain] = $this->code($server);
+
+        $this->actingAs($admin)
+            ->get(route('servers.agent.show', $server))
+            ->assertOk()
+            ->assertSee('data-agent-install-request-watcher', false)
+            ->assertSee('setInterval(check, 3000)', false);
+
+        $this->postJson('/api/agent/install-requests', $this->payload($plain))
+            ->assertAccepted();
+        $installRequest = DnsAgentInstallRequest::query()->sole();
+
+        $this->actingAs($admin)
+            ->getJson(route('servers.agent.install-requests.status', $server))
+            ->assertOk()
+            ->assertJsonPath('request.id', $installRequest->id)
+            ->assertJsonPath('request.status', 'pending')
+            ->assertJsonPath('request.actionable', true);
+
+        $foreignOrganization = Organization::factory()->create();
+        $foreignServer = DnsServer::factory()->create([
+            'organization_id' => $foreignOrganization->id,
+        ]);
+        $this->getJson(route('servers.agent.install-requests.status', $foreignServer))
+            ->assertNotFound();
+    }
+
     public function test_admin_from_another_organization_cannot_issue_code_for_foreign_server(): void
     {
         [, $admin] = $this->user('organization_admin', true);

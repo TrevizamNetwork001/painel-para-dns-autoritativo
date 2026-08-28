@@ -399,6 +399,56 @@ class AgentTests(unittest.TestCase):
                 request.call_args.args[1],
             )
 
+    def test_request_approval_claims_request_already_approved_on_retry(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            config_path = Path(directory) / "agent.json"
+            pending_path = config_path.with_name("install-request.json")
+            pending = {
+                "request_id": "6b5852e5-6197-4fb1-a96a-5570b8266690",
+                "request_token": "temporary-request-token",
+                "agent_uuid": "3ce6b835-f030-452a-be4e-4e5f004f0dfa",
+                "fingerprint": "a" * 64,
+                "hostname": "ns1",
+                "base_url": agent.OFFICIAL_BASE_URL,
+            }
+            agent.save_config(pending_path, pending)
+
+            def approved_responses(method: str, url: str, payload: dict) -> dict:
+                if url.endswith("/status"):
+                    return {
+                        "ok": True,
+                        "status": "approved",
+                        "agent": {"uuid": pending["agent_uuid"], "token": "permanent-token"},
+                        "server": {"id": 1, "hostname": "ns1.example.test"},
+                    }
+
+                return {
+                    "ok": True,
+                    "status": "approved",
+                    "request_id": pending["request_id"],
+                    "matched": True,
+                }
+
+            with patch.object(
+                agent,
+                "request_json",
+                side_effect=approved_responses,
+            ), patch.object(
+                agent,
+                "os_release",
+                return_value={"NAME": "Debian", "VERSION_ID": "13"},
+            ):
+                result = agent.request_approval(
+                    argparse.Namespace(config=str(config_path), wait=30),
+                )
+
+            self.assertEqual(0, result)
+            self.assertEqual(
+                "permanent-token",
+                json.loads(config_path.read_text(encoding="utf-8"))["token"],
+            )
+            self.assertFalse(pending_path.exists())
+
     def test_request_approval_requires_persistence_confirmation(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             config_path = Path(directory) / "agent.json"
