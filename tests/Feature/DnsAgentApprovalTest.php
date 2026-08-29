@@ -316,6 +316,7 @@ class DnsAgentApprovalTest extends TestCase
             'dns-center-agent.service',
             'dns-center-agent.timer',
             'dns-center-agent-operation.service',
+            'dns-center-agent-operation.timer',
             'dns-center-agent-approval.service',
             'dns-center-agent-approval.timer',
         ] as $artifact) {

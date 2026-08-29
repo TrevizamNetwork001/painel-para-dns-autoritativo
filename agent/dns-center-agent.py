@@ -34,7 +34,7 @@ from email.utils import parsedate_to_datetime
 from pathlib import Path
 from typing import Any
 
-AGENT_VERSION = "0.7.2"
+AGENT_VERSION = "0.7.3"
 OFFICIAL_BASE_URL = "https://dnscenter.trevizamnetwork.com.br"
 DEFAULT_CONFIG = Path("/etc/dns-center-agent/agent.json")
 DEFAULT_STATE_DIR = Path("/var/lib/dns-center-agent")
@@ -144,6 +144,18 @@ def build_fingerprint() -> str:
     )
 
     return hashlib.sha256(source.encode("utf-8")).hexdigest()
+
+
+def sanitize_hostname(hostname: str) -> str:
+    """Normalize a raw OS hostname to what the panel's install-request
+    validator accepts (letters, digits, dots, hyphens only). Kernel
+    hostnames commonly contain underscores (Docker/K8s-provisioned hosts,
+    internal naming conventions), which the panel rejects outright with a
+    non-retryable 422 — replace disallowed characters instead of failing
+    enrollment for an otherwise-legitimate hostname."""
+    normalized = re.sub(r"[^a-zA-Z0-9.-]", "-", hostname).strip("-.")
+
+    return normalized or "host"
 
 
 def normalize_base_url(url: str) -> str:
@@ -530,6 +542,8 @@ def config_paths(config: dict[str, Any]) -> dict[str, Path]:
             "managed_options_include": Path(
                 "/etc/bind/dns-center-options.conf"
             ),
+            "managed_include": DEFAULT_INCLUDE,
+            "zones_dir": DEFAULT_ZONES_DIR,
         }
     )
     return {
@@ -537,10 +551,12 @@ def config_paths(config: dict[str, Any]) -> dict[str, Path]:
             config.get("state_dir", str(DEFAULT_STATE_DIR))
         ),
         "zones_dir": Path(
-            config.get("zones_dir", str(DEFAULT_ZONES_DIR))
+            config.get("zones_dir", str(defaults["zones_dir"]))
         ),
         "managed_include": Path(
-            config.get("managed_include", str(DEFAULT_INCLUDE))
+            config.get(
+                "managed_include", str(defaults["managed_include"])
+            )
         ),
         "backup_dir": Path(
             config.get("backup_dir", str(DEFAULT_BACKUP_DIR))
@@ -888,7 +904,7 @@ def request_approval(args: argparse.Namespace) -> int:
             "request_token": secrets.token_urlsafe(48),
             "agent_uuid": agent_uuid(config_path),
             "fingerprint": build_fingerprint(),
-            "hostname": socket.gethostname(),
+            "hostname": sanitize_hostname(socket.gethostname()),
             "base_url": base_url,
             "created_at": utc_now(),
         }
@@ -956,16 +972,17 @@ def request_approval(args: argparse.Namespace) -> int:
                 "agent_uuid": assigned_uuid,
                 "server": result.get("server", {}),
                 "state_dir": str(DEFAULT_STATE_DIR),
-                "zones_dir": str(DEFAULT_ZONES_DIR),
-                "managed_include": str(DEFAULT_INCLUDE),
                 "backup_dir": str(DEFAULT_BACKUP_DIR),
-                "named_checkzone": "/usr/bin/named-checkzone",
-                "named_checkconf": "/usr/bin/named-checkconf",
-                "rndc": "/usr/sbin/rndc",
                 "request_timeout": 30,
                 "max_artifact_bytes": DEFAULT_MAX_ARTIFACT_BYTES,
                 "enrolled_at": utc_now(),
             }
+            # zones_dir/managed_include/named_checkzone/named_checkconf/rndc
+            # are deliberately left unset here: BIND (and its OS family)
+            # may not even be installed yet at enrollment time, and
+            # config_paths()/command_path() already resolve family-correct
+            # values on every use — freezing a guess now would only be
+            # wrong on non-Debian hosts (see config_paths()/bind_paths()).
             save_config(config_path, config)
             pending_path.unlink(missing_ok=True)
             print("Vínculo aprovado e agente registrado.")
@@ -1706,7 +1723,9 @@ def discover_bind_zones(config: dict[str, Any]) -> dict[str, Any]:
     )
 
     checkconf_result = run_command(
-        [named_checkconf, "-p", named_conf], timeout=30
+        [named_checkconf, "-p", named_conf],
+        timeout=30,
+        max_output_bytes=DISCOVERY_MAX_ZONEFILE_BYTES,
     )
     if checkconf_result.returncode != 0:
         raise AgentError(
@@ -1714,6 +1733,13 @@ def discover_bind_zones(config: dict[str, Any]) -> dict[str, Any]:
             + sanitize_message(
                 checkconf_result.stderr or checkconf_result.stdout
             )
+        )
+    if getattr(checkconf_result, "stdout_truncated", False):
+        # Never parse a partial config dump — zones past the cutoff
+        # would silently disappear from discovery instead of erroring.
+        raise AgentError(
+            "Saída de named-checkconf -p excede o limite de captura; "
+            "descoberta abortada para não ignorar zonas silenciosamente."
         )
 
     sanitized_config_text = strip_tsig_secrets(checkconf_result.stdout)
@@ -1817,6 +1843,7 @@ SELF_UPGRADE_ARTIFACTS = (
     "dns-center-agent.service",
     "dns-center-agent.timer",
     "dns-center-agent-operation.service",
+    "dns-center-agent-operation.timer",
     "dns-center-agent-approval.service",
     "dns-center-agent-approval.timer",
 )
@@ -1841,8 +1868,34 @@ def download_public_artifact(
         method="GET",
         headers={"User-Agent": f"dns-center-agent/{AGENT_VERSION}"},
     )
-    with urllib.request.urlopen(checksum_request, timeout=timeout) as response:
-        checksum_body = response.read(1024).decode("utf-8", errors="replace")
+    checksum_body = ""
+    for attempt in range(retries):
+        try:
+            with urllib.request.urlopen(
+                checksum_request, timeout=timeout
+            ) as response:
+                checksum_body = response.read(1024).decode(
+                    "utf-8", errors="replace"
+                )
+            break
+        except urllib.error.HTTPError as exception:
+            error = http_error(exception)
+
+            if (
+                error.status not in RETRYABLE_HTTP_CODES
+                or attempt == retries - 1
+            ):
+                raise error from exception
+
+            bounded_backoff(attempt, error.retry_after)
+        except urllib.error.URLError as exception:
+            if attempt == retries - 1:
+                raise AgentError(
+                    "Falha de conexão ao buscar checksum: "
+                    + sanitize_message(exception.reason)
+                ) from exception
+
+            bounded_backoff(attempt)
 
     expected = checksum_body.strip().split()[0].lower() if checksum_body.strip() else ""
     if not re.fullmatch(r"[0-9a-f]{64}", expected):
@@ -2002,9 +2055,7 @@ def upgrade_agent_self(config: dict[str, Any]) -> dict[str, Any]:
                 units_changed = True
 
             if units_changed:
-                systemctl = detected_binary(
-                    ("/usr/bin/systemctl", "/bin/systemctl")
-                )
+                systemctl = detected_binary(SYSTEMCTL_CANDIDATES)
                 if not systemctl:
                     raise AgentError(
                         "systemctl não foi detectado; não é possível "
@@ -2019,7 +2070,19 @@ def upgrade_agent_self(config: dict[str, Any]) -> dict[str, Any]:
                         "systemctl daemon-reload falhou após atualizar "
                         "as units."
                     )
-        except Exception:
+
+                # Units introduced after an agent was already installed
+                # (e.g. a new timer) are dropped on disk by the loop above
+                # but never enabled/started by a plain self-upgrade — only
+                # a fresh install does that. Bring the operation-poll timer
+                # up explicitly so it activates without a full reinstall.
+                operation_timer = systemd_dir / "dns-center-agent-operation.timer"
+                if operation_timer in units_replaced:
+                    run_command(
+                        [systemctl, "enable", "--now", operation_timer.name],
+                        timeout=30,
+                    )
+        except Exception as exception:
             # Restore every unit file this run touched before propagating,
             # so a failed upgrade never leaves a mixed/unknown set of units
             # on disk — mirrors the binary's own restore-on-failure above.
@@ -2040,7 +2103,22 @@ def upgrade_agent_self(config: dict[str, Any]) -> dict[str, Any]:
                 except AgentError:
                     pass
 
-            raise
+            # This except also catches failures that happen after the
+            # binary swap above already succeeded — restore it too, or a
+            # unit-only rollback would leave the host on a new binary
+            # paired with reverted units while being reported as a clean,
+            # fully-rolled-back failure.
+            binary_rolled_back = True
+            if binary_changed:
+                try:
+                    os.chmod(backup_binary, 0o750)
+                    os.replace(backup_binary, install_path)
+                except OSError:
+                    binary_rolled_back = False
+
+            raise AgentOperationError(
+                str(exception), rolled_back=binary_rolled_back
+            ) from exception
 
     return {
         "binary_changed": binary_changed,
@@ -2098,10 +2176,12 @@ def configure_bind(action: str) -> dict[str, Any]:
         if not named_checkconf or not paths["named_conf"].is_file():
             raise AgentError("BIND instalado sem configuração validável.")
 
+        reject_symlink(DEFAULT_BACKUP_DIR)
         backup_dir = DEFAULT_BACKUP_DIR / datetime.now().strftime(
             "%Y%m%d-%H%M%S"
         )
         backup_dir.mkdir(parents=True, exist_ok=False)
+        reject_symlink(backup_dir)
         named_backup = backup_dir / "named.conf"
         shutil.copy2(paths["named_conf"], named_backup)
         include_existed = paths["managed_include"].exists()
@@ -2694,12 +2774,14 @@ def validate_staging(
     named_checkzone = command_path(
         config,
         "named_checkzone",
-        "/usr/bin/named-checkzone",
+        detected_binary(NAMED_CHECKZONE_CANDIDATES)
+        or NAMED_CHECKZONE_CANDIDATES[0],
     )
     named_checkconf = command_path(
         config,
         "named_checkconf",
-        "/usr/bin/named-checkconf",
+        detected_binary(NAMED_CHECKCONF_CANDIDATES)
+        or NAMED_CHECKCONF_CANDIDATES[0],
     )
     zones_dir = config_paths(config)["zones_dir"]
 
@@ -2834,6 +2916,14 @@ def build_staging(
                 artifact_path.read_bytes()
             ).hexdigest()
             reuse = actual_checksum == recorded["checksum"]
+
+            # Re-verify against the manifest's own checksum too, not just
+            # the one this agent recorded on a prior run — a self-only
+            # comparison would keep trusting stale cached content if the
+            # panel ever served different bytes under the same version.
+            manifest_checksum = item.get("artifact_checksum")
+            if reuse and isinstance(manifest_checksum, str):
+                reuse = actual_checksum == manifest_checksum.lower()
 
         if not reuse:
             try:
@@ -3065,7 +3155,9 @@ def restore_backup(
     if zones_backup.exists():
         for zonefile in zones_backup.glob("*.zone"):
             reject_symlink(zonefile)
-            shutil.copy2(zonefile, paths["zones_dir"] / zonefile.name)
+            destination = paths["zones_dir"] / zonefile.name
+            reject_symlink(destination)
+            shutil.copy2(zonefile, destination)
 
 
 def apply_staging(
@@ -3159,7 +3251,8 @@ def apply_staging(
         named_checkconf = command_path(
             config,
             "named_checkconf",
-            "/usr/bin/named-checkconf",
+            detected_binary(NAMED_CHECKCONF_CANDIDATES)
+            or NAMED_CHECKCONF_CANDIDATES[0],
         )
         result = run_command(
             [named_checkconf, str(paths["named_conf"])]
@@ -3907,6 +4000,14 @@ def sync_zones(
         else:
             backup_dir = None
 
+        # Each zone's files are already live on disk with BIND reloaded by
+        # this point — one publication becoming unavailable (e.g. reassigned
+        # server-side between manifest fetch and confirmation) must not
+        # abort confirmation of the other, already-applied zones in this
+        # batch, or their local state would never get persisted and every
+        # retry would re-hit the same stuck item forever.
+        confirmation_errors: list[str] = []
+
         for item in updates:
             checksum = state["artifacts"].get(
                 str(item["publication_id"]),
@@ -3917,32 +4018,47 @@ def sync_zones(
                 str(item["name"]),
                 int(item["serial"]),
             )
-            response = report_publication(
-                config,
-                state,
-                item["publication_id"],
-                attempt_id,
-                publication_event_payload(
-                    "applied",
-                    installed_version=item["desired_version"],
-                    checksum=checksum,
-                    authoritative_serial=observed_serial,
-                ),
-            )
 
-            if (
-                response.get("status") != "applied"
-                or response.get("installed_version")
-                != item["desired_version"]
-                or response.get("authoritative_serial")
-                != observed_serial
-            ):
-                raise AgentError(
-                    "Painel não confirmou a versão aplicada."
+            try:
+                response = report_publication(
+                    config,
+                    state,
+                    item["publication_id"],
+                    attempt_id,
+                    publication_event_payload(
+                        "applied",
+                        installed_version=item["desired_version"],
+                        checksum=checksum,
+                        authoritative_serial=observed_serial,
+                    ),
                 )
+
+                if (
+                    response.get("status") != "applied"
+                    or response.get("installed_version")
+                    != item["desired_version"]
+                    or response.get("authoritative_serial")
+                    != observed_serial
+                ):
+                    raise AgentError(
+                        "Painel não confirmou a versão aplicada."
+                    )
+            except AgentError as exception:
+                confirmation_errors.append(
+                    f"{item['name']}: {sanitize_message(exception)}"
+                )
+                continue
 
             state["installed_publication_id"] = item["publication_id"]
             state["installed_version"] = item["desired_version"]
+            save_publication_state(paths["state_dir"], state)
+
+        if confirmation_errors:
+            raise AgentError(
+                "Falha ao confirmar publicação de "
+                f"{len(confirmation_errors)} zona(s): "
+                + "; ".join(confirmation_errors)
+            )
 
         result.update(
             {

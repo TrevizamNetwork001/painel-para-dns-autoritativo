@@ -1,0 +1,10 @@
+[Unit]
+Description=Verifica operação autorizada pendente do DNS Center Agent
+
+[Timer]
+OnBootSec=30s
+OnUnitActiveSec=30s
+RandomizedDelaySec=5s
+
+[Install]
+WantedBy=timers.target
