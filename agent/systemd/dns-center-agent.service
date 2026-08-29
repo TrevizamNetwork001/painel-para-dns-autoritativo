@@ -2,6 +2,15 @@
 Description=DNS Center Agent
 After=network-online.target
 Wants=network-online.target
+# Kept as a backward-compatible fallback: an agent below the version that
+# introduced dns-center-agent-operation.timer self-upgrades using its OWN
+# already-running SELF_UPGRADE_ARTIFACTS list, which has no idea the new
+# timer file exists, so it never gets downloaded/enabled by that upgrade.
+# Without this Wants=, such an agent loses authorized-operation polling
+# entirely (including the ability to self-heal via a future upgrade_agent)
+# until someone manually re-runs the full installer. Keeping it means the
+# worst case is degraded (5min instead of 30s), never fully broken.
+Wants=dns-center-agent-operation.service
 
 [Service]
 Type=oneshot
