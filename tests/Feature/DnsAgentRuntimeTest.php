@@ -91,8 +91,9 @@ class DnsAgentRuntimeTest extends TestCase
             ->assertOk()
             ->assertSee('Credencial revogada — novo vínculo necessário')
             ->assertSee('Gerar vínculo')
-            ->assertSee('Máquina sem agente')
-            ->assertSee('wget -qO-', false);
+            ->assertSee('Enrollment pré-vinculado')
+            ->assertDontSee('Máquina sem agente')
+            ->assertDontSee('wget -qO-', false);
 
         $this->withToken($token)
             ->postJson('/api/agent/heartbeat')

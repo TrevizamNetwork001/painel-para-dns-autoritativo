@@ -23,6 +23,7 @@
         <env name="APP_PACKAGES_CACHE" value="/tmp/dns-center-phpunit-packages.php"/>
         <env name="APP_EVENTS_CACHE" value="/tmp/dns-center-phpunit-events.php"/>
         <env name="APP_CONFIG_CACHE" value="/tmp/dns-center-phpunit-config.php"/>
+        <env name="VIEW_COMPILED_PATH" value="/tmp/dns-center-phpunit-views"/>
         <env name="APP_ENV" value="testing"/>
         <env name="ADMIN_2FA_REQUIRED" value="false"/>
         <env name="APP_MAINTENANCE_DRIVER" value="file"/>

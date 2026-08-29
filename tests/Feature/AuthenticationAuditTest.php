@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Actions\Fortify\UpdateUserPassword;
 use App\Models\Organization;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -51,7 +52,7 @@ class AuthenticationAuditTest extends TestCase
 
         $this->actingAs($user);
 
-        app(\App\Actions\Fortify\UpdateUserPassword::class)->update(
+        app(UpdateUserPassword::class)->update(
             $user,
             [
                 'current_password' => 'SenhaForte@2026',
