@@ -127,7 +127,7 @@
     <summary><span><span class="eyebrow">Inventário</span><strong>Detalhes técnicos</strong></span><small>Identidade, caminhos, timestamps e última informação conhecida</small></summary>
     <div class="agent-technical-grid">
         <section><h3>Agente</h3><dl class="agent-technical-list">
-            <div><dt>UUID</dt><dd class="agent-technical-value">{{ $agent->agent_uuid }}</dd></div><div><dt>Hostname reportado</dt><dd>{{ $agent->reported_hostname }}</dd></div><div><dt>IP cadastrado</dt><dd class="agent-technical-value">{{ $server->ipv4_address ?: ($server->ipv6_address ?: 'Não informado') }}</dd></div><div><dt>IP observado</dt><dd class="agent-technical-value">{{ $agent->registered_ip ?: 'Não informado' }}</dd></div>
+            <div><dt>UUID</dt><dd class="agent-technical-value">{{ $agent->agent_uuid }}</dd></div><div><dt>Hostname reportado</dt><dd>{{ $agent->reported_hostname }}</dd></div><div><dt>IP cadastrado</dt><dd class="agent-technical-value">{{ $server->ipv4_address ?: ($server->ipv6_address ?: 'Não informado') }}</dd></div>
             <div><dt>Registrado em</dt><dd>{{ $agent->registered_at?->format('d/m/Y H:i:s') ?: 'Não informado' }}</dd></div><div><dt>Último contato exato</dt><dd>{{ $lastContact?->format('d/m/Y H:i:s') ?: 'Não recebido' }}</dd></div><div><dt>Versão</dt><dd>{{ $agentVersion }}</dd></div><div><dt>Sistema / kernel</dt><dd>{{ trim(($server->operating_system ?: 'Não informado').' '.$server->operating_system_version) }}</dd></div>
         </dl></section>
         <section><h3>BIND</h3><dl class="agent-technical-list">
