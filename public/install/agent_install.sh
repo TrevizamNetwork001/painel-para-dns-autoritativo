@@ -63,6 +63,7 @@ artifacts=(
     dns-center-agent.service
     dns-center-agent.timer
     dns-center-agent-operation.service
+    dns-center-agent-operation.timer
     dns-center-agent-approval.service
     dns-center-agent-approval.timer
 )
@@ -98,6 +99,7 @@ done
 rollback_installation() {
     systemctl disable --now \
         dns-center-agent.timer \
+        dns-center-agent-operation.timer \
         dns-center-agent-approval.timer >/dev/null 2>&1 || true
 
     if [ -e "${backup_dir}/dns-center-agent.py" ]; then
@@ -172,8 +174,14 @@ upgrade_agent() {
         units_changed=1
     done
 
+    local operation_timer_activated=0
     if [ "${units_changed}" -eq 1 ]; then
         systemctl daemon-reload
+
+        if ! systemctl is-enabled --quiet dns-center-agent-operation.timer 2>/dev/null; then
+            systemctl enable --now dns-center-agent-operation.timer
+            operation_timer_activated=1
+        fi
     fi
 
     if [ "${binary_changed}" -eq 0 ] && [ "${units_changed}" -eq 0 ]; then
@@ -182,7 +190,12 @@ upgrade_agent() {
         echo "Agente atualizado com sucesso pelo instalador ${INSTALLER_VERSION}."
     fi
     echo "Configuração, state e vínculos existentes foram preservados."
-    echo "Nenhum serviço/timer foi (re)iniciado e o BIND não foi tocado."
+    if [ "${operation_timer_activated}" -eq 1 ]; then
+        echo "Nenhum serviço/timer existente foi (re)iniciado e o BIND não foi tocado;"
+        echo "o novo dns-center-agent-operation.timer foi habilitado e iniciado."
+    else
+        echo "Nenhum serviço/timer foi (re)iniciado e o BIND não foi tocado."
+    fi
     echo "Verifique com: ${INSTALL_PATH} --help"
 }
 
@@ -201,6 +214,7 @@ if ! {
     systemctl daemon-reload
     systemctl enable --now \
         dns-center-agent.timer \
+        dns-center-agent-operation.timer \
         dns-center-agent-approval.timer
     systemctl start dns-center-agent-approval.service
 }; then

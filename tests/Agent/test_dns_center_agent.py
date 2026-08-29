@@ -85,6 +85,16 @@ class AgentTests(unittest.TestCase):
         with self.assertRaises(agent.AgentError):
             agent.safe_zone_filename("../example.com")
 
+    def test_sanitize_hostname_replaces_disallowed_characters(self) -> None:
+        # The panel's install-request validator only accepts
+        # a-zA-Z0-9.- (see DnsAgentInstallRequestController); underscores
+        # are common on Docker/K8s-provisioned hosts and must not break
+        # enrollment.
+        self.assertEqual("dns-server-01", agent.sanitize_hostname("dns_server_01"))
+        self.assertEqual("ns1.example.com", agent.sanitize_hostname("ns1.example.com"))
+        self.assertEqual("host", agent.sanitize_hostname("___"))
+        self.assertEqual("host", agent.sanitize_hostname(""))
+
     def test_render_managed_include(self) -> None:
         content = agent.render_managed_include(
             [
@@ -946,7 +956,7 @@ class AgentTests(unittest.TestCase):
             if command[:2] == ["/usr/sbin/rndc", "status"]:
                 return Mock(returncode=0, stdout="server is up and running\nnumber of zones: 2 (0 automatic)\n", stderr="")
             if command[:2] == ["/usr/bin/named-checkconf", "-p"]:
-                return Mock(
+                result = Mock(
                     returncode=0,
                     stdout=(
                         'zone "example.com" {\n    type master;\n'
@@ -956,6 +966,8 @@ class AgentTests(unittest.TestCase):
                     ),
                     stderr="",
                 )
+                result.stdout_truncated = False
+                return result
             if command[:2] == ["/usr/sbin/rndc", "zonestatus"]:
                 return Mock(
                     returncode=0,
@@ -1047,7 +1059,7 @@ class AgentTests(unittest.TestCase):
             if command[:2] == ["/usr/sbin/rndc", "status"]:
                 return Mock(returncode=0, stdout="server is up and running\n", stderr="")
             if command[:2] == ["/usr/bin/named-checkconf", "-p"]:
-                return Mock(
+                result = Mock(
                     returncode=0,
                     stdout=(
                         'zone "big.example.com" {\n    type master;\n'
@@ -1055,6 +1067,8 @@ class AgentTests(unittest.TestCase):
                     ),
                     stderr="",
                 )
+                result.stdout_truncated = False
+                return result
             if command[:2] == ["/usr/sbin/rndc", "zonestatus"]:
                 return Mock(
                     returncode=0,
@@ -1091,6 +1105,30 @@ class AgentTests(unittest.TestCase):
         self.assertIn("limite de captura", zone["validation_message"].lower())
         # node_count from rndc zonestatus is unaffected by the dump truncation.
         self.assertEqual(1030, zone["node_count"])
+
+    def test_discover_bind_zones_refuses_truncated_checkconf_output(self) -> None:
+        # named-checkconf -p enumerates which zones exist in the first
+        # place; if its output is truncated, zones past the cutoff would
+        # silently vanish from discovery instead of erroring, reopening
+        # the same class of bug the checkzone -D truncation guard covers.
+        def fake_run_command(command, timeout=30, max_output_bytes=8000):
+            if command[:2] == ["/usr/sbin/rndc", "status"]:
+                return Mock(returncode=0, stdout="server is up and running\n", stderr="")
+            if command[:2] == ["/usr/bin/named-checkconf", "-p"]:
+                result = Mock(returncode=0, stdout="zone \"a.example\" {};\n", stderr="")
+                result.stdout_truncated = True
+                return result
+            raise AssertionError(f"unexpected command: {command}")
+
+        with patch.object(
+            agent, "detected_binary", side_effect=lambda candidates: candidates[0],
+        ), patch.object(
+            agent, "detected_named_conf", return_value="/etc/bind/named.conf",
+        ), patch.object(
+            agent, "run_command", side_effect=fake_run_command,
+        ):
+            with self.assertRaisesRegex(agent.AgentError, "limite de captura"):
+                agent.discover_bind_zones({})
 
     def test_run_authorized_operation_dispatches_discovery_without_readiness(
         self,
@@ -1140,6 +1178,7 @@ class AgentTests(unittest.TestCase):
             "dns-center-agent.service": b"[Unit]\n",
             "dns-center-agent.timer": b"[Unit]\n",
             "dns-center-agent-operation.service": b"[Unit]\n",
+            "dns-center-agent-operation.timer": b"[Unit]\n",
             "dns-center-agent-approval.service": b"[Unit]\n",
             "dns-center-agent-approval.timer": b"[Unit]\n",
         }
@@ -1283,6 +1322,57 @@ class AgentTests(unittest.TestCase):
 
             self.assertEqual(old_content, install_path.read_bytes())
 
+    def test_upgrade_agent_self_reverts_binary_when_units_step_fails_after_swap(
+        self,
+    ) -> None:
+        # Regression: a failure in the unit-replacement step that happens
+        # AFTER the binary was already swapped and validated must not
+        # leave the new binary in place while reporting a clean,
+        # fully-rolled-back failure — that would be a half-applied
+        # upgrade silently misreported to the panel.
+        with tempfile.TemporaryDirectory() as directory:
+            install_path = Path(directory) / "dns-center-agent"
+            old_content = b"old content, still good\n"
+            install_path.write_bytes(old_content)
+            install_path.chmod(0o750)
+
+            systemd_dir = Path(directory) / "systemd"
+            systemd_dir.mkdir()
+            new_content = b"#!/usr/bin/env python3\nprint('new')\n"
+            artifacts = self._self_upgrade_artifacts(new_content)
+            # Leave systemd_dir empty so every unit differs from what's
+            # downloaded, forcing units_changed=True and reaching the
+            # daemon-reload step.
+
+            opener = self._install_artifact_opener(artifacts)
+
+            def fake_run_command(command, timeout=30):
+                if "--version" in command or "--help" in command:
+                    return Mock(returncode=0, stdout="--enroll available", stderr="")
+                if "daemon-reload" in command:
+                    return Mock(returncode=1, stdout="", stderr="reload failed")
+                return Mock(returncode=0, stdout="", stderr="")
+
+            with patch.object(agent.os, "geteuid", return_value=0), patch.object(
+                agent, "DEFAULT_INSTALL_PATH", install_path,
+            ), patch.object(
+                agent, "DEFAULT_SYSTEMD_DIR", systemd_dir,
+            ), patch.object(
+                agent.urllib.request, "urlopen", side_effect=opener,
+            ), patch.object(
+                agent, "run_command", side_effect=fake_run_command,
+            ), patch.object(
+                agent, "detected_binary", return_value="/usr/bin/systemctl",
+            ):
+                with self.assertRaises(agent.AgentOperationError) as caught:
+                    agent.upgrade_agent_self({"base_url": "https://panel.test"})
+
+            self.assertTrue(caught.exception.rolled_back)
+            self.assertEqual(
+                old_content, install_path.read_bytes(),
+                "binary must be reverted, not left on the new version",
+            )
+
     def test_upgrade_agent_self_never_calls_bind_or_zone_commands(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             install_path = Path(directory) / "dns-center-agent"
@@ -1318,11 +1408,20 @@ class AgentTests(unittest.TestCase):
                     Path(command[0]).name, forbidden_binaries,
                     f"unexpected BIND-related command: {command}",
                 )
-                # The only systemctl subcommand allowed here is
-                # daemon-reload for the agent's own units — never a BIND
-                # service restart/reload.
+                # The only systemctl subcommands allowed here are
+                # daemon-reload and enabling the agent's own operation-poll
+                # timer — never a BIND service restart/reload.
                 if "systemctl" in command[0]:
-                    self.assertEqual(["daemon-reload"], command[1:])
+                    self.assertIn(
+                        command[1:],
+                        [
+                            ["daemon-reload"],
+                            [
+                                "enable", "--now",
+                                "dns-center-agent-operation.timer",
+                            ],
+                        ],
+                    )
 
     def test_upgrade_agent_self_reloads_daemon_only_when_units_change(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -1412,6 +1511,47 @@ class AgentTests(unittest.TestCase):
 
             with self.assertRaises(agent.AgentError):
                 agent.reject_symlink(link / "managed.conf")
+
+    def test_restore_backup_checks_zone_destination_for_symlinks(self) -> None:
+        # The copy-back loop restores each backed-up zone file into
+        # zones_dir, which is group-writable by the bind service account.
+        # A symlink planted at the destination between the preceding
+        # unlink sweep and this copy (a TOCTOU race) must be rejected
+        # instead of followed — assert reject_symlink is actually called
+        # on the destination path, not just the backup source.
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            zones_dir = root / "zones"
+            zones_dir.mkdir()
+            managed_include = root / "managed.conf"
+            options_config = root / "named.conf.options"
+            managed_options_include = root / "options.conf"
+
+            backup_dir = root / "backup"
+            zones_backup = backup_dir / "zones"
+            zones_backup.mkdir(parents=True)
+            (zones_backup / "example.com.zone").write_text(
+                "dummy", encoding="utf-8"
+            )
+
+            paths = {
+                "zones_dir": zones_dir,
+                "managed_include": managed_include,
+                "options_config": options_config,
+                "managed_options_include": managed_options_include,
+            }
+
+            checked_paths: list[Path] = []
+            real_reject_symlink = agent.reject_symlink
+
+            def spy(path: Path) -> None:
+                checked_paths.append(path)
+                real_reject_symlink(path)
+
+            with patch.object(agent, "reject_symlink", side_effect=spy):
+                agent.restore_backup(paths, backup_dir)
+
+            self.assertIn(zones_dir / "example.com.zone", checked_paths)
 
     def test_named_checkzone_failure_blocks_staging(self) -> None:
         failed = Mock(returncode=1, stdout="", stderr="invalid")
