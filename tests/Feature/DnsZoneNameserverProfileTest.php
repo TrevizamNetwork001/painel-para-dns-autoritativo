@@ -7,7 +7,6 @@ use App\Models\DnsNameserverProfile;
 use App\Models\DnsServer;
 use App\Models\DnsZone;
 use App\Models\Organization;
-use App\Models\User;
 use App\Services\DnsZoneNameserverSynchronizer;
 use App\Services\DnsZoneValidator;
 use Illuminate\Foundation\Testing\RefreshDatabase;

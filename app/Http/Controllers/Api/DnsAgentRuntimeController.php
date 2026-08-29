@@ -71,18 +71,15 @@ class DnsAgentRuntimeController extends Controller
 
             $server->forceFill([
                 'agent_uuid' => $agent->agent_uuid,
-                'agent_version' =>
-                    $validated['agent_version']
+                'agent_version' => $validated['agent_version']
                     ?? $server->agent_version,
                 'agent_status' => 'online',
                 'agent_fingerprint' => $agent->fingerprint,
-                'agent_registered_at' =>
-                    $server->agent_registered_at
+                'agent_registered_at' => $server->agent_registered_at
                     ?? $agent->registered_at,
                 'last_seen_at' => $now,
                 'status' => $validated['status'] ?? 'online',
-                'capabilities' =>
-                    $validated['capabilities']
+                'capabilities' => $validated['capabilities']
                     ?? $server->capabilities,
             ])->save();
         });
@@ -171,27 +168,21 @@ class DnsAgentRuntimeController extends Controller
                 ->firstOrFail();
 
             $server->forceFill([
-                'operating_system' =>
-                    $validated['operating_system'],
-                'operating_system_version' =>
-                    $validated['operating_system_version']
+                'operating_system' => $validated['operating_system'],
+                'operating_system_version' => $validated['operating_system_version']
                     ?? null,
-                'bind_version' =>
-                    $validated['bind_version']
+                'bind_version' => $validated['bind_version']
                     ?? null,
                 'agent_uuid' => $agent->agent_uuid,
-                'agent_version' =>
-                    $validated['agent_version']
+                'agent_version' => $validated['agent_version']
                     ?? $server->agent_version,
                 'agent_status' => 'online',
                 'agent_fingerprint' => $agent->fingerprint,
-                'agent_registered_at' =>
-                    $server->agent_registered_at
+                'agent_registered_at' => $server->agent_registered_at
                     ?? $agent->registered_at,
                 'last_seen_at' => $now,
                 'status' => 'online',
-                'capabilities' =>
-                    $validated['capabilities']
+                'capabilities' => $validated['capabilities']
                     ?? $server->capabilities,
                 'inventory' => $validated['inventory'],
             ])->save();

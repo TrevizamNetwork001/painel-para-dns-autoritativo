@@ -28,15 +28,13 @@ class DnsZoneNameserverSynchronizer
 
         if ($profile === null) {
             throw ValidationException::withMessages([
-                'dns_nameserver_profile_id' =>
-                    'Selecione um perfil de nameservers válido e habilitado.',
+                'dns_nameserver_profile_id' => 'Selecione um perfil de nameservers válido e habilitado.',
             ]);
         }
 
         if ($profile->identities->count() < 2) {
             throw ValidationException::withMessages([
-                'dns_nameserver_profile_id' =>
-                    'O perfil precisa possuir pelo menos duas identidades de nameserver habilitadas.',
+                'dns_nameserver_profile_id' => 'O perfil precisa possuir pelo menos duas identidades de nameserver habilitadas.',
             ]);
         }
 
@@ -46,8 +44,7 @@ class DnsZoneNameserverSynchronizer
                 !== $organizationId
             ) {
                 throw ValidationException::withMessages([
-                    'dns_nameserver_profile_id' =>
-                        'O perfil contém uma identidade de outra empresa.',
+                    'dns_nameserver_profile_id' => 'O perfil contém uma identidade de outra empresa.',
                 ]);
             }
         }
@@ -61,8 +58,7 @@ class DnsZoneNameserverSynchronizer
     ): void {
         $identities = $profile->identities
             ->sortBy(
-                fn ($identity): int =>
-                    (int) $identity->pivot->position,
+                fn ($identity): int => (int) $identity->pivot->position,
             )
             ->values();
 
@@ -70,8 +66,7 @@ class DnsZoneNameserverSynchronizer
 
         if ($firstIdentity === null) {
             throw ValidationException::withMessages([
-                'dns_nameserver_profile_id' =>
-                    'O perfil não possui identidades disponíveis.',
+                'dns_nameserver_profile_id' => 'O perfil não possui identidades disponíveis.',
             ]);
         }
 

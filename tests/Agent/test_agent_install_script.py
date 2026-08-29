@@ -32,13 +32,18 @@ class AgentInstallUpgradeModeTest(unittest.TestCase):
         self.assertNotIn("${CONFIG_DIR}", self.upgrade_body)
         self.assertNotIn("${STATE_DIR}", self.upgrade_body)
 
-    def test_upgrade_never_calls_bind_or_service_management(self) -> None:
+    def test_upgrade_never_calls_bind_or_unrelated_service_management(self) -> None:
         for token in (
             "rndc", "named-checkzone", "named-checkconf", "install_bind",
-            "configure_bind", "systemctl enable", "systemctl start",
-            "systemctl restart",
+            "configure_bind", "systemctl start bind", "systemctl restart",
+            "systemctl reload",
         ):
             self.assertNotIn(token, self.upgrade_body)
+
+        self.assertIn(
+            "systemctl enable --now dns-center-agent-operation.timer",
+            self.upgrade_body,
+        )
 
     def test_upgrade_never_triggers_enrollment(self) -> None:
         self.assertNotIn("request_enrollment", self.upgrade_body)

@@ -339,16 +339,11 @@ class DnsNameserverController extends Controller
                 'max:2000',
             ],
         ], [
-            'hostname.regex' =>
-                'Informe um hostname DNS completo e válido.',
-            'hostname.unique' =>
-                'Este hostname já está cadastrado nesta empresa.',
-            'dns_server_id.exists' =>
-                'O servidor selecionado não pertence à empresa atual.',
-            'ipv4_address.ipv4' =>
-                'Informe um endereço IPv4 válido.',
-            'ipv6_address.ipv6' =>
-                'Informe um endereço IPv6 válido.',
+            'hostname.regex' => 'Informe um hostname DNS completo e válido.',
+            'hostname.unique' => 'Este hostname já está cadastrado nesta empresa.',
+            'dns_server_id.exists' => 'O servidor selecionado não pertence à empresa atual.',
+            'ipv4_address.ipv4' => 'Informe um endereço IPv4 válido.',
+            'ipv6_address.ipv6' => 'Informe um endereço IPv6 válido.',
         ]);
 
         return [
@@ -422,18 +417,12 @@ class DnsNameserverController extends Controller
                 'max:2000',
             ],
         ], [
-            'name.unique' =>
-                'Já existe um perfil com este nome.',
-            'identity_ids.required' =>
-                'Selecione pelo menos dois nameservers.',
-            'identity_ids.min' =>
-                'Um perfil deve possuir pelo menos dois nameservers.',
-            'identity_ids.max' =>
-                'Um perfil pode possuir no máximo dez nameservers.',
-            'identity_ids.*.distinct' =>
-                'O mesmo nameserver não pode ser selecionado duas vezes.',
-            'identity_ids.*.exists' =>
-                'Um dos nameservers selecionados não pertence à empresa atual.',
+            'name.unique' => 'Já existe um perfil com este nome.',
+            'identity_ids.required' => 'Selecione pelo menos dois nameservers.',
+            'identity_ids.min' => 'Um perfil deve possuir pelo menos dois nameservers.',
+            'identity_ids.max' => 'Um perfil pode possuir no máximo dez nameservers.',
+            'identity_ids.*.distinct' => 'O mesmo nameserver não pode ser selecionado duas vezes.',
+            'identity_ids.*.exists' => 'Um dos nameservers selecionados não pertence à empresa atual.',
         ]);
 
         $identityIds = array_values(
@@ -451,8 +440,7 @@ class DnsNameserverController extends Controller
 
         if ($enabledCount !== count($identityIds)) {
             throw ValidationException::withMessages([
-                'identity_ids' =>
-                    'Perfis novos ou alterados só podem usar identities ativas.',
+                'identity_ids' => 'Perfis novos ou alterados só podem usar identities ativas.',
             ]);
         }
 
