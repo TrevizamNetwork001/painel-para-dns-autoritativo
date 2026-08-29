@@ -87,8 +87,9 @@ class DnsBindDiscoveryTest extends TestCase
         $this->assertContains($states['existing.example.com'], ['exists', 'conflict']);
     }
 
-    public function test_repeated_report_with_same_event_is_idempotent(): void
+    public function test_repeated_report_with_same_event_in_same_second_is_idempotent(): void
     {
+        $this->travelTo(now()->startOfSecond());
         $context = $this->context();
         $operation = $this->authorizedDiscoveryOperation($context);
         $payload = $this->reportDiscoveryPayload($operation, 'succeeded', [
@@ -106,6 +107,100 @@ class DnsBindDiscoveryTest extends TestCase
             ->assertOk()->assertJsonPath('idempotent', true);
 
         $this->assertDatabaseCount('dns_bind_discovered_zones', 1);
+    }
+
+    public function test_repeated_report_remains_idempotent_after_processing_time_changes(): void
+    {
+        $this->travelTo(now()->startOfSecond());
+        $context = $this->context();
+        $operation = $this->authorizedDiscoveryOperation($context);
+        $payload = $this->reportDiscoveryPayload($operation, 'succeeded', [
+            $this->sampleZone(['name' => 'delayed-idempotent.example.com']),
+        ]);
+
+        $this->markOperationRunning($operation, $context['token']);
+
+        $this->withToken($context['token'])
+            ->postJson(route('api.agent.bind.operations.report', $operation), $payload)
+            ->assertOk()->assertJsonPath('idempotent', false);
+
+        $firstOperation = $operation->fresh();
+        $firstDiscovered = DnsBindDiscoveredZone::query()->sole();
+        $firstDiscoveredAt = $firstOperation->result['discovered_at'];
+        $firstCreatedAt = $firstDiscovered->created_at;
+
+        $this->travel(2)->seconds();
+
+        $this->withToken($context['token'])
+            ->postJson(route('api.agent.bind.operations.report', $operation), $payload)
+            ->assertOk()->assertJsonPath('idempotent', true);
+
+        $this->assertSame($firstDiscoveredAt, $operation->fresh()->result['discovered_at']);
+        $this->assertTrue($firstCreatedAt->equalTo(DnsBindDiscoveredZone::query()->sole()->created_at));
+        $this->assertDatabaseCount('dns_bind_discovered_zones', 1);
+        $this->assertDatabaseCount('dns_zones', 0);
+    }
+
+    public function test_same_event_with_semantically_different_discovery_is_rejected(): void
+    {
+        $context = $this->context();
+        $operation = $this->authorizedDiscoveryOperation($context);
+        $payload = $this->reportDiscoveryPayload($operation, 'succeeded', [
+            $this->sampleZone(['name' => 'original.example.com']),
+        ]);
+
+        $this->markOperationRunning($operation, $context['token']);
+        $this->withToken($context['token'])
+            ->postJson(route('api.agent.bind.operations.report', $operation), $payload)
+            ->assertOk();
+
+        $payload['result']['zones'][0]['serial']++;
+
+        $this->withToken($context['token'])
+            ->postJson(route('api.agent.bind.operations.report', $operation), $payload)
+            ->assertStatus(409)
+            ->assertJsonPath('error', 'event_replay');
+
+        $this->assertDatabaseCount('dns_bind_discovered_zones', 1);
+    }
+
+    public function test_new_event_with_same_discovery_is_a_legitimate_late_report(): void
+    {
+        $context = $this->context();
+        $operation = $this->authorizedDiscoveryOperation($context);
+        $payload = $this->reportDiscoveryPayload($operation, 'succeeded', [
+            $this->sampleZone(['name' => 'same-content.example.com']),
+        ]);
+
+        $this->markOperationRunning($operation, $context['token']);
+        $this->withToken($context['token'])
+            ->postJson(route('api.agent.bind.operations.report', $operation), $payload)
+            ->assertOk()->assertJsonPath('idempotent', false);
+
+        $payload['event_id'] = (string) Str::uuid();
+
+        $this->withToken($context['token'])
+            ->postJson(route('api.agent.bind.operations.report', $operation), $payload)
+            ->assertOk()->assertJsonPath('idempotent', true);
+
+        $this->assertDatabaseCount('dns_bind_discovered_zones', 1);
+    }
+
+    public function test_agent_cannot_report_discovery_for_another_tenant_operation(): void
+    {
+        $context = $this->context();
+        $foreign = $this->context('Outra Organização');
+        $operation = $this->authorizedDiscoveryOperation($foreign);
+        $payload = $this->reportDiscoveryPayload($operation, 'succeeded', [
+            $this->sampleZone(['name' => 'foreign.example.com']),
+        ]);
+
+        $this->withToken($context['token'])
+            ->postJson(route('api.agent.bind.operations.report', $operation), $payload)
+            ->assertNotFound()
+            ->assertJsonPath('error', 'operation_not_available');
+
+        $this->assertDatabaseCount('dns_bind_discovered_zones', 0);
     }
 
     public function test_agent_page_shows_factual_discovery_and_import_stages(): void
