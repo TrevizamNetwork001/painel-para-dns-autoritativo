@@ -237,15 +237,15 @@ em produção. As evidências e limitações estão em
 | [Baseline de segurança](docs/SECURITY_BASELINE_1.md) | Controles da superfície administrativa |
 | [Baseline de deploy](docs/DEPLOY_BASELINE_1.md) | Build, instalação, atualização, backup e rollback |
 | [Reconciliação operacional](docs/OPS_RECONCILE_1.md) | Evidências do ambiente ativo reconciliado |
+| [Release candidate 2](docs/RELEASE_CANDIDATE_2.md) | Escopo congelado, gates, homologações e limitações da RC2 |
 | [Histórico da interface](docs/CHANGELOG_UI.md) | Ajustes realizados na interface web |
 
 ## Status do projeto
 
-**Feature-complete para homologação operacional, com release candidate em
-preparação.**
+**v1.0.0-rc2 em feature freeze, pronta para homologação operacional curta.**
 
 As funcionalidades centrais e os fluxos BIND foram implementados e possuem
 testes automatizados e homologações descartáveis documentadas. Antes de uma
-declaração de produção, a release integral ainda deve ser validada no ambiente
-Docker de destino, incluindo imagens, migrations, backup, health checks,
-testes, aplicação primary/secondary e procedimento de rollback.
+declaração de produção, a RC2 ainda deve passar pela homologação operacional
+curta no ambiente de destino. A promoção para `v1.0.0` é uma etapa posterior e
+não faz parte do fechamento desta release candidate.
