@@ -59,7 +59,37 @@ repositório.
 
 Esta tag marca o código pronto para promoção. O procedimento formal de
 build/deploy com imagem imutável (`compose.build.yaml` +
-`deploy/dns-center-deploy install`, documentado em `DEPLOY_BASELINE_1.md`)
-ainda não foi executado para esta versão — a stack em produção continua
-rodando a imagem `1.0.0-rc3-candidate`. Isso é um passo operacional
-separado, não coberto por este documento.
+`deploy/dns-center-deploy`, documentado em `DEPLOY_BASELINE_1.md`) foi
+executado nesta produção em 2026-08-31, a partir do HEAD `261e3ee` (um
+commit à frente da tag `v1.0.0`, só com a atualização de status do README).
+
+Já havia uma instalação registrada nesta stack, então o subcomando usado foi
+`update`, não `install`:
+
+```
+sudo DNS_CENTER_DEPLOY_CONFIG=/etc/dns-center/deployment.env \
+  ./deploy/dns-center-deploy update 1.0.0
+```
+
+- backup do PostgreSQL criado e validado antes de qualquer migration:
+  `dns-center-20260831T202940Z.dump`, 579375 bytes, SHA-256
+  `ad09bf834a921caab7700e375f13c4b48b3c4bcdc98888ff67680adc50761072`;
+- nenhuma migration nova a aplicar (as 31 já estavam `Ran` na versão
+  anterior — `migrate` reportou "Nothing to migrate");
+- `security-check` rodou duas vezes (pré e pós corte de tráfego) e retornou
+  apenas o warning já conhecido de `TRUSTED_PROXIES` vazio, sem nenhum
+  bloqueio;
+- corte de tráfego com `compose up --wait` bem-sucedido; os seis serviços
+  (`app`, `queue`, `scheduler`, `web`, `postgres`, `redis`) ficaram
+  saudáveis com a imagem `:1.0.0`;
+- `https://dnscenter.trevizamnetwork.com.br/up` respondeu HTTP 200 após o
+  deploy;
+- estado registrado: `current-version=1.0.0`,
+  `previous-version=1.0.0-rc3-candidate` — rollback disponível via
+  `./deploy/dns-center-deploy rollback`, sem reversão de banco (não houve
+  migration nova, então não há incompatibilidade de schema a considerar).
+
+Antes do build, o host tinha 84% do disco em uso (3,0 GB livres); imagens e
+build cache de ciclos de desenvolvimento antigos, já sem uso, foram
+removidos (`docker image prune`/`docker builder prune`, ~9 GB liberados),
+preservando a imagem em produção até o corte de tráfego.
