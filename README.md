@@ -18,6 +18,8 @@ O projeto já possui:
 - cadastro e acompanhamento de servidores DNS;
 - enrollment, autenticação e revogação de agentes remotos;
 - gerenciamento de zonas e registros DNS;
+- descoberta somente leitura e importação de BIND existente, com adoção
+  ainda fora do escopo homologado;
 - identidades e perfis ordenados de nameservers;
 - topologia primary/secondary;
 - chaves TSIG cifradas, com associação, rotação e desativação controladas;
@@ -233,19 +235,26 @@ em produção. As evidências e limitações estão em
 | [Primary/secondary](docs/BIND_PRIMARY_SECONDARY.md) | Topologia, TSIG, AXFR/NOTIFY e continuidade |
 | [Readiness e instalação](docs/BIND_READINESS_INSTALLATION.md) | Detecção e operações allowlisted do BIND |
 | [Homologação real](docs/BIND_REAL_HOMOLOGATION.md) | Evidências do agente e BIND em ambiente descartável |
+| [Descoberta e adoção de BIND](docs/BIND_ADOPTION_1.md) | Discover/Import somente leitura de BIND existente; Adopt fora de escopo |
 | [Observabilidade](docs/OBSERVABILITY_1.md) | Seriais, transferências, hardening e alertas internos |
 | [Baseline de segurança](docs/SECURITY_BASELINE_1.md) | Controles da superfície administrativa |
 | [Baseline de deploy](docs/DEPLOY_BASELINE_1.md) | Build, instalação, atualização, backup e rollback |
 | [Reconciliação operacional](docs/OPS_RECONCILE_1.md) | Evidências do ambiente ativo reconciliado |
+| [Homologação da RC1](docs/RC_HOMOLOGATION_1.md) | Homologação descartável completa, aprovada com ressalvas |
 | [Release candidate 2](docs/RELEASE_CANDIDATE_2.md) | Escopo congelado, gates, homologações e limitações da RC2 |
+| [Release candidate 3](docs/RELEASE_CANDIDATE_3.md) | Correção de idempotência do DISCOVER encontrada no gate da RC2 |
+| [Homologação da RC2](docs/RC_HOMOLOGATION_2.md) | Homologação operacional curta do fix de idempotência, ao vivo |
+| [Release 1.0.0](docs/RELEASE_1.0.0.md) | Promoção da v1.0.0 a partir da RC3 e correção da tag irregular |
 | [Histórico da interface](docs/CHANGELOG_UI.md) | Ajustes realizados na interface web |
 
 ## Status do projeto
 
-**v1.0.0-rc2 em feature freeze, pronta para homologação operacional curta.**
+**v1.0.0 promovida em 2026-08-31, a partir da v1.0.0-rc3.**
 
 As funcionalidades centrais e os fluxos BIND foram implementados e possuem
-testes automatizados e homologações descartáveis documentadas. Antes de uma
-declaração de produção, a RC2 ainda deve passar pela homologação operacional
-curta no ambiente de destino. A promoção para `v1.0.0` é uma etapa posterior e
-não faz parte do fechamento desta release candidate.
+testes automatizados e homologações descartáveis documentadas. A homologação
+operacional curta exigida pela RC2 foi concluída e confirmada ao vivo,
+registrada em [Homologação da RC2](docs/RC_HOMOLOGATION_2.md). O deploy formal
+com imagem imutável para esta versão ainda não foi executado — a produção
+continua na imagem `1.0.0-rc3-candidate` até que esse passo operacional seja
+realizado (ver [Release 1.0.0](docs/RELEASE_1.0.0.md)).
