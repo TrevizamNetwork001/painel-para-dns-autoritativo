@@ -10,6 +10,7 @@ use App\Http\Controllers\DnsNameserverController;
 use App\Http\Controllers\DnsServerController;
 use App\Http\Controllers\DnsTsigKeyController;
 use App\Http\Controllers\DnsZoneController;
+use App\Http\Controllers\OrganizationController;
 use App\Http\Controllers\PasswordChangeController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\UserManagementController;
@@ -140,6 +141,17 @@ Route::middleware([
         '/{user}/status',
         [UserManagementController::class, 'updateStatus']
     )->name('status');
+});
+
+Route::middleware([
+    'auth',
+    'password.changed',
+])->prefix('empresas')->name('organizations.')->group(function (): void {
+    Route::get('/', [OrganizationController::class, 'index'])
+        ->name('index');
+
+    Route::post('/', [OrganizationController::class, 'store'])
+        ->name('store');
 });
 
 Route::middleware([
