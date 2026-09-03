@@ -249,7 +249,8 @@ em produção. As evidências e limitações estão em
 
 ## Status do projeto
 
-**v1.0.1 em produção desde 2026-09-03** (patch de segurança sobre a
+**v1.1.0 em produção desde 2026-09-03** (feature de onboarding de
+empresa sobre a v1.0.1, que por sua vez é um patch de segurança sobre a
 v1.0.0, promovida em 2026-08-31 a partir da v1.0.0-rc3).
 
 As funcionalidades centrais e os fluxos BIND foram implementados e possuem
@@ -261,4 +262,9 @@ formal da v1.0.0 com imagem imutável foi executado em 2026-08-31
 segurança corrigiu duas dependências transitivas com CVEs conhecidos
 (`league/commonmark`, `guzzlehttp/guzzle`) e foi promovido a produção como
 v1.0.1 (ver [Release 1.0.1](docs/RELEASE_1.0.1.md)); `composer audit`
-confirma zero advisories restantes.
+confirma zero advisories restantes. Em seguida, a tela `/empresas`
+(restrita a `is_platform_admin`) foi adicionada para criar organizações
+(tenants) novas e o primeiro usuário de cada uma pelo painel, sem
+precisar de shell — promovida a produção como v1.1.0
+(ver [Release 1.1.0](docs/RELEASE_1.1.0.md)). A homologação visual
+dessa tela ainda está pendente (ver ressalva no próprio documento).
