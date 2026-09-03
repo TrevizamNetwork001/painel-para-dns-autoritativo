@@ -254,7 +254,6 @@ em produção. As evidências e limitações estão em
 As funcionalidades centrais e os fluxos BIND foram implementados e possuem
 testes automatizados e homologações descartáveis documentadas. A homologação
 operacional curta exigida pela RC2 foi concluída e confirmada ao vivo,
-registrada em [Homologação da RC2](docs/RC_HOMOLOGATION_2.md). O deploy formal
-com imagem imutável para esta versão ainda não foi executado — a produção
-continua na imagem `1.0.0-rc3-candidate` até que esse passo operacional seja
-realizado (ver [Release 1.0.0](docs/RELEASE_1.0.0.md)).
+registrada em [Homologação da RC2](docs/RC_HOMOLOGATION_2.md). O deploy
+formal com imagem imutável foi executado em 2026-08-31 — a produção roda a
+imagem `1.0.0` (ver seção "Deploy" em [Release 1.0.0](docs/RELEASE_1.0.0.md)).
