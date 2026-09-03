@@ -24,8 +24,12 @@
                 <h1>Nameservers</h1>
 
                 <p class="page-description">
-                    Separe a identidade pública dos nameservers
-                    da infraestrutura física que publica as zonas.
+                    Cadastre os hostnames de NS da empresa (ex.:
+                    ns1.suaempresa.com.br) como identidades, agrupe duas
+                    ou mais em um perfil e reaproveite esse perfil em
+                    quantas zonas quiser. Toda zona nova exige um perfil,
+                    que gera os registros NS — e o glue, quando
+                    necessário — automaticamente.
                 </p>
             </div>
 
@@ -154,7 +158,10 @@
 
                         <p>
                             O hostname público pode estar ligado a uma
-                            máquina do inventário ou representar serviço externo.
+                            máquina do inventário ou representar serviço
+                            externo (ex.: NS de outro provedor). Uma
+                            identidade só vira registro DNS quando entra
+                            em um perfil usado por uma zona.
                         </p>
                     </div>
 
@@ -254,8 +261,10 @@
                         <span class="nameserver-icon">NS</span>
                         <h2>Nenhuma identidade cadastrada</h2>
                         <p>
-                            Cadastre os hostnames públicos utilizados
-                            nas delegações dos domínios.
+                            Cadastre os hostnames públicos usados nas
+                            delegações dos domínios — normalmente ns1 e
+                            ns2 desta empresa. Depois, agrupe-os em um
+                            perfil na aba Perfis para usá-los nas zonas.
                         </p>
 
                         @if ($canManage)
@@ -278,8 +287,11 @@
                         <h2>Perfis de nameservers</h2>
 
                         <p>
-                            Agrupe dois ou mais nameservers e mantenha
-                            a ordem em que serão usados nas zonas.
+                            Agrupe dois ou mais nameservers e mantenha a
+                            ordem em que serão usados nas zonas (NS1,
+                            NS2...). Toda zona nova exige um perfil — o
+                            mesmo perfil pode ser reaproveitado em
+                            quantos domínios esta empresa hospedar.
                         </p>
                     </div>
 
@@ -398,7 +410,9 @@
                             <h2>Nenhum perfil cadastrado</h2>
                             <p>
                                 Crie um perfil para reutilizar o mesmo
-                                conjunto de NS em vários domínios.
+                                conjunto de NS em vários domínios desta
+                                empresa — toda zona nova precisa de um
+                                perfil escolhido para ser criada.
                             </p>
                         </div>
                     @endforelse
@@ -585,6 +599,8 @@
                     <h2 data-ns-profile-title>Novo perfil</h2>
                     <p>
                         A ordem selecionada define NS1, NS2 e seguintes.
+                        Esse perfil poderá ser escolhido por qualquer
+                        zona desta empresa.
                     </p>
                 </div>
 
