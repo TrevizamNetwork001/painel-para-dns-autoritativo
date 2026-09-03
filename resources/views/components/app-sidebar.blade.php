@@ -7,6 +7,7 @@
         $user->is_platform_admin
         || $user->roleForOrganization($organizationId) === 'organization_admin'
     );
+    $canManageOrganizations = $user && $user->is_platform_admin;
 @endphp
 
 <aside class="sidebar app-sidebar">
@@ -77,6 +78,19 @@
                     </svg>
                 </span>
                 Usuários
+            </a>
+        @endif
+
+        @if ($canManageOrganizations && Route::has('organizations.index'))
+            <span class="nav-section">Plataforma</span>
+
+            <a href="{{ route('organizations.index') }}" @class(['nav-item', 'is-active' => $active === 'organizations'])>
+                <span class="nav-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="none">
+                        <path d="M3 21h18M5 21V7l7-4 7 4v14M9 21v-6h6v6" />
+                    </svg>
+                </span>
+                Empresas
             </a>
         @endif
     </nav>
