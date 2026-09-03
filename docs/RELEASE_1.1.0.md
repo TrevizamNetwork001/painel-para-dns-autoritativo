@@ -38,14 +38,25 @@ as colunas necessárias. Nenhum Gate/Policy novo — segue o padrão
 
 ## Homologação visual
 
-Não foi possível verificar a tela renderizada num navegador real (sem
-credencial de login no painel de produção). A verificação ficou
-limitada a: compilação Blade sem erro, e conferência manual de que
-todas as classes CSS usadas (`.panel`, `.form-field`, `.password-field`,
-`.data-table`, etc.) já existem em `resources/css/app.css` com o
-formato de marcação esperado — um desalinhamento (wrapper `<span>`
-extra numa célula de tabela) foi encontrado e corrigido antes do
-deploy, comparando a marcação diretamente com as regras CSS.
+Não foi possível verificar a tela renderizada num navegador real durante
+o desenvolvimento (sem credencial de login no painel de produção). A
+verificação nessa fase ficou limitada a: compilação Blade sem erro, e
+conferência manual de que todas as classes CSS usadas (`.panel`,
+`.form-field`, `.password-field`, `.data-table`, etc.) já existem em
+`resources/css/app.css` com o formato de marcação esperado — um
+desalinhamento (wrapper `<span>` extra numa célula de tabela) foi
+encontrado e corrigido antes do deploy, comparando a marcação
+diretamente com as regras CSS.
+
+**Homologada em produção em 2026-09-03, pelo operador da plataforma**:
+criada a organização real "Cliente Legado Telecom LTDA" (`id=2`,
+slug `conecta-network-telecom-ltda`) com o primeiro usuário
+`contato@onixnetwork.com.br` (papel `organization_admin`,
+`is_platform_admin=false`, `must_change_password=true`, confirmado via
+consulta direta em `organizations`/`users`/`organization_user`).
+Login com a senha definida na tela funcionou. Fluxo completo (criar
+empresa → criar usuário → logar como esse usuário) validado ponta a
+ponta pela primeira vez, em uso real, não só por teste automatizado.
 
 ## Deploy
 
@@ -84,7 +95,5 @@ rota `GET|HEAD empresas` apareceu em `route:list` executado dentro do
 container `app-1` já em produção; imagem ativa confirmada como
 `dns-center-app:1.1.0` via `docker inspect`.
 
-A tela `/empresas` em si (visual, clique a clique) ainda não foi
-homologada por ninguém — ver ressalva na seção "Homologação visual"
-acima. Recomendo testar criando uma empresa de verdade (ou descartável)
-antes de depender dessa tela para operação real.
+A tela `/empresas` em si (visual, clique a clique) foi homologada em
+produção logo em seguida — ver seção "Homologação visual" acima.

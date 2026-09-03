@@ -266,5 +266,6 @@ confirma zero advisories restantes. Em seguida, a tela `/empresas`
 (restrita a `is_platform_admin`) foi adicionada para criar organizações
 (tenants) novas e o primeiro usuário de cada uma pelo painel, sem
 precisar de shell — promovida a produção como v1.1.0
-(ver [Release 1.1.0](docs/RELEASE_1.1.0.md)). A homologação visual
-dessa tela ainda está pendente (ver ressalva no próprio documento).
+(ver [Release 1.1.0](docs/RELEASE_1.1.0.md)) e homologada em produção
+no mesmo dia, com uma empresa real cadastrada e login confirmado pelo
+usuário criado.
