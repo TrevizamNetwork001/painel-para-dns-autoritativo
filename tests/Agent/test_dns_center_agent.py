@@ -111,6 +111,97 @@ class AgentTests(unittest.TestCase):
         self.assertIn("type master;", content)
         self.assertNotIn("options {", content)
 
+    def test_include_wired_report_detects_direct_statement(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            config = self.config(directory)
+            config["named_conf"] = str(root / "named.conf")
+            managed_include = Path(config["managed_include"])
+
+            Path(config["named_conf"]).write_text(
+                f'include "{managed_include}";\n',
+                encoding="utf-8",
+            )
+
+            report = agent.include_wired_report(config)
+
+            self.assertTrue(report["statement_found"])
+            self.assertEqual(
+                str(managed_include),
+                report["expected_include"],
+            )
+
+    def test_include_wired_report_follows_nested_includes(self) -> None:
+        # Debian's stock named.conf includes named.conf.local, and
+        # administrators are expected to add custom includes there, not
+        # directly in named.conf — the check must follow that chain.
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            config = self.config(directory)
+            config["named_conf"] = str(root / "named.conf")
+            local_conf = root / "named.conf.local"
+            managed_include = Path(config["managed_include"])
+
+            Path(config["named_conf"]).write_text(
+                f'include "{local_conf}";\n',
+                encoding="utf-8",
+            )
+            local_conf.write_text(
+                f'include "{managed_include}";\n',
+                encoding="utf-8",
+            )
+
+            report = agent.include_wired_report(config)
+
+            self.assertTrue(report["statement_found"])
+
+    def test_include_wired_report_detects_missing_statement(self) -> None:
+        # Real incident: named.conf.local kept only old static zone
+        # declarations pointing at pre-migration file paths, with no
+        # include of the DNS Center managed file anywhere in the chain.
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            config = self.config(directory)
+            config["named_conf"] = str(root / "named.conf")
+            local_conf = root / "named.conf.local"
+
+            Path(config["named_conf"]).write_text(
+                f'include "{local_conf}";\n',
+                encoding="utf-8",
+            )
+            local_conf.write_text(
+                'zone "example.com" {\n'
+                "    type master;\n"
+                '    file "/var/cache/bind/master-aut/example.com.hosts";\n'
+                "};\n",
+                encoding="utf-8",
+            )
+
+            report = agent.include_wired_report(config)
+
+            self.assertFalse(report["statement_found"])
+
+    def test_include_wired_report_handles_missing_named_conf(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            config = self.config(directory)
+            config["named_conf"] = str(Path(directory) / "absent.conf")
+
+            report = agent.include_wired_report(config)
+
+            self.assertFalse(report["statement_found"])
+
+    def test_readiness_report_includes_include_wired_fact(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            config = self.config(directory)
+            config["named_conf"] = str(
+                Path(directory) / "absent-named.conf"
+            )
+
+            report = agent.readiness_report(config)
+
+            self.assertIn("include_wired", report)
+            self.assertFalse(report["include_wired"]["statement_found"])
+
     def test_parse_rndc_zonestatus_normalizes_runtime_values(self) -> None:
         facts = agent.parse_rndc_zonestatus(
             "\n".join(

@@ -161,6 +161,43 @@ class DnsZoneNameserverProfileTest extends TestCase
         );
     }
 
+    public function test_validator_flags_server_not_reading_managed_include(): void
+    {
+        [$organization, $profile] = $this->context();
+
+        $zone = $this->zone($organization);
+        $server = $this->publicationServer(
+            $organization,
+        );
+        $server->forceFill([
+            'bind_readiness' => [
+                'include_wired' => [
+                    'expected_include' => '/etc/bind/dns-center-managed.conf',
+                    'statement_found' => false,
+                ],
+            ],
+        ])->save();
+
+        $zone->servers()->sync([
+            $server->id => [
+                'role' => 'primary',
+            ],
+        ]);
+
+        app(DnsZoneNameserverSynchronizer::class)
+            ->synchronize($zone, $profile);
+
+        $result = app(DnsZoneValidator::class)
+            ->validate($zone->fresh());
+
+        $this->assertFalse($result['ok']);
+
+        $this->assertContains(
+            'O servidor Servidor de publicação não está lendo o include gerenciado do DNS Center — esta zona continuará presa depois de publicar.',
+            $result['errors'],
+        );
+    }
+
     private function context(
         string $identityDomain = 'provider.example',
     ): array {

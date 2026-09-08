@@ -34,7 +34,7 @@ from email.utils import parsedate_to_datetime
 from pathlib import Path
 from typing import Any
 
-AGENT_VERSION = "0.7.4"
+AGENT_VERSION = "0.7.5"
 OFFICIAL_BASE_URL = "https://dnscenter.trevizamnetwork.com.br"
 DEFAULT_CONFIG = Path("/etc/dns-center-agent/agent.json")
 DEFAULT_STATE_DIR = Path("/var/lib/dns-center-agent")
@@ -737,7 +737,51 @@ def security_modules() -> dict[str, str]:
     return {"apparmor": apparmor, "selinux": selinux}
 
 
-def readiness_report() -> dict[str, Any]:
+def include_wired_report(config: dict[str, Any]) -> dict[str, Any]:
+    """Detect whether BIND's active config chain actually includes the
+    file DNS Center manages, following include statements recursively.
+
+    A server can have BIND installed, running, and listening on 53 while
+    still serving zone content from old static declarations that were
+    never wired to DNS Center's managed include — every publish then
+    silently gets stuck, since named never re-reads the new content.
+    """
+    paths = config_paths(config)
+    include_statement = f'include "{paths["managed_include"]}";'
+    named_conf = paths["named_conf"]
+    found = False
+    visited: set[Path] = set()
+
+    def scan(path: Path, depth: int) -> None:
+        nonlocal found
+
+        if found or depth > 5 or path in visited or not path.is_file():
+            return
+
+        visited.add(path)
+
+        try:
+            text = path.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            return
+
+        if include_statement in text:
+            found = True
+            return
+
+        for match in re.finditer(r'include\s+"([^"]+)"\s*;', text):
+            scan(Path(match.group(1)), depth + 1)
+
+    if named_conf.is_file():
+        scan(named_conf, 0)
+
+    return {
+        "expected_include": str(paths["managed_include"]),
+        "statement_found": found,
+    }
+
+
+def readiness_report(config: dict[str, Any]) -> dict[str, Any]:
     family = os_family()
     named = detected_binary(NAMED_CANDIDATES)
     named_checkconf = detected_binary(NAMED_CHECKCONF_CANDIDATES)
@@ -784,12 +828,18 @@ def readiness_report() -> dict[str, Any]:
     except OSError:
         pass
 
+    try:
+        include_wired = include_wired_report(config)
+    except (AgentError, OSError):
+        include_wired = None
+
     return {
         "event_id": str(uuid.uuid4()),
         "detected_at": utc_now(),
         "os_family": family,
         "bind_installed": named is not None,
         "bind_version": bind_version,
+        "include_wired": include_wired,
         "paths": {
             "named_conf": named_conf,
             "include_dir": include_dir,
@@ -1049,7 +1099,7 @@ def heartbeat(config: dict[str, Any]) -> dict[str, Any]:
 
 
 def inventory(config: dict[str, Any]) -> dict[str, Any]:
-    report = readiness_report()
+    report = readiness_report(config)
 
     return request_json(
         "POST",
@@ -1088,7 +1138,7 @@ def send_readiness(config: dict[str, Any]) -> dict[str, Any]:
         "POST",
         normalize_base_url(str(config["base_url"]))
         + "/api/agent/bind/readiness",
-        readiness_report(),
+        readiness_report(config),
         str(config["token"]),
     )
 
@@ -2278,7 +2328,7 @@ def configure_bind(action: str) -> dict[str, Any]:
                 timeout=30,
             )
 
-    report = readiness_report()
+    report = readiness_report(config)
 
     return {
         "bind_installed": report["bind_installed"],

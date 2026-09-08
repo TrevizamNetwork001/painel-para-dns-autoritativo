@@ -65,6 +65,9 @@ class DnsBindRuntimeController extends Controller
             'permissions' => ['required', 'array'],
             'permissions.can_manage_include' => ['required', 'boolean'],
             'permissions.can_manage_zones' => ['required', 'boolean'],
+            'include_wired' => ['nullable', 'array'],
+            'include_wired.expected_include' => ['nullable', 'string', 'max:255'],
+            'include_wired.statement_found' => ['nullable', 'boolean'],
         ]);
 
         foreach (self::ALLOWED_PATHS as $key => $allowed) {
