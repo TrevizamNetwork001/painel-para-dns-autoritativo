@@ -7,6 +7,7 @@ use App\Models\DnsBindOperation;
 use App\Models\DnsServer;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
 class DnsBindApplyController extends Controller
@@ -15,36 +16,43 @@ class DnsBindApplyController extends Controller
     {
         $organizationId = $this->authorizeServer($request, $server);
 
-        $agent = $server->agent;
-        abort_unless($agent && $agent->revoked_at === null, 409, 'Agente não vinculado ou revogado.');
+        $operation = DB::transaction(function () use ($request, $server, $organizationId): DnsBindOperation {
+            // Lock the server even when no operation exists yet, so concurrent
+            // requests cannot both pass the in-flight check.
+            $server = DnsServer::query()->lockForUpdate()->findOrFail($server->id);
+            $this->authorizeServer($request, $server);
 
-        DnsBindOperation::expireStaleOperations($server->id);
+            $agent = $server->agent;
+            abort_unless($agent && $agent->revoked_at === null, 409, 'Agente não vinculado ou revogado.');
 
-        $inFlight = DnsBindOperation::query()
-            ->where('dns_server_id', $server->id)
-            ->where('action', 'apply_zones')
-            ->whereIn('status', ['authorized', 'running'])
-            ->exists();
+            DnsBindOperation::expireStaleOperations($server->id);
 
-        abort_if($inFlight, 409, 'Já existe uma aplicação em andamento para este servidor.');
+            $inFlight = DnsBindOperation::query()
+                ->where('dns_server_id', $server->id)
+                ->where('action', 'apply_zones')
+                ->whereIn('status', ['authorized', 'running'])
+                ->exists();
 
-        $hasPending = DnsAgentPublication::query()
-            ->where('dns_server_id', $server->id)
-            ->whereIn('status', ['pending', 'downloaded', 'applying', 'failed'])
-            ->exists();
+            abort_if($inFlight, 409, 'Já existe uma aplicação em andamento para este servidor.');
 
-        abort_unless($hasPending, 409, 'Nenhuma publicação pendente para este servidor.');
+            $hasPending = DnsAgentPublication::query()
+                ->where('dns_server_id', $server->id)
+                ->whereIn('status', ['pending', 'downloaded', 'applying', 'failed'])
+                ->exists();
 
-        $operation = DnsBindOperation::query()->create([
-            'organization_id' => $organizationId,
-            'dns_server_id' => $server->id,
-            'dns_agent_id' => $agent->id,
-            'action' => 'apply_zones',
-            'status' => 'authorized',
-            'authorization_nonce' => (string) Str::uuid(),
-            'authorized_by' => $request->user()->id,
-            'authorized_at' => now(),
-        ]);
+            abort_unless($hasPending, 409, 'Nenhuma publicação pendente para este servidor.');
+
+            return DnsBindOperation::query()->create([
+                'organization_id' => $organizationId,
+                'dns_server_id' => $server->id,
+                'dns_agent_id' => $agent->id,
+                'action' => 'apply_zones',
+                'status' => 'authorized',
+                'authorization_nonce' => (string) Str::uuid(),
+                'authorized_by' => $request->user()->id,
+                'authorized_at' => now(),
+            ]);
+        });
 
         return response()->json([
             'ok' => true,

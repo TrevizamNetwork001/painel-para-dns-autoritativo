@@ -1,0 +1,56 @@
+name: dns-center-ci
+
+services:
+  app:
+    image: ${DNS_CENTER_CI_PHP_IMAGE:-dns-center-ci-php}
+    build:
+      context: .
+      dockerfile: docker/php/Dockerfile
+    user: root
+    working_dir: /var/www/html
+    volumes:
+      - ./:/var/www/html
+    environment:
+      APP_NAME: DNS Center
+      APP_ENV: testing
+      APP_LOCALE: pt_BR
+      APP_FALLBACK_LOCALE: pt_BR
+      APP_TIMEZONE: America/Sao_Paulo
+      APP_KEY: base64:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+      APP_DEBUG: "false"
+      APP_URL: http://localhost
+      DB_CONNECTION: pgsql
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_DATABASE: dns_center_testing
+      DB_USERNAME: dns_center_testing
+      DB_PASSWORD: ci-only-password
+      CACHE_STORE: array
+      SESSION_DRIVER: database
+      QUEUE_CONNECTION: sync
+      MAIL_MAILER: array
+      LOG_CHANNEL: stderr
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: dns_center_testing
+      POSTGRES_USER: dns_center_testing
+      POSTGRES_PASSWORD: ci-only-password
+    tmpfs:
+      - /var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U dns_center_testing -d dns_center_testing"]
+      interval: 2s
+      timeout: 5s
+      retries: 30
+
+  assets:
+    image: node:24-bookworm-slim
+    working_dir: /app
+    volumes:
+      - ./:/app
+    command: sh -c 'npm ci --ignore-scripts --no-audit --no-fund && npm run build'

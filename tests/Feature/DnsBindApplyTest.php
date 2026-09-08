@@ -9,13 +9,67 @@ use App\Models\DnsZone;
 use App\Models\DnsZoneVersion;
 use App\Models\Organization;
 use App\Models\User;
-use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Database\Events\QueryExecuted;
+use Illuminate\Database\QueryException;
+use Illuminate\Foundation\Testing\DatabaseMigrations;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Tests\TestCase;
 
 class DnsBindApplyTest extends TestCase
 {
-    use RefreshDatabase;
+    use DatabaseMigrations;
+
+    public function test_server_is_locked_while_checking_for_an_existing_application(): void
+    {
+        $context = $this->context();
+        $this->pendingPublication($context);
+
+        config(['database.connections.contender' => config('database.connections.pgsql')]);
+        $contender = DB::connection('contender');
+        $serverId = $context['server']->id;
+        $probe = fn () => $contender->transaction(fn () => $contender->select(
+            'SELECT id FROM dns_servers WHERE id = ? FOR UPDATE NOWAIT',
+            [$serverId],
+        ));
+
+        // Fixtures must be committed so that only the controller's lock
+        // prevents another connection from acquiring this server.
+        $this->assertCount(1, $probe());
+        $checked = false;
+
+        DB::listen(function (QueryExecuted $query) use ($probe, &$checked): void {
+            if ($checked || $query->connectionName !== 'pgsql'
+                || ! str_starts_with($query->sql, 'select exists(')
+                || ! str_contains($query->sql, 'dns_bind_operations')) {
+                return;
+            }
+
+            $checked = true;
+
+            try {
+                $probe();
+                $this->fail('Another connection acquired the server during authorization.');
+            } catch (QueryException $exception) {
+                $this->assertSame('55P03', (string) $exception->getCode());
+            }
+        });
+
+        try {
+            $this->actingAs($context['admin'])
+                ->postJson(route('servers.bind.apply', $context['server']))
+                ->assertOk();
+
+            $this->assertTrue($checked);
+            $this->assertCount(1, $probe());
+
+            $this->postJson(route('servers.bind.apply', $context['server']))
+                ->assertStatus(409);
+            $this->assertDatabaseCount('dns_bind_operations', 1);
+        } finally {
+            DB::purge('contender');
+        }
+    }
 
     public function test_admin_can_trigger_apply_when_something_is_pending(): void
     {
