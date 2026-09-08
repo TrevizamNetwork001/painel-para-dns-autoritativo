@@ -132,7 +132,8 @@ class DnsTsigKeyController extends Controller
         $key = DnsTsigKey::query()->findOrFail($validated['dns_tsig_key_id']);
         $this->audit($request, 'dns.tsig.associated', $key);
 
-        return back()->with('status', 'Chave TSIG associada. Republique a zona.');
+        return redirect(route('zones.show', $zone).'#reverse')
+            ->with('status', 'Chave TSIG associada. Republique a zona.');
     }
 
     private function authorizeKey(Request $request, DnsTsigKey $key): int
