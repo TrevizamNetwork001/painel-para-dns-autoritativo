@@ -42,4 +42,18 @@ sudo DNS_CENTER_DEPLOY_CONFIG=/etc/dns-center/deployment.env \
   ./deploy/dns-center-deploy update 1.3.1
 ```
 
-_(seção a completar após a execução)_
+- imagens `dns-center-app:1.3.1`/`dns-center-web:1.3.1` construídas
+  localmente e conferidas via `composer audit` ("No security
+  vulnerability advisories found.") antes do corte de tráfego;
+- backup do PostgreSQL criado e validado antes de qualquer migration:
+  `dns-center-20260908T165052Z.dump`, 1413166 bytes, SHA-256
+  `d65621591eaf73df45a993aa57d4a2ada815ae3281d7271ca0482525cc3b0ed3`;
+- `migrate:status`/`migrate --force`: nenhuma migration nova;
+- corte de tráfego bem-sucedido; estado registrado:
+  `current-version=1.3.1`, `previous-version=1.3.0` — rollback
+  disponível via `./deploy/dns-center-deploy rollback`.
+
+Conferido de forma independente após o deploy:
+`https://dnscenter.trevizamnetwork.com.br/up` respondeu HTTP 200;
+imagem ativa confirmada como `dns-center-app:1.3.1`; os 6 serviços
+saudáveis.
