@@ -63,3 +63,34 @@ existente no painel — não depende de SSH manual.
   de validator).
 
 Ver commits a partir de `17b220f`.
+
+## Deploy
+
+Executado em produção em 2026-09-08, a partir do HEAD `1ea4ddd` (tag
+`v1.3.3`):
+
+```
+sudo DNS_CENTER_DEPLOY_CONFIG=/etc/dns-center/deployment.env \
+  ./deploy/dns-center-deploy update 1.3.3
+```
+
+- imagens `dns-center-app:1.3.3`/`dns-center-web:1.3.3` construídas
+  localmente e conferidas via `composer audit` ("No security
+  vulnerability advisories found.") antes do corte de tráfego;
+- backup do PostgreSQL criado e validado antes de qualquer migration:
+  `dns-center-20260908T175205Z.dump`, 1442595 bytes, SHA-256
+  `0fad3d0d2bdf73685b21fee1482bd55edab75a09581aa3aff8cd7cc7b2146428`;
+- `migrate:status`/`migrate --force`: nenhuma migration nova;
+- corte de tráfego bem-sucedido; estado registrado:
+  `current-version=1.3.3`, `previous-version=1.3.2` — rollback
+  disponível via `./deploy/dns-center-deploy rollback`.
+
+Conferido de forma independente após o deploy:
+`https://dnscenter.trevizamnetwork.com.br/up` respondeu HTTP 200;
+os 4 serviços da aplicação (`app`, `web`, `queue`, `scheduler`)
+confirmados na imagem `1.3.3` e saudáveis.
+
+Pendente (operacional, não faz parte deste deploy): atualizar o
+agente instalado em ns1/ns2 da Conecta (e outros servidores) da
+versão 0.7.4 pra 0.7.5, pelo botão "Atualizar agente" no painel — sem
+isso, `include_wired` não aparece na prontidão desses servidores.

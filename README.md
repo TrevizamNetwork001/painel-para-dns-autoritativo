@@ -246,11 +246,17 @@ em produção. As evidências e limitações estão em
 | [Homologação da RC2](docs/RC_HOMOLOGATION_2.md) | Homologação operacional curta do fix de idempotência, ao vivo |
 | [Release 1.0.0](docs/RELEASE_1.0.0.md) | Promoção da v1.0.0 a partir da RC3 e correção da tag irregular |
 | [Histórico da interface](docs/CHANGELOG_UI.md) | Ajustes realizados na interface web |
+| [Release 1.3.3](docs/RELEASE_1.3.3.md) | Checagem de prontidão detecta BIND não vinculado ao include gerenciado antes de publicar |
 
 ## Status do projeto
 
-**v1.3.2 em produção desde 2026-09-08** (publicar uma zona agora volta
-pra lista de domínios em vez de ficar presa na zona, facilitando
+**v1.3.3 em produção desde 2026-09-08** (checagem de prontidão do
+agente agora detecta, antes de publicar, quando um BIND existente não
+está lendo o include gerenciado do DNS Center — o problema real que
+travou a importação da Conecta Network agora aparece como aviso em
+"Correções necessárias" em vez de só ser descoberto depois de adoção/
+TSIG/PTR/SOA já resolvidos; sobre a v1.3.2 que fez publicar uma zona
+voltar pra lista de domínios em vez de ficar presa na zona, facilitando
 trabalhar zona por zona; sobre a v1.3.1 que corrigiu a tela de zona
 voltar sempre pra aba "Registros DNS" depois de adotar/publicar/
 vincular PTR/associar TSIG, sobre a v1.3.0 de vínculo de PTR reverso,
