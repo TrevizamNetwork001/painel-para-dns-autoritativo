@@ -9,6 +9,7 @@
 
     $dashboardServers = App\Models\DnsServer::query()
         ->forOrganization($organizationId)
+        ->where('status', '!=', 'transferred')
         ->orderBy('name')
         ->get();
     $dashboardObservations = Illuminate\Support\Facades\Schema::hasTable(
@@ -494,7 +495,10 @@
                                         : 'Secundário' }}
                                 </span>
 
-                                <span class="dashboard-server-state">
+                                <span
+                                    class="dashboard-server-state
+                                        dashboard-server-state-{{ $server->status }}"
+                                >
                                     {{ $serverStatusLabel }}
                                 </span>
                             </a>

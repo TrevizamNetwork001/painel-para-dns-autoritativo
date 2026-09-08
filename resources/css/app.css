@@ -3716,6 +3716,26 @@ html[data-theme='light'] .users-modal-backdrop {
     white-space: nowrap;
 }
 
+.dashboard-server-state-online {
+    background: rgba(16, 185, 129, 0.14);
+    color: #10b981;
+}
+
+.dashboard-server-state-warning {
+    background: rgba(245, 158, 11, 0.14);
+    color: #f59e0b;
+}
+
+.dashboard-server-state-offline {
+    background: rgba(239, 68, 68, 0.14);
+    color: #ef4444;
+}
+
+.dashboard-server-state-maintenance {
+    background: rgba(100, 116, 139, 0.14);
+    color: #64748b;
+}
+
 @media (max-width: 620px) {
     .dashboard-server-item {
         grid-template-columns: 9px minmax(0, 1fr) auto;
