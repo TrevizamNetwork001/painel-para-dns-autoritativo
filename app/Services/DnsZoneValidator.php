@@ -144,6 +144,18 @@ class DnsZoneValidator
             $errors[] = 'Inclua pelo menos dois registros NS no apex da zona.';
         }
 
+        foreach ($zone->servers as $server) {
+            if (
+                in_array($server->pivot->role, ['primary', 'secondary'], true)
+                && data_get($server->bind_readiness, 'include_wired.statement_found') === false
+            ) {
+                $errors[] = sprintf(
+                    'O servidor %s não está lendo o include gerenciado do DNS Center — esta zona continuará presa depois de publicar.',
+                    $server->name,
+                );
+            }
+        }
+
         foreach ($nsRecords as $record) {
             if ($this->owner($record, $zone) !== '@') {
                 $warnings[] = sprintf(
