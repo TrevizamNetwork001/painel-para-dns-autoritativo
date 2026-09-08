@@ -653,7 +653,7 @@ class DnsZoneController extends Controller
 
         $changed = $summary['created'] + $summary['updated'];
 
-        return back()->with(
+        return redirect(route('zones.show', $zone).'#publication')->with(
             'status',
             $changed > 0
                 ? sprintf(
@@ -704,7 +704,7 @@ class DnsZoneController extends Controller
 
         $zone->forceFill(['origin' => 'managed'])->save();
 
-        return back()->with(
+        return redirect(route('zones.show', $zone).'#publication')->with(
             'status',
             'Adoção concluída. A zona agora pode ser publicada normalmente.',
         );
@@ -796,12 +796,12 @@ class DnsZoneController extends Controller
                 'exception' => $exception::class,
             ]);
 
-            return back()->withErrors([
+            return redirect(route('zones.show', $zone).'#publication')->withErrors([
                 'zone' => 'Não foi possível concluir a publicação. Verifique o servidor e o agente de publicação e tente novamente.',
             ]);
         }
 
-        return back()->with(
+        return redirect(route('zones.show', $zone).'#publication')->with(
             'status',
             $published
                 ? 'Publicação concluída. O artefato está disponível para os agentes configurados.'
