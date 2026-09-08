@@ -249,8 +249,9 @@ em produção. As evidências e limitações estão em
 
 ## Status do projeto
 
-**v1.1.0 em produção desde 2026-09-03** (feature de onboarding de
-empresa sobre a v1.0.1, que por sua vez é um patch de segurança sobre a
+**v1.2.0 em produção desde 2026-09-08** (troca de contexto de
+organização + transferência de servidor entre empresas, sobre a v1.1.0
+de onboarding de empresa, sobre a v1.0.1 de patch de segurança, sobre a
 v1.0.0, promovida em 2026-08-31 a partir da v1.0.0-rc3).
 
 As funcionalidades centrais e os fluxos BIND foram implementados e possuem
@@ -268,4 +269,9 @@ confirma zero advisories restantes. Em seguida, a tela `/empresas`
 precisar de shell — promovida a produção como v1.1.0
 (ver [Release 1.1.0](docs/RELEASE_1.1.0.md)) e homologada em produção
 no mesmo dia, com uma empresa real cadastrada e login confirmado pelo
-usuário criado.
+usuário criado. Em seguida vieram troca de contexto de organização pelo
+platform admin e transferência de servidor entre empresas — código
+iterado e testado direto em produção pelo operador (`1.1.1` a `1.1.7`)
+antes de ser commitado; consolidado numa release formal como v1.2.0
+(ver [Release 1.2.0](docs/RELEASE_1.2.0.md)), com o código conferido
+byte a byte contra o que já estava no ar.
