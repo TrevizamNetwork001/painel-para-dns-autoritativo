@@ -1220,6 +1220,39 @@
                                 <dd>{{ $offlineCount }}</dd>
                             </div>
                         </dl>
+
+                        @if ($canManageDomain)
+                            @php
+                                $pendingTargets = $publicationTargets
+                                    ->where('status', '!=', 'applied')
+                                    ->filter(fn ($target) => $target->server !== null)
+                                    ->unique('dns_server_id');
+                            @endphp
+
+                            @if ($pendingTargets->isNotEmpty())
+                                <div class="domain-publication-action">
+                                    @foreach ($pendingTargets as $target)
+                                        <button
+                                            type="button"
+                                            class="button button-secondary"
+                                            data-apply-zones-open
+                                            data-apply-zones-server-name="{{ $target->server->name }}"
+                                            data-apply-zones-store-url="{{ route('servers.bind.apply', $target->server) }}"
+                                            data-apply-zones-status-url="{{ route('servers.bind.apply.status', $target->server) }}"
+                                        >
+                                            Aplicar agora em {{ $target->server->name }}
+                                        </button>
+                                    @endforeach
+
+                                    <small>
+                                        Aplica todas as zonas pendentes daquele
+                                        servidor, não só esta — o agente processa
+                                        na próxima janela do timer, sem precisar
+                                        de SSH.
+                                    </small>
+                                </div>
+                            @endif
+                        @endif
                     @endif
                 </article>
 
@@ -1491,6 +1524,68 @@
                 @csrf
                 @method('DELETE')
             </form>
+        </section>
+    </div>
+@endif
+
+@if ($canManageDomain)
+    <div
+        class="record-modal-backdrop"
+        data-apply-zones-modal
+        aria-hidden="true"
+    >
+        <section
+            class="record-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="apply-zones-modal-title"
+        >
+            <header class="record-modal-header">
+                <div>
+                    <p class="eyebrow">Aplicar zonas</p>
+
+                    <h2 id="apply-zones-modal-title">
+                        Aplicar em <span data-apply-zones-server-label></span>
+                    </h2>
+
+                    <p>
+                        Isso aplica no BIND todas as zonas pendentes deste
+                        servidor agora — o agente executa na próxima janela
+                        do timer (até ~30s), sem precisar de SSH.
+                    </p>
+                </div>
+
+                <button
+                    type="button"
+                    class="record-modal-close"
+                    data-apply-zones-close
+                    aria-label="Fechar"
+                >
+                    ×
+                </button>
+            </header>
+
+            <div class="domain-publication-action" style="padding: 1.2rem;">
+                <p data-apply-zones-state></p>
+
+                <div data-apply-zones-confirm-actions>
+                    <button
+                        type="button"
+                        class="button button-secondary"
+                        data-apply-zones-close
+                    >
+                        Cancelar
+                    </button>
+
+                    <button
+                        type="button"
+                        class="button button-primary"
+                        data-apply-zones-confirm
+                    >
+                        Confirmar aplicação
+                    </button>
+                </div>
+            </div>
         </section>
     </div>
 @endif
@@ -1935,6 +2030,138 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     updateRecordFields();
+});
+</script>
+
+<script nonce="{{ $cspNonce ?? '' }}">
+document.addEventListener('DOMContentLoaded', () => {
+    const modal = document.querySelector('[data-apply-zones-modal]');
+    const serverLabel = document.querySelector('[data-apply-zones-server-label]');
+    const stateText = document.querySelector('[data-apply-zones-state]');
+    const confirmActions = document.querySelector('[data-apply-zones-confirm-actions]');
+    const confirmButton = document.querySelector('[data-apply-zones-confirm]');
+
+    if (!modal || !serverLabel || !stateText || !confirmActions || !confirmButton) {
+        return;
+    }
+
+    let activeButton = null;
+    let pollTimer = null;
+
+    const open = () => {
+        modal.classList.add('is-open');
+        modal.setAttribute('aria-hidden', 'false');
+        document.body.classList.add('has-open-modal');
+    };
+
+    const close = () => {
+        window.clearTimeout(pollTimer);
+        pollTimer = null;
+        modal.classList.remove('is-open');
+        modal.setAttribute('aria-hidden', 'true');
+        document.body.classList.remove('has-open-modal');
+    };
+
+    const confirming = () => {
+        stateText.textContent = 'Confirma aplicar as zonas pendentes agora?';
+        confirmActions.hidden = false;
+        confirmButton.disabled = false;
+    };
+
+    const waiting = () => {
+        stateText.textContent = 'Solicitação enviada. Aguardando o agente pegar a operação (até ~30s)…';
+        confirmActions.hidden = true;
+    };
+
+    const succeeded = () => {
+        stateText.textContent = 'Aplicado com sucesso.';
+        confirmActions.hidden = true;
+        window.setTimeout(() => window.location.reload(), 1200);
+    };
+
+    const failed = (message) => {
+        stateText.textContent = message || 'Falha ao aplicar.';
+        confirmActions.hidden = true;
+    };
+
+    const poll = async (statusUrl) => {
+        let payload;
+
+        try {
+            const response = await fetch(statusUrl, { headers: { Accept: 'application/json' } });
+            payload = await response.json();
+        } catch (error) {
+            pollTimer = window.setTimeout(() => poll(statusUrl), 4000);
+            return;
+        }
+
+        if (payload.status === 'succeeded') {
+            return succeeded();
+        }
+
+        if (payload.status === 'failed' || payload.status === 'expired') {
+            return failed(payload.error);
+        }
+
+        pollTimer = window.setTimeout(() => poll(statusUrl), 4000);
+    };
+
+    confirmButton.addEventListener('click', async () => {
+        if (!activeButton) {
+            return;
+        }
+
+        confirmButton.disabled = true;
+        waiting();
+
+        const storeUrl = activeButton.dataset.applyZonesStoreUrl;
+        const statusUrl = activeButton.dataset.applyZonesStatusUrl;
+
+        try {
+            const response = await fetch(storeUrl, {
+                method: 'POST',
+                headers: {
+                    Accept: 'application/json',
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': '{{ csrf_token() }}',
+                },
+            });
+
+            if (!response.ok) {
+                const payload = await response.json().catch(() => ({}));
+                return failed(payload.message);
+            }
+        } catch (error) {
+            return failed('Não foi possível conectar ao painel.');
+        }
+
+        poll(statusUrl);
+    });
+
+    document.querySelectorAll('[data-apply-zones-open]').forEach((button) => {
+        button.addEventListener('click', () => {
+            activeButton = button;
+            serverLabel.textContent = button.dataset.applyZonesServerName || '';
+            confirming();
+            open();
+        });
+    });
+
+    document.querySelectorAll('[data-apply-zones-close]').forEach((button) => {
+        button.addEventListener('click', close);
+    });
+
+    modal.addEventListener('click', (event) => {
+        if (event.target === modal) {
+            close();
+        }
+    });
+
+    document.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape' && modal.classList.contains('is-open')) {
+            close();
+        }
+    });
 });
 </script>
 

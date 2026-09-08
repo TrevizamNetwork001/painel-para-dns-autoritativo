@@ -1573,6 +1573,32 @@ class AgentTests(unittest.TestCase):
         upgrade.assert_called_once()
         readiness.assert_not_called()
 
+    def test_run_authorized_operation_dispatches_apply_zones(self) -> None:
+        config = {
+            "base_url": "https://panel.test", "token": "t",
+            "server": {"name": "ns1"},
+        }
+
+        with patch.object(
+            agent, "request_json",
+            return_value={"operation": {
+                "id": 10, "action": "apply_zones",
+                "authorization_nonce": "nonce", "authorized_at": None,
+            }},
+        ), patch.object(
+            agent, "sync_zones",
+            return_value={"status": "applied", "updates": 1},
+        ) as sync, patch.object(
+            agent, "send_readiness",
+        ) as readiness:
+            result = agent.run_authorized_operation(config)
+
+        self.assertEqual("succeeded", result["status"])
+        sync.assert_called_once_with(
+            config, apply=True, confirmation="APLICAR ZONAS ns1",
+        )
+        readiness.assert_called_once()
+
     def test_command_execution_disables_shell_and_has_timeout(self) -> None:
         completed = Mock(returncode=0, stdout="ok", stderr="")
 

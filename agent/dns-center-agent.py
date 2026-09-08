@@ -34,7 +34,7 @@ from email.utils import parsedate_to_datetime
 from pathlib import Path
 from typing import Any
 
-AGENT_VERSION = "0.7.5"
+AGENT_VERSION = "0.7.6"
 OFFICIAL_BASE_URL = "https://dnscenter.trevizamnetwork.com.br"
 DEFAULT_CONFIG = Path("/etc/dns-center-agent/agent.json")
 DEFAULT_STATE_DIR = Path("/var/lib/dns-center-agent")
@@ -2386,6 +2386,7 @@ def run_authorized_operation(
 
     if action not in {
         "install_bind", "configure_bind", "discover_bind_zones", "upgrade_agent",
+        "apply_zones",
     }:
         # Tell the panel immediately instead of leaving the operation stuck
         # in "authorized" until its TTL sweep expires it — an older agent
@@ -2406,6 +2407,12 @@ def run_authorized_operation(
             result = discover_bind_zones(config)
         elif action == "upgrade_agent":
             result = upgrade_agent_self(config)
+        elif action == "apply_zones":
+            server_name = str(config.get("server", {}).get("name", ""))
+            result = sync_zones(
+                config, apply=True,
+                confirmation=f"APLICAR ZONAS {server_name}".strip(),
+            )
         else:
             result = configure_bind(str(action))
     except AgentError as exception:

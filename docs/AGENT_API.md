@@ -140,10 +140,41 @@ O agente só envia `applying` imediatamente antes da aplicação real e só envi
 executa nova reconfiguração e mantém a versão instalada anterior.
 
 Por padrão, o serviço periódico conclui apenas download, staging e validação.
-Isso não é aplicação. A aplicação BIND real já existe, mas continua exigindo a
-decisão local explícita `DNS_CENTER_AGENT_ALLOW_APPLY=1`, execução como root e
-`--sync-zones --apply --confirm "APLICAR ZONAS <servidor>"`. O painel não envia
-comandos e a instalação automática de pacotes BIND não faz parte deste ciclo.
+Isso não é aplicação. A aplicação BIND real já existe e pode acontecer de duas
+formas, ambas exigindo `DNS_CENTER_AGENT_ALLOW_APPLY=1` e execução como root:
+
+- manual via SSH: `--sync-zones --apply --confirm "APLICAR ZONAS <servidor>"`;
+- via painel, botão "Aplicar agora" na aba de publicação da zona: cria uma
+  operação autorizada `apply_zones` (mesmo mecanismo de `install_bind`/
+  `upgrade_agent`) que o agente coleta na próxima janela do timer de operações
+  (`--run-authorized-operation`, ~30s) e executa como
+  `sync_zones(config, apply=True, confirmation="APLICAR ZONAS <servidor>")` —
+  a frase de confirmação é suprida internamente pelo agente, já que a
+  autorização humana aconteceu no clique de confirmação do modal do painel,
+  não por digitação de texto.
+
+Em ambos os casos `DNS_CENTER_AGENT_ALLOW_APPLY=1` é a decisão local do
+sysadmin do servidor e não vem do painel. Para habilitar o botão "Aplicar
+agora" sem precisar de SSH a cada aplicação, defina essa variável de forma
+persistente no serviço do timer de operações:
+
+```bash
+sudo systemctl edit dns-center-agent-operation.service
+```
+
+```ini
+[Service]
+Environment=DNS_CENTER_AGENT_ALLOW_APPLY=1
+```
+
+```bash
+sudo systemctl daemon-reload
+```
+
+Sem isso, `apply_zones` disparado pelo painel falha com a mesma mensagem do
+CLI manual ("Apply bloqueado: defina DNS_CENTER_AGENT_ALLOW_APPLY=1."),
+reportada de volta como operação `failed` — não é um erro silencioso. A
+instalação automática de pacotes BIND não faz parte deste ciclo.
 
 ### Estado local e retomada
 

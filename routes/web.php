@@ -5,6 +5,7 @@ use App\Http\Controllers\Auth\ForgotPasswordController;
 use App\Http\Controllers\Auth\ResetPasswordController;
 use App\Http\Controllers\DnsAgentEnrollmentController;
 use App\Http\Controllers\DnsAgentInstallAssignmentController;
+use App\Http\Controllers\DnsBindApplyController;
 use App\Http\Controllers\DnsBindDiscoveryController;
 use App\Http\Controllers\DnsNameserverController;
 use App\Http\Controllers\DnsServerController;
@@ -305,6 +306,16 @@ Route::middleware([
         '/servidores/{server}/bind/descoberta/importar',
         [DnsBindDiscoveryController::class, 'import'],
     )->name('servers.bind.discovery.import');
+
+    Route::post(
+        '/servidores/{server}/bind/aplicar-zonas',
+        [DnsBindApplyController::class, 'store'],
+    )->middleware('throttle:5,1')->name('servers.bind.apply');
+
+    Route::get(
+        '/servidores/{server}/bind/aplicar-zonas/status',
+        [DnsBindApplyController::class, 'status'],
+    )->name('servers.bind.apply.status');
 });
 
 Route::middleware([
