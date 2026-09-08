@@ -1126,6 +1126,30 @@
                         </form>
                     @endif
 
+                    @if ($canManageDomain && $zone->isReverseZone())
+                        <form
+                            method="POST"
+                            action="{{ route('zones.ptr-sync', $zone) }}"
+                            class="domain-publication-action"
+                            onsubmit="return confirm('Vincular os registros PTR desta zona às identidades de nameserver da organização?')"
+                        >
+                            @csrf
+
+                            <button
+                                type="submit"
+                                class="button button-secondary"
+                            >
+                                Vincular PTR das identidades de nameserver
+                            </button>
+
+                            <small>
+                                Atualiza os registros PTR desta zona reversa
+                                pra apontar às identidades de nameserver cujo
+                                IPv4 está dentro dela.
+                            </small>
+                        </form>
+                    @endif
+
                     <div class="domain-validation-success">
                         <strong>Última publicação</strong>
 

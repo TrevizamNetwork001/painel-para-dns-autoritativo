@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\DnsAgentPublication;
+use App\Models\DnsNameserverIdentity;
 use App\Models\DnsNameserverProfile;
 use App\Models\DnsRecord;
 use App\Models\DnsServer;
@@ -10,6 +11,7 @@ use App\Models\DnsTsigKey;
 use App\Models\DnsZone;
 use App\Models\DnsZoneVersion;
 use App\Services\BindZoneRenderer;
+use App\Services\DnsReversePtrSynchronizer;
 use App\Services\DnsZoneNameserverSynchronizer;
 use App\Services\DnsZoneValidator;
 use Illuminate\Http\RedirectResponse;
@@ -615,6 +617,53 @@ class DnsZoneController extends Controller
         return back()->with(
             'status',
             'Registro DNS salvo. As alterações ainda não foram publicadas.',
+        );
+    }
+
+    public function ptrSync(
+        Request $request,
+        DnsZone $zone,
+        DnsReversePtrSynchronizer $synchronizer,
+        BindZoneRenderer $renderer,
+    ): RedirectResponse {
+        $organizationId = $this->authorizeWrite($request);
+        $this->authorizeZone($request, $zone);
+
+        abort_unless($zone->isReverseZone(), 404);
+
+        $identities = DnsNameserverIdentity::query()
+            ->forOrganization($organizationId)
+            ->enabled()
+            ->get();
+
+        $summary = DB::transaction(function () use ($zone, $identities, $synchronizer, $request, $renderer): array {
+            $result = $synchronizer->synchronize($zone, $identities);
+
+            if (($result['created'] + $result['updated']) > 0) {
+                $this->bump(
+                    $zone,
+                    $request,
+                    'PTR vinculado às identidades de nameserver.',
+                    $renderer,
+                );
+            }
+
+            return $result;
+        });
+
+        $changed = $summary['created'] + $summary['updated'];
+
+        return back()->with(
+            'status',
+            $changed > 0
+                ? sprintf(
+                    '%d registro(s) PTR vinculado(s) (%d criado(s), %d atualizado(s)). %d já estavam corretos.',
+                    $changed,
+                    $summary['created'],
+                    $summary['updated'],
+                    $summary['unchanged'],
+                )
+                : 'Nenhum registro PTR precisou de alteração.',
         );
     }
 

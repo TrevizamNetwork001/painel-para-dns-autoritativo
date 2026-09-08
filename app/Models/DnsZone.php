@@ -107,6 +107,13 @@ class DnsZone extends Model
         return $this->origin === 'bind_import';
     }
 
+    public function isReverseZone(): bool
+    {
+        $name = strtolower(rtrim(trim($this->name), '.'));
+
+        return $name === 'in-addr.arpa' || str_ends_with($name, '.in-addr.arpa');
+    }
+
     public function scopeForOrganization(
         Builder $query,
         int $organizationId,
