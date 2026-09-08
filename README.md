@@ -249,14 +249,15 @@ em produção. As evidências e limitações estão em
 
 ## Status do projeto
 
-**v1.3.1 em produção desde 2026-09-08** (corrige a tela de zona voltar
-sempre pra aba "Registros DNS" depois de adotar/publicar/vincular
-PTR/associar TSIG — achado ao vivo importando a Conecta Network; sobre
-a v1.3.0 de vínculo de PTR reverso, sobre a v1.2.2 de correções de
-dashboard, sobre a v1.2.0 de troca de contexto de organização +
-transferência de servidor, sobre a v1.1.0 de onboarding de empresa,
-sobre a v1.0.1 de patch de segurança, sobre a v1.0.0, promovida em
-2026-08-31 a partir da v1.0.0-rc3).
+**v1.3.2 em produção desde 2026-09-08** (publicar uma zona agora volta
+pra lista de domínios em vez de ficar presa na zona, facilitando
+trabalhar zona por zona; sobre a v1.3.1 que corrigiu a tela de zona
+voltar sempre pra aba "Registros DNS" depois de adotar/publicar/
+vincular PTR/associar TSIG, sobre a v1.3.0 de vínculo de PTR reverso,
+sobre a v1.2.2 de correções de dashboard, sobre a v1.2.0 de troca de
+contexto de organização + transferência de servidor, sobre a v1.1.0 de
+onboarding de empresa, sobre a v1.0.1 de patch de segurança, sobre a
+v1.0.0, promovida em 2026-08-31 a partir da v1.0.0-rc3).
 
 As funcionalidades centrais e os fluxos BIND foram implementados e possuem
 testes automatizados e homologações descartáveis documentadas. A homologação
