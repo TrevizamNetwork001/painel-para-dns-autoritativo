@@ -1,0 +1,35 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build PHP test environment
+        run: docker compose --env-file /dev/null -f compose.ci.yaml build app
+      - name: Install PHP dependencies
+        run: docker compose --env-file /dev/null -f compose.ci.yaml run --rm app composer install --no-interaction --prefer-dist --no-progress
+      - name: Check PHP style
+        run: docker compose --env-file /dev/null -f compose.ci.yaml run --rm app vendor/bin/pint --test
+      - name: Build frontend
+        run: docker compose --env-file /dev/null -f compose.ci.yaml run --rm assets
+      - name: Test Laravel
+        run: docker compose --env-file /dev/null -f compose.ci.yaml run --rm app php vendor/bin/phpunit
+      - name: Test agent and installation scripts
+        run: python3 -m unittest discover -s tests/Agent
+      - name: Clean up
+        if: always()
+        run: docker compose --env-file /dev/null -f compose.ci.yaml down --volumes --remove-orphans

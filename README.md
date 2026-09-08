@@ -10,6 +10,10 @@ desabilitada nos servidores gerenciados.
 
 ## Estado atual
 
+A avaliação técnica e as melhorias de confiabilidade de 2026-09-08 estão
+registradas em [Avaliação e melhorias](docs/AVALIACAO_E_MELHORIAS_2026_09_08.md),
+com resultados dos testes e pendências operacionais.
+
 O projeto já possui:
 
 - organizações com isolamento multi-tenant;
@@ -150,6 +154,44 @@ docker compose up -d --build
 O projeto também define os scripts Composer `setup`, `dev` e `test` e os
 scripts npm `dev` e `build`. A execução direta desses scripts requer PHP,
 Composer e Node.js disponíveis no ambiente local.
+
+### Integração contínua
+
+O workflow [CI](.github/workflows/ci.yml) executa Pint, build frontend e as
+suítes Laravel e Python em pushes e pull requests no GitHub. O ambiente
+[compose.ci.yaml](compose.ci.yaml) usa PostgreSQL temporário, sem portas
+publicadas, com o banco exclusivo `dns_center_testing`. Ele não usa o Compose
+de produção. O build frontend deve preceder os testes Laravel, pois as views
+precisam do manifest Vite.
+
+Para reproduzir em um checkout de desenvolvimento dedicado, sem `.env` de
+produção e sem caches de configuração de produção:
+
+```bash
+docker compose --env-file /dev/null -f compose.ci.yaml build app
+docker compose --env-file /dev/null -f compose.ci.yaml run --rm app composer install --no-interaction --prefer-dist
+docker compose --env-file /dev/null -f compose.ci.yaml run --rm app vendor/bin/pint --test
+docker compose --env-file /dev/null -f compose.ci.yaml run --rm assets
+docker compose --env-file /dev/null -f compose.ci.yaml run --rm app php vendor/bin/phpunit
+python3 -m unittest discover -s tests/Agent
+docker compose --env-file /dev/null -f compose.ci.yaml down --volumes --remove-orphans
+```
+
+As credenciais presentes nesse Compose são exclusivas do banco temporário de
+CI. O workflow precisa ser enviado a um repositório GitHub com Actions
+habilitado para executar automaticamente.
+
+### Tempos da fila
+
+Os workers dos Composes de desenvolvimento e produção usam `--timeout=120`.
+O `retry_after` padrão de database, Redis e Beanstalkd é 180 segundos, para
+que uma tarefa não volte à fila enquanto seu worker ainda pode executá-la.
+Ao atualizar instalações existentes, confira os overrides
+`DB_QUEUE_RETRY_AFTER`, `REDIS_QUEUE_RETRY_AFTER` e
+`BEANSTALKD_QUEUE_RETRY_AFTER` no ambiente externo: devem ser maiores que o
+timeout do worker. Recrie os workers e atualize o cache de configuração pelo
+procedimento de deploy. Para SQS, confira separadamente o visibility timeout
+na configuração da fila.
 
 ### Banco de testes
 
