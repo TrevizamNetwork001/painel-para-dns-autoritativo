@@ -74,5 +74,25 @@ sudo DNS_CENTER_DEPLOY_CONFIG=/etc/dns-center/deployment.env \
   ./deploy/dns-center-deploy update 1.2.0
 ```
 
-_(seção a completar após a execução, com backup/hash/health checks,
-seguindo o mesmo padrão das versões anteriores)_
+Executado em produção em 2026-09-08, a partir do HEAD `8e0c3ea` (tag
+`v1.2.0`):
+
+- imagens `dns-center-app:1.2.0`/`dns-center-web:1.2.0` construídas
+  localmente e conferidas via `composer audit` ("No security
+  vulnerability advisories found.") e diff de hash contra a imagem
+  `1.1.7` já em produção (idênticas) antes do corte de tráfego;
+- backup do PostgreSQL criado e validado antes de qualquer migration:
+  `dns-center-20260908T150356Z.dump`, 1322462 bytes, SHA-256
+  `0634ec84d00d4f3ab47caf4e1c2fbad72293d7a28a318329580a84cbafc52a11`;
+- `migrate:status`/`migrate --force`: nenhuma migration nova;
+- `security-check` rodou antes e depois do corte, ambas vezes apenas
+  com o warning já conhecido de `TRUSTED_PROXIES` vazio;
+- corte de tráfego bem-sucedido; estado registrado:
+  `current-version=1.2.0`, `previous-version=1.1.7` — rollback
+  disponível via `./deploy/dns-center-deploy rollback`.
+
+Conferido de forma independente após o deploy:
+`https://dnscenter.trevizamnetwork.com.br/up` respondeu HTTP 200; as
+rotas `servers.transfer.*` e `platform.organization-context.update`
+confirmadas via `route:list` no container `app-1` já em produção;
+imagem ativa confirmada como `dns-center-app:1.2.0`.
