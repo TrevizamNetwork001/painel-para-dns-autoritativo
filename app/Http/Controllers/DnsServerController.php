@@ -33,14 +33,14 @@ class DnsServerController extends Controller
             $relations[] = 'authoritativeObservations.zone';
         }
 
-        $servers = DnsServer::query()
+        $allServers = DnsServer::query()
             ->forOrganization($organizationId)
             ->with($relations)
             ->orderBy('name')
             ->get();
 
         if (! $hasAuthoritativeObservations) {
-            $servers->each(
+            $allServers->each(
                 fn (DnsServer $server) => $server->setRelation(
                     'authoritativeObservations',
                     collect(),
@@ -48,8 +48,16 @@ class DnsServerController extends Controller
             );
         }
 
+        $servers = $allServers
+            ->where('status', '!=', 'transferred')
+            ->values();
+        $archivedServers = $allServers
+            ->where('status', 'transferred')
+            ->values();
+
         return view('servers.index', [
             'servers' => $servers,
+            'archivedServers' => $archivedServers,
             'roles' => DnsServer::ROLES,
             'environments' => DnsServer::ENVIRONMENTS,
             'unassignedInstallRequests' => $this->unassignedInstallRequests(
@@ -159,6 +167,12 @@ class DnsServerController extends Controller
     ): RedirectResponse {
         $this->ensureCanManage($request);
         $this->ensureServerAccess($request, $server);
+
+        abort_if(
+            $server->status === 'transferred',
+            409,
+            'Um servidor transferido não pode ser reativado na empresa de origem.',
+        );
 
         $enableServer = ! $server->enabled;
 

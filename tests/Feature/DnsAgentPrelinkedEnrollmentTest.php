@@ -33,6 +33,12 @@ class DnsAgentPrelinkedEnrollmentTest extends TestCase
         $this->assertNotSame($plain, $code->code_hash);
         $this->assertTrue($code->expires_at->isFuture());
         $this->assertStringNotContainsString($plain, (string) $code->toJson());
+        $this->get(route('servers.agent.show', $server))
+            ->assertOk()
+            ->assertSee('agent-enrollment-token', false)
+            ->assertSee('Token temporário para integrar o agente')
+            ->assertSee('Copiar token')
+            ->assertSee($plain);
         $this->assertDatabaseHas('security_audits', ['event' => 'agent.enrollment_code_issued']);
         $this->assertStringNotContainsString($plain, implode('|', SecurityAudit::query()->pluck('reason')->all()));
     }
@@ -122,6 +128,56 @@ class DnsAgentPrelinkedEnrollmentTest extends TestCase
         $this->actingAs($admin)->post(route('servers.agent.install-requests.approve', [$server, $installRequest]))->assertRedirect();
         $this->assertSame('approved', $installRequest->fresh()->status);
         $this->assertDatabaseCount('dns_agents', 1);
+    }
+
+    public function test_revoked_agent_can_be_enrolled_on_a_server_in_another_organization(): void
+    {
+        $sourceOrganization = Organization::factory()->create();
+        $agentUuid = (string) Str::uuid();
+        $sourceServer = DnsServer::factory()->create([
+            'organization_id' => $sourceOrganization->id,
+            'agent_uuid' => $agentUuid,
+            'agent_status' => 'revoked',
+        ]);
+        [$targetOrganization, $admin] = $this->user('organization_admin', true);
+        $targetServer = DnsServer::factory()->create([
+            'organization_id' => $targetOrganization->id,
+        ]);
+        $oldAgent = DnsAgent::query()->create([
+            'organization_id' => $sourceOrganization->id,
+            'dns_server_id' => $sourceServer->id,
+            'agent_uuid' => $agentUuid,
+            'fingerprint' => hash('sha256', 'old-machine'),
+            'token_hash' => hash('sha256', 'revoked-credential'),
+            'registered_at' => now()->subDay(),
+            'revoked_at' => now()->subHour(),
+            'metadata' => ['installation' => 'previous_tenant'],
+        ]);
+
+        [, $plain] = $this->code($targetServer);
+        $this->postJson('/api/agent/install-requests', $this->payload($plain, $agentUuid))
+            ->assertAccepted();
+        $installRequest = DnsAgentInstallRequest::query()->sole();
+
+        $this->actingAs($admin)
+            ->post(route('servers.agent.install-requests.approve', [$targetServer, $installRequest]))
+            ->assertRedirect(route('servers.agent.show', $targetServer));
+
+        $oldAgent->refresh();
+        $newAgent = DnsAgent::query()->where('agent_uuid', $agentUuid)->sole();
+
+        $this->assertNotSame($agentUuid, $oldAgent->agent_uuid);
+        $this->assertSame($agentUuid, $oldAgent->metadata['superseded_agent_uuid']);
+        $this->assertSame($sourceOrganization->id, $oldAgent->organization_id);
+        $this->assertSame($sourceServer->id, $oldAgent->dns_server_id);
+        $this->assertNotNull($oldAgent->revoked_at);
+        $this->assertNull($sourceServer->fresh()->agent_uuid);
+        $this->assertNotSame($oldAgent->id, $newAgent->id);
+        $this->assertSame($targetOrganization->id, $newAgent->organization_id);
+        $this->assertSame($targetServer->id, $newAgent->dns_server_id);
+        $this->assertNull($newAgent->revoked_at);
+        $this->assertSame('approved', $installRequest->fresh()->status);
+        $this->assertDatabaseCount('dns_agents', 2);
     }
 
     public function test_onboarding_poll_detects_new_request_for_approval(): void

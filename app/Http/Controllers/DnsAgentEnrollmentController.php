@@ -337,14 +337,38 @@ class DnsAgentEnrollmentController extends Controller
                 ->lockForUpdate()
                 ->first();
             abort_if(
-                $existingAgent && (
-                    $existingAgent->revoked_at === null
-                    || (int) $existingAgent->dns_server_id !== (int) $server->id
-                    || (int) $existingAgent->organization_id !== $organizationId
-                ),
+                $existingAgent && $existingAgent->revoked_at === null,
                 409,
                 'Este agente já está registrado em outro vínculo ativo.',
             );
+
+            if ($existingAgent
+                && ((int) $existingAgent->dns_server_id !== (int) $server->id
+                    || (int) $existingAgent->organization_id !== $organizationId)
+            ) {
+                $previousAgentUuid = $existingAgent->agent_uuid;
+                $metadata = is_array($existingAgent->metadata) ? $existingAgent->metadata : [];
+                $metadata['superseded_agent_uuid'] = $previousAgentUuid;
+                $metadata['superseded_at'] = $now->toIso8601String();
+                $metadata['superseded_by_organization_id'] = $organizationId;
+                $metadata['superseded_by_dns_server_id'] = $server->id;
+
+                // Preserve the revoked row and its historical relations while
+                // releasing the physical agent UUID for the new tenant binding.
+                DnsServer::query()
+                    ->whereKey($existingAgent->dns_server_id)
+                    ->where('agent_uuid', $previousAgentUuid)
+                    ->lockForUpdate()
+                    ->update([
+                        'agent_uuid' => null,
+                        'updated_at' => $now,
+                    ]);
+                $existingAgent->forceFill([
+                    'agent_uuid' => (string) Str::uuid(),
+                    'metadata' => $metadata,
+                ])->save();
+                $existingAgent = null;
+            }
 
             $agentAttributes = [
                 'organization_id' => $organizationId,

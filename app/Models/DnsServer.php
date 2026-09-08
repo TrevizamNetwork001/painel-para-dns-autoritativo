@@ -31,6 +31,7 @@ class DnsServer extends Model
         'warning',
         'offline',
         'maintenance',
+        'transferred',
     ];
 
     public const AGENT_STATUSES = [
