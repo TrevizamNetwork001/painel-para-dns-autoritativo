@@ -173,6 +173,15 @@ document.querySelectorAll('[data-account-menu]').forEach((menu) => {
     });
 });
 
+document
+    .querySelectorAll('[data-platform-organization-context]')
+    .forEach((select) => {
+        select.addEventListener('change', () => {
+            select.closest('[data-platform-organization-context-form]')
+                ?.requestSubmit();
+        });
+    });
+
 
 // DNS CENTER USERS UI 2.0
 

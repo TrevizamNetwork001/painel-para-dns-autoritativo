@@ -2993,6 +2993,17 @@ html[data-theme='light']
     background: rgba(16, 185, 129, 0.14);
 }
 
+.button-warning-soft {
+    border: 1px solid rgba(245, 158, 11, 0.26);
+    background: rgba(245, 158, 11, 0.09);
+    color: #f59e0b;
+}
+
+.button-warning-soft:hover:not(:disabled) {
+    border-color: rgba(245, 158, 11, 0.44);
+    background: rgba(245, 158, 11, 0.15);
+}
+
 .users-empty-state,
 .users-filter-empty {
     padding: 2rem;
@@ -4375,6 +4386,39 @@ html[data-theme='light'] .users-modal-backdrop {
 
 .agent-code-warning {
     color: var(--text-muted);
+}
+
+.agent-enrollment-token {
+    display: grid;
+    gap: 0.85rem;
+    margin-top: 1rem;
+    padding: 1rem;
+    border: 1px solid rgba(245, 158, 11, 0.48);
+    border-left: 4px solid #f59e0b;
+    border-radius: 0.9rem;
+    background: linear-gradient(135deg, rgba(245, 158, 11, 0.16), rgba(245, 158, 11, 0.05));
+    box-shadow: 0 0 0 1px rgba(245, 158, 11, 0.05), 0 12px 28px rgba(0, 0, 0, 0.12);
+}
+
+.agent-enrollment-token > div:first-child {
+    display: grid;
+    gap: 0.35rem;
+}
+
+.agent-enrollment-token strong {
+    font-size: 0.9rem;
+}
+
+.agent-enrollment-token p,
+.agent-enrollment-token small {
+    margin: 0;
+    color: var(--text-muted);
+    font-size: 0.68rem;
+}
+
+.agent-enrollment-token .agent-code-box {
+    border-color: rgba(245, 158, 11, 0.35);
+    background: rgba(15, 23, 42, 0.48);
 }
 
 .agent-code-box,

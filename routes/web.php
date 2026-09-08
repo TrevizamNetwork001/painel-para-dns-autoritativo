@@ -8,10 +8,12 @@ use App\Http\Controllers\DnsAgentInstallAssignmentController;
 use App\Http\Controllers\DnsBindDiscoveryController;
 use App\Http\Controllers\DnsNameserverController;
 use App\Http\Controllers\DnsServerController;
+use App\Http\Controllers\DnsServerTransferController;
 use App\Http\Controllers\DnsTsigKeyController;
 use App\Http\Controllers\DnsZoneController;
 use App\Http\Controllers\OrganizationController;
 use App\Http\Controllers\PasswordChangeController;
+use App\Http\Controllers\PlatformOrganizationContextController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\UserManagementController;
 use Illuminate\Support\Facades\Route;
@@ -123,6 +125,14 @@ Route::middleware(['auth', 'password.changed', 'organization'])
 Route::middleware([
     'auth',
     'password.changed',
+])->post(
+    '/plataforma/empresa-atual',
+    [PlatformOrganizationContextController::class, 'update'],
+)->name('platform.organization-context.update');
+
+Route::middleware([
+    'auth',
+    'password.changed',
     'organization',
     'organization.role:organization_admin',
 ])->prefix('usuarios')->name('users.')->group(function (): void {
@@ -204,6 +214,16 @@ Route::middleware([
         '/servidores/{server}/status',
         [DnsServerController::class, 'toggleStatus']
     )->name('servers.status');
+
+    Route::get(
+        '/servidores/{server}/transferencia',
+        [DnsServerTransferController::class, 'show']
+    )->name('servers.transfer.show');
+
+    Route::post(
+        '/servidores/{server}/transferencia',
+        [DnsServerTransferController::class, 'store']
+    )->name('servers.transfer.store');
 });
 
 Route::middleware([

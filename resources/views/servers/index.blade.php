@@ -23,6 +23,7 @@
         'warning' => 'Atenção',
         'offline' => 'Offline',
         'maintenance' => 'Desativado',
+        'transferred' => 'Transferido',
     ];
 @endphp
 
@@ -208,6 +209,34 @@
                     )) {
                         $serverAlerts->push('Zona próxima da expiração');
                     }
+
+                    $agentContactFresh = $server->last_seen_at?->gte(now()->subMinutes(10)) ?? false;
+                    $agentReadiness = $server->bind_readiness ?? [];
+                    $agentReadinessOk = $server->bind_readiness_at !== null
+                        && (bool) data_get($agentReadiness, 'bind_installed', false)
+                        && (bool) data_get($agentReadiness, 'service.active', false)
+                        && (bool) data_get($agentReadiness, 'listeners.tcp_53', false)
+                        && (bool) data_get($agentReadiness, 'listeners.udp_53', false);
+                    $agentIndicator = match (true) {
+                        $server->agent_status === 'online' && $agentContactFresh && $agentReadinessOk => [
+                            'class' => 'button-success-soft',
+                            'label' => '● Agente operacional',
+                            'title' => 'Agente online, comunicação recente e BIND pronto',
+                        ],
+                        $server->agent_status === 'pending'
+                            || ($server->agent_status === 'online' && $agentContactFresh) => [
+                            'class' => 'button-warning-soft',
+                            'label' => '● Agente em atenção',
+                            'title' => 'Integração em andamento ou prontidão BIND requer atenção',
+                        ],
+                        default => [
+                            'class' => 'button-danger-soft',
+                            'label' => $server->agent_uuid ? '● Agente com falha' : '● Agente não integrado',
+                            'title' => $server->agent_uuid
+                                ? 'Agente sem comunicação recente, offline ou bloqueado'
+                                : 'Este servidor ainda não possui agente integrado',
+                        ],
+                    };
                 @endphp
                 <article class="server-row">
                     <div class="server-row-main">
@@ -301,9 +330,10 @@
                     <div class="server-row-actions">
                         <a
                             href="{{ route('servers.agent.show', $server) }}"
-                            class="button button-secondary button-small"
+                            class="button {{ $agentIndicator['class'] }} button-small"
+                            title="{{ $agentIndicator['title'] }}"
                         >
-                            Agente
+                            {{ $agentIndicator['label'] }}
                         </a>
 
                         <button
@@ -321,6 +351,15 @@
                         >
                             Editar
                         </button>
+
+                        @if (auth()->user()->is_platform_admin)
+                            <a
+                                href="{{ route('servers.transfer.show', $server) }}"
+                                class="button button-secondary button-small"
+                            >
+                                Transferir
+                            </a>
+                        @endif
 
                         <form
                             method="POST"
@@ -363,6 +402,48 @@
                 </div>
             @endforelse
         </section>
+
+        @if ($archivedServers->isNotEmpty())
+            <details class="servers-list-panel">
+                <summary class="servers-list-heading">
+                    <div>
+                        <p class="eyebrow">Consulta histórica</p>
+                        <h2>Servidores arquivados</h2>
+                    </div>
+                    <span>{{ $archivedServers->count() }} servidor(es)</span>
+                </summary>
+
+                @foreach ($archivedServers as $archivedServer)
+                    <article class="server-row">
+                        <div class="server-row-main">
+                            <div class="server-icon">▤</div>
+                            <div>
+                                <strong>{{ $archivedServer->name }}</strong>
+                                <span>{{ $archivedServer->hostname }}</span>
+                                <small>
+                                    Transferido para outra empresa · cadastro preservado somente para consulta
+                                </small>
+                            </div>
+                        </div>
+
+                        <div class="server-row-meta">
+                            <span class="server-status server-status-maintenance">
+                                Arquivado
+                            </span>
+                        </div>
+
+                        <div class="server-row-actions">
+                            <a
+                                href="{{ route('servers.agent.show', $archivedServer) }}"
+                                class="button button-secondary button-small"
+                            >
+                                Consultar histórico
+                            </a>
+                        </div>
+                    </article>
+                @endforeach
+            </details>
+        @endif
     </main>
 </div>
 

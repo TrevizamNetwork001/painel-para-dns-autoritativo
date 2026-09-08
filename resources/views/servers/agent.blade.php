@@ -266,10 +266,21 @@
                 </form>
 
                 @if ($issuedEnrollmentCode)
-                    <div class="alert alert-warning">
-                        <strong>Código exibido uma única vez</strong>
-                        <code id="agent-enrollment-code">{{ $issuedEnrollmentCode }}</code>
-                        <span>Não será possível recuperá-lo ao fechar ou recarregar esta tela.</span>
+                    <div class="agent-enrollment-token" role="status">
+                        <div>
+                            <span class="status-badge status-warning">Ação necessária</span>
+                            <strong>Token temporário para integrar o agente</strong>
+                            <p>Copie este token e informe-o no prompt do agente no servidor.</p>
+                        </div>
+
+                        <div class="agent-code-box">
+                            <code id="agent-enrollment-code">{{ $issuedEnrollmentCode }}</code>
+                            <button type="button" class="button button-warning-soft" data-copy-target="agent-enrollment-code">
+                                Copiar token
+                            </button>
+                        </div>
+
+                        <small>Exibido uma única vez. Não será possível recuperá-lo após fechar ou recarregar esta tela.</small>
                     </div>
 
                     <div class="agent-choice-grid">

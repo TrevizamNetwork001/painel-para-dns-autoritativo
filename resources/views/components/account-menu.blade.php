@@ -13,16 +13,70 @@
             ? 'Administrador da plataforma'
             : 'Usuário',
     };
+
+    $platformOrganizations = $currentUser->is_platform_admin
+        ? \App\Models\Organization::query()
+            ->where('status', 'active')
+            ->orderBy('name')
+            ->get(['id', 'name'])
+        : collect();
+
+    $platformHomeOrganizationId = $currentUser->is_platform_admin
+        ? $currentUser->organizations()
+            ->wherePivot('status', 'active')
+            ->wherePivot('is_default', true)
+            ->value('organizations.id')
+        : null;
+
+    $isAdministeringAnotherOrganization = $currentUser->is_platform_admin
+        && $platformHomeOrganizationId
+        && (int) $currentUser->current_organization_id !== (int) $platformHomeOrganizationId;
 @endphp
 
 <div class="header-account">
     <div class="organization-context">
-        <span>Empresa atual</span>
+        <span>
+            {{ $isAdministeringAnotherOrganization
+                ? 'Administrando como plataforma'
+                : 'Empresa atual' }}
+        </span>
 
         <strong>
             {{ $currentUser->currentOrganization?->name
                 ?? 'Administração da plataforma' }}
         </strong>
+
+        @if ($currentUser->is_platform_admin)
+            <form
+                method="POST"
+                action="{{ route('platform.organization-context.update') }}"
+                data-platform-organization-context-form
+            >
+                @csrf
+                <label class="sr-only" for="platform-organization-context">
+                    Empresa em administração
+                </label>
+                <select
+                    id="platform-organization-context"
+                    name="organization_id"
+                    data-platform-organization-context
+                    aria-label="Empresa em administração"
+                >
+                    @foreach ($platformOrganizations as $organization)
+                        <option
+                            value="{{ $organization->id }}"
+                            @selected((int) $currentUser->current_organization_id === (int) $organization->id)
+                        >
+                            {{ $organization->name }}
+                        </option>
+                    @endforeach
+                </select>
+
+                <button type="submit" class="button button-secondary button-small">
+                    Trocar
+                </button>
+            </form>
+        @endif
     </div>
 
     <button

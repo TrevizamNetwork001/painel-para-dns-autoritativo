@@ -28,6 +28,46 @@ class DnsServerManagementTest extends TestCase
             ->assertSee('DNS-01');
     }
 
+    public function test_agent_button_uses_operational_attention_and_failure_indicators(): void
+    {
+        [$admin, $organization] = $this->admin();
+
+        DnsServer::factory()->create([
+            'organization_id' => $organization->id,
+            'name' => 'DNS operacional',
+            'agent_uuid' => 'b5ca7b7c-9740-4ff1-95e8-7b2cab58ea40',
+            'agent_status' => 'online',
+            'last_seen_at' => now(),
+            'bind_readiness_at' => now(),
+            'bind_readiness' => [
+                'bind_installed' => true,
+                'service' => ['active' => true],
+                'listeners' => ['tcp_53' => true, 'udp_53' => true],
+            ],
+        ]);
+        DnsServer::factory()->create([
+            'organization_id' => $organization->id,
+            'name' => 'DNS aguardando',
+            'agent_status' => 'pending',
+        ]);
+        DnsServer::factory()->create([
+            'organization_id' => $organization->id,
+            'name' => 'DNS sem agente',
+            'agent_uuid' => null,
+            'agent_status' => 'not_installed',
+        ]);
+
+        $this->actingAs($admin)
+            ->get(route('servers.index'))
+            ->assertOk()
+            ->assertSee('button-success-soft', false)
+            ->assertSee('Agente operacional')
+            ->assertSee('button-warning-soft', false)
+            ->assertSee('Agente em atenção')
+            ->assertSee('button-danger-soft', false)
+            ->assertSee('Agente não integrado');
+    }
+
     public function test_admin_can_create_primary_server(): void
     {
         [$admin, $organization] = $this->admin();
