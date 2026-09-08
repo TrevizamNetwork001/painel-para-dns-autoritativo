@@ -275,3 +275,24 @@ iterado e testado direto em produção pelo operador (`1.1.1` a `1.1.7`)
 antes de ser commitado; consolidado numa release formal como v1.2.0
 (ver [Release 1.2.0](docs/RELEASE_1.2.0.md)), com o código conferido
 byte a byte contra o que já estava no ar.
+
+## Pendências futuras
+
+Itens deliberadamente fora do escopo até a v1.2.0, sem data prevista —
+registrados aqui pra não se perderem, não porque algo ficou pela
+metade:
+
+- **IMPORT-PILOT e ADOPT de BIND legado**: importar/adotar zonas de
+  servidores BIND existentes que não passaram pelo fluxo padrão de
+  criação do DNS Center.
+- **Notificações por SMTP e Telegram**: hoje não há envio de e-mail
+  transacional nem alertas via Telegram.
+- **WAF integrado**: proteção de camada de aplicação é responsabilidade
+  operacional externa, não um recurso do próprio DNS Center.
+- **Failover automático de delegação**: promoção de secondary a
+  primary hoje é manual.
+- **IXFR incremental**: apenas AXFR completo é suportado; nunca foi
+  comprovado nem alegado suporte a transferência incremental.
+
+Ver [`RELEASE_CANDIDATE_2.md`](docs/RELEASE_CANDIDATE_2.md) para o
+levantamento original completo dessas limitações.
