@@ -801,7 +801,7 @@ class DnsZoneController extends Controller
             ]);
         }
 
-        return redirect(route('zones.show', $zone).'#publication')->with(
+        return redirect(route('zones.index'))->with(
             'status',
             $published
                 ? 'Publicação concluída. O artefato está disponível para os agentes configurados.'
