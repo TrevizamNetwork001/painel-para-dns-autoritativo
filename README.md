@@ -249,10 +249,13 @@ em produção. As evidências e limitações estão em
 
 ## Status do projeto
 
-**v1.2.0 em produção desde 2026-09-08** (troca de contexto de
-organização + transferência de servidor entre empresas, sobre a v1.1.0
-de onboarding de empresa, sobre a v1.0.1 de patch de segurança, sobre a
-v1.0.0, promovida em 2026-08-31 a partir da v1.0.0-rc3).
+**v1.2.2 em produção desde 2026-09-08** (dois bugs de dashboard achados
+ao vivo pelo operador logo depois da v1.2.0 — servidor arquivado ainda
+listado, badge de status sem cor — mais o texto explicativo do
+secundário da v1.2.1; sobre a v1.2.0 de troca de contexto de
+organização + transferência de servidor, sobre a v1.1.0 de onboarding
+de empresa, sobre a v1.0.1 de patch de segurança, sobre a v1.0.0,
+promovida em 2026-08-31 a partir da v1.0.0-rc3).
 
 As funcionalidades centrais e os fluxos BIND foram implementados e possuem
 testes automatizados e homologações descartáveis documentadas. A homologação
