@@ -107,3 +107,35 @@ atualizado pra 0.7.6 (botão "Atualizar agente" no painel) e do opt-in
 `DNS_CENTER_AGENT_ALLOW_APPLY=1` no `dns-center-agent-operation.service`
 (passo manual único, documentado acima e em `docs/AGENT_API.md`) antes
 do botão "Aplicar agora" funcionar neles.
+
+## Deploy
+
+Executado em produção em 2026-09-08, a partir do HEAD `dd264dc` (tag
+`v1.3.4`):
+
+```
+sudo DNS_CENTER_DEPLOY_CONFIG=/etc/dns-center/deployment.env \
+  ./deploy/dns-center-deploy update 1.3.4
+```
+
+- imagens `dns-center-app:1.3.4`/`dns-center-web:1.3.4` construídas
+  localmente e conferidas via `composer audit` ("No security
+  vulnerability advisories found.") antes do corte de tráfego;
+- backup do PostgreSQL criado e validado antes de qualquer migration:
+  `dns-center-20260908T185419Z.dump`, 1452003 bytes, SHA-256
+  `f5caebcc7b6d8a96f440303061a04077d294afd094b6ee8ce3f61dcc52f26251`;
+- `migrate:status`/`migrate --force`: nenhuma migration nova (feature
+  não altera schema);
+- corte de tráfego bem-sucedido; estado registrado:
+  `current-version=1.3.4`, `previous-version=1.3.3` — rollback
+  disponível via `./deploy/dns-center-deploy rollback`.
+
+Conferido de forma independente após o deploy:
+`https://dnscenter.trevizamnetwork.com.br/up` respondeu HTTP 200; os 4
+serviços da aplicação (`app`, `web`, `queue`, `scheduler`) confirmados
+na imagem `1.3.4` e saudáveis.
+
+Pendente (operacional, não faz parte deste deploy): atualizar o agente
+em ns1/ns2 da Cliente Legado pra 0.7.6 e adicionar o opt-in
+`DNS_CENTER_AGENT_ALLOW_APPLY=1` nos dois — sem isso o botão "Aplicar
+agora" existe na tela mas ainda falha nesses dois servidores.
