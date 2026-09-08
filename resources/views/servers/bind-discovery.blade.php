@@ -166,6 +166,16 @@
                     </div>
 
                     <p class="bind-discovery-note">Apenas zonas <strong>Prontas para importar</strong> podem ser selecionadas.</p>
+
+                    @if ($server->role === 'secondary')
+                        <p class="bind-discovery-note">
+                            <strong>{{ $server->name }} é um servidor secundário, não o master.</strong>
+                            As zonas aqui chegam por réplica (AXFR) do primário e por isso não podem
+                            ser importadas por esta tela — importação só é necessária uma vez, feita
+                            no servidor primário. Rodar a descoberta aqui serve só para conferir se a
+                            réplica está sincronizada com o primário.
+                        </p>
+                    @endif
                 </form>
             @endif
         </section>
