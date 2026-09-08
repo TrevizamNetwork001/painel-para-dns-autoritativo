@@ -48,4 +48,26 @@ sudo DNS_CENTER_DEPLOY_CONFIG=/etc/dns-center/deployment.env \
   ./deploy/dns-center-deploy update 1.2.2
 ```
 
-_(seção a completar após a execução)_
+O primeiro build falhou por instabilidade de rede (timeout conectando
+em `fonts.bunny.net` durante `npm run build`, plugin de fontes do
+Vite) — sem relação com o código; refeito com sucesso na segunda
+tentativa.
+
+- imagens `dns-center-app:1.2.2`/`dns-center-web:1.2.2` construídas
+  localmente e conferidas via `composer audit` ("No security
+  vulnerability advisories found.") antes do corte de tráfego. Essa
+  versão já leva junto o texto explicativo do secundário da v1.2.1
+  (nunca chegou a ser deployada isoladamente — ficou pronta e foi
+  incluída aqui);
+- backup do PostgreSQL criado e validado antes de qualquer migration:
+  `dns-center-20260908T153447Z.dump`, 1357967 bytes, SHA-256
+  `70dce3c51caf057c730fd2f3877318d175886b4bcb8f3b26b303f7b1e9c8f799`;
+- `migrate:status`/`migrate --force`: nenhuma migration nova;
+- corte de tráfego bem-sucedido; estado registrado:
+  `current-version=1.2.2`, `previous-version=1.2.0` — rollback
+  disponível via `./deploy/dns-center-deploy rollback`.
+
+Conferido de forma independente após o deploy:
+`https://dnscenter.trevizamnetwork.com.br/up` respondeu HTTP 200;
+imagem ativa confirmada como `dns-center-app:1.2.2`; os 6 serviços
+saudáveis.
