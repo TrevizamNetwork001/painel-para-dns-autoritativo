@@ -397,6 +397,11 @@ Route::middleware([
         '/{zone}/adotar',
         [DnsZoneController::class, 'adopt'],
     )->name('adopt');
+
+    Route::post(
+        '/{zone}/vincular-ptr',
+        [DnsZoneController::class, 'ptrSync'],
+    )->name('ptr-sync');
 });
 
 Route::middleware([
