@@ -13,6 +13,10 @@ desabilitada nos servidores gerenciados.
 A avaliação técnica e as melhorias de confiabilidade de 2026-09-08 estão
 registradas em [Avaliação e melhorias](docs/AVALIACAO_E_MELHORIAS_2026_09_08.md),
 com resultados dos testes e pendências operacionais.
+O funcionamento e a revisão específica do agente estão em
+[Avaliação do Agent](docs/AGENT_AVALIACAO_2026_09_08.md).
+O deploy e a atualização do agente 0.7.7 estão registrados em
+[Release 1.3.6](docs/RELEASE_1.3.6.md).
 
 O projeto já possui:
 

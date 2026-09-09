@@ -28,13 +28,14 @@ import urllib.error
 import urllib.parse
 import urllib.request
 import uuid
+from shutil import copyfileobj
 from collections.abc import Callable
 from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
 from pathlib import Path
 from typing import Any
 
-AGENT_VERSION = "0.7.6"
+AGENT_VERSION = "0.7.7"
 OFFICIAL_BASE_URL = "https://dnscenter.trevizamnetwork.com.br"
 DEFAULT_CONFIG = Path("/etc/dns-center-agent/agent.json")
 DEFAULT_STATE_DIR = Path("/var/lib/dns-center-agent")
@@ -217,6 +218,27 @@ def atomic_write(
             temporary.unlink(missing_ok=True)
 
 
+def atomic_copy(source: Path, destination: Path, mode: int = 0o640) -> None:
+    """Copy a file through a same-directory temporary file and rename."""
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    descriptor, temporary_name = tempfile.mkstemp(
+        prefix=f".{destination.name}.",
+        dir=str(destination.parent),
+    )
+    temporary = Path(temporary_name)
+
+    try:
+        with source.open("rb") as source_handle, os.fdopen(descriptor, "wb") as target_handle:
+            copyfileobj(source_handle, target_handle)
+            target_handle.flush()
+            os.fsync(target_handle.fileno())
+        os.chmod(temporary, mode)
+        os.replace(temporary, destination)
+    finally:
+        if temporary.exists():
+            temporary.unlink(missing_ok=True)
+
+
 def write_json_state(path: Path, payload: dict[str, Any], mode: int = 0o600) -> None:
     atomic_write(
         path,
@@ -291,6 +313,10 @@ def request_json(
                     + sanitize_message(exception.reason)
                 ) from exception
 
+            bounded_backoff(attempt)
+        except (TimeoutError, socket.timeout) as exception:
+            if attempt == retries - 1:
+                raise AgentError("Tempo limite de conexão excedido.") from exception
             bounded_backoff(attempt)
         except json.JSONDecodeError as exception:
             raise AgentError("Resposta JSON inválida.") from exception
@@ -2095,7 +2121,7 @@ def upgrade_agent_self(config: dict[str, Any]) -> dict[str, Any]:
                         unit_backups[destination] = backup_unit
 
                     os.chmod(downloaded[unit], 0o644)
-                    shutil.copy2(downloaded[unit], destination)
+                    atomic_copy(downloaded[unit], destination, 0o644)
                 except OSError as exception:
                     raise AgentError(
                         f"Falha ao atualizar a unit {unit}: {exception}"
@@ -2128,10 +2154,14 @@ def upgrade_agent_self(config: dict[str, Any]) -> dict[str, Any]:
                 # up explicitly so it activates without a full reinstall.
                 operation_timer = systemd_dir / "dns-center-agent-operation.timer"
                 if operation_timer in units_replaced:
-                    run_command(
+                    enable_result = run_command(
                         [systemctl, "enable", "--now", operation_timer.name],
                         timeout=30,
                     )
+                    if enable_result.returncode != 0:
+                        raise AgentError(
+                            "systemctl enable do timer de operações falhou."
+                        )
         except Exception as exception:
             # Restore every unit file this run touched before propagating,
             # so a failed upgrade never leaves a mixed/unknown set of units
@@ -2400,7 +2430,12 @@ def run_authorized_operation(
         )
         raise AgentError("Operação não pertence ao catálogo local.")
 
-    report_operation(config, operation, "running")
+    running_response = report_operation(config, operation, "running")
+    if running_response.get("status") not in {None, "running"}:
+        raise AgentError(
+            "A operação não foi assumida pelo painel "
+            f"(status: {running_response.get('status')})."
+        )
 
     try:
         if action == "discover_bind_zones":
@@ -3877,14 +3912,26 @@ def send_authoritative_observation(config: dict[str, Any]) -> dict[str, Any]:
         raise AgentError("Manifesto de zonas inválido.")
     manifest = [validate_manifest_item(item) for item in raw_manifest]
     payload = collect_authoritative_observation(config, manifest)
-    result = request_json(
-        "POST",
-        normalize_base_url(str(config["base_url"]))
-        + "/api/agent/bind/observations",
-        payload,
-        str(config["token"]),
-        timeout=30,
-    )
+    try:
+        result = request_json(
+            "POST",
+            normalize_base_url(str(config["base_url"]))
+            + "/api/agent/bind/observations",
+            payload,
+            str(config["token"]),
+            timeout=30,
+        )
+    except AgentHttpError as exception:
+        # A permanent rejection means the panel will never accept this
+        # payload (for example, a zone was removed or reassigned). Do not
+        # replay it forever on every timer tick; discard the pending snapshot
+        # and collect a fresh one on the next run.
+        if exception.status in {404, 409, 422}:
+            state_dir = config_paths(config)["state_dir"]
+            state = load_observation_state(state_dir)
+            state["pending"] = None
+            save_observation_state(state_dir, state)
+        raise
     state_dir = config_paths(config)["state_dir"]
     state = load_observation_state(state_dir)
     state["sequence"] = int(payload["sequence"])
@@ -4070,13 +4117,12 @@ def sync_zones(
                 str(item["publication_id"]),
                 {},
             ).get("checksum")
-            observed_serial = authoritative_serial(
-                config,
-                str(item["name"]),
-                int(item["serial"]),
-            )
-
             try:
+                observed_serial = authoritative_serial(
+                    config,
+                    str(item["name"]),
+                    int(item["serial"]),
+                )
                 response = report_publication(
                     config,
                     state,
