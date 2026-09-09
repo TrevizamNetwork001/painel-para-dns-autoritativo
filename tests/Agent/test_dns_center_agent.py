@@ -2376,6 +2376,41 @@ options {
 
         return response
 
+    def test_operation_is_not_executed_after_panel_expiry(self) -> None:
+        operation = {
+            "id": 10,
+            "action": "apply_zones",
+            "authorization_nonce": "nonce",
+        }
+
+        with patch.object(
+            agent,
+            "request_json",
+            side_effect=[{"operation": operation}, {"status": "expired"}],
+        ), patch.object(agent, "sync_zones") as sync, self.assertRaisesRegex(
+            agent.AgentError,
+            "não foi assumida",
+        ):
+            agent.run_authorized_operation({
+                "base_url": "https://panel.test",
+                "token": "t",
+                "server": {"name": "ns1"},
+            })
+
+        sync.assert_not_called()
+
+    def test_request_timeout_uses_retry_policy_and_returns_agent_error(self) -> None:
+        with patch.object(
+            agent.urllib.request,
+            "urlopen",
+            side_effect=TimeoutError("read timed out"),
+        ) as opener, patch.object(agent, "bounded_backoff") as backoff:
+            with self.assertRaisesRegex(agent.AgentError, "Tempo limite"):
+                agent.request_json("GET", "https://panel.test", retries=3)
+
+        self.assertEqual(3, opener.call_count)
+        self.assertEqual(2, backoff.call_count)
+
     @staticmethod
     def fake_download(*args, **kwargs):
         agent.atomic_write(args[2], "$ORIGIN example.com.\n", 0o640)

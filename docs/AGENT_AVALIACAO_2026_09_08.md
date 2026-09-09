@@ -92,9 +92,8 @@ filesystem. Os agentes ns1/ns2 da Cliente Legado estavam em 0.7.6, online, com s
 zonas sincronizadas e seriais iguais nos dois servidores.
 
 As reproduções dos problemas atuais foram feitas com mocks e arquivos
-temporários, sem rede, BIND ou systemd reais. A suíte Python existente passou
-com 102 testes antes da publicação da 0.7.7; novos testes específicos devem ser
-adicionados na próxima rodada para fixar cada regressão.
+temporários, sem rede, BIND ou systemd reais. A suíte Python passou com 104
+testes após a inclusão de regressões para operação expirada e timeout de rede.
 
 ## Procedimento de atualização
 
