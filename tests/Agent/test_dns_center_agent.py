@@ -1841,6 +1841,10 @@ options {
                 agent,
                 "DEFAULT_BACKUP_DIR",
                 backups,
+            ), patch.object(
+                agent.os,
+                "geteuid",
+                return_value=0,
             ):
                 with self.assertRaises(
                     agent.AgentOperationError,
