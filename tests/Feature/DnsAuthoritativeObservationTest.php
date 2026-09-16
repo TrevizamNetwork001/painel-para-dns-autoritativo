@@ -326,6 +326,37 @@ class DnsAuthoritativeObservationTest extends TestCase
             ->assertJsonValidationErrors('zones.0.error');
     }
 
+    public function test_dashboard_distinguishes_divergent_zones_from_server_observations(): void
+    {
+        [$token, $server, $zone] = $this->authoritativeAgent();
+        $this->withToken($token)
+            ->postJson('/api/agent/bind/observations', $this->payload($zone))
+            ->assertOk();
+
+        $first = DnsAuthoritativeObservation::query()->firstOrFail();
+        $first->update(['status' => 'serial_mismatch']);
+        $secondServer = DnsServer::factory()->create([
+            'organization_id' => $zone->organization_id,
+            'name' => 'ns-second-observation',
+            'role' => 'secondary',
+            'status' => 'maintenance',
+        ]);
+        $second = $first->replicate();
+        $second->dns_server_id = $secondServer->id;
+        $second->event_id = (string) Str::uuid();
+        $second->save();
+
+        $admin = $this->organizationUser($zone->organization, 'organization_admin');
+        $this->actingAs($admin)
+            ->get(route('dashboard'))
+            ->assertOk()
+            ->assertSee('1 zona divergente · 2 observações afetadas')
+            ->assertSee('data-authoritative-counter="zonas-divergentes"', false)
+            ->assertSee('data-authoritative-value="1"', false)
+            ->assertSee('2 pendências operacionais')
+            ->assertSee('ns-second-observation');
+    }
+
     private function authoritativeAgent(): array
     {
         $organization = Organization::factory()->create();
