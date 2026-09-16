@@ -309,7 +309,7 @@ em produção. As evidências e limitações estão em
 
 ## Status do projeto
 
-**v1.3.16 pronta para deploy** (agente 0.7.9 — depois de um
+**v1.3.16 em produção desde 2026-09-16** (agente 0.7.9 — depois de um
 `apply_zones` bem-sucedido, o agente atualiza a observação
 autoritativa na hora em vez de esperar até 5 minutos pelo próximo
 ciclo do `--observe-bind`; corrige o alerta "Serial divergente" que

@@ -71,4 +71,29 @@ tratado como uma correção própria, separada desta versão.
 
 ## Deploy
 
-Pendente de execução pelo operador.
+Executado em produção em 2026-09-16, a partir do HEAD `1eb9be3` (tag
+`v1.3.16`):
+
+```
+sudo DNS_CENTER_DEPLOY_CONFIG=/etc/dns-center/deployment.env \
+  ./deploy/dns-center-deploy update 1.3.16
+```
+
+- imagens `dns-center-app:1.3.16`/`dns-center-web:1.3.16` construídas
+  localmente, suíte completa reconferida na imagem final e
+  `composer audit` sem vulnerabilidades antes do corte de tráfego;
+- backup do PostgreSQL criado antes de qualquer migration:
+  `dns-center-20260916T174303Z.dump`, 2348802 bytes, SHA-256
+  `80d2b8a30934b9c6ee5f78df0342895d946cd8c40f2d6757a8e84b2a9697b34a`;
+- nenhuma migration nova nesta versão (mudança restrita ao agente
+  Python);
+- corte de tráfego bem-sucedido.
+
+Conferido de forma independente após o deploy:
+`https://dnscenter.trevizamnetwork.com.br/up` respondeu HTTP 200; os 4
+serviços da aplicação (`app`, `web`, `queue`, `scheduler`) confirmados
+na imagem `1.3.16`.
+
+Pendente (operacional, fora deste deploy): atualizar o agente do
+ns1/ns2 pra 0.7.9 via botão "Atualizar agente" — sem isso, a correção
+do "Serial divergente" não é aplicada nos servidores já existentes.
