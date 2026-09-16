@@ -288,7 +288,7 @@
                             <h3>Agente já instalado</h3>
                             <p>Execute o comando e cole o código no prompt seguro. O segredo não entra em argv nem no histórico shell.</p>
                             <div class="agent-command-box">
-                                <code id="agent-enroll-command">sudo /usr/local/sbin/dns-center-agent --enroll --wait 0</code>
+                                <code id="agent-enroll-command">$(command -v sudo || true) /usr/local/sbin/dns-center-agent --enroll --wait 0</code>
                                 <button type="button" class="button button-secondary" data-copy-target="agent-enroll-command">Copiar</button>
                             </div>
                             <p>
@@ -296,7 +296,7 @@
                                 esta funcionalidade. Atualize somente o binário antes (não reinstala, não mexe no BIND):
                             </p>
                             <div class="agent-command-box">
-                                <code id="agent-upgrade-command">curl -fsSL https://dnscenter.trevizamnetwork.com.br/install/agent_install.sh | sudo bash -s -- --upgrade-agent</code>
+                                <code id="agent-upgrade-command">curl -fsSL https://dnscenter.trevizamnetwork.com.br/install/agent_install.sh | $(command -v sudo || true) bash -s -- --upgrade-agent</code>
                                 <button type="button" class="button button-secondary" data-copy-target="agent-upgrade-command">Copiar</button>
                             </div>
                         </div>
@@ -305,7 +305,7 @@
                             <h3>Máquina sem agente</h3>
                             <p>Execute o comando abaixo. O instalador completo solicitará o código de vínculo pelo terminal.</p>
                             <div class="agent-command-box">
-                                <code id="agent-install-command">wget -qO- https://dnscenter.trevizamnetwork.com.br/install/agent_install.sh | sudo bash -s -- --enroll</code>
+                                <code id="agent-install-command">wget -qO- https://dnscenter.trevizamnetwork.com.br/install/agent_install.sh | $(command -v sudo || true) bash -s -- --enroll</code>
                                 <button type="button" class="button button-secondary" data-copy-target="agent-install-command">Copiar</button>
                             </div>
                         </div>

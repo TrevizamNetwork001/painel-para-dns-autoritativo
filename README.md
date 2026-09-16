@@ -312,10 +312,15 @@ em produção. As evidências e limitações estão em
 | [Release 1.3.20](docs/RELEASE_1.3.20.md) | Histórico de versões mostra qual registro mudou, não só "Registro atualizado." |
 | [Release 1.3.21](docs/RELEASE_1.3.21.md) | Tela de Auditoria global por organização, com filtros e exportação CSV |
 | [Release 1.3.22](docs/RELEASE_1.3.22.md) | Template de nome pro PTR gerado a partir de registros A |
+| [Release 1.3.23](docs/RELEASE_1.3.23.md) | Comandos do agente funcionam sem sudo instalado |
 
 ## Status do projeto
 
-**v1.3.22 em produção desde 2026-09-16** (zonas reversas IPv4 ganham um campo
+**v1.3.23 pronta para deploy** (comandos de instalação/enrollment/
+atualização do agente exibidos na tela do servidor usam `sudo` só se
+ele existir no servidor, em vez de assumir presença — encontrado ao
+vivo tentando instalar no ns2 do cliente-exemplo, logado como root sem sudo);
+sobre a v1.3.22 em produção desde 2026-09-16 (zonas reversas IPv4 ganham um campo
 opcional "Modelo de nome do PTR", ex. `host-$`, aplicado só aos PTR
 gerados a partir de registros A já cadastrados — inspirado no projeto
 antigo, mas sem a geração especulativa pro bloco inteiro que existia
