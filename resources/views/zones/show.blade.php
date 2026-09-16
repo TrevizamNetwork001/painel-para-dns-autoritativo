@@ -1024,7 +1024,16 @@
                         @foreach ($reverseZones as $reverseZone)
                             <li>
                                 <a href="{{ route('zones.show', $reverseZone) }}">
-                                    {{ $reverseZone->name }}
+                                    <span class="domain-reverse-icon" aria-hidden="true">↺</span>
+
+                                    <span>
+                                        <strong>{{ $reverseZone->name }}</strong>
+
+                                        <small>
+                                            {{ $reverseZone->isIpv6ReverseZone() ? 'IPv6' : 'IPv4' }}
+                                            · {{ $reverseZone->records_count ?? $reverseZone->records()->count() }} registro(s)
+                                        </small>
+                                    </span>
                                 </a>
                             </li>
                         @endforeach
@@ -1699,7 +1708,7 @@
             >
                 @csrf
 
-                <div class="record-modal-main-grid">
+                <div class="reverse-modal-grid">
                     <label class="domain-field">
                         <span>Família</span>
 
@@ -1721,7 +1730,7 @@
                     </label>
                 </div>
 
-                <div class="record-modal-main-grid">
+                <div class="reverse-modal-grid">
                     <label class="domain-field">
                         <span>Perfil de nameservers</span>
 
@@ -1740,7 +1749,7 @@
                     </label>
                 </div>
 
-                <div class="record-modal-main-grid">
+                <div class="reverse-modal-grid">
                     <label class="domain-field">
                         <span>Servidor de publicação principal</span>
 
