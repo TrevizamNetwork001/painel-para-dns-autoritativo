@@ -314,10 +314,16 @@ em produção. As evidências e limitações estão em
 | [Release 1.3.22](docs/RELEASE_1.3.22.md) | Template de nome pro PTR gerado a partir de registros A |
 | [Release 1.3.23](docs/RELEASE_1.3.23.md) | Comandos do agente funcionam sem sudo instalado |
 | [Release 1.3.24](docs/RELEASE_1.3.24.md) | Agente 0.8.0 reporta o erro real de named-checkconf/checkzone/rndc, sem mais vir vazio |
+| [Release 1.3.25](docs/RELEASE_1.3.25.md) | Hotfix: sync_zones não descarta mais diagnostics/rolled_back de uma falha de apply |
 
 ## Status do projeto
 
-**v1.3.24 pronta para deploy** (agente 0.8.0 — corrige um bug real
+**v1.3.25 pronta para deploy** (agente 0.8.1 — hotfix pego ao vivo
+minutos depois do deploy da v1.3.24: `apply_staging` já reportava
+`diagnostics`/`rolled_back` certos, mas `sync_zones` relançava um erro
+genérico ao registrar o evento de publicação, descartando os dois
+campos antes de chegarem no painel; achado no apply real de
+`0.2.0.192.in-addr.arpa` no dns-secondary); sobre a v1.3.24 (corrige um bug real
 achado ao vivo no incidente do cliente-exemplo: falhas de apply mostravam só
 "Validação final falhou:" sem nenhum detalhe, forçando SSH+journalctl
 pra diagnosticar; agora o painel mostra o comando e a saída real do
