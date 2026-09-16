@@ -315,7 +315,7 @@ em produção. As evidências e limitações estão em
 
 ## Status do projeto
 
-**v1.3.22 pronta para deploy** (zonas reversas IPv4 ganham um campo
+**v1.3.22 em produção desde 2026-09-16** (zonas reversas IPv4 ganham um campo
 opcional "Modelo de nome do PTR", ex. `host-$`, aplicado só aos PTR
 gerados a partir de registros A já cadastrados — inspirado no projeto
 antigo, mas sem a geração especulativa pro bloco inteiro que existia

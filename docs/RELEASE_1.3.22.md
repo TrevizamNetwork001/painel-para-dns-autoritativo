@@ -45,6 +45,24 @@ bloco reverso mesmo sem A correspondente; isso fica fora de escopo.
 
 ## Deploy
 
-Pendente de execução pelo operador. Esta versão inclui uma migration
-nova (`migrate --force` roda como parte do `dns-center-deploy
-update`).
+Executado em produção em 2026-09-16, a partir do HEAD `2d1f458` (tag
+`v1.3.22`):
+
+```
+sudo DNS_CENTER_DEPLOY_CONFIG=/etc/dns-center/deployment.env \
+  ./deploy/dns-center-deploy update 1.3.22
+```
+
+- imagens `dns-center-app:1.3.22`/`dns-center-web:1.3.22` construídas
+  localmente, suíte completa reconferida na imagem final e
+  `composer audit` sem vulnerabilidades antes do corte de tráfego;
+- backup do PostgreSQL criado antes da migration:
+  `dns-center-20260916T204834Z.dump`, 2515108 bytes, SHA-256
+  `244cf084ec191f575370d0d2c3c5594765dc2a378c53a24013c00645d2adad82`;
+- `migrate --force`: `2026_09_16_210000_add_ptr_name_template_to_dns_zones`
+  aplicada com sucesso (`migrate:status` confirmado como `Ran`);
+- corte de tráfego bem-sucedido.
+
+Conferido de forma independente após o deploy:
+`https://dnscenter.trevizamnetwork.com.br/up` respondeu HTTP 200; os 4
+serviços da aplicação confirmados na imagem `1.3.22`.
