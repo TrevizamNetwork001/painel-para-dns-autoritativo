@@ -39,3 +39,13 @@ A comparação visual em navegador deve ser feita em tema escuro, nas larguras d
 ## Limitações visuais
 
 O mapa é ilustrativo. A busca no cabeçalho leva ao inventário de servidores; a aplicação ainda não possui busca global. As ações rápidas levam às páginas de gestão correspondentes, como já ocorria antes da mudança.
+
+## Publicação em produção
+
+- Código da interface: commit `8d5752f`, enviado para `origin/main`.
+- Imagens imutáveis de app e nginx: `1.3.25-dashboard-8d5752f`.
+- Atualização feita pelo comando `deploy/dns-center-deploy update`, com preflight, backup validado, migrations e health checks.
+- Backup criado em `/var/backups/dns-center/dns-center-20260916T234710Z.dump`, com SHA-256 `9ea96f584bdba2a7fca0696e46cdacffbe71df190115d7622d8d2132c089b752`.
+- Após o deploy, app, web, fila, scheduler, PostgreSQL e Redis ficaram saudáveis; `/up` respondeu HTTP 200.
+- O SVG servido por HTTPS respondeu HTTP 200 e teve o mesmo SHA-256 do arquivo local: `10bdc97ad7e8818a3735b0db482604cf70acb2489b2e15c57ec17722b8c7c8cd`. O CSS da nova versão também respondeu HTTP 200.
+- `/dashboard` respondeu HTTP 302 para `/login` sem autenticação, conforme esperado. A comparação visual autenticada não foi automatizada.
