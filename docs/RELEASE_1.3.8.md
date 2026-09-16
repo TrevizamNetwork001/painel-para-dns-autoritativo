@@ -45,3 +45,27 @@ Pontos corrigidos nesta rodada (além dos já feitos na v1.3.7):
 - `composer audit`: sem vulnerabilidades.
 
 ## Deploy
+
+Executado em produção em 2026-09-16, a partir do HEAD `03394e3` (tag
+`v1.3.8`):
+
+```
+sudo DNS_CENTER_DEPLOY_CONFIG=/etc/dns-center/deployment.env \
+  ./deploy/dns-center-deploy update 1.3.8
+```
+
+- imagens `dns-center-app:1.3.8`/`dns-center-web:1.3.8` construídas
+  localmente e conferidas via `composer audit` ("No security
+  vulnerability advisories found.") antes do corte de tráfego;
+- backup do PostgreSQL criado e validado antes de qualquer migration:
+  `dns-center-20260916T135443Z.dump`, 2328119 bytes, SHA-256
+  `6c585d779048661b20229b0d1ca1130710f762dbc5e6d89a1d579434720604f7`;
+- `migrate:status`/`migrate --force`: nenhuma migration nova;
+- corte de tráfego bem-sucedido; estado registrado:
+  `current-version=1.3.8`, `previous-version=1.3.7` — rollback
+  disponível via `./deploy/dns-center-deploy rollback`.
+
+Conferido de forma independente após o deploy:
+`https://dnscenter.trevizamnetwork.com.br/up` respondeu HTTP 200; os 4
+serviços da aplicação confirmados na imagem `1.3.8` e saudáveis; o CSS
+novo (`app-DFirmZ-h.css`) já sendo servido na URL pública.

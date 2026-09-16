@@ -297,16 +297,22 @@ em produção. As evidências e limitações estão em
 | [Release 1.3.5](docs/RELEASE_1.3.5.md) | Trava de concorrência na autorização de aplicação, CI e ajuste de fila |
 | [Release 1.3.6](docs/RELEASE_1.3.6.md) | Agente 0.7.7 com correções de robustez operacional |
 | [Release 1.3.7](docs/RELEASE_1.3.7.md) | Fix de CSS na aba Nameservers e de teste que só passava como root |
+| [Release 1.3.8](docs/RELEASE_1.3.8.md) | Continuação do fix de fonte da aba Nameservers (Identidades e Perfis) |
 
 ## Status do projeto
 
-**v1.3.7 em produção desde 2026-09-16** (correções pequenas: CSS da
-aba Nameservers que ficava com fonte maior que o resto do painel por
-falta de `font-size` em alguns elementos, e um teste do agente que só
-passava rodando como root — mascarava o próprio comportamento sob
-teste no CI; também nessa janela o histórico completo do repositório
-foi publicado pela primeira vez no GitHub, com CI habilitado e verde;
-sobre a v1.3.6, que trouxe o agente 0.7.7 com correções de robustez
+**v1.3.8 em produção desde 2026-09-16** (segunda rodada do fix de
+fonte da aba Nameservers — o primeiro fix da v1.3.7 corrigiu parte,
+mas comparando print a print com Domínios/Servidores ainda sobravam
+vários elementos maiores que o resto do painel, em ambas as sub-abas
+Identidades e Perfis: contadores, títulos, número de posição na lista,
+cabeçalho de seção e rótulos dos cards de resumo — todos sem
+`font-size` definido, então caíam no tamanho padrão do navegador;
+sobre a v1.3.7, que fez o primeiro fix de CSS dessa aba e corrigiu um
+teste do agente que só passava rodando como root — mascarava o
+próprio comportamento sob teste no CI; também nessa janela o
+histórico completo do repositório foi publicado pela primeira vez no
+GitHub, com CI habilitado e verde; sobre a v1.3.6, que trouxe o agente 0.7.7 com correções de robustez
 operacional — não repete operação já expirada pelo painel, trata
 timeout de rede como erro recuperável, atualiza units systemd por
 cópia atômica, entre outras; sobre a v1.3.5, que colocou o botão
