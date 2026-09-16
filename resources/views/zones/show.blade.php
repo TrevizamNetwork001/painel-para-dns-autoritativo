@@ -385,7 +385,32 @@
                                 <span></span>
                             </div>
 
+                            @php
+                                $reverseCalculator = app(
+                                    \App\Services\ReverseZoneNameCalculator::class,
+                                );
+                            @endphp
+
                             @foreach ($zone->records as $record)
+                                @php
+                                    $recordNameLower = strtolower(
+                                        rtrim(trim($record->name), '.'),
+                                    );
+                                    $zoneNameLower = strtolower(
+                                        rtrim(trim($zone->name), '.'),
+                                    );
+                                    $fullRecordName = $recordNameLower === '@'
+                                        ? $zoneNameLower
+                                        : ($recordNameLower === $zoneNameLower
+                                            || str_ends_with($recordNameLower, '.'.$zoneNameLower)
+                                            ? $recordNameLower
+                                            : $recordNameLower.'.'.$zoneNameLower);
+                                    $friendlyIp = $record->type === 'PTR'
+                                        ? ($reverseCalculator->ptrNameToIpv4($fullRecordName)
+                                            ?? $reverseCalculator->ptrNameToIpv6($fullRecordName))
+                                        : null;
+                                @endphp
+
                                 <div
                                     class="domain-record-row"
                                     data-record-row
@@ -395,15 +420,17 @@
                                         . $record->type
                                         . ' '
                                         . $record->content
+                                        . ' '
+                                        . $friendlyIp
                                     ) }}"
                                 >
                                     <div class="domain-record-name">
-                                        <strong>{{ $record->name }}</strong>
+                                        <strong>
+                                            {{ $friendlyIp ?? $record->name }}
+                                        </strong>
 
-                                        <small>
-                                            {{ $record->name === '@'
-                                                ? $zone->name
-                                                : $record->name . '.' . $zone->name }}
+                                        <small title="{{ $fullRecordName }}">
+                                            {{ $fullRecordName }}
                                         </small>
                                     </div>
 
@@ -1026,18 +1053,23 @@
                     <ul class="domain-reverse-list">
                         @foreach ($reverseZones as $reverseZone)
                             <li>
-                                <a href="{{ route('zones.show', $reverseZone) }}">
+                                <a
+                                    href="{{ route('zones.show', $reverseZone) }}"
+                                    title="{{ $reverseZone->name }}"
+                                >
                                     <span class="domain-reverse-icon" aria-hidden="true">↺</span>
 
                                     <span>
-                                        <strong>{{ $reverseZone->name }}</strong>
+                                        <strong>
+                                            @if ($reverseBlocks[$reverseZone->id] ?? null)
+                                                bloco {{ $reverseBlocks[$reverseZone->id] }}
+                                            @else
+                                                {{ $reverseZone->name }}
+                                            @endif
+                                        </strong>
 
                                         <small>
-                                            {{ $reverseZone->isIpv6ReverseZone() ? 'IPv6' : 'IPv4' }}
-                                            @if ($reverseBlocks[$reverseZone->id] ?? null)
-                                                · bloco {{ $reverseBlocks[$reverseZone->id] }}
-                                            @endif
-                                            · {{ $reverseZone->records_count }} registro(s)
+                                            {{ $reverseZone->records_count }} registro(s)
                                         </small>
                                     </span>
                                 </a>

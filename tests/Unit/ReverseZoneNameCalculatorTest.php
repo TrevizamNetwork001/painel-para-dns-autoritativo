@@ -119,4 +119,34 @@ class ReverseZoneNameCalculatorTest extends TestCase
     {
         $this->assertNull($this->calculator->toIpv6Prefix('example.com'));
     }
+
+    public function test_ptr_name_to_ipv4_computes_the_address(): void
+    {
+        $this->assertSame(
+            '192.0.2.10',
+            $this->calculator->ptrNameToIpv4('10.2.0.192.in-addr.arpa'),
+        );
+    }
+
+    public function test_ptr_name_to_ipv4_returns_null_for_partial_name(): void
+    {
+        $this->assertNull($this->calculator->ptrNameToIpv4('2.0.192.in-addr.arpa'));
+    }
+
+    public function test_ptr_name_to_ipv6_computes_the_address(): void
+    {
+        $this->assertSame(
+            '2001:db8::242',
+            $this->calculator->ptrNameToIpv6(
+                '2.4.2.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.8.b.d.0.1.0.0.2.ip6.arpa',
+            ),
+        );
+    }
+
+    public function test_ptr_name_to_ipv6_returns_null_for_partial_name(): void
+    {
+        $this->assertNull(
+            $this->calculator->ptrNameToIpv6('8.b.d.0.1.0.0.2.ip6.arpa'),
+        );
+    }
 }

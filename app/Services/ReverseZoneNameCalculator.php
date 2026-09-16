@@ -165,4 +165,55 @@ class ReverseZoneNameCalculator
 
         return $address.'/'.($nibbleCount * 4);
     }
+
+    public function ptrNameToIpv4(string $recordName): ?string
+    {
+        $name = strtolower(rtrim(trim($recordName), '.'));
+
+        if (! str_ends_with($name, '.in-addr.arpa')) {
+            return null;
+        }
+
+        $labels = explode('.', substr($name, 0, -strlen('.in-addr.arpa')));
+
+        if (count($labels) !== 4) {
+            return null;
+        }
+
+        foreach ($labels as $label) {
+            if (! ctype_digit($label) || (int) $label > 255) {
+                return null;
+            }
+        }
+
+        return implode('.', array_reverse($labels));
+    }
+
+    public function ptrNameToIpv6(string $recordName): ?string
+    {
+        $name = strtolower(rtrim(trim($recordName), '.'));
+
+        if (! str_ends_with($name, '.ip6.arpa')) {
+            return null;
+        }
+
+        $nibbles = explode('.', substr($name, 0, -strlen('.ip6.arpa')));
+
+        if (count($nibbles) !== 32) {
+            return null;
+        }
+
+        foreach ($nibbles as $nibble) {
+            if (! ctype_xdigit($nibble) || strlen($nibble) !== 1) {
+                return null;
+            }
+        }
+
+        $hex = implode('', array_reverse($nibbles));
+        $address = implode(':', str_split($hex, 4));
+
+        $binary = @inet_pton($address);
+
+        return $binary === false ? null : inet_ntop($binary);
+    }
 }
