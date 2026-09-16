@@ -7230,6 +7230,7 @@ body.has-open-modal {
 .nameservers-summary small {
     display: block;
     color: var(--muted);
+    font-size: 0.65rem;
 }
 
 .nameservers-summary strong {
@@ -7298,13 +7299,14 @@ body.has-open-modal {
 
 .nameservers-panel-heading h2 {
     margin: 0.25rem 0;
-    font-size: 1.1rem;
+    font-size: 0.94rem;
 }
 
 .nameservers-panel-heading p {
     max-width: 700px;
     margin: 0;
     color: var(--muted);
+    font-size: 0.67rem;
 }
 
 .nameserver-identity-row {
