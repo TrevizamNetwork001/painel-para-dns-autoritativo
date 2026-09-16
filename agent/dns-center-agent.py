@@ -35,7 +35,7 @@ from email.utils import parsedate_to_datetime
 from pathlib import Path
 from typing import Any
 
-AGENT_VERSION = "0.7.8"
+AGENT_VERSION = "0.7.9"
 OFFICIAL_BASE_URL = "https://dnscenter.trevizamnetwork.com.br"
 DEFAULT_CONFIG = Path("/etc/dns-center-agent/agent.json")
 DEFAULT_STATE_DIR = Path("/var/lib/dns-center-agent")
@@ -2475,6 +2475,16 @@ def run_authorized_operation(
 
     if action not in {"discover_bind_zones", "upgrade_agent"}:
         send_readiness(config)
+
+    if action == "apply_zones":
+        # A successful apply just changed BIND's live serials; refresh the
+        # authoritative observation now instead of leaving the panel showing
+        # a stale "serial divergente" alert until the next --observe-bind
+        # tick (up to 5 minutes later, per dns-center-agent.timer).
+        try:
+            send_authoritative_observation(config)
+        except Exception:
+            pass
 
     return {"status": "succeeded", "result": result}
 

@@ -1566,12 +1566,15 @@ class AgentTests(unittest.TestCase):
             return_value={"binary_changed": True, "units_changed": False, "changed": True},
         ) as upgrade, patch.object(
             agent, "send_readiness",
-        ) as readiness:
+        ) as readiness, patch.object(
+            agent, "send_authoritative_observation",
+        ) as observation:
             result = agent.run_authorized_operation({"base_url": "https://panel.test", "token": "t"})
 
         self.assertEqual("succeeded", result["status"])
         upgrade.assert_called_once()
         readiness.assert_not_called()
+        observation.assert_not_called()
 
     def test_run_authorized_operation_dispatches_apply_zones(self) -> None:
         config = {
@@ -1590,7 +1593,9 @@ class AgentTests(unittest.TestCase):
             return_value={"status": "applied", "updates": 1},
         ) as sync, patch.object(
             agent, "send_readiness",
-        ) as readiness:
+        ) as readiness, patch.object(
+            agent, "send_authoritative_observation",
+        ) as observation:
             result = agent.run_authorized_operation(config)
 
         self.assertEqual("succeeded", result["status"])
@@ -1598,6 +1603,32 @@ class AgentTests(unittest.TestCase):
             config, apply=True, confirmation="APLICAR ZONAS ns1",
         )
         readiness.assert_called_once()
+        observation.assert_called_once_with(config)
+
+    def test_run_authorized_operation_apply_zones_survives_observation_failure(self) -> None:
+        config = {
+            "base_url": "https://panel.test", "token": "t",
+            "server": {"name": "ns1"},
+        }
+
+        with patch.object(
+            agent, "request_json",
+            return_value={"operation": {
+                "id": 11, "action": "apply_zones",
+                "authorization_nonce": "nonce", "authorized_at": None,
+            }},
+        ), patch.object(
+            agent, "sync_zones",
+            return_value={"status": "applied", "updates": 1},
+        ), patch.object(
+            agent, "send_readiness",
+        ), patch.object(
+            agent, "send_authoritative_observation",
+            side_effect=RuntimeError("network blip"),
+        ):
+            result = agent.run_authorized_operation(config)
+
+        self.assertEqual("succeeded", result["status"])
 
     def test_command_execution_disables_shell_and_has_timeout(self) -> None:
         completed = Mock(returncode=0, stdout="ok", stderr="")
