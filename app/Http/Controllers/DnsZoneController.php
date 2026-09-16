@@ -697,7 +697,17 @@ class DnsZoneController extends Controller
                 'enabled' => true,
             ]);
 
-            $this->bump($zone, $request, 'Registro adicionado.', $renderer);
+            $this->bump(
+                $zone,
+                $request,
+                sprintf(
+                    'Registro adicionado: %s %s → %s.',
+                    $normalizedName,
+                    $validated['type'],
+                    trim($validated['content']),
+                ),
+                $renderer,
+            );
         });
 
         return back()->with(
@@ -750,6 +760,8 @@ class DnsZoneController extends Controller
 
         $this->validateRecord([...$validated, 'name' => $normalizedName]);
 
+        $before = sprintf('%s %s → %s', $record->name, $record->type, $record->content);
+
         DB::transaction(function () use (
             $request,
             $zone,
@@ -757,6 +769,7 @@ class DnsZoneController extends Controller
             $validated,
             $normalizedName,
             $renderer,
+            $before,
         ): void {
             $record->forceFill([
                 'name' => $normalizedName,
@@ -768,10 +781,19 @@ class DnsZoneController extends Controller
                 'content' => trim($validated['content']),
             ])->save();
 
+            $after = sprintf(
+                '%s %s → %s',
+                $normalizedName,
+                $validated['type'],
+                trim($validated['content']),
+            );
+
             $this->bump(
                 $zone,
                 $request,
-                'Registro atualizado.',
+                $before === $after
+                    ? sprintf('Registro atualizado: %s.', $after)
+                    : sprintf('Registro atualizado: %s (era %s).', $after, $before),
                 $renderer,
             );
         });
@@ -844,9 +866,16 @@ class DnsZoneController extends Controller
             404,
         );
 
-        DB::transaction(function () use ($request, $zone, $record, $renderer): void {
+        $description = sprintf('%s %s → %s', $record->name, $record->type, $record->content);
+
+        DB::transaction(function () use ($request, $zone, $record, $renderer, $description): void {
             $record->delete();
-            $this->bump($zone, $request, 'Registro removido.', $renderer);
+            $this->bump(
+                $zone,
+                $request,
+                sprintf('Registro removido: %s.', $description),
+                $renderer,
+            );
         });
 
         return back()->with(

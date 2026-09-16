@@ -121,6 +121,11 @@ class DnsZoneWorkflowTest extends TestCase
                 'Registro DNS adicionado. As alterações ainda não foram publicadas.',
             );
 
+        $this->assertDatabaseHas('dns_zone_versions', [
+            'dns_zone_id' => $zone->id,
+            'reason' => 'Registro adicionado: www A → 192.0.2.40.',
+        ]);
+
         $record = $zone->records()
             ->where('name', 'www')
             ->firstOrFail();
@@ -141,12 +146,22 @@ class DnsZoneWorkflowTest extends TestCase
             'content' => '2001:db8::40',
         ]);
 
+        $this->assertDatabaseHas('dns_zone_versions', [
+            'dns_zone_id' => $zone->id,
+            'reason' => 'Registro atualizado: web AAAA → 2001:db8::40 (era www A → 192.0.2.40).',
+        ]);
+
         $this->actingAs($context['admin'])
             ->delete(route('zones.records.destroy', [$zone, $record]))
             ->assertSessionHasNoErrors();
 
         $this->assertDatabaseMissing('dns_records', ['id' => $record->id]);
         $this->assertNotSame('published', $zone->fresh()->status);
+
+        $this->assertDatabaseHas('dns_zone_versions', [
+            'dns_zone_id' => $zone->id,
+            'reason' => 'Registro removido: web AAAA → 2001:db8::40.',
+        ]);
     }
 
     public function test_invalid_and_foreign_zone_records_cannot_be_manipulated(): void
