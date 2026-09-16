@@ -314,7 +314,7 @@ em produção. As evidências e limitações estão em
 
 ## Status do projeto
 
-**v1.3.21 pronta para deploy** (tela nova "Auditoria" — trilha de
+**v1.3.21 em produção desde 2026-09-16** (tela nova "Auditoria" — trilha de
 todas as ações administrativas (zonas, registros, servidores,
 usuários, organizações, login/logout) por organização, com filtro,
 paginação e exportação CSV, recriando uma feature que existia no

@@ -58,6 +58,25 @@ entrada na auditoria nova — podem entrar depois se fizer falta.
 
 ## Deploy
 
-Pendente de execução pelo operador. Esta versão inclui uma migration
-nova (`migrate --force` roda como parte do `dns-center-deploy
-update`).
+Executado em produção em 2026-09-16, a partir do HEAD `b2f7d74` (tag
+`v1.3.21`), junto com a v1.3.20 (bundle único, nenhum deploy separado
+da v1.3.20 foi feito):
+
+```
+sudo DNS_CENTER_DEPLOY_CONFIG=/etc/dns-center/deployment.env \
+  ./deploy/dns-center-deploy update 1.3.21
+```
+
+- imagens `dns-center-app:1.3.21`/`dns-center-web:1.3.21` construídas
+  localmente, suíte completa reconferida na imagem final e
+  `composer audit` sem vulnerabilidades antes do corte de tráfego;
+- backup do PostgreSQL criado antes da migration:
+  `dns-center-20260916T202130Z.dump`, 2508359 bytes, SHA-256
+  `d98e17e3c656869dfc503e74d3221e59ff444ef8d2901db3fd3811ffef20df8c`;
+- `migrate --force`: `2026_09_16_200000_create_dns_audit_logs_table`
+  aplicada com sucesso (`migrate:status` confirmado como `Ran`);
+- corte de tráfego bem-sucedido.
+
+Conferido de forma independente após o deploy:
+`https://dnscenter.trevizamnetwork.com.br/up` respondeu HTTP 200; os 4
+serviços da aplicação confirmados na imagem `1.3.21`.
