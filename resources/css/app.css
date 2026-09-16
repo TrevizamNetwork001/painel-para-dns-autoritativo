@@ -7382,6 +7382,10 @@ body.has-open-modal {
     font-size: 0.74rem;
 }
 
+.nameserver-profile-card .nameserver-title-line h3 {
+    font-size: 0.82rem;
+}
+
 .nameserver-state,
 .nameserver-default {
     display: inline-flex;
@@ -7497,7 +7501,7 @@ body.has-open-modal {
 .nameserver-profile-card > header > strong {
     flex: 0 0 auto;
     color: var(--muted);
-    font-size: 0.78rem;
+    font-size: 0.7rem;
     font-weight: 700;
 }
 
@@ -7528,6 +7532,7 @@ body.has-open-modal {
     border-radius: 8px;
     color: #fb923c;
     background: rgba(249, 115, 22, 0.1);
+    font-size: 0.7rem;
     font-weight: 750;
 }
 
@@ -7539,14 +7544,14 @@ body.has-open-modal {
 .nameserver-profile-list small {
     display: block;
     overflow: hidden;
-    font-size: 0.72rem;
+    font-size: 0.74rem;
     text-overflow: ellipsis;
     white-space: nowrap;
 }
 
 .nameserver-profile-list small {
     color: var(--muted);
-    font-size: 0.62rem;
+    font-size: 0.63rem;
 }
 
 .nameserver-profile-notes {
