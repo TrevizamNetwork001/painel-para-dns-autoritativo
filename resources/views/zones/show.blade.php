@@ -1070,7 +1070,7 @@
                                     <span>
                                         <strong>
                                             @if ($reverseBlocks[$reverseZone->id] ?? null)
-                                                bloco {{ $reverseBlocks[$reverseZone->id] }}
+                                                {{ $reverseBlocks[$reverseZone->id] }}
                                             @else
                                                 {{ $reverseZone->name }}
                                             @endif

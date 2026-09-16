@@ -221,7 +221,7 @@
                                         <div>
                                             <strong title="{{ $zone->name }}">
                                                 {{ $reverseBlock
-                                                    ? 'bloco '.$reverseBlock
+                                                    ? $reverseBlock
                                                     : $zone->name }}
                                             </strong>
 
