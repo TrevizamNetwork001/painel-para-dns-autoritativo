@@ -300,10 +300,17 @@ em produção. As evidências e limitações estão em
 | [Release 1.3.8](docs/RELEASE_1.3.8.md) | Continuação do fix de fonte da aba Nameservers (Identidades e Perfis) |
 | [Release 1.3.9](docs/RELEASE_1.3.9.md) | Assistente de DNS reverso IPv4/IPv6 |
 | [Release 1.3.10](docs/RELEASE_1.3.10.md) | Corrige layout do modal de criar zona reversa |
+| [Release 1.3.11](docs/RELEASE_1.3.11.md) | Mostra o bloco CIDR das zonas reversas na forma cadastrada |
 
 ## Status do projeto
 
-**v1.3.10 em produção desde 2026-09-16** (o modal "Criar zona
+**v1.3.11 em produção desde 2026-09-16** (zona reversa mostra o bloco
+CIDR calculado — ex. `2001:db8::/32` — junto do nome in-addr.arpa/
+ip6.arpa, tanto no cabeçalho da zona quanto na lista da aba "DNS
+reverso"; pedido do operador ao testar o assistente ao vivo, já que o
+nome reverso sozinho é difícil de verificar de cabeça; funciona pra
+qualquer zona reversa, não só as criadas pelo assistente; sobre a
+v1.3.10, que corrigiu o modal "Criar zona
 reversa" lançado na v1.3.9 estava reaproveitando um grid CSS pensado
 pra outro formulário, o que espremia os campos e quebrava o rótulo de
 forma feia — achado ao vivo pelo operador logo após o deploy. Corrigido
