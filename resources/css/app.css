@@ -7379,7 +7379,7 @@ body.has-open-modal {
 }
 
 .nameserver-identity-row .nameserver-title-line strong {
-    font-size: 0.78rem;
+    font-size: 0.74rem;
 }
 
 .nameserver-state,
@@ -7414,18 +7414,27 @@ body.has-open-modal {
 }
 
 .nameserver-server-link span,
-.nameserver-server-link small,
 .nameserver-usage span {
     display: block;
     color: var(--muted);
-    font-size: 0.78rem;
+    font-size: 0.63rem;
 }
 
 .nameserver-server-link strong,
 .nameserver-server-link small {
+    display: block;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+}
+
+.nameserver-server-link strong {
+    font-size: 0.74rem;
+}
+
+.nameserver-server-link small {
+    color: var(--muted);
+    font-size: 0.63rem;
 }
 
 .nameserver-usage {
@@ -7434,7 +7443,8 @@ body.has-open-modal {
 
 .nameserver-usage strong {
     display: block;
-    font-size: 1.2rem;
+    font-size: 0.74rem;
+    font-weight: 800;
 }
 
 .nameserver-actions,
