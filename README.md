@@ -304,10 +304,18 @@ em produção. As evidências e limitações estão em
 | [Release 1.3.12](docs/RELEASE_1.3.12.md) | Registros PTR mostram o IP calculado em vez do nome reverso de 32 nibbles |
 | [Release 1.3.13](docs/RELEASE_1.3.13.md) | Bloco CIDR na lista geral de domínios, no título da zona e PTR sem nome truncado |
 | [Release 1.3.14](docs/RELEASE_1.3.14.md) | Aceita IP curto ao editar/criar registro PTR, remove prefixo "bloco" |
+| [Release 1.3.15](docs/RELEASE_1.3.15.md) | Agente 0.7.8 habilita DNS_CENTER_AGENT_ALLOW_APPLY por padrão |
 
 ## Status do projeto
 
-**v1.3.14 em produção desde 2026-09-16** (o campo "Nome" ao editar um
+**v1.3.15 em produção desde 2026-09-16** (agente 0.7.8 passa a
+habilitar `DNS_CENTER_AGENT_ALLOW_APPLY=1` por padrão — decisão
+consciente confirmada com o operador após o primeiro `apply_zones`
+real em produção falhar por esse opt-in nunca ter sido feito por SSH
+no ns1; remove a necessidade de SSH manual por servidor pra sempre,
+tanto em instalações novas quanto via "Atualizar agente" nas já
+existentes; a autorização passa a depender só do RBAC do painel;
+sobre a v1.3.14, que fez o campo "Nome" ao editar um
 registro PTR numa zona reversa agora mostra e aceita o IP curto — ex.
 `2001:db8::243` — em vez do nome reverso de 32 nibbles; o controller
 converte automaticamente pro formato completo ao salvar, sem mudar o
