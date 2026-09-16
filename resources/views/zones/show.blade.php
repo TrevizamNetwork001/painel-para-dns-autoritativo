@@ -869,6 +869,42 @@
                             </div>
                         </div>
 
+                        @if ($zone->isReverseZone())
+                            <div class="domain-configuration-section">
+                                <div class="domain-configuration-heading">
+                                    <h3>Geração de PTR</h3>
+
+                                    <p>
+                                        Modelo de nome usado ao gerar PTR
+                                        a partir de registros A (botão na
+                                        aba Publicação).
+                                    </p>
+                                </div>
+
+                                <label class="domain-field">
+                                    <span>Modelo de nome do PTR (opcional)</span>
+
+                                    <input
+                                        type="text"
+                                        name="ptr_name_template"
+                                        placeholder="host-$"
+                                        maxlength="50"
+                                        value="{{ old(
+                                            'ptr_name_template',
+                                            $zone->ptr_name_template
+                                        ) }}"
+                                    >
+
+                                    <small>
+                                        Use <code>$</code> no lugar do IP
+                                        do host, ex. <code>host-$</code>.
+                                        Em branco, usa o nome do próprio
+                                        registro A.
+                                    </small>
+                                </label>
+                            </div>
+                        @endif
+
                         <label class="domain-field domain-field-full">
                             <span>Cliente</span>
 
@@ -1287,6 +1323,15 @@
                                 Cria/atualiza um PTR nesta zona pra cada
                                 registro A do domínio selecionado cujo
                                 endereço esteja dentro deste bloco.
+                                @if ($zone->ptr_name_template)
+                                    Usará o modelo de nome
+                                    <code>{{ $zone->ptr_name_template }}</code>
+                                    (configurável na aba Configuração).
+                                @else
+                                    Usará o nome do próprio registro A
+                                    (defina um modelo de nome na aba
+                                    Configuração pra mudar isso).
+                                @endif
                             </small>
                         </form>
                     @endif
@@ -1893,6 +1938,24 @@
                                 </option>
                             @endforeach
                         </select>
+                    </label>
+
+                    <label class="domain-field">
+                        <span>Modelo de nome do PTR (opcional, só IPv4)</span>
+
+                        <input
+                            type="text"
+                            name="ptr_name_template"
+                            placeholder="host-$"
+                            maxlength="50"
+                        >
+
+                        <small>
+                            Use <code>$</code> no lugar do IP do host,
+                            ex. <code>host-$</code>. Só vale pra PTR
+                            gerado a partir de registros A; deixe em
+                            branco pra usar o nome do próprio A.
+                        </small>
                     </label>
                 </div>
 

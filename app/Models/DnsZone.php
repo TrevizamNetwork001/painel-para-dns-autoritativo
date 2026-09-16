@@ -33,6 +33,7 @@ class DnsZone extends Model
         'version',
         'enabled',
         'notes',
+        'ptr_name_template',
         'origin',
         'imported_at',
         'imported_by',

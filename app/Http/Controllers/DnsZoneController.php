@@ -269,6 +269,7 @@ class DnsZoneController extends Controller
                 Rule::exists('dns_servers', 'id')
                     ->where('organization_id', $organizationId),
             ],
+            'ptr_name_template' => $this->ptrNameTemplateRules(),
         ]);
 
         try {
@@ -320,7 +321,12 @@ class DnsZoneController extends Controller
             $nameservers,
             $organizationId,
             $zoneName,
-            ['kind' => 'primary'],
+            [
+                'kind' => 'primary',
+                'ptr_name_template' => $validated['family'] === 'ipv4'
+                    ? ($validated['ptr_name_template'] ?? null)
+                    : null,
+            ],
             $nameserverProfile,
             $primaryServer,
             $secondaryServer,
@@ -368,6 +374,7 @@ class DnsZoneController extends Controller
             $summary = $synchronizer->synchronizeFromForwardZone(
                 $zone,
                 $forwardZone,
+                $zone->ptr_name_template,
             );
 
             if (($summary['created'] + $summary['updated']) > 0) {
@@ -475,6 +482,7 @@ class DnsZoneController extends Controller
                     ->where('organization_id', $organizationId),
             ],
             'notes' => ['nullable', 'string', 'max:2000'],
+            'ptr_name_template' => $this->ptrNameTemplateRules(),
         ]);
 
         $nameserverProfile =
@@ -514,6 +522,9 @@ class DnsZoneController extends Controller
                 'soa_expire' => $validated['soa_expire'],
                 'soa_minimum' => $validated['soa_minimum'],
                 'notes' => $validated['notes'] ?? null,
+                'ptr_name_template' => $zone->isReverseZone()
+                    ? ($validated['ptr_name_template'] ?? null)
+                    : null,
             ])->save();
 
             $servers = [
@@ -1334,6 +1345,7 @@ class DnsZoneController extends Controller
                 'notes' => isset($zoneAttributes['notes'])
                     ? trim($zoneAttributes['notes'])
                     : null,
+                'ptr_name_template' => $zoneAttributes['ptr_name_template'] ?? null,
             ]);
 
             $sync = [
@@ -1417,6 +1429,19 @@ class DnsZoneController extends Controller
     private function domain(string $value): string
     {
         return strtolower(rtrim(trim($value), '.'));
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    private function ptrNameTemplateRules(): array
+    {
+        return [
+            'nullable',
+            'string',
+            'max:50',
+            'regex:/^[a-z0-9_-]*\$[a-z0-9_-]*$/i',
+        ];
     }
 
     private function authorizeZone(Request $request, DnsZone $zone): void

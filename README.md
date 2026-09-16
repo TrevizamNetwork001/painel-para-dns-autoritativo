@@ -311,10 +311,15 @@ em produção. As evidências e limitações estão em
 | [Release 1.3.19](docs/RELEASE_1.3.19.md) | Botão "Publicar e sincronizar" reduz publicação+aplicação a 1 clique |
 | [Release 1.3.20](docs/RELEASE_1.3.20.md) | Histórico de versões mostra qual registro mudou, não só "Registro atualizado." |
 | [Release 1.3.21](docs/RELEASE_1.3.21.md) | Tela de Auditoria global por organização, com filtros e exportação CSV |
+| [Release 1.3.22](docs/RELEASE_1.3.22.md) | Template de nome pro PTR gerado a partir de registros A |
 
 ## Status do projeto
 
-**v1.3.21 em produção desde 2026-09-16** (tela nova "Auditoria" — trilha de
+**v1.3.22 pronta para deploy** (zonas reversas IPv4 ganham um campo
+opcional "Modelo de nome do PTR", ex. `host-$`, aplicado só aos PTR
+gerados a partir de registros A já cadastrados — inspirado no projeto
+antigo, mas sem a geração especulativa pro bloco inteiro que existia
+lá); sobre a v1.3.21 em produção desde 2026-09-16 (tela nova "Auditoria" — trilha de
 todas as ações administrativas (zonas, registros, servidores,
 usuários, organizações, login/logout) por organização, com filtro,
 paginação e exportação CSV, recriando uma feature que existia no

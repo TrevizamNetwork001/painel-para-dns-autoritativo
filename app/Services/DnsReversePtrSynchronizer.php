@@ -86,14 +86,19 @@ class DnsReversePtrSynchronizer
     /**
      * @return array{created: int, updated: int, unchanged: int, unmatched: int}
      */
-    public function synchronizeFromForwardZone(DnsZone $reverseZone, DnsZone $forwardZone): array
-    {
+    public function synchronizeFromForwardZone(
+        DnsZone $reverseZone,
+        DnsZone $forwardZone,
+        ?string $nameTemplate = null,
+    ): array {
         $summary = [
             'created' => 0,
             'updated' => 0,
             'unchanged' => 0,
             'unmatched' => 0,
         ];
+
+        $nameTemplate = filled($nameTemplate) ? trim($nameTemplate) : null;
 
         $records = $forwardZone->records()
             ->where('type', 'A')
@@ -110,7 +115,9 @@ class DnsReversePtrSynchronizer
                 continue;
             }
 
-            $hostname = $this->absoluteOwner($record->name, $forwardZone->name).'.';
+            $hostname = $nameTemplate === null
+                ? $this->absoluteOwner($record->name, $forwardZone->name).'.'
+                : $this->templatedOwner($nameTemplate, $ip, $reverseZone->name, $forwardZone->name).'.';
 
             $existing = $reverseZone->records()
                 ->where('name', $recordName)
@@ -137,6 +144,25 @@ class DnsReversePtrSynchronizer
         }
 
         return $summary;
+    }
+
+    private function templatedOwner(
+        string $nameTemplate,
+        string $ip,
+        string $reverseZoneName,
+        string $forwardZoneName,
+    ): string {
+        $network = $this->ipv4ZoneNetwork($reverseZoneName);
+        $ipOctets = array_map('intval', explode('.', $ip));
+
+        $hostOctets = $network === null
+            ? $ipOctets
+            : array_slice($ipOctets, $network['labelCount']);
+
+        $hostPart = implode('-', $hostOctets);
+        $label = str_replace('$', $hostPart, $nameTemplate);
+
+        return $label.'.'.strtolower(rtrim(trim($forwardZoneName), '.'));
     }
 
     private function absoluteOwner(string $recordName, string $zoneName): string

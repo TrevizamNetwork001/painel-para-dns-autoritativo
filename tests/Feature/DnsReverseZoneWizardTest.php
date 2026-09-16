@@ -179,6 +179,151 @@ class DnsReverseZoneWizardTest extends TestCase
             ->assertNotFound();
     }
 
+    public function test_wizard_saves_ptr_name_template_for_ipv4(): void
+    {
+        $context = $this->context();
+
+        $this->actingAs($context['admin'])
+            ->post(route('zones.reverse.store'), $this->reversePayload($context, [
+                'family' => 'ipv4',
+                'cidr' => '192.0.2.0/24',
+                'ptr_name_template' => 'host-$',
+            ]))
+            ->assertSessionHasNoErrors();
+
+        $zone = DnsZone::query()
+            ->where('organization_id', $context['organization']->id)
+            ->where('name', '2.0.192.in-addr.arpa')
+            ->firstOrFail();
+
+        $this->assertSame('host-$', $zone->ptr_name_template);
+    }
+
+    public function test_wizard_ignores_ptr_name_template_for_ipv6(): void
+    {
+        $context = $this->context();
+
+        $this->actingAs($context['admin'])
+            ->post(route('zones.reverse.store'), $this->reversePayload($context, [
+                'family' => 'ipv6',
+                'cidr' => '2001:db8::/32',
+                'ptr_name_template' => 'host-$',
+            ]))
+            ->assertSessionHasNoErrors();
+
+        $zone = DnsZone::query()
+            ->where('organization_id', $context['organization']->id)
+            ->where('name', '8.b.d.0.1.0.0.2.ip6.arpa')
+            ->firstOrFail();
+
+        $this->assertNull($zone->ptr_name_template);
+    }
+
+    public function test_wizard_rejects_invalid_ptr_name_template(): void
+    {
+        $context = $this->context();
+
+        $this->actingAs($context['admin'])
+            ->post(route('zones.reverse.store'), $this->reversePayload($context, [
+                'family' => 'ipv4',
+                'cidr' => '192.0.2.0/24',
+                'ptr_name_template' => 'sem-placeholder',
+            ]))
+            ->assertSessionHasErrors('ptr_name_template');
+
+        $this->assertDatabaseCount('dns_zones', 0);
+    }
+
+    public function test_generate_ptr_uses_configured_name_template(): void
+    {
+        $context = $this->context();
+        $forwardZone = $this->createZone($context, 'example.com');
+
+        DnsRecord::query()->create([
+            'organization_id' => $context['organization']->id,
+            'dns_zone_id' => $forwardZone->id,
+            'name' => 'inside',
+            'type' => 'A',
+            'ttl' => null,
+            'priority' => null,
+            'content' => '192.0.2.10',
+            'enabled' => true,
+        ]);
+
+        $reverseZone = $this->createReverseZone($context, '2.0.192.in-addr.arpa');
+        $reverseZone->forceFill(['ptr_name_template' => 'host-$'])->save();
+
+        $this->actingAs($context['admin'])
+            ->post(route('zones.reverse.generate-ptr', $reverseZone), [
+                'forward_zone_id' => $forwardZone->id,
+            ])
+            ->assertRedirect();
+
+        $this->assertDatabaseHas('dns_records', [
+            'dns_zone_id' => $reverseZone->id,
+            'name' => '10.2.0.192.in-addr.arpa.',
+            'type' => 'PTR',
+            'content' => 'host-10.example.com.',
+        ]);
+    }
+
+    public function test_generate_ptr_template_joins_multiple_host_octets_for_slash16_block(): void
+    {
+        $context = $this->context();
+        $forwardZone = $this->createZone($context, 'example.com');
+
+        DnsRecord::query()->create([
+            'organization_id' => $context['organization']->id,
+            'dns_zone_id' => $forwardZone->id,
+            'name' => 'inside',
+            'type' => 'A',
+            'ttl' => null,
+            'priority' => null,
+            'content' => '198.18.5.7',
+            'enabled' => true,
+        ]);
+
+        $reverseZone = $this->createReverseZone($context, '18.198.in-addr.arpa');
+        $reverseZone->forceFill(['ptr_name_template' => 'host-$'])->save();
+
+        $this->actingAs($context['admin'])
+            ->post(route('zones.reverse.generate-ptr', $reverseZone), [
+                'forward_zone_id' => $forwardZone->id,
+            ])
+            ->assertRedirect();
+
+        $this->assertDatabaseHas('dns_records', [
+            'dns_zone_id' => $reverseZone->id,
+            'name' => '7.5.18.198.in-addr.arpa.',
+            'type' => 'PTR',
+            'content' => 'host-5-7.example.com.',
+        ]);
+    }
+
+    public function test_zone_settings_update_saves_ptr_name_template(): void
+    {
+        $context = $this->context();
+        $reverseZone = $this->createReverseZone($context, '2.0.192.in-addr.arpa');
+
+        $this->actingAs($context['admin'])
+            ->put(route('zones.update', $reverseZone), [
+                'kind' => 'primary',
+                'dns_nameserver_profile_id' => $context['profile']->id,
+                'default_ttl' => 3600,
+                'soa_rname' => 'hostmaster.'.$reverseZone->name,
+                'soa_refresh' => 3600,
+                'soa_retry' => 900,
+                'soa_expire' => 1209600,
+                'soa_minimum' => 300,
+                'primary_server_id' => $context['primary']->id,
+                'secondary_server_id' => $context['secondary']->id,
+                'ptr_name_template' => 'ip-$',
+            ])
+            ->assertSessionHasNoErrors();
+
+        $this->assertSame('ip-$', $reverseZone->fresh()->ptr_name_template);
+    }
+
     public function test_ptr_record_name_accepts_short_ip_and_normalizes_to_full_name(): void
     {
         $context = $this->context();
