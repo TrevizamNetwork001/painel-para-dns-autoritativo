@@ -1,5 +1,15 @@
 const root = document.documentElement;
 
+const dashboardSearch = document.querySelector('[data-dashboard-search]');
+if (dashboardSearch) {
+    document.addEventListener('keydown', (event) => {
+        if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k') {
+            event.preventDefault();
+            window.location.assign(dashboardSearch.href);
+        }
+    });
+}
+
 function updateThemeIcon() {
     const theme = root.dataset.theme || 'dark';
 

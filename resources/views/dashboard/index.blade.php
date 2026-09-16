@@ -48,6 +48,7 @@
     $isAuthoritativeOnline = fn ($server) =>
         $server->authoritative_observed_at?->gte(now()->subMinutes(10))
         && (bool) data_get($server->authoritative_runtime, 'available', false);
+    $serviceOnlineCount = $dashboardServers->filter($isAuthoritativeOnline)->count();
     $primaryOnlineCount = $primaryServers->filter($isAuthoritativeOnline)->count();
     $secondaryOnlineCount = $secondaryServers->filter($isAuthoritativeOnline)->count();
     $synchronizedZoneCount = $dashboardObservations
@@ -77,13 +78,13 @@
     $pendingItems = collect();
     foreach ($dashboardServers as $server) {
         if (in_array($server->status, ['offline', 'warning'], true)) {
-            $pendingItems->push(['type' => 'Servidor '.($server->status === 'offline' ? 'offline' : 'em atenção'), 'object' => $server->name, 'detail' => $server->hostname, 'severity' => $server->status === 'offline' ? 'critical' : 'warning', 'url' => route('servers.index')]);
+            $pendingItems->push(['type' => 'Servidor '.($server->status === 'offline' ? 'offline' : 'em atenção'), 'object' => $server->name, 'detail' => $server->hostname, 'severity' => $server->status === 'offline' ? 'critical' : 'warning', 'at' => $server->last_seen_at, 'url' => route('servers.index')]);
         }
         if (in_array($server->role, ['primary', 'secondary'], true) && ! $isAuthoritativeOnline($server) && in_array($server->status, ['online', 'warning'], true)) {
-            $pendingItems->push(['type' => 'Saúde autoritativa não confirmada', 'object' => $server->name, 'detail' => 'Sem observação recente de serviço disponível', 'severity' => 'warning', 'url' => route('servers.index')]);
+            $pendingItems->push(['type' => 'Saúde autoritativa não confirmada', 'object' => $server->name, 'detail' => 'Sem observação recente de serviço disponível', 'severity' => 'warning', 'at' => $server->authoritative_observed_at, 'url' => route('servers.index')]);
         }
         if (data_get($server->authoritative_runtime, 'recursion_enabled') === true) {
-            $pendingItems->push(['type' => 'Recursão habilitada', 'object' => $server->name, 'detail' => 'Observada no serviço autoritativo', 'severity' => 'warning', 'url' => route('servers.index')]);
+            $pendingItems->push(['type' => 'Recursão habilitada', 'object' => $server->name, 'detail' => 'Observada no serviço autoritativo', 'severity' => 'warning', 'at' => $server->authoritative_observed_at, 'url' => route('servers.index')]);
         }
     }
     foreach ($dashboardObservations as $observation) {
@@ -95,11 +96,11 @@
             default => null,
         };
         if ($type) {
-            $pendingItems->push(['type' => $type, 'object' => $zoneNames[$observation->dns_zone_id] ?? 'Zona #'.$observation->dns_zone_id, 'detail' => ($observation->status === 'serial_mismatch' ? 'Serial observado difere do esperado' : 'Estado reportado pelo agente').($dashboardServers->firstWhere('id', $observation->dns_server_id) ? ' · '.$dashboardServers->firstWhere('id', $observation->dns_server_id)->name : ''), 'severity' => in_array($observation->status, ['expired', 'transfer_failed', 'primary_unreachable'], true) ? 'critical' : 'warning', 'url' => route('zones.index')]);
+            $pendingItems->push(['type' => $type, 'object' => $zoneNames[$observation->dns_zone_id] ?? 'Zona #'.$observation->dns_zone_id, 'detail' => ($observation->status === 'serial_mismatch' ? 'Serial observado difere do esperado' : 'Estado reportado pelo agente').($dashboardServers->firstWhere('id', $observation->dns_server_id) ? ' · '.$dashboardServers->firstWhere('id', $observation->dns_server_id)->name : ''), 'severity' => in_array($observation->status, ['expired', 'transfer_failed', 'primary_unreachable'], true) ? 'critical' : 'warning', 'at' => $observation->updated_at, 'url' => route('zones.index')]);
         }
     }
     foreach ($dashboardPublications as $publication) {
-        $pendingItems->push(['type' => 'Publicação pendente', 'object' => $dashboardServers->firstWhere('id', $publication->dns_server_id)?->name ?? 'Servidor DNS', 'detail' => 'Estado: '.match ($publication->status) { 'downloaded' => 'baixada', 'applying' => 'aplicando', default => 'aguardando' }, 'severity' => 'warning', 'url' => route('zones.index')]);
+        $pendingItems->push(['type' => 'Publicação pendente', 'object' => $dashboardServers->firstWhere('id', $publication->dns_server_id)?->name ?? 'Servidor DNS', 'detail' => 'Estado: '.match ($publication->status) { 'downloaded' => 'baixada', 'applying' => 'aplicando', default => 'aguardando' }, 'severity' => 'warning', 'at' => $publication->updated_at, 'url' => route('zones.index')]);
     }
     $activeAlertCount = $pendingItems->count();
     $healthState = $serverCount === 0 || ($onlineServerCount === 0 && $activeAlertCount === 0) ? 'neutral' : ($pendingItems->contains(fn ($item) => $item['severity'] === 'critical') ? 'critical' : ($activeAlertCount || $onlineServerCount < $serverCount ? 'warning' : 'healthy'));
@@ -257,13 +258,20 @@
                 <h1>Visão geral do ambiente</h1>
 
                 <p class="page-description">
-                    Acompanhe a infraestrutura DNS autoritativa,
-                    os serviços e as pendências operacionais.
+                    Monitore sua infraestrutura DNS autoritativa em tempo real.
                 </p>
             </div>
 
-            <div class="topbar-actions">
-                <x-account-menu />
+            <div class="dashboard-header-right">
+                <div class="topbar-actions">
+                    <a class="dashboard-search" data-dashboard-search href="{{ route('servers.index') }}" aria-label="Abrir inventário de servidores">
+                        <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="10.8" cy="10.8" r="6.8"/><path d="m16 16 5 5"/></svg>
+                        <span>Buscar servidor, zona ou domínio...</span>
+                        <kbd>Ctrl + K</kbd>
+                    </a>
+                    <x-account-menu />
+                </div>
+                <div class="dashboard-header-status"><span>Última atualização<br><time datetime="{{ now()->toIso8601String() }}">{{ now()->format('d/m/Y H:i') }}</time></span><span class="dashboard-header-system"><i></i>{{ $healthState === 'healthy' ? 'Todos os sistemas respondendo' : 'Acompanhe o estado dos sistemas' }}</span></div>
             </div>
         </header>
 
@@ -277,33 +285,55 @@
         @endif
 
         <section class="dashboard-health dashboard-health-{{ $healthState }}" aria-label="Saúde do ambiente">
-            <div class="dashboard-health-title"><span class="dashboard-health-dot" aria-hidden="true"></span><span class="dashboard-health-heading"><small>Saúde do ambiente</small><strong>{{ $healthLabel }}</strong></span></div>
-            <p>{{ $onlineServerCount }}/{{ $serverCount }} servidores online <span aria-hidden="true">·</span> {{ $zoneCount }} zonas autoritativas <span aria-hidden="true">·</span> {{ $activeAlertCount ? $activeAlertCount.' pendências operacionais' : 'Nenhuma pendência operacional' }}</p>
+            <span class="dashboard-health-dot" aria-hidden="true"></span>
+            <div class="dashboard-health-copy"><strong>{{ $healthLabel }}</strong><p>{{ $onlineServerCount }} de {{ $serverCount }} servidores online <span aria-hidden="true">·</span> {{ $mismatchZoneCount }} {{ $mismatchZoneCount === 1 ? 'zona divergente' : 'zonas divergentes' }} <span aria-hidden="true">·</span> {{ $activeAlertCount }} {{ $activeAlertCount === 1 ? 'pendência operacional' : 'pendências operacionais' }}</p></div>
+            <span class="dashboard-health-arrow" aria-hidden="true">›</span>
         </section>
 
         <section class="dashboard-kpi-grid" aria-label="Indicadores operacionais">
             @foreach ([
-                ['Servidores DNS', $serverCount, $onlineServerCount.' online de '.$serverCount, 'servers.index', 'server'],
-                ['Zonas autoritativas', $zoneCount, $mismatchZoneCount.' divergentes', 'zones.index', 'zone'],
-                ['Servidores online', $onlineServerCount, $serverCount ? round($onlineServerCount / $serverCount * 100).'% da infraestrutura' : 'Sem servidores', 'servers.index', 'online'],
-                ['Pendências', $activeAlertCount, $hasAlerts ? 'Requerem atenção' : 'Ambiente sem alertas', null, 'alert'],
-            ] as [$label, $value, $detail, $destination, $icon])
+                ['Servidores DNS', $serverCount, $onlineServerCount.' online · '.($serverCount - $onlineServerCount).' offline', 'servers.index', 'server', $serverCount ? $onlineServerCount / $serverCount * 100 : 0],
+                ['Zonas autoritativas', $zoneCount, $mismatchZoneCount.' '.($mismatchZoneCount === 1 ? 'divergente' : 'divergentes'), 'zones.index', 'zone', $zoneCount ? $mismatchZoneCount / $zoneCount * 100 : 0],
+                ['Serviços', $serviceOnlineCount, $serviceOnlineCount.' online · '.max(0, $serverCount - $serviceOnlineCount).' offline', 'servers.index', 'online', $serverCount ? $serviceOnlineCount / $serverCount * 100 : 0],
+                ['Pendências', $activeAlertCount, $hasAlerts ? 'Requerem atenção' : 'Ambiente sem alertas', null, 'alert', min(100, $activeAlertCount * 15)],
+            ] as [$label, $value, $detail, $destination, $icon, $progress])
                 <article class="dashboard-kpi-card dashboard-kpi-{{ $icon }}">
-                    <span class="dashboard-kpi-icon kpi-icon-{{ $icon === 'alert' && ! $hasAlerts ? 'online' : $icon }}" aria-hidden="true">{{ ['server' => '▣', 'zone' => '◎', 'online' => '◉', 'alert' => '!'][$icon] }}</span>
-                    <div><strong class="dashboard-kpi-value" @if ($icon === 'zone') data-dashboard-zone-count @endif>{{ $value }}</strong><span class="dashboard-kpi-label">{{ $label }}</span></div>
-                    @if ($destination)<a class="dashboard-kpi-footer" href="{{ route($destination) }}">{{ $detail }} <span aria-hidden="true">›</span></a>
-                    @else <span class="dashboard-kpi-footer">{{ $detail }}</span> @endif
+                    <span class="dashboard-kpi-icon kpi-icon-{{ $icon === 'alert' && ! $hasAlerts ? 'online' : $icon }}" aria-hidden="true"><x-dashboard-icon :name="$icon" /></span>
+                    <div class="dashboard-kpi-content"><strong class="dashboard-kpi-value" @if ($icon === 'zone') data-dashboard-zone-count @endif>{{ $value }}</strong><span class="dashboard-kpi-label">{{ $label }}</span><span class="dashboard-kpi-detail">{{ $detail }}</span><span class="dashboard-kpi-progress"><span style="width: {{ $progress }}%"></span></span></div>
+                    @if ($destination)<a class="dashboard-kpi-arrow" href="{{ route($destination) }}" aria-label="Ver {{ strtolower($label) }}">›</a>@endif
                 </article>
             @endforeach
         </section>
 
         <section class="dashboard-operations-grid" aria-label="Infraestrutura e pendências">
+            <article class="dashboard-panel dashboard-map-panel">
+                <div class="dashboard-panel-heading"><h2>Mapa da infraestrutura</h2><div class="dashboard-map-legend"><span><i class="map-dot online"></i>Online</span><span><i class="map-dot offline"></i>Offline</span><span><i class="map-dot unknown"></i>Desconhecido</span></div></div>
+                <div class="dashboard-map-body">
+                    <div class="dashboard-map-art" aria-hidden="true">
+                        <img src="{{ asset('images/brazil-map.svg') }}" alt="">
+                        @if ($hasServers)
+                            <svg class="dashboard-map-network" viewBox="0 0 380 300" fill="none" preserveAspectRatio="xMidYMid meet">
+                                <path class="map-connection" d="M95 205Q188 125 295 78M205 224Q228 136 295 78M95 205Q156 185 205 224"/>
+                                @foreach ($dashboardServers->take(3) as $server)
+                                    @php $point = [[95,205],[205,224],[295,78]][$loop->index]; @endphp
+                                    <circle class="map-node-halo map-node-{{ $server->status }}" cx="{{ $point[0] }}" cy="{{ $point[1] }}" r="12"/>
+                                    <circle class="map-node map-node-{{ $server->status }}" cx="{{ $point[0] }}" cy="{{ $point[1] }}" r="6"/>
+                                @endforeach
+                            </svg>
+                        @endif
+                    </div>
+                    <div class="dashboard-map-locations">
+                        @forelse ($dashboardServers->take(4) as $server)
+                            <div class="dashboard-map-location"><span class="dashboard-server-status dashboard-server-status-{{ $server->status }}"></span><div><strong>{{ $server->name }}</strong><small>{{ $server->status === 'online' ? 'Online' : ($server->status === 'offline' ? 'Offline' : 'Aguardando') }}</small></div></div>
+                        @empty
+                            <p class="dashboard-empty-line">Nenhum servidor cadastrado.</p>
+                        @endforelse
+                    </div>
+                </div>
+            </article>
             <article class="dashboard-panel dashboard-server-panel">
-                <div class="dashboard-panel-heading"><div><p class="eyebrow">Infraestrutura</p><h2>Estado dos servidores</h2></div><a class="dashboard-panel-link" href="{{ route('servers.index') }}">Ver todos</a></div>
+                <div class="dashboard-panel-heading"><h2>Estado dos servidores</h2><a class="dashboard-panel-link" href="{{ route('servers.index') }}">Ver todos</a></div>
                 @if ($hasServers)
-                    <div class="dashboard-role-strip" aria-label="Funções dos servidores"><span><strong>{{ $primaryServers->count() }}</strong> primários</span><span><strong>{{ $secondaryServers->count() }}</strong> secundários</span><span><strong>{{ $dashboardServers->where('role', 'standalone')->count() }}</strong> independentes</span></div>
-                    <div class="dashboard-infrastructure-bar" role="img" aria-label="{{ $onlineServerCount }} de {{ $serverCount }} servidores online"><span class="health-online" style="width: {{ $serverCount ? $onlineServerCount / $serverCount * 100 : 0 }}%"></span><span class="health-warning" style="width: {{ $serverCount ? $warningServerCount / $serverCount * 100 : 0 }}%"></span><span class="health-offline" style="width: {{ $serverCount ? $offlineServerCount / $serverCount * 100 : 0 }}%"></span><span class="health-unknown" style="width: {{ $serverCount ? $unknownServerCount / $serverCount * 100 : 0 }}%"></span></div>
-                    <p class="dashboard-server-summary">{{ $onlineServerCount }} online <span>·</span> {{ $warningServerCount }} em atenção <span>·</span> {{ $offlineServerCount }} offline <span>·</span> {{ $unknownServerCount }} aguardando ou desativados</p>
                     <div class="dashboard-server-list">
                         @foreach ($dashboardServers->take(6) as $server)
                             @php
@@ -311,7 +341,7 @@
                             @endphp
                             <a href="{{ route('servers.index') }}" class="dashboard-server-item">
                                 <span class="dashboard-server-status dashboard-server-status-{{ $server->status }}" aria-hidden="true"></span>
-                                <span class="dashboard-server-info"><strong>{{ $server->name }}</strong><small title="{{ $server->hostname }}">{{ $server->hostname }}@if ($server->last_seen_at) · visto {{ $server->last_seen_at->diffForHumans() }}@endif</small></span>
+                                <span class="dashboard-server-info"><strong>{{ $server->name }}</strong><small title="{{ $server->hostname }}">{{ $server->hostname }}</small><small>{{ $server->last_seen_at ? 'Último visto '.$server->last_seen_at->diffForHumans() : 'Sem heartbeat recente' }}</small></span>
                                 <span class="dashboard-server-role">{{ match ($server->role) { 'primary' => 'Primário', 'secondary' => 'Secundário', default => 'Independente' } }}</span>
                                 <span class="dashboard-server-state dashboard-server-state-{{ $server->status }}">{{ $serverStatusLabel }}</span>
                             </a>
@@ -323,9 +353,13 @@
                 @endif
             </article>
             <article class="dashboard-panel dashboard-pending-panel">
-                <div class="dashboard-panel-heading"><div><p class="eyebrow">Operação</p><h2>Pendências operacionais</h2></div><span class="dashboard-count-badge">{{ $activeAlertCount }}</span></div>
+                <div class="dashboard-panel-heading"><h2>Pendências operacionais</h2><span class="dashboard-count-badge">{{ $activeAlertCount }}</span><a class="dashboard-panel-link" href="{{ route('servers.index') }}">Ver todas</a></div>
                 @forelse ($pendingItems->take(4) as $item)
-                    <a class="dashboard-pending-item" href="{{ $item['url'] }}"><span class="dashboard-issue-marker issue-{{ $item['severity'] }}" aria-hidden="true"></span><span class="dashboard-issue-copy"><strong>{{ $item['type'] }}</strong><span class="dashboard-issue-object">{{ $item['object'] }}</span><small>{{ $item['detail'] }}</small></span><span class="dashboard-issue-severity">{{ $item['severity'] === 'critical' ? 'Crítico' : 'Atenção' }}</span></a>
+                    <a class="dashboard-pending-item" href="{{ $item['url'] }}">
+                        <span class="dashboard-issue-marker issue-{{ $item['severity'] }}" aria-hidden="true"><x-dashboard-icon name="alert" /></span>
+                        <span class="dashboard-issue-copy"><strong>{{ $item['type'] }}</strong><span class="dashboard-issue-object">{{ $item['object'] }}</span><small>{{ $item['detail'] }}</small></span>
+                        <time class="dashboard-issue-severity" @if ($item['at']) datetime="{{ $item['at']->toIso8601String() }}" @endif>{{ $item['at']?->diffForHumans() ?? 'Agora' }}</time>
+                    </a>
                 @empty
                     <p class="dashboard-empty-line">✓ Nenhuma pendência operacional</p>
                 @endforelse
@@ -333,27 +367,27 @@
             </article>
         </section>
 
+        <section class="dashboard-lower-grid">
         <section class="dashboard-panel dashboard-authoritative" aria-labelledby="authoritative-title">
-            <div class="dashboard-panel-heading"><div><p class="eyebrow">Estado da autoridade</p><h2 id="authoritative-title">DNS autoritativo</h2></div><a class="dashboard-panel-link" href="{{ route('zones.index') }}">Ver zonas</a></div>
+            <div class="dashboard-panel-heading"><h2 id="authoritative-title"><span class="dashboard-title-symbol">▣</span> DNS autoritativo</h2></div>
             @if ($mismatchObservationCount > $mismatchZoneCount)
                 <p class="dashboard-observation-note">{{ $mismatchZoneCount }} {{ $mismatchZoneCount === 1 ? 'zona divergente' : 'zonas divergentes' }} · {{ $mismatchObservationCount }} observações afetadas</p>
             @endif
             <div class="dashboard-authoritative-grid">
                 @foreach ([
-                    ['Primários online', $primaryOnlineCount, $primaryServers->count(), 'primaries-online'],
-                    ['Secundários online', $secondaryOnlineCount, $secondaryServers->count(), 'secondaries-online'],
-                    ['Zonas sincronizadas', $synchronizedZoneCount, null, 'zonas-sincronizadas'],
-                    ['Zonas divergentes', $mismatchZoneCount, null, 'zonas-divergentes'],
-                ] as [$label, $value, $total, $key])
-                    <div class="dashboard-authoritative-stat dashboard-authoritative-{{ $key }}{{ $key === 'zonas-divergentes' && $value > 0 ? ' has-alert' : '' }}"><span>{{ $label }}</span><strong data-authoritative-counter="{{ $key }}" data-authoritative-value="{{ $value }}">{{ $value }}@if ($total !== null)<small> / {{ $total }}</small>@endif</strong></div>
+                    ['Primários', $primaryOnlineCount, $primaryServers->count(), 'primaries-online', $primaryServers->count() ? $primaryOnlineCount / $primaryServers->count() * 100 : 0],
+                    ['Secundários', $secondaryOnlineCount, $secondaryServers->count(), 'secondaries-online', $secondaryServers->count() ? $secondaryOnlineCount / $secondaryServers->count() * 100 : 0],
+                    ['Sincronizadas', $synchronizedZoneCount, null, 'zonas-sincronizadas', $zoneCount ? $synchronizedZoneCount / $zoneCount * 100 : 0],
+                    ['Divergentes', $mismatchZoneCount, null, 'zonas-divergentes', $zoneCount ? $mismatchZoneCount / $zoneCount * 100 : 0],
+                ] as [$label, $value, $total, $key, $progress])
+                    <div class="dashboard-authoritative-stat dashboard-authoritative-{{ $key }}{{ $key === 'zonas-divergentes' && $value > 0 ? ' has-alert' : '' }}"><span class="dashboard-auth-icon" aria-hidden="true"><x-dashboard-icon :name="$key" /></span><span>{{ $label }}</span><strong data-authoritative-counter="{{ $key }}" data-authoritative-value="{{ $value }}">{{ $value }}@if ($total !== null)<small> / {{ $total }}</small>@endif</strong><small>{{ $key === 'primaries-online' || $key === 'secondaries-online' ? ($total - $value).' offline' : ($key === 'zonas-divergentes' ? 'Serial mismatch' : 'Zonas convergentes') }}</small><span class="dashboard-auth-progress"><span style="width: {{ $progress }}%"></span></span></div>
                 @endforeach
             </div>
-            <div class="dashboard-authoritative-secondary"><span>Transferências falhando <strong data-authoritative-counter="transferencias-falhando" data-authoritative-value="{{ $failedTransferCount }}">{{ $failedTransferCount }}</strong></span><span>Zonas expiradas <strong data-authoritative-counter="zonas-expiradas" data-authoritative-value="{{ $expiredZoneCount }}">{{ $expiredZoneCount }}</strong></span><span>Publicações pendentes <strong data-authoritative-counter="publicacoes-pendentes" data-authoritative-value="{{ $pendingPublicationCount }}">{{ $pendingPublicationCount }}</strong></span></div>
+            <div class="dashboard-authoritative-secondary"><span><i><x-dashboard-icon name="server" /></i>Transferências<strong data-authoritative-counter="transferencias-falhando" data-authoritative-value="{{ $failedTransferCount }}">{{ $failedTransferCount }}</strong><small>Falhando</small></span><span><i><x-dashboard-icon name="clock" /></i>Zonas expiradas<strong data-authoritative-counter="zonas-expiradas" data-authoritative-value="{{ $expiredZoneCount }}">{{ $expiredZoneCount }}</strong><small>Requer atenção</small></span><span><i><x-dashboard-icon name="upload" /></i>Publicações pendentes<strong data-authoritative-counter="publicacoes-pendentes" data-authoritative-value="{{ $pendingPublicationCount }}">{{ $pendingPublicationCount }}</strong><small>Aguardando aplicação</small></span></div>
         </section>
 
-        <section class="dashboard-bottom-grid">
             <article class="dashboard-panel dashboard-activity-panel">
-                <div class="dashboard-panel-heading"><div><p class="eyebrow">Histórico de operações</p><h2>Atividades recentes</h2></div></div>
+                <div class="dashboard-panel-heading"><h2>Atividade recente</h2>@if ($canManageUsers)<a class="dashboard-panel-link" href="{{ route('audit.index') }}">Ver todas</a>@endif</div>
                 @forelse ($recentActivity as $activity)
                     <div class="dashboard-activity-item"><span class="activity-icon {{ $activity['status'] === 'succeeded' ? 'activity-icon-green' : 'activity-icon-orange' }}" aria-hidden="true">{{ $activity['status'] === 'succeeded' ? '✓' : '!' }}</span><div><strong>{{ $activity['label'] }} · {{ $activity['status'] === 'succeeded' ? 'concluída' : ($activity['status'] === 'failed' ? 'falhou' : 'expirou') }}</strong><span class="dashboard-activity-meta"><span>{{ $activity['context'] }}</span><time datetime="{{ $activity['at']?->toIso8601String() }}">{{ $activity['at']?->diffForHumans() }}</time></span></div></div>
                 @empty
@@ -361,19 +395,21 @@
                 @endforelse
             </article>
             <article class="dashboard-panel dashboard-actions-panel">
-                <div class="dashboard-panel-heading"><div><p class="eyebrow">Atalhos</p><h2>Ações rápidas</h2></div></div>
+                <div class="dashboard-panel-heading"><h2>Ações rápidas</h2></div>
                 <div class="dashboard-quick-actions">
                     @if ($canManageUsers)
-                        <a href="{{ route('servers.index') }}" class="dashboard-quick-action"><span class="quick-action-icon" aria-hidden="true">▣</span><strong>Novo servidor</strong><small>Gerenciar servidores</small></a>
-                        <a href="{{ route('zones.index') }}" class="dashboard-quick-action"><span class="quick-action-icon quick-icon-purple" aria-hidden="true">◎</span><strong>Nova zona</strong><small>Gerenciar zonas</small></a>
-                        <a href="{{ route('users.index') }}" class="dashboard-quick-action"><span class="quick-action-icon quick-icon-red" aria-hidden="true">♙</span><strong>Novo usuário</strong><small>Gerenciar acessos</small></a>
+                        <a href="{{ route('servers.index') }}" class="dashboard-quick-action"><span class="quick-action-icon" aria-hidden="true"><x-dashboard-icon name="server" /></span><strong>Novo servidor</strong><small>Gerenciar servidores</small></a>
+                        <a href="{{ route('zones.index') }}" class="dashboard-quick-action"><span class="quick-action-icon quick-icon-purple" aria-hidden="true"><x-dashboard-icon name="zone" /></span><strong>Nova zona</strong><small>Gerenciar zonas</small></a>
+                        <a href="{{ route('users.index') }}" class="dashboard-quick-action"><span class="quick-action-icon quick-icon-red" aria-hidden="true"><x-dashboard-icon name="user" /></span><strong>Novo usuário</strong><small>Gerenciar acessos</small></a>
+                        <a href="{{ route('audit.index') }}" class="dashboard-quick-action"><span class="quick-action-icon quick-icon-blue" aria-hidden="true"><x-dashboard-icon name="logs" /></span><strong>Ver logs</strong><small>Analisar eventos</small></a>
                     @else
-                        <a href="{{ route('servers.index') }}" class="dashboard-quick-action"><span class="quick-action-icon" aria-hidden="true">▣</span><strong>Ver servidores</strong></a>
-                        <a href="{{ route('zones.index') }}" class="dashboard-quick-action"><span class="quick-action-icon quick-icon-purple" aria-hidden="true">◎</span><strong>Ver zonas</strong></a>
+                        <a href="{{ route('servers.index') }}" class="dashboard-quick-action"><span class="quick-action-icon" aria-hidden="true"><x-dashboard-icon name="server" /></span><strong>Ver servidores</strong></a>
+                        <a href="{{ route('zones.index') }}" class="dashboard-quick-action"><span class="quick-action-icon quick-icon-purple" aria-hidden="true"><x-dashboard-icon name="zone" /></span><strong>Ver zonas</strong></a>
                     @endif
                 </div>
             </article>
         </section>
+        <footer class="dashboard-footer"><span>“DNS estável. Internet mais confiável.”</span><span>DNS Center v1.0 <i></i> {{ auth()->user()->currentOrganization?->name ?? config('app.name') }}</span></footer>
     </main>
 </div>
 @endsection
