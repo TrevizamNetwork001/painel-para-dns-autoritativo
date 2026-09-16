@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\DnsAgentPublication;
+use App\Models\DnsBindOperation;
 use App\Models\DnsNameserverIdentity;
 use App\Models\DnsNameserverProfile;
 use App\Models\DnsRecord;
@@ -15,11 +16,13 @@ use App\Services\DnsReversePtrSynchronizer;
 use App\Services\DnsZoneNameserverSynchronizer;
 use App\Services\DnsZoneValidator;
 use App\Services\ReverseZoneNameCalculator;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
@@ -885,67 +888,7 @@ class DnsZoneController extends Controller
         );
 
         try {
-            $published = DB::transaction(function () use (
-                $request,
-                $zone,
-                $renderer,
-                $validator,
-            ): bool {
-                $lockedZone = DnsZone::query()
-                    ->whereKey($zone->id)
-                    ->lockForUpdate()
-                    ->firstOrFail();
-
-                $this->authorizeZone($request, $lockedZone);
-
-                if ($lockedZone->status === 'published') {
-                    return false;
-                }
-
-                $lockedZone->load([
-                    'records',
-                    'servers.agent',
-                    'nameserverProfile.identities',
-                ]);
-
-                $result = $validator->validate($lockedZone);
-
-                if (! $result['ok']) {
-                    throw ValidationException::withMessages([
-                        'zone' => $result['errors'],
-                    ]);
-                }
-
-                $this->ensurePublishingServersAvailable($lockedZone);
-
-                // A renderização também valida o artefato antes de expô-lo.
-                $renderer->render($lockedZone);
-
-                $lockedZone->forceFill([
-                    'status' => 'published',
-                    'serial' => $this->nextSerial($lockedZone->serial),
-                    'version' => $lockedZone->version + 1,
-                ])->save();
-
-                $version = $this->saveVersion(
-                    $lockedZone,
-                    $request,
-                    'Zona publicada.',
-                    $renderer,
-                );
-
-                foreach ($lockedZone->servers as $server) {
-                    DnsAgentPublication::query()->create([
-                        'organization_id' => $lockedZone->organization_id,
-                        'dns_zone_version_id' => $version->id,
-                        'dns_server_id' => $server->id,
-                        'dns_agent_id' => $server->agent->id,
-                        'status' => 'pending',
-                    ]);
-                }
-
-                return true;
-            });
+            $published = $this->performPublish($request, $zone, $renderer, $validator);
         } catch (ValidationException $exception) {
             throw $exception;
         } catch (Throwable $exception) {
@@ -960,12 +903,177 @@ class DnsZoneController extends Controller
             ]);
         }
 
-        return redirect(route('zones.index'))->with(
+        return redirect(route('zones.show', $zone).'#publication')->with(
             'status',
             $published
                 ? 'Publicação concluída. O artefato está disponível para os agentes configurados.'
                 : 'Esta versão da zona já está publicada.',
         );
+    }
+
+    /**
+     * Publica a versão salva da zona (valida, renderiza, incrementa
+     * serial/versão e agenda uma DnsAgentPublication "pending" por
+     * servidor). Retorna true se publicou agora, false se já estava
+     * publicada (nenhuma mudança feita). Lança ValidationException em
+     * caso de zona inválida ou servidores de publicação indisponíveis.
+     */
+    private function performPublish(
+        Request $request,
+        DnsZone $zone,
+        BindZoneRenderer $renderer,
+        DnsZoneValidator $validator,
+    ): bool {
+        return DB::transaction(function () use (
+            $request,
+            $zone,
+            $renderer,
+            $validator,
+        ): bool {
+            $lockedZone = DnsZone::query()
+                ->whereKey($zone->id)
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            $this->authorizeZone($request, $lockedZone);
+
+            if ($lockedZone->status === 'published') {
+                return false;
+            }
+
+            $lockedZone->load([
+                'records',
+                'servers.agent',
+                'nameserverProfile.identities',
+            ]);
+
+            $result = $validator->validate($lockedZone);
+
+            if (! $result['ok']) {
+                throw ValidationException::withMessages([
+                    'zone' => $result['errors'],
+                ]);
+            }
+
+            $this->ensurePublishingServersAvailable($lockedZone);
+
+            // A renderização também valida o artefato antes de expô-lo.
+            $renderer->render($lockedZone);
+
+            $lockedZone->forceFill([
+                'status' => 'published',
+                'serial' => $this->nextSerial($lockedZone->serial),
+                'version' => $lockedZone->version + 1,
+            ])->save();
+
+            $version = $this->saveVersion(
+                $lockedZone,
+                $request,
+                'Zona publicada.',
+                $renderer,
+            );
+
+            foreach ($lockedZone->servers as $server) {
+                DnsAgentPublication::query()->create([
+                    'organization_id' => $lockedZone->organization_id,
+                    'dns_zone_version_id' => $version->id,
+                    'dns_server_id' => $server->id,
+                    'dns_agent_id' => $server->agent->id,
+                    'status' => 'pending',
+                ]);
+            }
+
+            return true;
+        });
+    }
+
+    public function publishAndSync(
+        Request $request,
+        DnsZone $zone,
+        BindZoneRenderer $renderer,
+        DnsZoneValidator $validator,
+    ): JsonResponse {
+        $this->authorizeWrite($request);
+        $this->authorizeZone($request, $zone);
+
+        abort_if(
+            $zone->origin === 'bind_import',
+            409,
+            'Conclua a adoção do gerenciamento antes de publicar esta zona.',
+        );
+
+        try {
+            $this->performPublish($request, $zone, $renderer, $validator);
+        } catch (ValidationException $exception) {
+            return response()->json([
+                'ok' => false,
+                'message' => collect($exception->errors())
+                    ->flatten()
+                    ->first() ?? 'Não foi possível publicar esta zona.',
+            ], 422);
+        } catch (Throwable $exception) {
+            Log::error('Falha controlada ao publicar zona DNS.', [
+                'zone_id' => $zone->id,
+                'organization_id' => $zone->organization_id,
+                'exception' => $exception::class,
+            ]);
+
+            return response()->json([
+                'ok' => false,
+                'message' => 'Não foi possível concluir a publicação. Verifique o servidor e o agente de publicação e tente novamente.',
+            ], 409);
+        }
+
+        $zone->refresh()->load('servers.agent');
+
+        $targets = $zone->servers->map(function (DnsServer $server) use ($zone, $request): array {
+            $hasPending = DnsAgentPublication::query()
+                ->where('dns_server_id', $server->id)
+                ->whereIn('status', ['pending', 'downloaded', 'applying', 'failed'])
+                ->exists();
+
+            if (! $hasPending) {
+                return [
+                    'server_id' => $server->id,
+                    'server_name' => $server->name,
+                    'skipped' => 'já sincronizado',
+                    'status_url' => route('servers.bind.apply.status', $server),
+                ];
+            }
+
+            DnsBindOperation::expireStaleOperations($server->id);
+
+            $inFlight = DnsBindOperation::query()
+                ->where('dns_server_id', $server->id)
+                ->where('action', 'apply_zones')
+                ->whereIn('status', ['authorized', 'running'])
+                ->exists();
+
+            if (! $inFlight) {
+                DnsBindOperation::query()->create([
+                    'organization_id' => $zone->organization_id,
+                    'dns_server_id' => $server->id,
+                    'dns_agent_id' => $server->agent->id,
+                    'action' => 'apply_zones',
+                    'status' => 'authorized',
+                    'authorization_nonce' => (string) Str::uuid(),
+                    'authorized_by' => $request->user()->id,
+                    'authorized_at' => now(),
+                ]);
+            }
+
+            return [
+                'server_id' => $server->id,
+                'server_name' => $server->name,
+                'skipped' => null,
+                'status_url' => route('servers.bind.apply.status', $server),
+            ];
+        })->values();
+
+        return response()->json([
+            'ok' => true,
+            'targets' => $targets,
+        ]);
     }
 
     private function normalizeRecordName(

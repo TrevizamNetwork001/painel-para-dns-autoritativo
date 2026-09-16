@@ -405,6 +405,11 @@ Route::middleware([
     )->name('publish');
 
     Route::post(
+        '/{zone}/publicar-e-sincronizar',
+        [DnsZoneController::class, 'publishAndSync'],
+    )->name('publish-and-sync');
+
+    Route::post(
         '/{zone}/adotar',
         [DnsZoneController::class, 'adopt'],
     )->name('adopt');

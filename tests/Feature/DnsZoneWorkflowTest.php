@@ -3,6 +3,8 @@
 namespace Tests\Feature;
 
 use App\Models\DnsAgent;
+use App\Models\DnsAgentPublication;
+use App\Models\DnsBindOperation;
 use App\Models\DnsNameserverIdentity;
 use App\Models\DnsNameserverProfile;
 use App\Models\DnsServer;
@@ -342,6 +344,95 @@ class DnsZoneWorkflowTest extends TestCase
             'dns_zone_id' => $zone->id,
             'reason' => 'Zona publicada.',
         ]);
+    }
+
+    public function test_publish_and_sync_publishes_and_creates_apply_operations_for_all_servers(): void
+    {
+        $context = $this->context(withAgents: true);
+        $zone = $this->createZone($context);
+
+        $this->assertSame('draft', $zone->status);
+
+        $response = $this->actingAs($context['admin'])
+            ->postJson(route('zones.publish-and-sync', $zone))
+            ->assertOk()
+            ->assertJsonPath('ok', true);
+
+        $zone->refresh();
+
+        $this->assertSame('published', $zone->status);
+
+        $targets = $response->json('targets');
+        $this->assertCount(2, $targets);
+
+        foreach ($targets as $target) {
+            $this->assertNull($target['skipped']);
+            $this->assertNotEmpty($target['status_url']);
+
+            $this->assertDatabaseHas('dns_bind_operations', [
+                'dns_server_id' => $target['server_id'],
+                'action' => 'apply_zones',
+                'status' => 'authorized',
+            ]);
+        }
+    }
+
+    public function test_publish_and_sync_skips_server_already_synchronized(): void
+    {
+        $context = $this->context(withAgents: true);
+        $zone = $this->createZone($context);
+
+        $this->actingAs($context['admin'])
+            ->postJson(route('zones.publish-and-sync', $zone))
+            ->assertOk();
+
+        // Simula que ambos os servidores já confirmaram a aplicação desta
+        // versão — sem nenhuma mudança nova, uma segunda chamada não deve
+        // criar operação nova pra nenhum dos dois.
+        DnsAgentPublication::query()
+            ->whereIn('dns_zone_version_id', $zone->versions()->pluck('id'))
+            ->update(['status' => 'applied']);
+
+        $operationsBefore = DnsBindOperation::query()->count();
+
+        $response = $this->actingAs($context['admin'])
+            ->postJson(route('zones.publish-and-sync', $zone))
+            ->assertOk()
+            ->assertJsonPath('ok', true);
+
+        $targets = collect($response->json('targets'))->keyBy('server_id');
+
+        $this->assertSame('já sincronizado', $targets[$context['primary']->id]['skipped']);
+        $this->assertSame('já sincronizado', $targets[$context['secondary']->id]['skipped']);
+        $this->assertSame($operationsBefore, DnsBindOperation::query()->count());
+    }
+
+    public function test_publish_and_sync_returns_422_for_invalid_zone(): void
+    {
+        $context = $this->context(withAgents: true);
+        $zone = $this->createZone($context);
+
+        $zone->records()->where('type', 'NS')->firstOrFail()->delete();
+
+        $this->actingAs($context['admin'])
+            ->postJson(route('zones.publish-and-sync', $zone))
+            ->assertStatus(422)
+            ->assertJsonPath('ok', false);
+
+        $this->assertSame('draft', $zone->fresh()->status);
+    }
+
+    public function test_publish_and_sync_requires_write_permission(): void
+    {
+        $context = $this->context(withAgents: true);
+        $zone = $this->createZone($context);
+        $viewer = $this->member($context['organization'], 'viewer');
+
+        $this->actingAs($viewer)
+            ->postJson(route('zones.publish-and-sync', $zone))
+            ->assertForbidden();
+
+        $this->assertSame('draft', $zone->fresh()->status);
     }
 
     public function test_private_zone_routes_redirect_guests(): void

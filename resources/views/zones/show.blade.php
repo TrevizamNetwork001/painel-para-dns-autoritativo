@@ -1186,6 +1186,24 @@
                             </form>
                         @endif
                     @elseif ($canManageDomain)
+                        <div class="domain-publication-action">
+                            <button
+                                type="button"
+                                class="button button-primary"
+                                data-publish-sync-open
+                                data-publish-sync-store-url="{{ route('zones.publish-and-sync', $zone) }}"
+                                @disabled(! $validationOk)
+                            >
+                                Publicar e sincronizar
+                            </button>
+
+                            <small>
+                                Publica a versão salva e já envia a
+                                atualização pra todos os servidores
+                                configurados, em um só passo.
+                            </small>
+                        </div>
+
                         <form
                             method="POST"
                             action="{{ route('zones.publish', $zone) }}"
@@ -1196,15 +1214,17 @@
 
                             <button
                                 type="submit"
-                                class="button button-primary"
+                                class="button button-secondary"
                                 @disabled(! $validationOk)
                             >
-                                Publicar zona
+                                Só publicar
                             </button>
 
                             <small>
                                 Salvar não publica. Esta ação disponibiliza o
-                                artefato aos agentes configurados.
+                                artefato aos agentes configurados, sem enviar
+                                pros servidores — use "Aplicar agora" por
+                                servidor depois, se preferir revisar antes.
                             </small>
                         </form>
                     @endif
@@ -1707,6 +1727,84 @@
                         data-apply-zones-confirm
                     >
                         Confirmar aplicação
+                    </button>
+                </div>
+            </div>
+        </section>
+    </div>
+@endif
+
+@if ($canManageDomain)
+    <div
+        class="record-modal-backdrop"
+        data-publish-sync-modal
+        aria-hidden="true"
+    >
+        <section
+            class="record-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="publish-sync-modal-title"
+        >
+            <header class="record-modal-header">
+                <div>
+                    <p class="eyebrow">Publicação</p>
+
+                    <h2 id="publish-sync-modal-title">
+                        Publicar e sincronizar
+                    </h2>
+
+                    <p>
+                        Publica a versão salva desta zona e já envia a
+                        atualização pra todos os servidores configurados,
+                        sem cliques extras.
+                    </p>
+                </div>
+
+                <button
+                    type="button"
+                    class="record-modal-close"
+                    data-publish-sync-close
+                    aria-label="Fechar"
+                >
+                    ×
+                </button>
+            </header>
+
+            <div class="domain-publication-action" style="padding: 1.2rem;">
+                <p data-publish-sync-state></p>
+
+                <ul
+                    class="publish-sync-targets"
+                    data-publish-sync-targets
+                    hidden
+                ></ul>
+
+                <div data-publish-sync-confirm-actions>
+                    <button
+                        type="button"
+                        class="button button-secondary"
+                        data-publish-sync-close
+                    >
+                        Cancelar
+                    </button>
+
+                    <button
+                        type="button"
+                        class="button button-primary"
+                        data-publish-sync-confirm
+                    >
+                        Confirmar publicação
+                    </button>
+                </div>
+
+                <div data-publish-sync-close-actions hidden>
+                    <button
+                        type="button"
+                        class="button button-secondary"
+                        data-publish-sync-close
+                    >
+                        Fechar
                     </button>
                 </div>
             </div>
@@ -2446,6 +2544,186 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     document.querySelectorAll('[data-apply-zones-close]').forEach((button) => {
+        button.addEventListener('click', close);
+    });
+
+    modal.addEventListener('click', (event) => {
+        if (event.target === modal) {
+            close();
+        }
+    });
+
+    document.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape' && modal.classList.contains('is-open')) {
+            close();
+        }
+    });
+});
+</script>
+
+<script nonce="{{ $cspNonce ?? '' }}">
+document.addEventListener('DOMContentLoaded', () => {
+    const openButton = document.querySelector('[data-publish-sync-open]');
+    const modal = document.querySelector('[data-publish-sync-modal]');
+    const stateText = document.querySelector('[data-publish-sync-state]');
+    const targetsList = document.querySelector('[data-publish-sync-targets]');
+    const confirmActions = document.querySelector('[data-publish-sync-confirm-actions]');
+    const confirmButton = document.querySelector('[data-publish-sync-confirm]');
+    const closeActions = document.querySelector('[data-publish-sync-close-actions]');
+
+    if (!openButton || !modal || !stateText || !targetsList || !confirmActions || !confirmButton || !closeActions) {
+        return;
+    }
+
+    let pollTimers = [];
+
+    const open = () => {
+        modal.classList.add('is-open');
+        modal.setAttribute('aria-hidden', 'false');
+        document.body.classList.add('has-open-modal');
+    };
+
+    const close = () => {
+        pollTimers.forEach((timer) => window.clearTimeout(timer));
+        pollTimers = [];
+        modal.classList.remove('is-open');
+        modal.setAttribute('aria-hidden', 'true');
+        document.body.classList.remove('has-open-modal');
+    };
+
+    const confirming = () => {
+        stateText.textContent = 'Confirma publicar esta zona e enviar a atualização pra todos os servidores configurados agora?';
+        targetsList.hidden = true;
+        targetsList.innerHTML = '';
+        confirmActions.hidden = false;
+        closeActions.hidden = true;
+        confirmButton.disabled = false;
+    };
+
+    const rowFor = (target) => {
+        const item = document.createElement('li');
+        item.className = 'publish-sync-target';
+        item.dataset.publishSyncTargetServer = target.server_id;
+
+        const name = document.createElement('span');
+        name.className = 'publish-sync-target-name';
+        name.textContent = target.server_name;
+
+        const status = document.createElement('span');
+        status.className = 'status-badge status-neutral';
+        status.dataset.publishSyncTargetStatus = '';
+        status.textContent = target.skipped ? 'Já sincronizado' : 'Aguardando agente…';
+
+        if (target.skipped) {
+            status.className = 'status-badge status-success';
+        }
+
+        item.append(name, status);
+        return item;
+    };
+
+    const allSettled = () => Array.from(
+        targetsList.querySelectorAll('[data-publish-sync-target-status]'),
+    ).every((el) => ['Aplicado', 'Falhou', 'Expirou', 'Já sincronizado'].includes(el.textContent));
+
+    const finishIfSettled = () => {
+        if (!allSettled()) return;
+
+        const hasFailure = targetsList.querySelector('.status-badge.status-danger, .status-badge.status-warning');
+        stateText.textContent = hasFailure
+            ? 'Publicado. Alguns servidores precisam de atenção — veja o status abaixo.'
+            : 'Publicado e sincronizado com sucesso em todos os servidores.';
+        closeActions.hidden = false;
+
+        if (!hasFailure) {
+            window.setTimeout(() => window.location.reload(), 1500);
+        }
+    };
+
+    const pollTarget = async (target, statusEl) => {
+        let payload;
+
+        try {
+            const response = await fetch(target.status_url, { headers: { Accept: 'application/json' } });
+            payload = await response.json();
+        } catch (error) {
+            pollTimers.push(window.setTimeout(() => pollTarget(target, statusEl), 4000));
+            return;
+        }
+
+        if (payload.status === 'succeeded') {
+            statusEl.textContent = 'Aplicado';
+            statusEl.className = 'status-badge status-success';
+            return finishIfSettled();
+        }
+
+        if (payload.status === 'failed' || payload.status === 'expired') {
+            statusEl.textContent = payload.status === 'failed' ? 'Falhou' : 'Expirou';
+            statusEl.className = 'status-badge status-danger';
+            return finishIfSettled();
+        }
+
+        statusEl.textContent = payload.status === 'running' ? 'Aplicando…' : 'Aguardando agente…';
+        pollTimers.push(window.setTimeout(() => pollTarget(target, statusEl), 4000));
+    };
+
+    confirmButton.addEventListener('click', async () => {
+        confirmButton.disabled = true;
+        stateText.textContent = 'Publicando…';
+        confirmActions.hidden = true;
+
+        let payload;
+
+        try {
+            const response = await fetch(openButton.dataset.publishSyncStoreUrl, {
+                method: 'POST',
+                headers: {
+                    Accept: 'application/json',
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': '{{ csrf_token() }}',
+                },
+            });
+            payload = await response.json().catch(() => ({}));
+
+            if (!response.ok || !payload.ok) {
+                stateText.textContent = payload.message || 'Não foi possível publicar esta zona.';
+                closeActions.hidden = false;
+                return;
+            }
+        } catch (error) {
+            stateText.textContent = 'Não foi possível conectar ao painel.';
+            closeActions.hidden = false;
+            return;
+        }
+
+        stateText.textContent = 'Publicado. Sincronizando com os servidores…';
+        targetsList.hidden = false;
+
+        if (payload.targets.length === 0) {
+            stateText.textContent = 'Publicado. Nenhum servidor configurado pra sincronizar.';
+            closeActions.hidden = false;
+            return;
+        }
+
+        payload.targets.forEach((target) => {
+            const row = rowFor(target);
+            targetsList.appendChild(row);
+
+            if (!target.skipped) {
+                const statusEl = row.querySelector('[data-publish-sync-target-status]');
+                pollTarget(target, statusEl);
+            }
+        });
+
+        finishIfSettled();
+    });
+
+    openButton.addEventListener('click', () => {
+        confirming();
+        open();
+    });
+
+    document.querySelectorAll('[data-publish-sync-close]').forEach((button) => {
         button.addEventListener('click', close);
     });
 

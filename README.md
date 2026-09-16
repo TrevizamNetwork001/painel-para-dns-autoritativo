@@ -308,10 +308,16 @@ em produção. As evidências e limitações estão em
 | [Release 1.3.16](docs/RELEASE_1.3.16.md) | Agente 0.7.9 atualiza a observação autoritativa logo após aplicar zonas |
 | [Release 1.3.17](docs/RELEASE_1.3.17.md) | Modal de atualização do agente fecha sozinho e volta pra dashboard ao concluir |
 | [Release 1.3.18](docs/RELEASE_1.3.18.md) | TTL padrão de zonas novas reduzido de 3600s para 300s |
+| [Release 1.3.19](docs/RELEASE_1.3.19.md) | Botão "Publicar e sincronizar" reduz publicação+aplicação a 1 clique |
 
 ## Status do projeto
 
-**v1.3.18 em produção desde 2026-09-16** (TTL padrão sugerido em zonas novas
+**v1.3.19 pronta para deploy** (novo botão "Publicar e sincronizar"
+publica a zona e já aplica em todos os servidores vinculados numa
+única confirmação, com modal de progresso por servidor; corrige
+redirect pós-publicação que jogava o operador de volta pra lista
+geral de domínios em vez de manter na própria zona); sobre a v1.3.18
+em produção desde 2026-09-16 (TTL padrão sugerido em zonas novas
 cai de 1 hora pra 5 minutos, reduzindo o tempo que resolvers podem
 manter respostas antigas em cache após uma mudança; inclui migration
 nova ajustando o DEFAULT da coluna no schema e correção de rótulo

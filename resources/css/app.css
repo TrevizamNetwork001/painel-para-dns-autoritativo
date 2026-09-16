@@ -6692,6 +6692,33 @@ body.has-open-modal {
     color: var(--accent);
 }
 
+.publish-sync-targets {
+    display: grid;
+    gap: 0;
+    padding: 0;
+    margin: 0.8rem 0 0;
+    list-style: none;
+}
+
+.publish-sync-target {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.8rem;
+    padding: 0.6rem 0;
+    border-bottom: 1px solid var(--border);
+}
+
+.publish-sync-target:last-child {
+    border-bottom: 0;
+}
+
+.publish-sync-target-name {
+    font-size: 0.78rem;
+    font-weight: 700;
+    color: var(--text);
+}
+
 .domain-record-no-results,
 .domain-history-empty,
 .domain-readonly-message {
