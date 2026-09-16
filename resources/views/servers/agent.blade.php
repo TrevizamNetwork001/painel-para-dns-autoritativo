@@ -970,6 +970,13 @@
                 button.disabled = false;
                 button.dataset.agentUpgradeActive = 'false';
                 renderCard(installedVersionConfirmed || finalVersion, targetVersionKnown || targetVersion, false);
+                const dashboardUrl = button.dataset.agentUpgradeDashboardUrl;
+                if (dashboardUrl) {
+                    setTimeout(() => {
+                        close();
+                        window.location.assign(dashboardUrl);
+                    }, 2500);
+                }
             };
             const schedule = (delay = 3000) => {
                 clearTimeout(pollTimer);
