@@ -299,10 +299,17 @@ em produção. As evidências e limitações estão em
 | [Release 1.3.7](docs/RELEASE_1.3.7.md) | Fix de CSS na aba Nameservers e de teste que só passava como root |
 | [Release 1.3.8](docs/RELEASE_1.3.8.md) | Continuação do fix de fonte da aba Nameservers (Identidades e Perfis) |
 | [Release 1.3.9](docs/RELEASE_1.3.9.md) | Assistente de DNS reverso IPv4/IPv6 |
+| [Release 1.3.10](docs/RELEASE_1.3.10.md) | Corrige layout do modal de criar zona reversa |
 
 ## Status do projeto
 
-**v1.3.9 em produção desde 2026-09-16** (a aba "DNS reverso" da zona,
+**v1.3.10 em produção desde 2026-09-16** (o modal "Criar zona
+reversa" lançado na v1.3.9 estava reaproveitando um grid CSS pensado
+pra outro formulário, o que espremia os campos e quebrava o rótulo de
+forma feia — achado ao vivo pelo operador logo após o deploy. Corrigido
+com um grid próprio de duas colunas, e a lista de zonas reversas
+ganhou ícone/família/contagem de registros em vez de só texto solto;
+sobre a v1.3.9, que deu à aba "DNS reverso" da zona,
 que antes era só um placeholder estático, ganhou um assistente de
 verdade: botão "Criar zona reversa" calcula o nome in-addr.arpa/
 ip6.arpa a partir de um bloco CIDR IPv4 octeto-alinhado ou prefixo
