@@ -989,19 +989,47 @@
                     </div>
                 </header>
 
-                <div class="domain-reverse-empty">
-                    <div aria-hidden="true">↺</div>
+                @if ($canManageDomain)
+                    <div class="domain-publication-action">
+                        <button
+                            type="button"
+                            class="button button-primary"
+                            data-reverse-modal-open
+                        >
+                            Criar zona reversa
+                        </button>
 
-                    <h3>Nenhum reverso associado</h3>
+                        <small>
+                            Cria uma zona in-addr.arpa/ip6.arpa a partir
+                            de um bloco de endereços — sem misturar os
+                            registros PTR com os registros desta zona
+                            direta.
+                        </small>
+                    </div>
+                @endif
 
-                    <p>
-                        O assistente de reverso IPv4 e IPv6 será implementado
-                        como um fluxo próprio, sem misturar os registros PTR
-                        com os registros da zona direta.
-                    </p>
+                @if ($reverseZones->isEmpty())
+                    <div class="domain-reverse-empty">
+                        <div aria-hidden="true">↺</div>
 
-                    <span>Funcionalidade preparada para a próxima fase</span>
-                </div>
+                        <h3>Nenhuma zona reversa nesta empresa</h3>
+
+                        <p>
+                            Ainda não há zona in-addr.arpa ou ip6.arpa
+                            cadastrada para esta organização.
+                        </p>
+                    </div>
+                @else
+                    <ul class="domain-reverse-list">
+                        @foreach ($reverseZones as $reverseZone)
+                            <li>
+                                <a href="{{ route('zones.show', $reverseZone) }}">
+                                    {{ $reverseZone->name }}
+                                </a>
+                            </li>
+                        @endforeach
+                    </ul>
+                @endif
             </article>
         </section>
 
@@ -1146,6 +1174,44 @@
                                 Atualiza os registros PTR desta zona reversa
                                 pra apontar às identidades de nameserver cujo
                                 IPv4 está dentro dela.
+                            </small>
+                        </form>
+                    @endif
+
+                    @if ($canManageDomain && $zone->isReverseZone() && $forwardZones->isNotEmpty())
+                        <form
+                            method="POST"
+                            action="{{ route('zones.reverse.generate-ptr', $zone) }}"
+                            class="domain-publication-action"
+                            onsubmit="return confirm('Gerar/atualizar os registros PTR desta zona a partir dos registros A do domínio selecionado?')"
+                        >
+                            @csrf
+
+                            <label class="domain-field">
+                                <span>Domínio de origem</span>
+
+                                <select name="forward_zone_id" required>
+                                    <option value="">Selecione o domínio</option>
+
+                                    @foreach ($forwardZones as $forwardZone)
+                                        <option value="{{ $forwardZone->id }}">
+                                            {{ $forwardZone->name }}
+                                        </option>
+                                    @endforeach
+                                </select>
+                            </label>
+
+                            <button
+                                type="submit"
+                                class="button button-secondary"
+                            >
+                                Gerar PTR a partir dos registros A
+                            </button>
+
+                            <small>
+                                Cria/atualiza um PTR nesta zona pra cada
+                                registro A do domínio selecionado cujo
+                                endereço esteja dentro deste bloco.
                             </small>
                         </form>
                     @endif
@@ -1589,6 +1655,180 @@
         </section>
     </div>
 @endif
+
+@if ($canManageDomain)
+    <div
+        class="record-modal-backdrop"
+        data-reverse-modal
+        aria-hidden="true"
+    >
+        <section
+            class="record-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="reverse-modal-title"
+        >
+            <header class="record-modal-header">
+                <div>
+                    <p class="eyebrow">DNS reverso</p>
+
+                    <h2 id="reverse-modal-title">Criar zona reversa</h2>
+
+                    <p>
+                        Informe o bloco de endereços exato (endereço de
+                        rede, não um IP individual dentro dele). Por
+                        enquanto só blocos alinhados em octeto (IPv4
+                        /8, /16, /24) ou em nibble (IPv6) são aceitos.
+                    </p>
+                </div>
+
+                <button
+                    type="button"
+                    class="record-modal-close"
+                    data-reverse-modal-close
+                    aria-label="Fechar"
+                >
+                    ×
+                </button>
+            </header>
+
+            <form
+                method="POST"
+                action="{{ route('zones.reverse.store') }}"
+                class="record-modal-form"
+            >
+                @csrf
+
+                <div class="record-modal-main-grid">
+                    <label class="domain-field">
+                        <span>Família</span>
+
+                        <select name="family" required>
+                            <option value="ipv4">IPv4 (in-addr.arpa)</option>
+                            <option value="ipv6">IPv6 (ip6.arpa)</option>
+                        </select>
+                    </label>
+
+                    <label class="domain-field">
+                        <span>Bloco (CIDR)</span>
+
+                        <input
+                            type="text"
+                            name="cidr"
+                            placeholder="192.0.2.0/24 ou 2001:db8::/32"
+                            required
+                        >
+                    </label>
+                </div>
+
+                <div class="record-modal-main-grid">
+                    <label class="domain-field">
+                        <span>Perfil de nameservers</span>
+
+                        <select name="dns_nameserver_profile_id" required>
+                            <option value="">Selecione o perfil</option>
+
+                            @foreach ($nameserverProfiles as $profile)
+                                <option value="{{ $profile->id }}">
+                                    {{ $profile->name }}
+                                    @if ($profile->is_default)
+                                        — padrão
+                                    @endif
+                                </option>
+                            @endforeach
+                        </select>
+                    </label>
+                </div>
+
+                <div class="record-modal-main-grid">
+                    <label class="domain-field">
+                        <span>Servidor de publicação principal</span>
+
+                        <select name="primary_server_id" required>
+                            <option value="">Selecione o servidor</option>
+
+                            @foreach ($servers as $server)
+                                <option value="{{ $server->id }}">
+                                    {{ $server->name }} — {{ $server->hostname }}
+                                </option>
+                            @endforeach
+                        </select>
+                    </label>
+
+                    <label class="domain-field">
+                        <span>Servidor de publicação secundário</span>
+
+                        <select name="secondary_server_id">
+                            <option value="">Nenhum</option>
+
+                            @foreach ($servers as $server)
+                                <option value="{{ $server->id }}">
+                                    {{ $server->name }} — {{ $server->hostname }}
+                                </option>
+                            @endforeach
+                        </select>
+                    </label>
+                </div>
+
+                <footer class="record-modal-footer">
+                    <div></div>
+
+                    <div>
+                        <button
+                            type="button"
+                            class="button button-secondary"
+                            data-reverse-modal-close
+                        >
+                            Cancelar
+                        </button>
+
+                        <button type="submit" class="button button-primary">
+                            Criar zona reversa
+                        </button>
+                    </div>
+                </footer>
+            </form>
+        </section>
+    </div>
+@endif
+
+<script nonce="{{ $cspNonce ?? '' }}">
+document.addEventListener('DOMContentLoaded', () => {
+    const reverseModal = document.querySelector('[data-reverse-modal]');
+
+    const openReverseModal = () => {
+        reverseModal?.classList.add('is-open');
+        reverseModal?.setAttribute('aria-hidden', 'false');
+        document.body.classList.add('has-open-modal');
+    };
+
+    const closeReverseModal = () => {
+        reverseModal?.classList.remove('is-open');
+        reverseModal?.setAttribute('aria-hidden', 'true');
+        document.body.classList.remove('has-open-modal');
+    };
+
+    document.querySelectorAll('[data-reverse-modal-open]').forEach((button) => {
+        button.addEventListener('click', openReverseModal);
+    });
+
+    document.querySelectorAll('[data-reverse-modal-close]').forEach((button) => {
+        button.addEventListener('click', closeReverseModal);
+    });
+
+    reverseModal?.addEventListener('click', (event) => {
+        if (event.target === reverseModal) {
+            closeReverseModal();
+        }
+    });
+
+    document.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape' && reverseModal?.classList.contains('is-open')) {
+            closeReverseModal();
+        }
+    });
+});
+</script>
 
 <script nonce="{{ $cspNonce ?? '' }}">
 document.addEventListener('DOMContentLoaded', () => {

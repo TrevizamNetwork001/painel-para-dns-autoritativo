@@ -114,6 +114,13 @@ class DnsZone extends Model
         return $name === 'in-addr.arpa' || str_ends_with($name, '.in-addr.arpa');
     }
 
+    public function isIpv6ReverseZone(): bool
+    {
+        $name = strtolower(rtrim(trim($this->name), '.'));
+
+        return $name === 'ip6.arpa' || str_ends_with($name, '.ip6.arpa');
+    }
+
     public function scopeForOrganization(
         Builder $query,
         int $organizationId,

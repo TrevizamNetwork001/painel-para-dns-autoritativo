@@ -413,6 +413,16 @@ Route::middleware([
         '/{zone}/vincular-ptr',
         [DnsZoneController::class, 'ptrSync'],
     )->name('ptr-sync');
+
+    Route::post(
+        '/reversa',
+        [DnsZoneController::class, 'storeReverse'],
+    )->name('reverse.store');
+
+    Route::post(
+        '/{zone}/gerar-ptr-de-zona',
+        [DnsZoneController::class, 'generatePtrFromForwardZone'],
+    )->name('reverse.generate-ptr');
 });
 
 Route::middleware([

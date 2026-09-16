@@ -6664,6 +6664,34 @@ body.has-open-modal {
     font-weight: 800;
 }
 
+.domain-reverse-list {
+    display: grid;
+    gap: 0;
+    padding: 0;
+    margin: 0;
+    list-style: none;
+}
+
+.domain-reverse-list li {
+    padding: 0.7rem 0;
+    border-bottom: 1px solid var(--border);
+}
+
+.domain-reverse-list li:last-child {
+    border-bottom: 0;
+}
+
+.domain-reverse-list a {
+    color: var(--text);
+    font-size: 0.74rem;
+    font-weight: 700;
+    text-decoration: none;
+}
+
+.domain-reverse-list a:hover {
+    color: var(--accent);
+}
+
 .domain-record-no-results,
 .domain-history-empty,
 .domain-readonly-message {

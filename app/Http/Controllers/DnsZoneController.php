@@ -14,6 +14,7 @@ use App\Services\BindZoneRenderer;
 use App\Services\DnsReversePtrSynchronizer;
 use App\Services\DnsZoneNameserverSynchronizer;
 use App\Services\DnsZoneValidator;
+use App\Services\ReverseZoneNameCalculator;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -22,6 +23,7 @@ use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
+use InvalidArgumentException;
 use Throwable;
 
 class DnsZoneController extends Controller
@@ -180,89 +182,26 @@ class DnsZoneController extends Controller
                 );
         }
 
-        $zone = DB::transaction(function () use (
+        $zone = $this->createZone(
             $request,
-            $validated,
-            $organizationId,
             $renderer,
-            $zoneName,
-            $primaryServer,
-            $secondaryServer,
             $nameservers,
-            $nameserverProfile,
-        ): DnsZone {
-            $zone = DnsZone::query()->create([
-                'organization_id' => $organizationId,
-                'dns_nameserver_profile_id' => $nameserverProfile->id,
-                'name' => $zoneName,
-                'client' => isset($validated['client'])
-                    ? trim($validated['client']) ?: null
-                    : null,
+            $organizationId,
+            $zoneName,
+            [
+                'client' => $validated['client'] ?? null,
                 'kind' => $validated['kind'],
-                'serial' => $this->nextSerial(),
                 'default_ttl' => $validated['default_ttl'],
-                'soa_mname' => $this->domain(
-                    $nameserverProfile->identities
-                        ->sortBy(
-                            fn ($identity): int => (int) $identity->pivot->position,
-                        )
-                        ->firstOrFail()
-                        ->hostname,
-                ),
-                'soa_rname' => 'hostmaster.'.$zoneName,
                 'soa_refresh' => $validated['soa_refresh'],
                 'soa_retry' => $validated['soa_retry'],
                 'soa_expire' => $validated['soa_expire'],
                 'soa_minimum' => $validated['soa_minimum'],
-                'status' => 'draft',
-                'version' => 1,
-                'enabled' => true,
-                'notes' => isset($validated['notes'])
-                    ? trim($validated['notes'])
-                    : null,
-            ]);
-
-            $sync = [
-                (int) $primaryServer->id => [
-                    'role' => 'primary',
-                ],
-            ];
-
-            if ($secondaryServer !== null) {
-                $sync[(int) $secondaryServer->id] = [
-                    'role' => 'secondary',
-                ];
-            }
-
-            $zone->servers()->sync($sync);
-
-            $nameservers->synchronize(
-                $zone,
-                $nameserverProfile,
-            );
-
-            $nameServers = $nameserverProfile
-                ->identities
-                ->pluck('hostname')
-                ->filter()
-                ->map(
-                    fn (string $hostname): string => $this->domain($hostname),
-                )
-                ->unique()
-                ->values();
-
-            $this->saveVersion(
-                $zone,
-                $request,
-                sprintf(
-                    'Domínio criado com %d registro(s) NS automático(s).',
-                    $nameServers->count(),
-                ),
-                $renderer,
-            );
-
-            return $zone;
-        });
+                'notes' => $validated['notes'] ?? null,
+            ],
+            $nameserverProfile,
+            $primaryServer,
+            $secondaryServer,
+        );
 
         $nsCount = $zone->records()
             ->where('type', 'NS')
@@ -280,6 +219,186 @@ class DnsZoneController extends Controller
                 sprintf(
                     'Zona salva. %d registro(s) NS foram configurados automaticamente. As alterações ainda não foram publicadas.',
                     $nsCount,
+                ),
+            );
+    }
+
+    public function storeReverse(
+        Request $request,
+        BindZoneRenderer $renderer,
+        DnsZoneNameserverSynchronizer $nameservers,
+        ReverseZoneNameCalculator $calculator,
+    ): RedirectResponse {
+        $organizationId = $this->authorizeWrite($request);
+
+        $validated = $request->validate([
+            'family' => [
+                'required',
+                Rule::in(['ipv4', 'ipv6']),
+            ],
+            'cidr' => [
+                'required',
+                'string',
+                'max:64',
+            ],
+            'dns_nameserver_profile_id' => [
+                'required',
+                'integer',
+                Rule::exists(
+                    'dns_nameserver_profiles',
+                    'id',
+                )->where(
+                    'organization_id',
+                    $organizationId,
+                ),
+            ],
+            'primary_server_id' => [
+                'required',
+                'integer',
+                Rule::exists('dns_servers', 'id')
+                    ->where('organization_id', $organizationId),
+            ],
+            'secondary_server_id' => [
+                'nullable',
+                'integer',
+                'different:primary_server_id',
+                Rule::exists('dns_servers', 'id')
+                    ->where('organization_id', $organizationId),
+            ],
+        ]);
+
+        try {
+            $zoneName = $validated['family'] === 'ipv4'
+                ? $calculator->fromIpv4Cidr($validated['cidr'])
+                : $calculator->fromIpv6Prefix($validated['cidr']);
+        } catch (InvalidArgumentException $exception) {
+            throw ValidationException::withMessages([
+                'cidr' => $exception->getMessage(),
+            ]);
+        }
+
+        $exists = DnsZone::query()
+            ->forOrganization($organizationId)
+            ->where('name', $zoneName)
+            ->exists();
+
+        if ($exists) {
+            throw ValidationException::withMessages([
+                'cidr' => sprintf(
+                    'Já existe uma zona reversa %s nesta organização.',
+                    $zoneName,
+                ),
+            ]);
+        }
+
+        $nameserverProfile = $nameservers->profileForOrganization(
+            (int) $validated['dns_nameserver_profile_id'],
+            $organizationId,
+        );
+
+        $primaryServer = DnsServer::query()
+            ->forOrganization($organizationId)
+            ->enabled()
+            ->findOrFail((int) $validated['primary_server_id']);
+
+        $secondaryServer = null;
+
+        if (! empty($validated['secondary_server_id'])) {
+            $secondaryServer = DnsServer::query()
+                ->forOrganization($organizationId)
+                ->enabled()
+                ->findOrFail((int) $validated['secondary_server_id']);
+        }
+
+        $zone = $this->createZone(
+            $request,
+            $renderer,
+            $nameservers,
+            $organizationId,
+            $zoneName,
+            ['kind' => 'primary'],
+            $nameserverProfile,
+            $primaryServer,
+            $secondaryServer,
+        );
+
+        return redirect()
+            ->route('zones.show', $zone)
+            ->with(
+                'status',
+                sprintf('Zona reversa %s criada.', $zoneName),
+            );
+    }
+
+    public function generatePtrFromForwardZone(
+        Request $request,
+        DnsZone $zone,
+        BindZoneRenderer $renderer,
+        DnsReversePtrSynchronizer $synchronizer,
+    ): RedirectResponse {
+        $organizationId = $this->authorizeWrite($request);
+        $this->authorizeZone($request, $zone);
+
+        abort_unless($zone->isReverseZone(), 404);
+
+        $validated = $request->validate([
+            'forward_zone_id' => [
+                'required',
+                'integer',
+                Rule::exists('dns_zones', 'id')
+                    ->where('organization_id', $organizationId),
+            ],
+        ]);
+
+        $forwardZone = DnsZone::query()
+            ->forOrganization($organizationId)
+            ->findOrFail((int) $validated['forward_zone_id']);
+
+        $summary = DB::transaction(function () use (
+            $zone,
+            $forwardZone,
+            $synchronizer,
+            $request,
+            $renderer,
+        ): array {
+            $summary = $synchronizer->synchronizeFromForwardZone(
+                $zone,
+                $forwardZone,
+            );
+
+            if (($summary['created'] + $summary['updated']) > 0) {
+                $zone->forceFill([
+                    'serial' => $this->nextSerial($zone->serial),
+                    'version' => $zone->version + 1,
+                    'status' => $zone->status === 'published'
+                        ? 'ready'
+                        : $zone->status,
+                ])->save();
+
+                $this->saveVersion(
+                    $zone,
+                    $request,
+                    sprintf(
+                        'PTR gerado a partir de %s.',
+                        $forwardZone->name,
+                    ),
+                    $renderer,
+                );
+            }
+
+            return $summary;
+        });
+
+        return redirect(route('zones.show', $zone).'#publication')
+            ->with(
+                'status',
+                sprintf(
+                    'PTR a partir de %s: %d criado(s), %d atualizado(s), %d sem alteração, %d sem endereço dentro do bloco.',
+                    $forwardZone->name,
+                    $summary['created'],
+                    $summary['updated'],
+                    $summary['unchanged'],
+                    $summary['unmatched'],
                 ),
             );
     }
@@ -501,6 +620,26 @@ class DnsZoneController extends Controller
                 ->where('enabled', true)
                 ->orderBy('name')
                 ->get(),
+            'reverseZones' => DnsZone::query()
+                ->forOrganization($zone->organization_id)
+                ->where(function ($query): void {
+                    $query
+                        ->where('name', 'like', '%.in-addr.arpa')
+                        ->orWhere('name', 'like', '%.ip6.arpa');
+                })
+                ->orderBy('name')
+                ->get(['id', 'name']),
+            'forwardZones' => $zone->isReverseZone() || $zone->isIpv6ReverseZone()
+                ? DnsZone::query()
+                    ->forOrganization($zone->organization_id)
+                    ->where(function ($query): void {
+                        $query
+                            ->where('name', 'not like', '%.in-addr.arpa')
+                            ->where('name', 'not like', '%.ip6.arpa');
+                    })
+                    ->orderBy('name')
+                    ->get(['id', 'name'])
+                : collect(),
         ]);
     }
 
@@ -892,6 +1031,114 @@ class DnsZoneController extends Controller
                 ]);
             }
         }
+    }
+
+    /**
+     * @param  array{
+     *     client?: string|null,
+     *     kind: string,
+     *     default_ttl?: int,
+     *     soa_refresh?: int,
+     *     soa_retry?: int,
+     *     soa_expire?: int,
+     *     soa_minimum?: int,
+     *     notes?: string|null,
+     * }  $zoneAttributes
+     */
+    private function createZone(
+        Request $request,
+        BindZoneRenderer $renderer,
+        DnsZoneNameserverSynchronizer $nameservers,
+        int $organizationId,
+        string $zoneName,
+        array $zoneAttributes,
+        DnsNameserverProfile $nameserverProfile,
+        DnsServer $primaryServer,
+        ?DnsServer $secondaryServer,
+    ): DnsZone {
+        return DB::transaction(function () use (
+            $request,
+            $zoneAttributes,
+            $organizationId,
+            $renderer,
+            $zoneName,
+            $primaryServer,
+            $secondaryServer,
+            $nameservers,
+            $nameserverProfile,
+        ): DnsZone {
+            $zone = DnsZone::query()->create([
+                'organization_id' => $organizationId,
+                'dns_nameserver_profile_id' => $nameserverProfile->id,
+                'name' => $zoneName,
+                'client' => isset($zoneAttributes['client'])
+                    ? trim($zoneAttributes['client']) ?: null
+                    : null,
+                'kind' => $zoneAttributes['kind'],
+                'serial' => $this->nextSerial(),
+                'default_ttl' => $zoneAttributes['default_ttl'] ?? 3600,
+                'soa_mname' => $this->domain(
+                    $nameserverProfile->identities
+                        ->sortBy(
+                            fn ($identity): int => (int) $identity->pivot->position,
+                        )
+                        ->firstOrFail()
+                        ->hostname,
+                ),
+                'soa_rname' => 'hostmaster.'.$zoneName,
+                'soa_refresh' => $zoneAttributes['soa_refresh'] ?? 3600,
+                'soa_retry' => $zoneAttributes['soa_retry'] ?? 900,
+                'soa_expire' => $zoneAttributes['soa_expire'] ?? 1209600,
+                'soa_minimum' => $zoneAttributes['soa_minimum'] ?? 300,
+                'status' => 'draft',
+                'version' => 1,
+                'enabled' => true,
+                'notes' => isset($zoneAttributes['notes'])
+                    ? trim($zoneAttributes['notes'])
+                    : null,
+            ]);
+
+            $sync = [
+                (int) $primaryServer->id => [
+                    'role' => 'primary',
+                ],
+            ];
+
+            if ($secondaryServer !== null) {
+                $sync[(int) $secondaryServer->id] = [
+                    'role' => 'secondary',
+                ];
+            }
+
+            $zone->servers()->sync($sync);
+
+            $nameservers->synchronize(
+                $zone,
+                $nameserverProfile,
+            );
+
+            $nameServers = $nameserverProfile
+                ->identities
+                ->pluck('hostname')
+                ->filter()
+                ->map(
+                    fn (string $hostname): string => $this->domain($hostname),
+                )
+                ->unique()
+                ->values();
+
+            $this->saveVersion(
+                $zone,
+                $request,
+                sprintf(
+                    'Domínio criado com %d registro(s) NS automático(s).',
+                    $nameServers->count(),
+                ),
+                $renderer,
+            );
+
+            return $zone;
+        });
     }
 
     private function saveVersion(

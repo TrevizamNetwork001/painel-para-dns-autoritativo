@@ -84,6 +84,78 @@ class DnsReversePtrSynchronizer
     }
 
     /**
+     * @return array{created: int, updated: int, unchanged: int, unmatched: int}
+     */
+    public function synchronizeFromForwardZone(DnsZone $reverseZone, DnsZone $forwardZone): array
+    {
+        $summary = [
+            'created' => 0,
+            'updated' => 0,
+            'unchanged' => 0,
+            'unmatched' => 0,
+        ];
+
+        $records = $forwardZone->records()
+            ->where('type', 'A')
+            ->where('enabled', true)
+            ->get();
+
+        foreach ($records as $record) {
+            $ip = $record->content;
+            $recordName = filled($ip) ? $this->recordNameFor($ip, $reverseZone->name) : null;
+
+            if ($recordName === null) {
+                $summary['unmatched']++;
+
+                continue;
+            }
+
+            $hostname = $this->absoluteOwner($record->name, $forwardZone->name).'.';
+
+            $existing = $reverseZone->records()
+                ->where('name', $recordName)
+                ->where('type', 'PTR')
+                ->first();
+
+            if ($existing === null) {
+                $reverseZone->records()->create([
+                    'organization_id' => $reverseZone->organization_id,
+                    'name' => $recordName,
+                    'type' => 'PTR',
+                    'ttl' => null,
+                    'priority' => null,
+                    'content' => $hostname,
+                    'enabled' => true,
+                ]);
+                $summary['created']++;
+            } elseif ($existing->content !== $hostname) {
+                $existing->forceFill(['content' => $hostname])->save();
+                $summary['updated']++;
+            } else {
+                $summary['unchanged']++;
+            }
+        }
+
+        return $summary;
+    }
+
+    private function absoluteOwner(string $recordName, string $zoneName): string
+    {
+        $name = strtolower(rtrim(trim($recordName), '.'));
+        $zone = strtolower(rtrim(trim($zoneName), '.'));
+
+        if ($name === '@' || $name === $zone) {
+            return $zone;
+        }
+
+        if ($name === $zone || str_ends_with($name, '.'.$zone)) {
+            return $name;
+        }
+
+        return $name.'.'.$zone;
+    }
+
+    /**
      * @return array{octets: int[], labelCount: int}|null
      */
     private function ipv4ZoneNetwork(string $zoneName): ?array
