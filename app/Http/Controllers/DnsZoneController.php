@@ -627,8 +627,9 @@ class DnsZoneController extends Controller
                         ->where('name', 'like', '%.in-addr.arpa')
                         ->orWhere('name', 'like', '%.ip6.arpa');
                 })
+                ->withCount('records')
                 ->orderBy('name')
-                ->get(['id', 'name']),
+                ->get(['id', 'name', 'organization_id']),
             'forwardZones' => $zone->isReverseZone() || $zone->isIpv6ReverseZone()
                 ? DnsZone::query()
                     ->forOrganization($zone->organization_id)

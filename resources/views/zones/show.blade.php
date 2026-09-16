@@ -1031,7 +1031,7 @@
 
                                         <small>
                                             {{ $reverseZone->isIpv6ReverseZone() ? 'IPv6' : 'IPv4' }}
-                                            · {{ $reverseZone->records_count ?? $reverseZone->records()->count() }} registro(s)
+                                            · {{ $reverseZone->records_count }} registro(s)
                                         </small>
                                     </span>
                                 </a>
