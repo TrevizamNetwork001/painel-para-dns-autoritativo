@@ -312,7 +312,7 @@ em produção. As evidências e limitações estão em
 
 ## Status do projeto
 
-**v1.3.19 pronta para deploy** (novo botão "Publicar e sincronizar"
+**v1.3.19 em produção desde 2026-09-16** (novo botão "Publicar e sincronizar"
 publica a zona e já aplica em todos os servidores vinculados numa
 única confirmação, com modal de progresso por servidor; corrige
 redirect pós-publicação que jogava o operador de volta pra lista

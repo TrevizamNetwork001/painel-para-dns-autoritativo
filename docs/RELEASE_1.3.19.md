@@ -65,4 +65,30 @@ depois, se o fluxo combinado se mostrar suficiente no uso real.
 
 ## Deploy
 
-Pendente de execução pelo operador.
+Executado em produção em 2026-09-16, a partir do HEAD `e9f09d0` (tag
+`v1.3.19`):
+
+```
+sudo DNS_CENTER_DEPLOY_CONFIG=/etc/dns-center/deployment.env \
+  ./deploy/dns-center-deploy update 1.3.19
+```
+
+- imagens `dns-center-app:1.3.19`/`dns-center-web:1.3.19` construídas
+  localmente, suíte completa reconferida na imagem final e
+  `composer audit` sem vulnerabilidades antes do corte de tráfego;
+- durante o build, o disco do servidor ficou 100% cheio (acúmulo de
+  imagens Docker de versões antigas) e a suíte de testes falhou em
+  massa por "No space left on device" — não era regressão de código;
+  limpas as imagens anteriores à 1.3.17 (`docker rmi` + `docker
+  builder prune`), liberando ~7,6GB, e a suíte completa voltou a
+  passar (281 testes, 1413 assertions);
+- backup do PostgreSQL criado antes do corte de tráfego:
+  `dns-center-20260916T193513Z.dump`, 2474654 bytes, SHA-256
+  `0f9294c66ab2aa13810a3aae91e931818b724b2a7a327232911a684d8fe49c6b`;
+- nenhuma migration nova nesta versão;
+- corte de tráfego bem-sucedido.
+
+Conferido de forma independente após o deploy:
+`https://dnscenter.trevizamnetwork.com.br/up` respondeu HTTP 200; os 4
+serviços da aplicação confirmados na imagem `1.3.19`; disco em 57% de
+uso (7,6GB livres).
