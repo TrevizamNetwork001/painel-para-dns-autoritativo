@@ -61,6 +61,30 @@ execução e vai republicar/aplicar cada zona normalmente pelo painel.
 
 ## Deploy
 
-Pendente de execução pelo operador. Esta versão inclui uma migration
-nova (`migrate --force` vai rodar como parte do
-`dns-center-deploy update`).
+Executado em produção em 2026-09-16, a partir do HEAD `4a92e92` (tag
+`v1.3.18`):
+
+```
+sudo DNS_CENTER_DEPLOY_CONFIG=/etc/dns-center/deployment.env \
+  ./deploy/dns-center-deploy update 1.3.18
+```
+
+- imagens `dns-center-app:1.3.18`/`dns-center-web:1.3.18` construídas
+  localmente, suíte completa reconferida na imagem final e
+  `composer audit` sem vulnerabilidades antes do corte de tráfego;
+- backup do PostgreSQL criado antes da migration:
+  `dns-center-20260916T190652Z.dump`, 2458239 bytes, SHA-256
+  `2a15c6ca02e05a4c4b3a97264c86e7e3a9e214793e1b67f5ed8ef5f1444d2343`;
+- `migrate --force`: `2026_09_16_190000_lower_default_ttl_column_default`
+  aplicada com sucesso (`migrate:status` confirmado como `Ran`);
+- corte de tráfego bem-sucedido.
+
+Conferido de forma independente após o deploy:
+`https://dnscenter.trevizamnetwork.com.br/up` respondeu HTTP 200; os 4
+serviços da aplicação confirmados na imagem `1.3.18`.
+
+Pendente (operacional, fora deste deploy): publicar e aplicar de novo
+as 7 zonas da Cliente Legado que ficaram em `ready` depois da atualização de
+TTL (`legacy.example` + as 5 zonas reversas + a zona de
+delegação `1.0.0.0.8.b.d.0.1.0.0.2.ip6.arpa`), pra o `$TTL 300`
+realmente valer nos servidores BIND.

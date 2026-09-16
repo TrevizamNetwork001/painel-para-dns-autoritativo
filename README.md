@@ -311,7 +311,7 @@ em produção. As evidências e limitações estão em
 
 ## Status do projeto
 
-**v1.3.18 pronta para deploy** (TTL padrão sugerido em zonas novas
+**v1.3.18 em produção desde 2026-09-16** (TTL padrão sugerido em zonas novas
 cai de 1 hora pra 5 minutos, reduzindo o tempo que resolvers podem
 manter respostas antigas em cache após uma mudança; inclui migration
 nova ajustando o DEFAULT da coluna no schema e correção de rótulo
