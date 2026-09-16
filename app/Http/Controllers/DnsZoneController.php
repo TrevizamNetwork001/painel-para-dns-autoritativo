@@ -552,6 +552,7 @@ class DnsZoneController extends Controller
         DnsZone $zone,
         BindZoneRenderer $renderer,
         DnsZoneValidator $validator,
+        ReverseZoneNameCalculator $calculator,
     ): View {
         $this->authorizeZone($request, $zone);
 
@@ -620,7 +621,7 @@ class DnsZoneController extends Controller
                 ->where('enabled', true)
                 ->orderBy('name')
                 ->get(),
-            'reverseZones' => DnsZone::query()
+            'reverseZones' => $reverseZones = DnsZone::query()
                 ->forOrganization($zone->organization_id)
                 ->where(function ($query): void {
                     $query
@@ -630,6 +631,16 @@ class DnsZoneController extends Controller
                 ->withCount('records')
                 ->orderBy('name')
                 ->get(['id', 'name', 'organization_id']),
+            'reverseBlocks' => $reverseZones->mapWithKeys(
+                fn (DnsZone $reverseZone): array => [
+                    $reverseZone->id => $reverseZone->isIpv6ReverseZone()
+                        ? $calculator->toIpv6Prefix($reverseZone->name)
+                        : $calculator->toIpv4Cidr($reverseZone->name),
+                ],
+            ),
+            'currentReverseBlock' => $zone->isIpv6ReverseZone()
+                ? $calculator->toIpv6Prefix($zone->name)
+                : ($zone->isReverseZone() ? $calculator->toIpv4Cidr($zone->name) : null),
             'forwardZones' => $zone->isReverseZone() || $zone->isIpv6ReverseZone()
                 ? DnsZone::query()
                     ->forOrganization($zone->organization_id)

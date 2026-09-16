@@ -85,4 +85,38 @@ class ReverseZoneNameCalculatorTest extends TestCase
 
         $this->calculator->fromIpv6Prefix('2001:db8::1/32');
     }
+
+    public function test_to_ipv4_cidr_reverses_the_calculation(): void
+    {
+        $this->assertSame(
+            '192.0.2.0/24',
+            $this->calculator->toIpv4Cidr('2.0.192.in-addr.arpa'),
+        );
+    }
+
+    public function test_to_ipv4_cidr_returns_null_for_non_reverse_zone(): void
+    {
+        $this->assertNull($this->calculator->toIpv4Cidr('example.com'));
+    }
+
+    public function test_to_ipv6_prefix_reverses_the_calculation(): void
+    {
+        $this->assertSame(
+            '2001:db8:1::/48',
+            $this->calculator->toIpv6Prefix('1.0.0.0.8.b.d.0.1.0.0.2.ip6.arpa'),
+        );
+    }
+
+    public function test_to_ipv6_prefix_matches_real_conecta_zone(): void
+    {
+        $this->assertSame(
+            '2001:db8::/32',
+            $this->calculator->toIpv6Prefix('8.b.d.0.1.0.0.2.ip6.arpa'),
+        );
+    }
+
+    public function test_to_ipv6_prefix_returns_null_for_non_reverse_zone(): void
+    {
+        $this->assertNull($this->calculator->toIpv6Prefix('example.com'));
+    }
 }

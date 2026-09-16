@@ -93,6 +93,9 @@
                     {{ $zone->records->count() }} registro(s)
                     · versão {{ $zone->version }}
                     · serial {{ $zone->serial }}
+                    @if ($currentReverseBlock)
+                        · bloco {{ $currentReverseBlock }}
+                    @endif
                 </p>
             </div>
 
@@ -1031,6 +1034,9 @@
 
                                         <small>
                                             {{ $reverseZone->isIpv6ReverseZone() ? 'IPv6' : 'IPv4' }}
+                                            @if ($reverseBlocks[$reverseZone->id] ?? null)
+                                                · bloco {{ $reverseBlocks[$reverseZone->id] }}
+                                            @endif
                                             · {{ $reverseZone->records_count }} registro(s)
                                         </small>
                                     </span>

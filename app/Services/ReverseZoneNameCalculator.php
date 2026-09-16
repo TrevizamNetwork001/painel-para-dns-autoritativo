@@ -105,4 +105,64 @@ class ReverseZoneNameCalculator
 
         return implode('.', $nibbles).'.ip6.arpa';
     }
+
+    public function toIpv4Cidr(string $zoneName): ?string
+    {
+        $name = strtolower(rtrim(trim($zoneName), '.'));
+
+        if (! str_ends_with($name, '.in-addr.arpa')) {
+            return null;
+        }
+
+        $labels = explode('.', substr($name, 0, -strlen('.in-addr.arpa')));
+        $labelCount = count($labels);
+
+        if ($labelCount < 1 || $labelCount > 4) {
+            return null;
+        }
+
+        foreach ($labels as $label) {
+            if (! ctype_digit($label) || (int) $label > 255) {
+                return null;
+            }
+        }
+
+        $octets = array_reverse(array_map('intval', $labels));
+
+        while (count($octets) < 4) {
+            $octets[] = 0;
+        }
+
+        return implode('.', $octets).'/'.($labelCount * 8);
+    }
+
+    public function toIpv6Prefix(string $zoneName): ?string
+    {
+        $name = strtolower(rtrim(trim($zoneName), '.'));
+
+        if (! str_ends_with($name, '.ip6.arpa')) {
+            return null;
+        }
+
+        $nibbles = explode('.', substr($name, 0, -strlen('.ip6.arpa')));
+        $nibbleCount = count($nibbles);
+
+        if ($nibbleCount < 1 || $nibbleCount > 32) {
+            return null;
+        }
+
+        foreach ($nibbles as $nibble) {
+            if (! ctype_xdigit($nibble) || strlen($nibble) !== 1) {
+                return null;
+            }
+        }
+
+        $hex = implode('', array_reverse($nibbles));
+        $hex = str_pad($hex, 32, '0');
+
+        $address = implode(':', str_split($hex, 4));
+        $address = inet_ntop(inet_pton($address));
+
+        return $address.'/'.($nibbleCount * 4);
+    }
 }
