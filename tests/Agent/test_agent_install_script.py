@@ -4,6 +4,9 @@ import unittest
 
 PROJECT_ROOT = pathlib.Path(__file__).resolve().parents[2]
 INSTALL_SCRIPT = PROJECT_ROOT / "public" / "install" / "agent_install.sh"
+OPERATION_SERVICE_UNIT = (
+    PROJECT_ROOT / "agent" / "systemd" / "dns-center-agent-operation.service"
+)
 
 
 def upgrade_function_body(script: str) -> str:
@@ -98,6 +101,13 @@ class AgentInstallUpgradeModeTest(unittest.TestCase):
         dispatch_index = self.script.index('"${ENROLL_MODE}" = "--upgrade-agent"')
         self.assertLess(checksum_index, dispatch_index)
         self.assertLess(backup_index, dispatch_index)
+
+
+class AgentOperationUnitTest(unittest.TestCase):
+    def test_operation_service_enables_apply_by_default(self) -> None:
+        unit = OPERATION_SERVICE_UNIT.read_text(encoding="utf-8")
+
+        self.assertIn("Environment=DNS_CENTER_AGENT_ALLOW_APPLY=1", unit)
 
 
 if __name__ == "__main__":
