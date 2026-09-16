@@ -35,7 +35,7 @@ from email.utils import parsedate_to_datetime
 from pathlib import Path
 from typing import Any
 
-AGENT_VERSION = "0.8.0"
+AGENT_VERSION = "0.8.1"
 OFFICIAL_BASE_URL = "https://dnscenter.trevizamnetwork.com.br"
 DEFAULT_CONFIG = Path("/etc/dns-center-agent/agent.json")
 DEFAULT_STATE_DIR = Path("/var/lib/dns-center-agent")
@@ -4161,7 +4161,17 @@ def sync_zones(
 
                 state["attempt_id"] = None
                 save_publication_state(paths["state_dir"], state)
-                raise AgentError(error) from exception
+                # Re-wrapping into a bare AgentError here used to silently
+                # drop rolled_back/diagnostics from the original exception
+                # (apply_staging's AgentOperationError) before it ever
+                # reached run_authorized_operation's handler — the panel
+                # showed the sanitized message but "rolled_back": false and
+                # "diagnostics": null even when apply_staging had both.
+                raise AgentOperationError(
+                    error,
+                    rolled_back=getattr(exception, "rolled_back", False),
+                    diagnostics=getattr(exception, "diagnostics", None),
+                ) from exception
 
             latest = max(
                 updates,

@@ -2339,6 +2339,76 @@ options {
             self.assertEqual(6, restored["installed_version"])
             self.assertEqual("failed", restored["last_apply_status"])
 
+    def test_sync_zones_preserves_diagnostics_from_apply_staging_failure(
+        self,
+    ) -> None:
+        # Real incident: apply_staging correctly raised an
+        # AgentOperationError with rolled_back=True and structured
+        # diagnostics (named-checkconf output), but sync_zones's own
+        # failure handler re-wrapped it into a bare AgentError(error)
+        # before it ever reached run_authorized_operation — silently
+        # dropping both fields, so the panel showed "rolled_back": false
+        # and "diagnostics": null for a real, already-rolled-back
+        # apply_zones failure.
+        with tempfile.TemporaryDirectory() as directory:
+            config = self.config(directory)
+            state = agent.empty_publication_state()
+            state["attempt_id"] = "attempt"
+            staging = Path(directory) / "staging"
+            staging.mkdir()
+            include = staging / "managed.conf"
+            include.write_text("", encoding="utf-8")
+
+            diagnostics = {
+                "command": "named-checkconf",
+                "returncode": 1,
+                "stdout": "",
+                "stderr": (
+                    "/etc/bind/named.conf.local:9: zone "
+                    "'0.2.0.192.in-addr.arpa': already exists "
+                    "previous definition: "
+                    "/etc/bind/named.conf.local:2"
+                ),
+            }
+
+            with patch.object(
+                agent,
+                "build_staging",
+                return_value=(
+                    [self.manifest_item()],
+                    [self.manifest_item()],
+                    staging,
+                    include,
+                    state,
+                ),
+            ), patch.object(
+                agent,
+                "report_publication",
+                return_value={"status": "applying"},
+            ), patch.object(
+                agent,
+                "apply_staging",
+                side_effect=agent.AgentOperationError(
+                    "Validação final falhou: " + diagnostics["stderr"],
+                    rolled_back=True,
+                    diagnostics=diagnostics,
+                ),
+            ), patch.dict(
+                agent.os.environ,
+                {"DNS_CENTER_AGENT_ALLOW_APPLY": "1"},
+            ), patch.object(
+                agent.os,
+                "geteuid",
+                return_value=0,
+            ):
+                with self.assertRaises(
+                    agent.AgentOperationError
+                ) as raised:
+                    agent.sync_zones(config, True, "APLICAR ZONAS NS1")
+
+            self.assertTrue(raised.exception.rolled_back)
+            self.assertEqual(diagnostics, raised.exception.diagnostics)
+
     def test_staging_only_never_reports_applied(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             config = self.config(directory)
