@@ -303,10 +303,17 @@ em produção. As evidências e limitações estão em
 | [Release 1.3.11](docs/RELEASE_1.3.11.md) | Mostra o bloco CIDR das zonas reversas na forma cadastrada |
 | [Release 1.3.12](docs/RELEASE_1.3.12.md) | Registros PTR mostram o IP calculado em vez do nome reverso de 32 nibbles |
 | [Release 1.3.13](docs/RELEASE_1.3.13.md) | Bloco CIDR na lista geral de domínios, no título da zona e PTR sem nome truncado |
+| [Release 1.3.14](docs/RELEASE_1.3.14.md) | Aceita IP curto ao editar/criar registro PTR, remove prefixo "bloco" |
 
 ## Status do projeto
 
-**v1.3.13 em produção desde 2026-09-16** (bloco CIDR agora aparece
+**v1.3.14 em produção desde 2026-09-16** (o campo "Nome" ao editar um
+registro PTR numa zona reversa agora mostra e aceita o IP curto — ex.
+`2001:db8::243` — em vez do nome reverso de 32 nibbles; o controller
+converte automaticamente pro formato completo ao salvar, sem mudar o
+que fica gravado no banco/BIND; também removido o prefixo "bloco"
+redundante das listas de zonas reversas; sobre a v1.3.13, que fez o
+bloco CIDR aparecer
 também na lista geral de Domínios (não só na aba "DNS reverso") e como
 título principal ao abrir uma zona reversa — nome arpa completo vira
 subtítulo em vez de sumir; registros PTR não mostram mais a linha
