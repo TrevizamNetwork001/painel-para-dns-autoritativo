@@ -577,7 +577,7 @@
                                 <input
                                     type="number"
                                     name="default_ttl"
-                                    value="{{ old('default_ttl', 3600) }}"
+                                    value="{{ old('default_ttl', 300) }}"
                                     min="60"
                                     required
                                 >

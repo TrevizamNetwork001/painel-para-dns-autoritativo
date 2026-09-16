@@ -1127,7 +1127,7 @@ class DnsZoneController extends Controller
                     : null,
                 'kind' => $zoneAttributes['kind'],
                 'serial' => $this->nextSerial(),
-                'default_ttl' => $zoneAttributes['default_ttl'] ?? 3600,
+                'default_ttl' => $zoneAttributes['default_ttl'] ?? 300,
                 'soa_mname' => $this->domain(
                     $nameserverProfile->identities
                         ->sortBy(

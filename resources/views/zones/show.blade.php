@@ -1567,8 +1567,11 @@
                         <span>TTL</span>
 
                         <select name="ttl" data-record-ttl>
-                            <option value="">
-                                Automático — {{ $zone->default_ttl }}
+                            <option
+                                value=""
+                                title="Herda o TTL padrão configurado na zona: {{ $zone->default_ttl }} segundos"
+                            >
+                                Auto (padrão da zona)
                             </option>
                             <option value="60">1 minuto</option>
                             <option value="300">5 minutos</option>
