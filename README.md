@@ -301,10 +301,17 @@ em produção. As evidências e limitações estão em
 | [Release 1.3.9](docs/RELEASE_1.3.9.md) | Assistente de DNS reverso IPv4/IPv6 |
 | [Release 1.3.10](docs/RELEASE_1.3.10.md) | Corrige layout do modal de criar zona reversa |
 | [Release 1.3.11](docs/RELEASE_1.3.11.md) | Mostra o bloco CIDR das zonas reversas na forma cadastrada |
+| [Release 1.3.12](docs/RELEASE_1.3.12.md) | Registros PTR mostram o IP calculado em vez do nome reverso de 32 nibbles |
 
 ## Status do projeto
 
-**v1.3.11 em produção desde 2026-09-16** (zona reversa mostra o bloco
+**v1.3.12 em produção desde 2026-09-16** (registros PTR de uma zona
+reversa agora mostram o IP calculado — ex. `2001:db8::242` — em vez
+do nome reverso de 32 nibbles ilegível; a lista de zonas reversas
+ficou mais enxuta, só "bloco X/NN · N registro(s)"; de brinde, corrige
+um bug antigo que duplicava o sufixo da zona no nome secundário de
+registros com nome já absoluto (PTR/NS gerados por sincronizadores);
+sobre a v1.3.11, que fez zona reversa mostrar o bloco
 CIDR calculado — ex. `2001:db8::/32` — junto do nome in-addr.arpa/
 ip6.arpa, tanto no cabeçalho da zona quanto na lista da aba "DNS
 reverso"; pedido do operador ao testar o assistente ao vivo, já que o
