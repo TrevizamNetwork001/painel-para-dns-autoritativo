@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Organization;
 use App\Models\User;
+use App\Support\DnsAuditLogger;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -64,6 +65,7 @@ class UserManagementController extends Controller
         ]);
 
         DB::transaction(function () use (
+            $request,
             $validated,
             $organization
         ): void {
@@ -86,6 +88,14 @@ class UserManagementController extends Controller
                 'status' => 'active',
                 'is_default' => true,
             ]);
+
+            DnsAuditLogger::record(
+                organizationId: $organization->id,
+                user: $request->user(),
+                action: 'user.created',
+                recordName: $user->email,
+                newValue: $validated['role'],
+            );
         });
 
         return redirect()
@@ -121,9 +131,20 @@ class UserManagementController extends Controller
             ],
         ]);
 
+        $previousRole = $user->roleForOrganization($organization->id);
+
         $user->organizations()->updateExistingPivot(
             $organization->id,
             ['role' => $validated['role']]
+        );
+
+        DnsAuditLogger::record(
+            organizationId: $organization->id,
+            user: $request->user(),
+            action: 'user.role_updated',
+            recordName: $user->email,
+            oldValue: $previousRole,
+            newValue: $validated['role'],
         );
 
         return back()->with(
@@ -158,6 +179,7 @@ class UserManagementController extends Controller
             : 'active';
 
         DB::transaction(function () use (
+            $request,
             $user,
             $organization,
             $newStatus
@@ -169,6 +191,14 @@ class UserManagementController extends Controller
             $user->organizations()->updateExistingPivot(
                 $organization->id,
                 ['status' => $newStatus]
+            );
+
+            DnsAuditLogger::record(
+                organizationId: $organization->id,
+                user: $request->user(),
+                action: 'user.status_updated',
+                recordName: $user->email,
+                newValue: $newStatus,
             );
         });
 

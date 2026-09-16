@@ -81,6 +81,18 @@
             </a>
         @endif
 
+        @if ($canManageUsers && Route::has('audit.index'))
+            <a href="{{ route('audit.index') }}" @class(['nav-item', 'is-active' => $active === 'audit'])>
+                <span class="nav-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="none">
+                        <path d="M9 3h6l3 3v15H6V3z" />
+                        <path d="M9 9h6M9 13h6M9 17h4" />
+                    </svg>
+                </span>
+                Auditoria
+            </a>
+        @endif
+
         @if ($canManageOrganizations && Route::has('organizations.index'))
             <span class="nav-section">Plataforma</span>
 

@@ -42,4 +42,6 @@ atualizados.`, etc.) não foram alteradas nesta versão.
 
 ## Deploy
 
-Pendente de execução pelo operador.
+Não houve deploy isolado desta versão — o operador pediu a feature de
+Auditoria (v1.3.21) antes do deploy, e as duas foram ao ar juntas no
+corte de tráfego da v1.3.21 (ver `docs/RELEASE_1.3.21.md`).

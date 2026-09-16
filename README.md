@@ -310,13 +310,20 @@ em produção. As evidências e limitações estão em
 | [Release 1.3.18](docs/RELEASE_1.3.18.md) | TTL padrão de zonas novas reduzido de 3600s para 300s |
 | [Release 1.3.19](docs/RELEASE_1.3.19.md) | Botão "Publicar e sincronizar" reduz publicação+aplicação a 1 clique |
 | [Release 1.3.20](docs/RELEASE_1.3.20.md) | Histórico de versões mostra qual registro mudou, não só "Registro atualizado." |
+| [Release 1.3.21](docs/RELEASE_1.3.21.md) | Tela de Auditoria global por organização, com filtros e exportação CSV |
 
 ## Status do projeto
 
-**v1.3.20 pronta para deploy** (entradas da aba Histórico de cada
+**v1.3.21 pronta para deploy** (tela nova "Auditoria" — trilha de
+todas as ações administrativas (zonas, registros, servidores,
+usuários, organizações, login/logout) por organização, com filtro,
+paginação e exportação CSV, recriando uma feature que existia no
+projeto antigo pré-Laravel; acesso restrito a organization_admin/
+platform_admin); sobre a v1.3.20 (entradas da aba Histórico de cada
 zona agora mostram o registro afetado e o que mudou, ex. "Registro
 atualizado: web AAAA → 2001:db8::40 (era www A → 192.0.2.40)." — antes
-era só "Registro atualizado.", sem detalhe algum); sobre a v1.3.19 em
+era só "Registro atualizado.", sem detalhe algum, embarcado junto no
+mesmo deploy da v1.3.21); sobre a v1.3.19 em
 produção desde 2026-09-16 (novo botão "Publicar e sincronizar"
 publica a zona e já aplica em todos os servidores vinculados numa
 única confirmação, com modal de progresso por servidor; corrige

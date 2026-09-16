@@ -16,6 +16,7 @@ use App\Services\DnsReversePtrSynchronizer;
 use App\Services\DnsZoneNameserverSynchronizer;
 use App\Services\DnsZoneValidator;
 use App\Services\ReverseZoneNameCalculator;
+use App\Support\DnsAuditLogger;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -542,6 +543,13 @@ class DnsZoneController extends Controller
                 'Parâmetros da zona atualizados.',
                 $renderer,
             );
+
+            DnsAuditLogger::record(
+                organizationId: $zone->organization_id,
+                user: $request->user(),
+                action: 'zone.settings_updated',
+                domain: $zone->name,
+            );
         });
 
         return back()->with(
@@ -708,6 +716,16 @@ class DnsZoneController extends Controller
                 ),
                 $renderer,
             );
+
+            DnsAuditLogger::record(
+                organizationId: $organizationId,
+                user: $request->user(),
+                action: 'zone.record.created',
+                domain: $zone->name,
+                recordType: $validated['type'],
+                recordName: $normalizedName,
+                newValue: trim($validated['content']),
+            );
         });
 
         return back()->with(
@@ -796,6 +814,17 @@ class DnsZoneController extends Controller
                     : sprintf('Registro atualizado: %s (era %s).', $after, $before),
                 $renderer,
             );
+
+            DnsAuditLogger::record(
+                organizationId: $zone->organization_id,
+                user: $request->user(),
+                action: 'zone.record.updated',
+                domain: $zone->name,
+                recordType: $validated['type'],
+                recordName: $normalizedName,
+                oldValue: $before,
+                newValue: $after,
+            );
         });
 
         return back()->with(
@@ -869,12 +898,26 @@ class DnsZoneController extends Controller
         $description = sprintf('%s %s → %s', $record->name, $record->type, $record->content);
 
         DB::transaction(function () use ($request, $zone, $record, $renderer, $description): void {
+            $recordType = $record->type;
+            $recordName = $record->name;
+            $recordContent = $record->content;
+
             $record->delete();
             $this->bump(
                 $zone,
                 $request,
                 sprintf('Registro removido: %s.', $description),
                 $renderer,
+            );
+
+            DnsAuditLogger::record(
+                organizationId: $zone->organization_id,
+                user: $request->user(),
+                action: 'zone.record.deleted',
+                domain: $zone->name,
+                recordType: $recordType,
+                recordName: $recordName,
+                oldValue: $recordContent,
             );
         });
 
@@ -1011,6 +1054,13 @@ class DnsZoneController extends Controller
                     'status' => 'pending',
                 ]);
             }
+
+            DnsAuditLogger::record(
+                organizationId: $lockedZone->organization_id,
+                user: $request->user(),
+                action: 'zone.published',
+                domain: $lockedZone->name,
+            );
 
             return true;
         });
@@ -1323,6 +1373,13 @@ class DnsZoneController extends Controller
                     $nameServers->count(),
                 ),
                 $renderer,
+            );
+
+            DnsAuditLogger::record(
+                organizationId: $organizationId,
+                user: $request->user(),
+                action: 'zone.created',
+                domain: $zoneName,
             );
 
             return $zone;

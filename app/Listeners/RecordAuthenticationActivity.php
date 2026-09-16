@@ -3,6 +3,7 @@
 namespace App\Listeners;
 
 use App\Models\User;
+use App\Support\DnsAuditLogger;
 use App\Support\SecurityAuditLogger;
 use Illuminate\Auth\Events\Failed;
 use Illuminate\Auth\Events\Lockout;
@@ -34,6 +35,12 @@ class RecordAuthenticationActivity
             'organization_id' => $event->user->current_organization_id,
             'ip_address' => request()->ip(),
         ]);
+
+        DnsAuditLogger::record(
+            organizationId: $event->user->current_organization_id,
+            user: $event->user,
+            action: 'auth.login_succeeded',
+        );
     }
 
     public function handleLogout(Logout $event): void
@@ -51,6 +58,12 @@ class RecordAuthenticationActivity
             'organization_id' => $event->user->current_organization_id,
             'ip_address' => request()->ip(),
         ]);
+
+        DnsAuditLogger::record(
+            organizationId: $event->user->current_organization_id,
+            user: $event->user,
+            action: 'auth.logout',
+        );
     }
 
     public function handleFailed(Failed $event): void
@@ -107,6 +120,14 @@ class RecordAuthenticationActivity
                 $email === '' ? '-' : hash('sha256', $email),
                 $rateLimitHit ? 'limited' : 'failed',
             ]),
+        );
+
+        DnsAuditLogger::record(
+            organizationId: $user?->current_organization_id,
+            user: $user,
+            action: 'auth.login_failed',
+            status: 'error',
+            ipAddress: $ip,
         );
     }
 }

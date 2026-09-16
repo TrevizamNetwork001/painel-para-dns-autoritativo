@@ -5,6 +5,7 @@ use App\Http\Controllers\Auth\ForgotPasswordController;
 use App\Http\Controllers\Auth\ResetPasswordController;
 use App\Http\Controllers\DnsAgentEnrollmentController;
 use App\Http\Controllers\DnsAgentInstallAssignmentController;
+use App\Http\Controllers\DnsAuditLogController;
 use App\Http\Controllers\DnsBindApplyController;
 use App\Http\Controllers\DnsBindDiscoveryController;
 use App\Http\Controllers\DnsNameserverController;
@@ -152,6 +153,19 @@ Route::middleware([
         '/{user}/status',
         [UserManagementController::class, 'updateStatus']
     )->name('status');
+});
+
+Route::middleware([
+    'auth',
+    'password.changed',
+    'organization',
+    'organization.role:organization_admin',
+])->prefix('auditoria')->name('audit.')->group(function (): void {
+    Route::get('/', [DnsAuditLogController::class, 'index'])
+        ->name('index');
+
+    Route::get('/exportar', [DnsAuditLogController::class, 'export'])
+        ->name('export');
 });
 
 Route::middleware([

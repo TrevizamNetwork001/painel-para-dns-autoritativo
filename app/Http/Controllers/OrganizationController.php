@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Organization;
 use App\Models\User;
+use App\Support\DnsAuditLogger;
 use Closure;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -67,7 +68,7 @@ class OrganizationController extends Controller
             ],
         ]);
 
-        DB::transaction(function () use ($validated): void {
+        DB::transaction(function () use ($request, $validated): void {
             $organization = Organization::query()->create([
                 'name' => trim($validated['organization_name']),
                 'status' => 'active',
@@ -93,6 +94,13 @@ class OrganizationController extends Controller
                 'status' => 'active',
                 'is_default' => true,
             ]);
+
+            DnsAuditLogger::record(
+                organizationId: $organization->id,
+                user: $request->user(),
+                action: 'organization.created',
+                recordName: $organization->name,
+            );
         });
 
         return redirect()

@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\DnsAgentInstallRequest;
 use App\Models\DnsServer;
 use App\Support\DnsAgentInstallRequestMatcher;
+use App\Support\DnsAuditLogger;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Schema;
@@ -127,12 +128,19 @@ class DnsServerController extends Controller
             organizationId: $organizationId,
         );
 
-        DnsServer::query()->create([
+        $server = DnsServer::query()->create([
             ...$validated,
             'organization_id' => $organizationId,
             'status' => 'pending',
             'enabled' => true,
         ]);
+
+        DnsAuditLogger::record(
+            organizationId: $organizationId,
+            user: $request->user(),
+            action: 'server.created',
+            recordName: $server->name,
+        );
 
         return redirect()
             ->route('servers.index')
@@ -155,6 +163,13 @@ class DnsServerController extends Controller
         );
 
         $server->update($validated);
+
+        DnsAuditLogger::record(
+            organizationId: $organizationId,
+            user: $request->user(),
+            action: 'server.updated',
+            recordName: $server->name,
+        );
 
         return redirect()
             ->route('servers.index')
@@ -182,6 +197,14 @@ class DnsServerController extends Controller
                 ? 'pending'
                 : 'maintenance',
         ]);
+
+        DnsAuditLogger::record(
+            organizationId: $this->organizationId($request),
+            user: $request->user(),
+            action: 'server.status_changed',
+            recordName: $server->name,
+            newValue: $enableServer ? 'ativado' : 'desativado',
+        );
 
         return redirect()
             ->route('servers.index')
