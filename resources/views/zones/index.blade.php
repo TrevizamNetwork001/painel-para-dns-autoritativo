@@ -186,6 +186,12 @@
                                 <span>{{ $groupedZones[$groupKey]->count() }}</span>
                             </div>
 
+                            @php
+                                $reverseCalculator ??= app(
+                                    \App\Services\ReverseZoneNameCalculator::class,
+                                );
+                            @endphp
+
                             @foreach ($groupedZones[$groupKey] as $zone)
                                 @php
                                     $primary = $zone->servers->first(
@@ -195,6 +201,12 @@
                                     $secondary = $zone->servers->first(
                                         fn ($server) => $server->pivot?->role === 'secondary'
                                     );
+
+                                    $reverseBlock = $zone->isIpv6ReverseZone()
+                                        ? $reverseCalculator->toIpv6Prefix($zone->name)
+                                        : ($zone->isReverseZone()
+                                            ? $reverseCalculator->toIpv4Cidr($zone->name)
+                                            : null);
                                 @endphp
 
                                 <a
@@ -207,7 +219,11 @@
                                         <span class="domains-domain-icon" aria-hidden="true">◎</span>
 
                                         <div>
-                                            <strong>{{ $zone->name }}</strong>
+                                            <strong title="{{ $zone->name }}">
+                                                {{ $reverseBlock
+                                                    ? 'bloco '.$reverseBlock
+                                                    : $zone->name }}
+                                            </strong>
 
                                             <small>
                                                 Serial {{ $zone->serial }}

@@ -82,20 +82,23 @@
                 <p class="eyebrow">Domínio autoritativo</p>
 
                 <div class="domain-workspace-title">
-                    <h1>{{ $zone->name }}</h1>
+                    <h1 title="{{ $zone->name }}">
+                        {{ $currentReverseBlock ?? $zone->name }}
+                    </h1>
 
                     <span class="domain-status domain-status-{{ $zone->status }}">
                         {{ $statusLabels[$zone->status] ?? $zone->status }}
                     </span>
                 </div>
 
+                @if ($currentReverseBlock)
+                    <p class="page-description">{{ $zone->name }}</p>
+                @endif
+
                 <p class="page-description">
                     {{ $zone->records->count() }} registro(s)
                     · versão {{ $zone->version }}
                     · serial {{ $zone->serial }}
-                    @if ($currentReverseBlock)
-                        · bloco {{ $currentReverseBlock }}
-                    @endif
                 </p>
             </div>
 
@@ -424,14 +427,19 @@
                                         . $friendlyIp
                                     ) }}"
                                 >
-                                    <div class="domain-record-name">
+                                    <div
+                                        class="domain-record-name"
+                                        @if ($friendlyIp) title="{{ $fullRecordName }}" @endif
+                                    >
                                         <strong>
                                             {{ $friendlyIp ?? $record->name }}
                                         </strong>
 
-                                        <small title="{{ $fullRecordName }}">
-                                            {{ $fullRecordName }}
-                                        </small>
+                                        @unless ($friendlyIp)
+                                            <small title="{{ $fullRecordName }}">
+                                                {{ $fullRecordName }}
+                                            </small>
+                                        @endunless
                                     </div>
 
                                     <div>
