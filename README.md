@@ -305,10 +305,17 @@ em produção. As evidências e limitações estão em
 | [Release 1.3.13](docs/RELEASE_1.3.13.md) | Bloco CIDR na lista geral de domínios, no título da zona e PTR sem nome truncado |
 | [Release 1.3.14](docs/RELEASE_1.3.14.md) | Aceita IP curto ao editar/criar registro PTR, remove prefixo "bloco" |
 | [Release 1.3.15](docs/RELEASE_1.3.15.md) | Agente 0.7.8 habilita DNS_CENTER_AGENT_ALLOW_APPLY por padrão |
+| [Release 1.3.16](docs/RELEASE_1.3.16.md) | Agente 0.7.9 atualiza a observação autoritativa logo após aplicar zonas |
 
 ## Status do projeto
 
-**v1.3.15 em produção desde 2026-09-16** (agente 0.7.8 passa a
+**v1.3.16 pronta para deploy** (agente 0.7.9 — depois de um
+`apply_zones` bem-sucedido, o agente atualiza a observação
+autoritativa na hora em vez de esperar até 5 minutos pelo próximo
+ciclo do `--observe-bind`; corrige o alerta "Serial divergente" que
+ficava visível mesmo com o apply confirmado, encontrado ao vivo em
+produção logo após o rollout da v1.3.15 no ns1/ns2 da Cliente Legado); sobre
+a v1.3.15 em produção desde 2026-09-16 (agente 0.7.8 passa a
 habilitar `DNS_CENTER_AGENT_ALLOW_APPLY=1` por padrão — decisão
 consciente confirmada com o operador após o primeiro `apply_zones`
 real em produção falhar por esse opt-in nunca ter sido feito por SSH
