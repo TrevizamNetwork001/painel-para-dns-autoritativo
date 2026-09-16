@@ -38,4 +38,24 @@ versão — só o front-end da página de servidor.
 
 ## Deploy
 
-Pendente de execução pelo operador.
+Executado em produção em 2026-09-16, a partir do HEAD `f33c846` (tag
+`v1.3.17`):
+
+```
+sudo DNS_CENTER_DEPLOY_CONFIG=/etc/dns-center/deployment.env \
+  ./deploy/dns-center-deploy update 1.3.17
+```
+
+- imagens `dns-center-app:1.3.17`/`dns-center-web:1.3.17` construídas
+  localmente, suíte completa reconferida na imagem final e
+  `composer audit` sem vulnerabilidades antes do corte de tráfego;
+- backup do PostgreSQL criado antes de qualquer migration:
+  `dns-center-20260916T184303Z.dump`, 2353664 bytes, SHA-256
+  `1dce3f6d7f3b4d771afbd2f4ad0c36ff51d50dfb3cabc671faa5b634b1d7c5de`;
+- nenhuma migration nova nesta versão (mudança restrita a front-end);
+- corte de tráfego bem-sucedido.
+
+Conferido de forma independente após o deploy:
+`https://dnscenter.trevizamnetwork.com.br/up` respondeu HTTP 200; os 4
+serviços da aplicação (`app`, `web`, `queue`, `scheduler`) confirmados
+na imagem `1.3.17`.

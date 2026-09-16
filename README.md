@@ -310,7 +310,7 @@ em produção. As evidências e limitações estão em
 
 ## Status do projeto
 
-**v1.3.17 pronta para deploy** (ao concluir uma atualização de agente
+**v1.3.17 em produção desde 2026-09-16** (ao concluir uma atualização de agente
 com sucesso, o modal fecha sozinho e navega pra dashboard automaticamente,
 em vez de exigir clique manual em "Fechar" — só front-end, sem mudança
 de backend/agente); sobre a v1.3.16 em produção desde 2026-09-16 (agente 0.7.9 — depois de um
