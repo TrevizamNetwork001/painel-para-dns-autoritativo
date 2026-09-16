@@ -78,3 +78,31 @@ próxima fase"). Pedido do operador ao notar o placeholder na zona
 - Build do frontend (`vite build`): sem erro.
 
 ## Deploy
+
+Executado em produção em 2026-09-16, a partir do HEAD `f5f31eb` (tag
+`v1.3.9`):
+
+```
+sudo DNS_CENTER_DEPLOY_CONFIG=/etc/dns-center/deployment.env \
+  ./deploy/dns-center-deploy update 1.3.9
+```
+
+- primeira tentativa de build falhou por instabilidade transitória de
+  rede (timeout no `apt-get`/`pecl install redis` durante a instalação
+  de dependências PHP da imagem) — resolvida na segunda tentativa, sem
+  mudança de código;
+- imagens `dns-center-app:1.3.9`/`dns-center-web:1.3.9` construídas
+  localmente, suíte completa (260 testes) reconferida na imagem final
+  antes do corte de tráfego, e `composer audit` sem vulnerabilidades;
+- backup do PostgreSQL criado e validado antes de qualquer migration:
+  `dns-center-20260916T150638Z.dump`, 2333294 bytes, SHA-256
+  `47f598c11888bf5d319df9ef61ac46518fc21a0b809d82be23d47393cc41acb4`;
+- `migrate:status`/`migrate --force`: nenhuma migration nova (sem
+  alteração de schema);
+- corte de tráfego bem-sucedido; estado registrado:
+  `current-version=1.3.9`, `previous-version=1.3.8` — rollback
+  disponível via `./deploy/dns-center-deploy rollback`.
+
+Conferido de forma independente após o deploy:
+`https://dnscenter.trevizamnetwork.com.br/up` respondeu HTTP 200; os 4
+serviços da aplicação confirmados na imagem `1.3.9` e saudáveis.

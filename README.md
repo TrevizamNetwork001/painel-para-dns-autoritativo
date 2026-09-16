@@ -298,10 +298,20 @@ em produção. As evidências e limitações estão em
 | [Release 1.3.6](docs/RELEASE_1.3.6.md) | Agente 0.7.7 com correções de robustez operacional |
 | [Release 1.3.7](docs/RELEASE_1.3.7.md) | Fix de CSS na aba Nameservers e de teste que só passava como root |
 | [Release 1.3.8](docs/RELEASE_1.3.8.md) | Continuação do fix de fonte da aba Nameservers (Identidades e Perfis) |
+| [Release 1.3.9](docs/RELEASE_1.3.9.md) | Assistente de DNS reverso IPv4/IPv6 |
 
 ## Status do projeto
 
-**v1.3.8 em produção desde 2026-09-16** (segunda rodada do fix de
+**v1.3.9 em produção desde 2026-09-16** (a aba "DNS reverso" da zona,
+que antes era só um placeholder estático, ganhou um assistente de
+verdade: botão "Criar zona reversa" calcula o nome in-addr.arpa/
+ip6.arpa a partir de um bloco CIDR IPv4 octeto-alinhado ou prefixo
+IPv6 nibble-alinhado e cria a zona com NS automático pelo mesmo
+caminho de criação de zona normal; nas zonas reversas IPv4 um botão
+separado gera/atualiza os PTR a partir dos registros A de um domínio
+escolhido da organização — passo deliberado, não automático na
+criação; PTR de IPv6 continua 100% manual, restrição já estabelecida
+nesta sessão; sobre a v1.3.8, que fez a segunda rodada do fix de
 fonte da aba Nameservers — o primeiro fix da v1.3.7 corrigiu parte,
 mas comparando print a print com Domínios/Servidores ainda sobravam
 vários elementos maiores que o resto do painel, em ambas as sub-abas
