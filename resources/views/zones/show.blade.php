@@ -473,7 +473,7 @@
                                                 class="domain-edit-record-button"
                                                 data-record-edit
                                                 data-edit-id="{{ $record->id }}"
-                                                data-edit-name="{{ $record->name }}"
+                                                data-edit-name="{{ $friendlyIp ?? $record->name }}"
                                                 data-edit-type="{{ $record->type }}"
                                                 data-edit-ttl="{{ $record->ttl }}"
                                                 data-edit-priority="{{ $record->priority }}"

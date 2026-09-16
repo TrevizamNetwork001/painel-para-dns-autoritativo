@@ -166,6 +166,34 @@ class ReverseZoneNameCalculator
         return $address.'/'.($nibbleCount * 4);
     }
 
+    public function ipv4ToPtrName(string $ip): ?string
+    {
+        if (! filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4)) {
+            return null;
+        }
+
+        $octets = explode('.', $ip);
+
+        return implode('.', array_reverse($octets)).'.in-addr.arpa';
+    }
+
+    public function ipv6ToPtrName(string $ip): ?string
+    {
+        if (! filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV6)) {
+            return null;
+        }
+
+        $binary = @inet_pton($ip);
+
+        if ($binary === false || strlen($binary) !== 16) {
+            return null;
+        }
+
+        $nibbles = array_reverse(str_split(bin2hex($binary)));
+
+        return implode('.', $nibbles).'.ip6.arpa';
+    }
+
     public function ptrNameToIpv4(string $recordName): ?string
     {
         $name = strtolower(rtrim(trim($recordName), '.'));

@@ -149,4 +149,50 @@ class ReverseZoneNameCalculatorTest extends TestCase
             $this->calculator->ptrNameToIpv6('8.b.d.0.1.0.0.2.ip6.arpa'),
         );
     }
+
+    public function test_ipv4_to_ptr_name_computes_the_record_name(): void
+    {
+        $this->assertSame(
+            '10.2.0.192.in-addr.arpa',
+            $this->calculator->ipv4ToPtrName('192.0.2.10'),
+        );
+    }
+
+    public function test_ipv4_to_ptr_name_returns_null_for_invalid_ip(): void
+    {
+        $this->assertNull($this->calculator->ipv4ToPtrName('not-an-ip'));
+    }
+
+    public function test_ipv6_to_ptr_name_computes_the_record_name(): void
+    {
+        $this->assertSame(
+            '2.4.2.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.8.b.d.0.1.0.0.2.ip6.arpa',
+            $this->calculator->ipv6ToPtrName('2001:db8::242'),
+        );
+    }
+
+    public function test_ipv6_to_ptr_name_returns_null_for_invalid_ip(): void
+    {
+        $this->assertNull($this->calculator->ipv6ToPtrName('not-an-ip'));
+    }
+
+    public function test_ipv4_to_ptr_name_and_back_are_inverses(): void
+    {
+        $name = $this->calculator->ipv4ToPtrName('192.0.2.10');
+
+        $this->assertSame(
+            '192.0.2.10',
+            $this->calculator->ptrNameToIpv4($name),
+        );
+    }
+
+    public function test_ipv6_to_ptr_name_and_back_are_inverses(): void
+    {
+        $name = $this->calculator->ipv6ToPtrName('2001:db8::242');
+
+        $this->assertSame(
+            '2001:db8::242',
+            $this->calculator->ptrNameToIpv6($name),
+        );
+    }
 }

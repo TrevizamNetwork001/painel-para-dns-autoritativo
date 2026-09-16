@@ -659,6 +659,7 @@ class DnsZoneController extends Controller
         Request $request,
         DnsZone $zone,
         BindZoneRenderer $renderer,
+        ReverseZoneNameCalculator $calculator,
     ): RedirectResponse {
         $organizationId = $this->authorizeWrite($request);
         $this->authorizeZone($request, $zone);
@@ -671,14 +672,19 @@ class DnsZoneController extends Controller
             'content' => ['required', 'string', 'max:4096'],
         ]);
 
-        $this->validateRecord($validated);
+        $normalizedName = $this->normalizeRecordName(
+            $validated['name'],
+            $validated['type'],
+            $zone,
+            $calculator,
+        );
 
-        DB::transaction(function () use ($request, $zone, $validated, $organizationId, $renderer): void {
+        $this->validateRecord([...$validated, 'name' => $normalizedName]);
+
+        DB::transaction(function () use ($request, $zone, $validated, $normalizedName, $organizationId, $renderer): void {
             $zone->records()->create([
                 'organization_id' => $organizationId,
-                'name' => $validated['name'] === '@'
-                    ? $zone->name
-                    : strtolower(rtrim(trim($validated['name']), '.')),
+                'name' => $normalizedName,
                 'type' => $validated['type'],
                 'ttl' => $validated['ttl'] ?? null,
                 'priority' => $validated['type'] === 'MX'
@@ -702,6 +708,7 @@ class DnsZoneController extends Controller
         DnsZone $zone,
         DnsRecord $record,
         BindZoneRenderer $renderer,
+        ReverseZoneNameCalculator $calculator,
     ): RedirectResponse {
         $this->authorizeWrite($request);
         $this->authorizeZone($request, $zone);
@@ -731,24 +738,25 @@ class DnsZoneController extends Controller
             'content' => ['required', 'string', 'max:4096'],
         ]);
 
-        $this->validateRecord($validated);
+        $normalizedName = $this->normalizeRecordName(
+            $validated['name'],
+            $validated['type'],
+            $zone,
+            $calculator,
+        );
+
+        $this->validateRecord([...$validated, 'name' => $normalizedName]);
 
         DB::transaction(function () use (
             $request,
             $zone,
             $record,
             $validated,
+            $normalizedName,
             $renderer,
         ): void {
             $record->forceFill([
-                'name' => $validated['name'] === '@'
-                    ? $zone->name
-                    : strtolower(
-                        rtrim(
-                            trim($validated['name']),
-                            '.',
-                        ),
-                    ),
+                'name' => $normalizedName,
                 'type' => $validated['type'],
                 'ttl' => $validated['ttl'] ?? null,
                 'priority' => $validated['type'] === 'MX'
@@ -958,6 +966,37 @@ class DnsZoneController extends Controller
                 ? 'Publicação concluída. O artefato está disponível para os agentes configurados.'
                 : 'Esta versão da zona já está publicada.',
         );
+    }
+
+    private function normalizeRecordName(
+        string $name,
+        string $type,
+        DnsZone $zone,
+        ReverseZoneNameCalculator $calculator,
+    ): string {
+        if ($name === '@') {
+            return $zone->name;
+        }
+
+        $trimmed = strtolower(rtrim(trim($name), '.'));
+
+        $isReverse = $zone->isReverseZone() || $zone->isIpv6ReverseZone();
+
+        if (
+            $type === 'PTR'
+            && $isReverse
+            && filter_var($trimmed, FILTER_VALIDATE_IP)
+        ) {
+            $ptrName = $zone->isIpv6ReverseZone()
+                ? $calculator->ipv6ToPtrName($trimmed)
+                : $calculator->ipv4ToPtrName($trimmed);
+
+            if ($ptrName !== null) {
+                return $ptrName;
+            }
+        }
+
+        return $trimmed;
     }
 
     private function validateRecord(array $record): void

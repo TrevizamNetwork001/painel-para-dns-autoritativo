@@ -179,6 +179,59 @@ class DnsReverseZoneWizardTest extends TestCase
             ->assertNotFound();
     }
 
+    public function test_ptr_record_name_accepts_short_ip_and_normalizes_to_full_name(): void
+    {
+        $context = $this->context();
+        $reverseZone = $this->createReverseZone($context, '2.0.192.in-addr.arpa');
+
+        $this->actingAs($context['admin'])
+            ->post(route('zones.records.store', $reverseZone), [
+                'name' => '192.0.2.10',
+                'type' => 'PTR',
+                'content' => 'host.example.com.',
+            ])
+            ->assertSessionHasNoErrors();
+
+        $this->assertDatabaseHas('dns_records', [
+            'dns_zone_id' => $reverseZone->id,
+            'name' => '10.2.0.192.in-addr.arpa',
+            'type' => 'PTR',
+            'content' => 'host.example.com.',
+        ]);
+    }
+
+    public function test_ptr_record_name_in_ipv6_zone_accepts_short_ip(): void
+    {
+        $context = $this->context();
+
+        $this->actingAs($context['admin'])
+            ->post(route('zones.reverse.store'), $this->reversePayload($context, [
+                'family' => 'ipv6',
+                'cidr' => '2001:db8::/32',
+            ]))
+            ->assertSessionHasNoErrors();
+
+        $reverseZone = DnsZone::query()
+            ->where('organization_id', $context['organization']->id)
+            ->where('name', '8.b.d.0.1.0.0.2.ip6.arpa')
+            ->firstOrFail();
+
+        $this->actingAs($context['admin'])
+            ->post(route('zones.records.store', $reverseZone), [
+                'name' => '2001:db8::242',
+                'type' => 'PTR',
+                'content' => 'host.example.com.',
+            ])
+            ->assertSessionHasNoErrors();
+
+        $this->assertDatabaseHas('dns_records', [
+            'dns_zone_id' => $reverseZone->id,
+            'name' => '2.4.2.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.8.b.d.0.1.0.0.2.ip6.arpa',
+            'type' => 'PTR',
+            'content' => 'host.example.com.',
+        ]);
+    }
+
     private function reversePayload(array $context, array $overrides = []): array
     {
         return array_merge([
