@@ -3,6 +3,8 @@
 namespace Tests\Feature;
 
 use App\Models\DnsAgent;
+use App\Models\DnsAuthoritativeObservation;
+use App\Models\DnsBindOperation;
 use App\Models\DnsServer;
 use App\Models\DnsTsigKey;
 use App\Models\DnsZone;
@@ -267,7 +269,7 @@ class DnsAuthoritativeObservationTest extends TestCase
 
     public function test_dashboard_uses_real_authoritative_counters(): void
     {
-        [$token, , $zone] = $this->authoritativeAgent();
+        [$token, $server, $zone] = $this->authoritativeAgent();
         $this->withToken($token)
             ->postJson('/api/agent/bind/observations', $this->payload($zone))
             ->assertOk();
@@ -281,6 +283,35 @@ class DnsAuthoritativeObservationTest extends TestCase
             ->assertSee('data-authoritative-counter="zonas-divergentes"', false)
             ->assertSee('data-authoritative-value="1"', false)
             ->assertSee('data-authoritative-value="0"', false);
+
+        DnsAuthoritativeObservation::query()
+            ->where('dns_zone_id', $zone->id)
+            ->update(['status' => 'serial_mismatch']);
+
+        $this->actingAs($admin)
+            ->get(route('dashboard'))
+            ->assertOk()
+            ->assertSee('Ambiente requer atenção')
+            ->assertSee('Zona divergente')
+            ->assertSee($zone->name)
+            ->assertSee('Serial observado difere do esperado');
+
+        DnsBindOperation::query()->create([
+            'organization_id' => $zone->organization_id,
+            'dns_server_id' => $server->id,
+            'dns_agent_id' => $server->agent->id,
+            'action' => 'discover_bind_zones',
+            'status' => 'succeeded',
+            'authorization_nonce' => (string) Str::uuid(),
+            'completed_at' => now(),
+        ]);
+
+        $this->actingAs($admin)
+            ->get(route('dashboard'))
+            ->assertOk()
+            ->assertSee('Descoberta de zonas · concluída')
+            ->assertSee($server->name)
+            ->assertDontSee('Sem operações recentes registradas.');
     }
 
     public function test_api_rejects_excessive_error_payload(): void

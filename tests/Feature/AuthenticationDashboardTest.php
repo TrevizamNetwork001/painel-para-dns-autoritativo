@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Models\DnsServer;
 use App\Models\DnsZone;
 use App\Models\Organization;
 use App\Models\User;
@@ -109,5 +110,43 @@ class AuthenticationDashboardTest extends TestCase
         $this->actingAs($user)
             ->get('/dashboard')
             ->assertForbidden();
+    }
+
+    public function test_dashboard_shows_real_server_health_and_compact_empty_activity(): void
+    {
+        $organization = Organization::factory()->create();
+        $user = User::factory()->create(['current_organization_id' => $organization->id]);
+        $user->organizations()->attach($organization->id, ['role' => 'organization_admin', 'status' => 'active']);
+        DnsServer::factory()->create(['organization_id' => $organization->id, 'name' => 'ns-operacional', 'hostname' => 'ns.example.test', 'role' => 'standalone', 'status' => 'offline']);
+        DnsServer::factory()->create(['organization_id' => Organization::factory()->create()->id, 'name' => 'outro-tenant', 'status' => 'online']);
+
+        $this->actingAs($user)->get(route('dashboard'))
+            ->assertOk()
+            ->assertSee('Ambiente crítico')
+            ->assertSee('Servidor offline')
+            ->assertSee('ns-operacional')
+            ->assertSee('ns.example.test')
+            ->assertSee('Sem operações recentes registradas.')
+            ->assertSee('DNS autoritativo')
+            ->assertDontSee('outro-tenant')
+            ->assertDontSee('Nenhum servidor cadastrado')
+            ->assertDontSee('Nenhuma zona configurada');
+    }
+
+    public function test_dashboard_neutral_empty_state_and_read_only_actions(): void
+    {
+        $organization = Organization::factory()->create();
+        $user = User::factory()->create(['current_organization_id' => $organization->id]);
+        $user->organizations()->attach($organization->id, ['role' => 'viewer', 'status' => 'active']);
+
+        $this->actingAs($user)->get(route('dashboard'))
+            ->assertOk()
+            ->assertSee('Aguardando infraestrutura')
+            ->assertSee('Nenhuma pendência operacional')
+            ->assertSee('Ver servidores')
+            ->assertSee('Ver zonas')
+            ->assertDontSee('Novo servidor')
+            ->assertDontSee('Nova zona')
+            ->assertDontSee('Novo usuário');
     }
 }
