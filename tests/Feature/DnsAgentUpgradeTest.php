@@ -450,6 +450,67 @@ class DnsAgentUpgradeTest extends TestCase
         $status->assertOk()->assertJsonPath('status', 'succeeded');
     }
 
+    public function test_report_preserves_diagnostics_paths_but_redacts_secrets_and_unknown_keys(): void
+    {
+        $context = $this->context();
+        $operation = DnsBindOperation::query()->create([
+            'organization_id' => $context['organization']->id,
+            'dns_server_id' => $context['server']->id,
+            'dns_agent_id' => $context['agent']->id,
+            'action' => 'apply_zones',
+            'status' => 'authorized',
+            'authorization_nonce' => (string) Str::uuid(),
+            'authorized_by' => $context['admin']->id,
+            'authorized_at' => now(),
+        ]);
+
+        $this->withToken($context['token'])->postJson(
+            route('api.agent.bind.operations.report', $operation),
+            [
+                'event_id' => (string) Str::uuid(),
+                'authorization_nonce' => $operation->getRawOriginal('authorization_nonce'),
+                'status' => 'running',
+            ],
+        )->assertOk();
+
+        $this->withToken($context['token'])->postJson(
+            route('api.agent.bind.operations.report', $operation),
+            [
+                'event_id' => (string) Str::uuid(),
+                'authorization_nonce' => $operation->getRawOriginal('authorization_nonce'),
+                'status' => 'failed',
+                'error' => 'Validação final falhou',
+                'result' => [
+                    'rolled_back' => true,
+                    'unexpected_key' => 'should be dropped',
+                    'diagnostics' => [
+                        'command' => 'named-checkconf',
+                        'returncode' => 1,
+                        'stderr' => "/etc/bind/named.conf.local:1: zone 'example.com' already exists, token=abc123",
+                        'stdout' => '',
+                        'unexpected_diagnostics_key' => 'also dropped',
+                    ],
+                ],
+            ],
+        )->assertOk();
+
+        $stored = $operation->fresh()->result;
+
+        $this->assertArrayNotHasKey('unexpected_key', $stored);
+        $this->assertArrayHasKey('diagnostics', $stored);
+        $this->assertArrayNotHasKey('unexpected_diagnostics_key', $stored['diagnostics']);
+        $this->assertSame('named-checkconf', $stored['diagnostics']['command']);
+        $this->assertStringContainsString(
+            '/etc/bind/named.conf.local:1',
+            $stored['diagnostics']['stderr'],
+        );
+        $this->assertStringContainsString(
+            'token=[removido]',
+            $stored['diagnostics']['stderr'],
+        );
+        $this->assertStringNotContainsString('abc123', $stored['diagnostics']['stderr']);
+    }
+
     private function member(Organization $organization, string $role): User
     {
         $user = User::factory()->create([

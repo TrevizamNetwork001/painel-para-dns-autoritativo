@@ -631,10 +631,52 @@ class DnsBindRuntimeController extends Controller
                 'units_changed',
                 'changed',
                 'previous_version',
+                'diagnostics',
             ])
-            ->map(fn ($value) => is_bool($value)
-                ? $value
-                : (is_string($value) ? $this->sanitize($value) : null))
+            ->map(fn ($value, $key) => $key === 'diagnostics'
+                ? $this->sanitizeDiagnostics($value)
+                : (is_bool($value)
+                    ? $value
+                    : (is_string($value) ? $this->sanitize($value) : null)))
+            ->all();
+    }
+
+    /**
+     * Structured tool output (named-checkconf/named-checkzone/rndc
+     * stdout+stderr) legitimately contains file paths — that's the whole
+     * diagnostic value. Unlike sanitize(), this intentionally skips the
+     * path-redaction rule, since without it every BIND config error comes
+     * back empty and the operator is back to SSH+journalctl to find out
+     * why an apply failed.
+     */
+    private function sanitizeDiagnostics(mixed $diagnostics): ?array
+    {
+        if (! is_array($diagnostics)) {
+            return null;
+        }
+
+        return collect($diagnostics)
+            ->only(['command', 'returncode', 'stdout', 'stderr'])
+            ->map(function ($value) {
+                if (is_int($value) || is_bool($value)) {
+                    return $value;
+                }
+
+                if (is_string($value)) {
+                    $value = strip_tags($value);
+                    $value = preg_replace('/[\x00-\x1F\x7F]/u', ' ', $value) ?? '';
+                    $value = preg_replace(
+                        '/\b(token|secret|password|authorization|api[_-]?key)\s*[:=]\s*\S+/iu',
+                        '$1=[removido]',
+                        $value,
+                    ) ?? '';
+                    $value = trim(preg_replace('/\s+/u', ' ', $value) ?? '');
+
+                    return $value === '' ? null : Str::limit($value, 4000, '');
+                }
+
+                return null;
+            })
             ->all();
     }
 

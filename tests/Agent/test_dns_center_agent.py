@@ -1701,7 +1701,7 @@ class AgentTests(unittest.TestCase):
 
             self.assertIn(zones_dir / "example.com.zone", checked_paths)
 
-    def test_named_checkzone_failure_blocks_staging(self) -> None:
+    def test_final_checkconf_failure_blocks_staging(self) -> None:
         failed = Mock(returncode=1, stdout="", stderr="invalid")
         config = {
             "named_checkzone": "/usr/bin/named-checkzone",
@@ -1719,13 +1719,81 @@ class AgentTests(unittest.TestCase):
                 agent,
                 "run_command",
                 return_value=failed,
-            ), self.assertRaises(agent.AgentError):
+            ), self.assertRaises(agent.AgentError) as ctx:
                 agent.validate_staging(
                     config,
                     [{"name": "example.com"}],
                     staging,
                     staging / "managed.conf",
                 )
+
+        self.assertIsInstance(ctx.exception, agent.AgentOperationError)
+        self.assertEqual(ctx.exception.diagnostics["stderr"], "invalid")
+        self.assertEqual(ctx.exception.diagnostics["command"], "named-checkconf")
+
+    def test_final_checkconf_failure_falls_back_to_stdout_when_stderr_empty(
+        self,
+    ) -> None:
+        failed = Mock(returncode=1, stdout="detail on stdout", stderr="")
+        config = {
+            "named_checkzone": "/usr/bin/named-checkzone",
+            "named_checkconf": "/usr/bin/named-checkconf",
+        }
+
+        with tempfile.TemporaryDirectory() as directory:
+            staging = Path(directory)
+            (staging / "example.com.zone").write_text(
+                "invalid",
+                encoding="utf-8",
+            )
+
+            with patch.object(
+                agent,
+                "run_command",
+                return_value=failed,
+            ), self.assertRaises(agent.AgentError) as ctx:
+                agent.validate_staging(
+                    config,
+                    [{"name": "example.com"}],
+                    staging,
+                    staging / "managed.conf",
+                )
+
+        self.assertIn("detail on stdout", str(ctx.exception))
+
+    def test_named_checkzone_failure_blocks_staging_with_diagnostics(
+        self,
+    ) -> None:
+        failed = Mock(returncode=1, stdout="", stderr="invalid zone data")
+        config = {
+            "named_checkzone": "/usr/bin/named-checkzone",
+            "named_checkconf": "/usr/bin/named-checkconf",
+        }
+
+        with tempfile.TemporaryDirectory() as directory:
+            staging = Path(directory)
+            (staging / "example.com.zone").write_text(
+                "invalid",
+                encoding="utf-8",
+            )
+
+            with patch.object(
+                agent,
+                "run_command",
+                return_value=failed,
+            ), self.assertRaises(agent.AgentError) as ctx:
+                agent.validate_staging(
+                    config,
+                    [{"name": "example.com", "type": "primary"}],
+                    staging,
+                    staging / "managed.conf",
+                )
+
+        self.assertIsInstance(ctx.exception, agent.AgentOperationError)
+        self.assertEqual(ctx.exception.diagnostics["command"], "named-checkzone")
+        self.assertEqual(
+            ctx.exception.diagnostics["stderr"], "invalid zone data",
+        )
 
     def test_primary_apply_reloads_zone_after_reconfig(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -1792,6 +1860,91 @@ class AgentTests(unittest.TestCase):
                 "recursion no;",
                 paths["managed_options_include"].read_text(encoding="utf-8"),
             )
+
+    def test_final_checkconf_failure_rolls_back_and_reports_diagnostics(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            config = self.config(directory)
+            paths = {
+                "zones_dir": Path(config["zones_dir"]),
+                "managed_include": Path(config["managed_include"]),
+                "backup_dir": Path(config["backup_dir"]),
+                "named_conf": Path(directory) / "named.conf",
+                "options_config": Path(directory) / "named.conf.options",
+                "managed_options_include": (
+                    Path(directory) / "dns-center-options.conf"
+                ),
+            }
+            paths["backup_dir"].mkdir(parents=True)
+            paths["named_conf"].write_text(
+                'include "named.conf.options";\n',
+                encoding="utf-8",
+            )
+            paths["options_config"].write_text(
+                "options {\n    recursion yes;\n};\n",
+                encoding="utf-8",
+            )
+            staging = Path(directory) / "staging"
+            staging.mkdir()
+            include = staging / "managed.conf"
+            include.write_text("// valid\n", encoding="utf-8")
+            (staging / "example.com.zone").write_text(
+                "$ORIGIN example.com.\n",
+                encoding="utf-8",
+            )
+
+            checkconf_failure = Mock(
+                returncode=1,
+                stdout="",
+                stderr=(
+                    "/etc/bind/named.conf.local:1: zone "
+                    "'example.com' already exists previous "
+                    "definition"
+                ),
+            )
+            success = Mock(returncode=0, stdout="", stderr="")
+
+            def run_command_side_effect(command, *args, **kwargs):
+                if command[0] == "/usr/bin/named-checkconf":
+                    return checkconf_failure
+                return success
+
+            with patch.object(
+                agent,
+                "config_paths",
+                return_value=paths,
+            ), patch.object(
+                agent,
+                "ensure_zones_directory",
+            ), patch.object(
+                agent,
+                "run_command",
+                side_effect=run_command_side_effect,
+            ), patch.object(
+                agent,
+                "restore_backup",
+            ) as restore:
+                with self.assertRaises(agent.AgentOperationError) as ctx:
+                    agent.apply_staging(
+                        config,
+                        [{
+                            "name": "example.com",
+                            "type": "primary",
+                            "authorized_listen_addresses": ["192.0.2.10"],
+                        }],
+                        staging,
+                        include,
+                    )
+
+            self.assertTrue(ctx.exception.rolled_back)
+            self.assertEqual(
+                ctx.exception.diagnostics["command"], "named-checkconf",
+            )
+            self.assertIn(
+                "already exists", ctx.exception.diagnostics["stderr"],
+            )
+            restore.assert_called_once()
 
     def test_authoritative_options_are_scoped_to_authorized_addresses(
         self,

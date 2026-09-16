@@ -2525,6 +2525,7 @@ document.addEventListener('DOMContentLoaded', () => {
         stateText.textContent = 'Confirma aplicar as zonas pendentes agora?';
         confirmActions.hidden = false;
         confirmButton.disabled = false;
+        modal.querySelectorAll('.apply-zones-diagnostics').forEach((el) => el.remove());
     };
 
     const waiting = () => {
@@ -2538,9 +2539,18 @@ document.addEventListener('DOMContentLoaded', () => {
         window.setTimeout(() => window.location.reload(), 1200);
     };
 
-    const failed = (message) => {
+    const failed = (message, diagnostics) => {
         stateText.textContent = message || 'Falha ao aplicar.';
         confirmActions.hidden = true;
+
+        const detail = diagnostics?.stderr || diagnostics?.stdout;
+
+        if (diagnostics?.command && detail) {
+            const pre = document.createElement('pre');
+            pre.className = 'apply-zones-diagnostics';
+            pre.textContent = `${diagnostics.command}:\n${detail}`;
+            stateText.insertAdjacentElement('afterend', pre);
+        }
     };
 
     const poll = async (statusUrl) => {
@@ -2559,7 +2569,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         if (payload.status === 'failed' || payload.status === 'expired') {
-            return failed(payload.error);
+            return failed(payload.error, payload.result?.diagnostics);
         }
 
         pollTimer = window.setTimeout(() => poll(statusUrl), 4000);
@@ -2723,6 +2733,12 @@ document.addEventListener('DOMContentLoaded', () => {
         if (payload.status === 'failed' || payload.status === 'expired') {
             statusEl.textContent = payload.status === 'failed' ? 'Falhou' : 'Expirou';
             statusEl.className = 'status-badge status-danger';
+
+            const detail = payload.result?.diagnostics?.stderr || payload.result?.diagnostics?.stdout;
+            if (detail) {
+                statusEl.title = detail;
+            }
+
             return finishIfSettled();
         }
 

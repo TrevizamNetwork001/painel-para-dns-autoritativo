@@ -313,10 +313,17 @@ em produção. As evidências e limitações estão em
 | [Release 1.3.21](docs/RELEASE_1.3.21.md) | Tela de Auditoria global por organização, com filtros e exportação CSV |
 | [Release 1.3.22](docs/RELEASE_1.3.22.md) | Template de nome pro PTR gerado a partir de registros A |
 | [Release 1.3.23](docs/RELEASE_1.3.23.md) | Comandos do agente funcionam sem sudo instalado |
+| [Release 1.3.24](docs/RELEASE_1.3.24.md) | Agente 0.8.0 reporta o erro real de named-checkconf/checkzone/rndc, sem mais vir vazio |
 
 ## Status do projeto
 
-**v1.3.23 pronta para deploy** (comandos de instalação/enrollment/
+**v1.3.24 pronta para deploy** (agente 0.8.0 — corrige um bug real
+achado ao vivo no incidente do cliente-exemplo: falhas de apply mostravam só
+"Validação final falhou:" sem nenhum detalhe, forçando SSH+journalctl
+pra diagnosticar; agora o painel mostra o comando e a saída real do
+erro, com sanitização que preserva caminho de arquivo mas continua
+removendo token/senha; é a Fase 0 do plano maior de detecção e
+resolução de conflito de zona legada sem SSH); sobre a v1.3.23 (comandos de instalação/enrollment/
 atualização do agente exibidos na tela do servidor usam `sudo` só se
 ele existir no servidor, em vez de assumir presença — encontrado ao
 vivo tentando instalar no ns2 do cliente-exemplo, logado como root sem sudo);

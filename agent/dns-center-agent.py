@@ -35,7 +35,7 @@ from email.utils import parsedate_to_datetime
 from pathlib import Path
 from typing import Any
 
-AGENT_VERSION = "0.7.9"
+AGENT_VERSION = "0.8.0"
 OFFICIAL_BASE_URL = "https://dnscenter.trevizamnetwork.com.br"
 DEFAULT_CONFIG = Path("/etc/dns-center-agent/agent.json")
 DEFAULT_STATE_DIR = Path("/var/lib/dns-center-agent")
@@ -55,9 +55,15 @@ class AgentError(RuntimeError):
 
 
 class AgentOperationError(AgentError):
-    def __init__(self, message: str, rolled_back: bool = False) -> None:
+    def __init__(
+        self,
+        message: str,
+        rolled_back: bool = False,
+        diagnostics: dict[str, Any] | None = None,
+    ) -> None:
         super().__init__(message)
         self.rolled_back = rolled_back
+        self.diagnostics = diagnostics
 
 
 class AgentHttpError(AgentError):
@@ -2457,11 +2463,16 @@ def run_authorized_operation(
             if isinstance(exception, AgentOperationError)
             else False
         )
+        diagnostics = (
+            exception.diagnostics
+            if isinstance(exception, AgentOperationError)
+            else None
+        )
         report_operation(
             config,
             operation,
             "failed",
-            result={"rolled_back": rolled_back},
+            result={"rolled_back": rolled_back, "diagnostics": diagnostics},
             error=message,
         )
         raise
@@ -2898,9 +2909,19 @@ def validate_staging(
         )
 
         if result.returncode != 0:
-            raise AgentError(
-                "named-checkzone falhou para "
-                f"{name}: {result.stderr.strip()}"
+            detail = (
+                result.stderr.strip()
+                or result.stdout.strip()
+                or f"named-checkzone saiu com código {result.returncode} sem saída"
+            )
+            raise AgentOperationError(
+                f"named-checkzone falhou para {name}: {detail}",
+                diagnostics={
+                    "command": "named-checkzone",
+                    "returncode": result.returncode,
+                    "stdout": result.stdout.strip(),
+                    "stderr": result.stderr.strip(),
+                },
             )
 
         deployed_serial = current_zone_serial(
@@ -2920,10 +2941,19 @@ def validate_staging(
     result = run_command([named_checkconf, str(include_path)])
 
     if result.returncode != 0:
-        detail = result.stderr.strip() or result.stdout.strip()
-        raise AgentError(
-            "named-checkconf falhou: "
-            f"{detail}"
+        detail = (
+            result.stderr.strip()
+            or result.stdout.strip()
+            or f"named-checkconf saiu com código {result.returncode} sem saída"
+        )
+        raise AgentOperationError(
+            f"named-checkconf falhou: {detail}",
+            diagnostics={
+                "command": "named-checkconf",
+                "returncode": result.returncode,
+                "stdout": result.stdout.strip(),
+                "stderr": result.stderr.strip(),
+            },
         )
 
 
@@ -3361,18 +3391,40 @@ def apply_staging(
         )
 
         if result.returncode != 0:
-            raise AgentError(
-                "Validação final falhou: "
-                f"{result.stderr.strip()}"
+            detail = (
+                result.stderr.strip()
+                or result.stdout.strip()
+                or f"named-checkconf saiu com código {result.returncode} sem saída"
+            )
+            raise AgentOperationError(
+                f"Validação final falhou: {detail}",
+                rolled_back=True,
+                diagnostics={
+                    "command": "named-checkconf",
+                    "returncode": result.returncode,
+                    "stdout": result.stdout.strip(),
+                    "stderr": result.stderr.strip(),
+                },
             )
 
         rndc = command_path(config, "rndc", "/usr/sbin/rndc")
         result = run_command([rndc, "reconfig"])
 
         if result.returncode != 0:
-            raise AgentError(
-                "rndc reconfig falhou: "
-                f"{result.stderr.strip()}"
+            detail = (
+                result.stderr.strip()
+                or result.stdout.strip()
+                or f"rndc reconfig saiu com código {result.returncode} sem saída"
+            )
+            raise AgentOperationError(
+                f"rndc reconfig falhou: {detail}",
+                rolled_back=True,
+                diagnostics={
+                    "command": "rndc reconfig",
+                    "returncode": result.returncode,
+                    "stdout": result.stdout.strip(),
+                    "stderr": result.stderr.strip(),
+                },
             )
 
         for item in manifest:
@@ -3384,10 +3436,20 @@ def apply_staging(
             )
 
             if result.returncode != 0:
-                detail = result.stderr.strip() or result.stdout.strip()
-                raise AgentError(
-                    "rndc reload falhou para "
-                    f"{item['name']}: {detail}"
+                detail = (
+                    result.stderr.strip()
+                    or result.stdout.strip()
+                    or f"rndc reload saiu com código {result.returncode} sem saída"
+                )
+                raise AgentOperationError(
+                    f"rndc reload falhou para {item['name']}: {detail}",
+                    rolled_back=True,
+                    diagnostics={
+                        "command": f"rndc reload {item['name']}",
+                        "returncode": result.returncode,
+                        "stdout": result.stdout.strip(),
+                        "stderr": result.stderr.strip(),
+                    },
                 )
 
         return backup_dir

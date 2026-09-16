@@ -6732,6 +6732,21 @@ body.has-open-modal {
     margin-top: 1rem;
 }
 
+.apply-zones-diagnostics {
+    margin: 0.6rem 0 0;
+    padding: 0.6rem 0.75rem;
+    background: var(--surface-soft);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--text-muted);
+    font-size: 0.7rem;
+    line-height: 1.5;
+    white-space: pre-wrap;
+    word-break: break-word;
+    max-height: 160px;
+    overflow-y: auto;
+}
+
 .domain-configuration-form {
     display: grid;
     gap: 1rem;
