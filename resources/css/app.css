@@ -7340,6 +7340,7 @@ body.has-open-modal {
     display: block;
     overflow: hidden;
     color: var(--muted);
+    font-size: 0.63rem;
     text-overflow: ellipsis;
     white-space: nowrap;
 }
@@ -7371,8 +7372,14 @@ body.has-open-modal {
     min-width: 0;
     margin: 0;
     overflow: hidden;
+    font-size: 0.94rem;
+    font-weight: 700;
     text-overflow: ellipsis;
     white-space: nowrap;
+}
+
+.nameserver-identity-row .nameserver-title-line strong {
+    font-size: 0.78rem;
 }
 
 .nameserver-state,
@@ -7480,6 +7487,8 @@ body.has-open-modal {
 .nameserver-profile-card > header > strong {
     flex: 0 0 auto;
     color: var(--muted);
+    font-size: 0.78rem;
+    font-weight: 700;
 }
 
 .nameserver-profile-list {
@@ -7520,12 +7529,14 @@ body.has-open-modal {
 .nameserver-profile-list small {
     display: block;
     overflow: hidden;
+    font-size: 0.72rem;
     text-overflow: ellipsis;
     white-space: nowrap;
 }
 
 .nameserver-profile-list small {
     color: var(--muted);
+    font-size: 0.62rem;
 }
 
 .nameserver-profile-notes {
