@@ -1,10 +1,14 @@
 # Dashboard baseado na referência de 16/09/2026
 
+> Registro histórico da primeira implementação (`8d5752f`). O estado atual,
+> incluindo a auditoria que removeu o mapa decorativo, está em
+> [Dashboard Operacional final — 17/09/2026](dashboard-final-2026-09-17.md).
+
 ## Objetivo e escopo
 
 Reproduzir na página inicial a composição, a hierarquia visual, as cores e a densidade da imagem `ChatGPT Image 16 de set. de 2026, 19_18_54.png`. A sidebar ficou fora do escopo e seu HTML e CSS não foram alterados.
 
-## Implementação
+## Implementação inicial
 
 - O cabeçalho recebeu a mesma hierarquia da referência: identificação da central, título, descrição curta, horário de atualização, resumo de saúde e atalho para a página de servidores. `Ctrl+K` e `⌘K` também abrem esse inventário.
 - A faixa de saúde destaca o estado real do ambiente e resume servidores online, zonas divergentes e pendências.
@@ -36,7 +40,7 @@ Todos os números exibidos são consultados no contexto da organização atual. 
 
 A comparação visual em navegador deve ser feita em tema escuro, nas larguras de desktop e mobile. Em desktop, a linha superior tem mapa, servidores e pendências, nessa ordem; a inferior tem DNS autoritativo, atividade recente e ações rápidas. A validação automatizada confirmou compilação e conteúdo, mas não mede semelhança pixel a pixel.
 
-## Limitações visuais
+## Limitações visuais da versão inicial
 
 O mapa é ilustrativo. A busca no cabeçalho leva ao inventário de servidores; a aplicação ainda não possui busca global. As ações rápidas levam às páginas de gestão correspondentes, como já ocorria antes da mudança.
 

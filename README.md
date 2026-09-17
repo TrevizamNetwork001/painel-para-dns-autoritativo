@@ -292,6 +292,7 @@ em produção. As evidências e limitações estão em
 | [Homologação da RC2](docs/RC_HOMOLOGATION_2.md) | Homologação operacional curta do fix de idempotência, ao vivo |
 | [Release 1.0.0](docs/RELEASE_1.0.0.md) | Promoção da v1.0.0 a partir da RC3 e correção da tag irregular |
 | [Histórico da interface](docs/CHANGELOG_UI.md) | Ajustes realizados na interface web |
+| [Dashboard Operacional final](docs/dashboard-final-2026-09-17.md) | Auditoria do mapa, composição, temas, testes e publicação |
 | [Release 1.3.3](docs/RELEASE_1.3.3.md) | Checagem de prontidão detecta BIND não vinculado ao include gerenciado antes de publicar |
 | [Release 1.3.4](docs/RELEASE_1.3.4.md) | Botão "Aplicar agora" aplica zonas pendentes no BIND sem SSH manual |
 | [Release 1.3.5](docs/RELEASE_1.3.5.md) | Trava de concorrência na autorização de aplicação, CI e ajuste de fila |
