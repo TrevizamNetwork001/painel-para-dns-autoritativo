@@ -45,6 +45,11 @@
 
     $primaryServers = $dashboardServers->where('role', 'primary');
     $secondaryServers = $dashboardServers->where('role', 'secondary');
+    $infrastructureGroups = [
+        ['label' => 'Primários', 'servers' => $primaryServers],
+        ['label' => 'Secundários', 'servers' => $secondaryServers],
+        ['label' => 'Independentes', 'servers' => $dashboardServers->where('role', 'standalone')],
+    ];
     $isAuthoritativeOnline = fn ($server) =>
         $server->authoritative_observed_at?->gte(now()->subMinutes(10))
         && (bool) data_get($server->authoritative_runtime, 'available', false);
@@ -264,14 +269,11 @@
 
             <div class="dashboard-header-right">
                 <div class="topbar-actions">
-                    <a class="dashboard-search" data-dashboard-search href="{{ route('servers.index') }}" aria-label="Abrir inventário de servidores">
+                    <a class="dashboard-search" data-dashboard-search href="{{ route('servers.index') }}" aria-label="Abrir inventário de servidores" title="Buscar servidores (Ctrl + K)">
                         <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="10.8" cy="10.8" r="6.8"/><path d="m16 16 5 5"/></svg>
-                        <span>Buscar servidor, zona ou domínio...</span>
-                        <kbd>Ctrl + K</kbd>
                     </a>
                     <x-account-menu />
                 </div>
-                <div class="dashboard-header-status"><span>Última atualização<br><time datetime="{{ now()->toIso8601String() }}">{{ now()->format('d/m/Y H:i') }}</time></span><span class="dashboard-header-system"><i></i>{{ $healthState === 'healthy' ? 'Todos os sistemas respondendo' : 'Acompanhe o estado dos sistemas' }}</span></div>
             </div>
         </header>
 
@@ -306,29 +308,31 @@
         </section>
 
         <section class="dashboard-operations-grid" aria-label="Infraestrutura e pendências">
-            <article class="dashboard-panel dashboard-map-panel">
-                <div class="dashboard-panel-heading"><h2>Mapa da infraestrutura</h2><div class="dashboard-map-legend"><span><i class="map-dot online"></i>Online</span><span><i class="map-dot offline"></i>Offline</span><span><i class="map-dot unknown"></i>Desconhecido</span></div></div>
-                <div class="dashboard-map-body">
-                    <div class="dashboard-map-art" aria-hidden="true">
-                        <img src="{{ asset('images/brazil-map.svg') }}" alt="">
-                        @if ($hasServers)
-                            <svg class="dashboard-map-network" viewBox="0 0 380 300" fill="none" preserveAspectRatio="xMidYMid meet">
-                                <path class="map-connection" d="M95 205Q188 125 295 78M205 224Q228 136 295 78M95 205Q156 185 205 224"/>
-                                @foreach ($dashboardServers->take(3) as $server)
-                                    @php $point = [[95,205],[205,224],[295,78]][$loop->index]; @endphp
-                                    <circle class="map-node-halo map-node-{{ $server->status }}" cx="{{ $point[0] }}" cy="{{ $point[1] }}" r="12"/>
-                                    <circle class="map-node map-node-{{ $server->status }}" cx="{{ $point[0] }}" cy="{{ $point[1] }}" r="6"/>
-                                @endforeach
-                            </svg>
-                        @endif
-                    </div>
-                    <div class="dashboard-map-locations">
-                        @forelse ($dashboardServers->take(4) as $server)
-                            <div class="dashboard-map-location"><span class="dashboard-server-status dashboard-server-status-{{ $server->status }}"></span><div><strong>{{ $server->name }}</strong><small>{{ $server->status === 'online' ? 'Online' : ($server->status === 'offline' ? 'Offline' : 'Aguardando') }}</small></div></div>
-                        @empty
-                            <p class="dashboard-empty-line">Nenhum servidor cadastrado.</p>
-                        @endforelse
-                    </div>
+            <article class="dashboard-panel dashboard-topology-panel">
+                <div class="dashboard-panel-heading"><h2>Topologia da infraestrutura</h2><a class="dashboard-panel-link" href="{{ route('servers.index') }}">Ver todos</a></div>
+                <div class="dashboard-topology-canvas">
+                    <div class="dashboard-topology-root">DNS autoritativo <small>Funções cadastradas</small></div>
+                    @if ($hasServers)
+                        <div class="dashboard-topology-groups">
+                            @foreach ($infrastructureGroups as $group)
+                                @if ($group['servers']->isNotEmpty())
+                                    <div class="dashboard-topology-group">
+                                        <h3>{{ $group['label'] }} <span>{{ $group['servers']->count() }}</span></h3>
+                                        @foreach ($group['servers']->take(3) as $server)
+                                            @php
+                                                $topologyStatus = ! $server->enabled || $server->status === 'maintenance' ? 'maintenance' : $server->status;
+                                                $topologyStatusLabel = match ($topologyStatus) { 'online' => 'Online', 'warning' => 'Atenção', 'offline' => 'Offline', 'maintenance' => 'Desativado', default => 'Desconhecido' };
+                                            @endphp
+                                            <div class="dashboard-topology-node"><span class="dashboard-server-status dashboard-server-status-{{ $topologyStatus }}" aria-hidden="true"></span><span class="dashboard-topology-node-copy"><strong title="{{ $server->name }}">{{ $server->name }}</strong><small>{{ $topologyStatusLabel }}</small></span></div>
+                                        @endforeach
+                                        @if ($group['servers']->count() > 3)<small class="dashboard-topology-more">+ {{ $group['servers']->count() - 3 }} servidores</small>@endif
+                                    </div>
+                                @endif
+                            @endforeach
+                        </div>
+                    @else
+                        <p class="dashboard-empty-line">Nenhum servidor cadastrado.</p>
+                    @endif
                 </div>
             </article>
             <article class="dashboard-panel dashboard-server-panel">

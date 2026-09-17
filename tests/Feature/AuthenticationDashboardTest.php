@@ -149,4 +149,26 @@ class AuthenticationDashboardTest extends TestCase
             ->assertDontSee('Nova zona')
             ->assertDontSee('Novo usuário');
     }
+
+    public function test_dashboard_topology_uses_registered_roles_and_statuses_without_claiming_location(): void
+    {
+        $organization = Organization::factory()->create();
+        $user = User::factory()->create(['current_organization_id' => $organization->id]);
+        $user->organizations()->attach($organization->id, ['role' => 'organization_admin', 'status' => 'active']);
+        DnsServer::factory()->create(['organization_id' => $organization->id, 'name' => 'primario-real', 'role' => 'primary', 'status' => 'online']);
+        DnsServer::factory()->create(['organization_id' => $organization->id, 'name' => 'secundario-real', 'role' => 'secondary', 'status' => 'warning']);
+
+        $this->actingAs($user)->get(route('dashboard'))
+            ->assertOk()
+            ->assertSee('Topologia da infraestrutura')
+            ->assertSee('Primários')
+            ->assertSee('Secundários')
+            ->assertSee('primario-real')
+            ->assertSee('secundario-real')
+            ->assertSee('Online')
+            ->assertSee('Atenção')
+            ->assertDontSee('Mapa da infraestrutura')
+            ->assertDontSee('brazil-map.svg')
+            ->assertDontSee('Última atualização');
+    }
 }
