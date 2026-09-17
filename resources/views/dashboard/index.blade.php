@@ -345,9 +345,8 @@
                             @endphp
                             <a href="{{ route('servers.index') }}" class="dashboard-server-item">
                                 <span class="dashboard-server-status dashboard-server-status-{{ $server->status }}" aria-hidden="true"></span>
-                                <span class="dashboard-server-info"><strong>{{ $server->name }}</strong><small title="{{ $server->hostname }}">{{ $server->hostname }}</small><small>{{ $server->last_seen_at ? 'Último visto '.$server->last_seen_at->diffForHumans() : 'Sem heartbeat recente' }}</small></span>
-                                <span class="dashboard-server-role">{{ match ($server->role) { 'primary' => 'Primário', 'secondary' => 'Secundário', default => 'Independente' } }}</span>
-                                <span class="dashboard-server-state dashboard-server-state-{{ $server->status }}">{{ $serverStatusLabel }}</span>
+                                <span class="dashboard-server-info"><strong>{{ $server->name }}</strong><small title="{{ $server->hostname }}">{{ $server->hostname }}</small><small class="dashboard-server-contact">{{ $server->last_seen_at ? 'Último visto '.$server->last_seen_at->diffForHumans() : 'Sem heartbeat recente' }}</small></span>
+                                <span class="dashboard-server-badges"><span class="dashboard-server-role">{{ match ($server->role) { 'primary' => 'Primário', 'secondary' => 'Secundário', default => 'Independente' } }}</span><span class="dashboard-server-state dashboard-server-state-{{ $server->status }}">{{ $serverStatusLabel }}</span></span>
                             </a>
                         @endforeach
                     </div>

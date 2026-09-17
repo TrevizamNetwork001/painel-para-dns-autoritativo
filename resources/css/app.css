@@ -8436,11 +8436,15 @@ body.has-open-modal {
 .dashboard-topology-more { display: block; margin-top: 7px; }
 .dashboard-topology-canvas > .dashboard-empty-line { text-align: center; }
 .dashboard-v2 .dashboard-server-list { padding-top: 12px; }
-.dashboard-v2 .dashboard-server-item { grid-template-columns: 10px minmax(0,1fr) auto; gap: 11px; padding: 9px 3px; border-bottom-color: #223240; }
+.dashboard-v2 .dashboard-server-item { grid-template-columns: 10px minmax(0,1fr) auto; align-items: start; gap: 11px; padding: 10px 3px; border-bottom-color: #223240; }
+.dashboard-v2 .dashboard-server-item > .dashboard-server-status { margin-top: 5px; }
 .dashboard-v2 .dashboard-server-info strong { font-size: 12px; }.dashboard-v2 .dashboard-server-info small { color: #a5b2c2; font-size: 10px; }
-.dashboard-v2 .dashboard-server-role { grid-column: 3; grid-row: 1; align-self: start; padding: 4px 8px; border-radius: 99px; background: #233241; color: #c3cedc; font-size: 10px; }
-.dashboard-v2 .dashboard-server-state { grid-column: 3; grid-row: 1; align-self: end; margin-top: 25px; padding: 4px 8px; border-radius: 99px; background: #153b36; color: #4ee1b7; font-size: 10px; }
-.dashboard-v2 .dashboard-server-state-offline { background: #40242b; color: #ff6b73; }.dashboard-v2 .dashboard-server-state-maintenance { background: #253240; color: #b3c1d0; }
+.dashboard-v2 .dashboard-server-info .dashboard-server-contact { margin-top: 4px; color: #8fa3b5; }
+.dashboard-v2 .dashboard-server-badges { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 5px; }
+.dashboard-v2 .dashboard-server-role { padding: 4px 8px; border-radius: 99px; background: #233241; color: #c3cedc; font-size: 10px; }
+.dashboard-v2 .dashboard-server-state { margin: 0; padding: 4px 8px; border-radius: 99px; background: #153b36; color: #4ee1b7; font-size: 10px; }
+.dashboard-v2 .dashboard-server-state-warning { background: #423323; color: #ffc06b; }
+.dashboard-v2 .dashboard-server-state-offline { background: #40242b; color: #ff6b73; }.dashboard-v2 .dashboard-server-state-maintenance, .dashboard-v2 .dashboard-server-state-pending { background: #253240; color: #b3c1d0; }
 .dashboard-v2 .dashboard-pending-item { grid-template-columns: 39px minmax(0,1fr) auto; min-height: 78px; gap: 10px; padding: 10px 0; border-radius: 0; border-bottom-color: #263542; }
 .dashboard-v2 .dashboard-issue-marker { display: grid; width: 38px; height: 38px; place-items: center; margin: 0; border-radius: 10px; background: #352c24; color: #ffb329; box-shadow: none; }
 .dashboard-v2 .dashboard-issue-marker svg { width: 21px; height: 21px; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
