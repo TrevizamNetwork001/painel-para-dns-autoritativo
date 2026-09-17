@@ -8479,6 +8479,9 @@ body.has-open-modal {
 .dashboard-v2 .dashboard-activity-item { grid-template-columns: 20px minmax(0,1fr); gap: 8px; padding: 9px 0; border-bottom: 1px solid #243441; }
 .dashboard-v2 .dashboard-activity-item::before { display: none; }
 .dashboard-v2 .dashboard-activity-item .activity-icon { width: 20px; height: 20px; font-size: 11px; }
+.dashboard-v2 .dashboard-activity-item .activity-icon svg { width: 13px; height: 13px; }
+.dashboard-v2 .dashboard-activity-item .activity-icon-green { color: #40d9aa; }
+.dashboard-v2 .dashboard-activity-item .activity-icon-orange { color: #f5ae43; }
 .dashboard-v2 .dashboard-activity-item strong { font-size: 10px; }.dashboard-v2 .dashboard-activity-meta { color: #9daec0; font-size: 9px; }
 .dashboard-v2 .dashboard-quick-actions { grid-template-columns: repeat(2,minmax(0,1fr)); gap: 8px; padding-top: 12px; }
 .dashboard-v2 .dashboard-quick-action { min-height: 97px; gap: 3px; padding: 8px; border: 1px solid #283847; background: #1b2a39; }
