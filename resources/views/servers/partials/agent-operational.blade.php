@@ -58,6 +58,30 @@
     </div>
 </section>
 
+@if (! empty($legacyZoneConflicts))
+    <section class="panel-card agent-legacy-conflict-card" aria-labelledby="legacy-conflict-title">
+        <header class="agent-section-header">
+            <div>
+                <p class="eyebrow">Conflito de configuração</p>
+                <h2 id="legacy-conflict-title">Declaração de zona legada detectada</h2>
+            </div>
+            <span class="status-badge status-danger">{{ count($legacyZoneConflicts) }} zona{{ count($legacyZoneConflicts) === 1 ? '' : 's' }}</span>
+        </header>
+        <p>Este servidor tem uma declaração estática de zona fora do include gerenciado pelo DNS Center — o apply será recusado pelo <code>named-checkconf</code> até o bloco antigo ser removido.</p>
+        <ul class="agent-legacy-conflict-list">
+            @foreach ($legacyZoneConflicts as $conflict)
+                <li>
+                    <strong>{{ $conflict['zone_name'] }}</strong>
+                    <span class="agent-technical-value">{{ $conflict['source_file'] }}:{{ $conflict['start_line'] }}@if ($conflict['end_line'] > $conflict['start_line'])–{{ $conflict['end_line'] }}@endif</span>
+                    @if ($conflict['declared_type'])<span class="status-badge status-neutral">type {{ $conflict['declared_type'] }}</span>@endif
+                    @if ($conflict['snippet'])<pre class="apply-zones-diagnostics">{{ $conflict['snippet'] }}</pre>@endif
+                </li>
+            @endforeach
+        </ul>
+        <p class="agent-empty-message">Remoção com um clique ainda não disponível nesta versão — remova o bloco manualmente no servidor e execute uma nova descoberta ou aguarde a próxima verificação de prontidão (~5 min) pra confirmar.</p>
+    </section>
+@endif
+
 @if ($server->agent_status !== 'online')
     <section class="agent-ops-alert {{ $server->agent_status === 'blocked' ? 'is-danger' : 'is-warning' }}" role="alert">
         <div><strong>{{ $server->agent_status === 'blocked' ? 'Agente bloqueado' : 'Agente offline' }}</strong><p>Último contato: {{ $lastContact ? $lastContact->diffForHumans() : 'nenhum contato recebido' }}. O inventário abaixo representa a última informação conhecida.</p></div>

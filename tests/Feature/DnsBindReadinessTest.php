@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\DnsAgent;
 use App\Models\DnsBindOperation;
 use App\Models\DnsServer;
+use App\Models\DnsZone;
 use App\Models\Organization;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -241,6 +242,65 @@ class DnsBindReadinessTest extends TestCase
             ->assertSee('Listener TCP 53')
             ->assertSee('Não detectado')
             ->assertDontSee('Saudável');
+    }
+
+    public function test_server_page_shows_legacy_zone_conflict_card_only_for_managed_zones(): void
+    {
+        $context = $this->context();
+        $server = $context['server'];
+        $server->forceFill([
+            'bind_readiness' => [
+                'legacy_zone_blocks' => [
+                    'managed_include' => '/etc/bind/dns-center-managed.conf',
+                    'blocks' => [
+                        [
+                            'name' => 'example.com',
+                            'source_file' => '/etc/bind/named.conf.local',
+                            'start_line' => 2,
+                            'end_line' => 6,
+                            'declared_type' => 'master',
+                            'hash' => str_repeat('a', 64),
+                            'snippet' => 'zone "example.com" { type master; };',
+                        ],
+                        [
+                            'name' => 'unrelated.test',
+                            'source_file' => '/etc/bind/named.conf.local',
+                            'start_line' => 10,
+                            'end_line' => 12,
+                            'declared_type' => 'master',
+                            'hash' => str_repeat('b', 64),
+                            'snippet' => null,
+                        ],
+                    ],
+                ],
+            ],
+        ])->save();
+
+        $zone = DnsZone::query()->create([
+            'organization_id' => $context['organization']->id,
+            'name' => 'example.com',
+            'kind' => 'primary',
+            'serial' => 2026072800,
+            'default_ttl' => 3600,
+            'soa_mname' => 'legacy.example',
+            'soa_rname' => 'hostmaster.example.com',
+            'soa_refresh' => 3600,
+            'soa_retry' => 900,
+            'soa_expire' => 1209600,
+            'soa_minimum' => 300,
+            'status' => 'draft',
+            'version' => 1,
+            'enabled' => true,
+        ]);
+        $zone->servers()->sync([$server->id => ['role' => 'primary']]);
+
+        $this->actingAs($context['admin'])
+            ->get(route('servers.agent.show', $server))
+            ->assertOk()
+            ->assertSee('Conflito de configuração')
+            ->assertSee('example.com')
+            ->assertSee('/etc/bind/named.conf.local:2')
+            ->assertDontSee('unrelated.test');
     }
 
     private function authorizedOperation(array $context): DnsBindOperation

@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\DnsRecord;
+use App\Models\DnsServer;
 use App\Models\DnsZone;
 
 class DnsZoneValidator
@@ -154,6 +155,18 @@ class DnsZoneValidator
                     $server->name,
                 );
             }
+
+            if (in_array($server->pivot->role, ['primary', 'secondary'], true)) {
+                foreach ($this->legacyZoneBlockConflicts($server, $zone) as $block) {
+                    $errors[] = sprintf(
+                        'O servidor %s já tem "%s" declarada fora do include gerenciado, em %s:%s — remova o bloco antigo antes de publicar, ou o apply será recusado pelo named-checkconf.',
+                        $server->name,
+                        $block['name'],
+                        $block['source_file'],
+                        $block['start_line'],
+                    );
+                }
+            }
         }
 
         foreach ($nsRecords as $record) {
@@ -268,5 +281,21 @@ class DnsZoneValidator
     private function domain(string $value): string
     {
         return strtolower(rtrim(trim($value), '.'));
+    }
+
+    /**
+     * @return array<int, array{name: string, source_file: string, start_line: int}>
+     */
+    private function legacyZoneBlockConflicts(DnsServer $server, DnsZone $zone): array
+    {
+        return collect((new DnsBindConfigConflicts)->forServer($server))
+            ->where('zone_id', $zone->id)
+            ->map(fn (array $conflict) => [
+                'name' => $conflict['zone_name'],
+                'source_file' => $conflict['source_file'],
+                'start_line' => $conflict['start_line'],
+            ])
+            ->values()
+            ->all();
     }
 }

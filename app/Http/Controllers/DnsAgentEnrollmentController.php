@@ -8,6 +8,7 @@ use App\Models\DnsAgentInstallRequest;
 use App\Models\DnsBindDiscoveredZone;
 use App\Models\DnsBindOperation;
 use App\Models\DnsServer;
+use App\Services\DnsBindConfigConflicts;
 use App\Support\AgentArtifact;
 use App\Support\SecurityAuditLogger;
 use Illuminate\Http\JsonResponse;
@@ -97,6 +98,7 @@ class DnsAgentEnrollmentController extends Controller
 
         $installedAgentVersion = $agent?->metadata['agent_version'] ?? $server->agent_version;
         $availableAgentVersion = AgentArtifact::availableVersion();
+        $legacyZoneConflicts = (new DnsBindConfigConflicts)->forServer($server);
 
         return view('servers.agent', [
             'server' => $server,
@@ -115,6 +117,7 @@ class DnsAgentEnrollmentController extends Controller
             'discoveredZoneCount' => $discoveryStats['total'],
             'discoveryStats' => $discoveryStats,
             'pendingPublicationCount' => $pendingPublicationCount,
+            'legacyZoneConflicts' => $legacyZoneConflicts,
         ]);
     }
 

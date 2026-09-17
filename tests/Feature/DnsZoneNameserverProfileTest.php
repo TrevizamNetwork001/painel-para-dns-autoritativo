@@ -198,6 +198,53 @@ class DnsZoneNameserverProfileTest extends TestCase
         );
     }
 
+    public function test_validator_flags_legacy_zone_block_conflicting_with_managed_zone(): void
+    {
+        [$organization, $profile] = $this->context();
+
+        $zone = $this->zone($organization);
+        $server = $this->publicationServer(
+            $organization,
+        );
+        $server->forceFill([
+            'bind_readiness' => [
+                'legacy_zone_blocks' => [
+                    'managed_include' => '/etc/bind/dns-center-managed.conf',
+                    'blocks' => [
+                        [
+                            'name' => 'example.com',
+                            'source_file' => '/etc/bind/named.conf.local',
+                            'start_line' => 2,
+                            'end_line' => 6,
+                            'declared_type' => 'master',
+                            'hash' => str_repeat('a', 64),
+                            'snippet' => null,
+                        ],
+                    ],
+                ],
+            ],
+        ])->save();
+
+        $zone->servers()->sync([
+            $server->id => [
+                'role' => 'primary',
+            ],
+        ]);
+
+        app(DnsZoneNameserverSynchronizer::class)
+            ->synchronize($zone, $profile);
+
+        $result = app(DnsZoneValidator::class)
+            ->validate($zone->fresh());
+
+        $this->assertFalse($result['ok']);
+
+        $this->assertContains(
+            'O servidor Servidor de publicação já tem "example.com" declarada fora do include gerenciado, em /etc/bind/named.conf.local:2 — remova o bloco antigo antes de publicar, ou o apply será recusado pelo named-checkconf.',
+            $result['errors'],
+        );
+    }
+
     private function context(
         string $identityDomain = 'provider.example',
     ): array {

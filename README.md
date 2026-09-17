@@ -317,17 +317,23 @@ em produção. As evidências e limitações estão em
 | [Release 1.3.24](docs/RELEASE_1.3.24.md) | Agente 0.8.0 reporta o erro real de named-checkconf/checkzone/rndc, sem mais vir vazio |
 | [Release 1.3.25](docs/RELEASE_1.3.25.md) | Hotfix: sync_zones não descarta mais diagnostics/rolled_back de uma falha de apply |
 | [Release 1.3.26](docs/RELEASE_1.3.26.md) | Agente 0.9.0 detecta blocos de zona legados fora do include gerenciado (Fase 1) |
+| [Release 1.3.27](docs/RELEASE_1.3.27.md) | Cartão "Conflito de configuração" no painel e bloqueio de publicação (Fase 2) |
 
 ## Status do projeto
 
-**v1.3.26 pronta para deploy** (agente 0.9.0 — Fase 1 do plano de
+**v1.3.27 pronta para deploy** (Fase 2 do plano de detecção e
+resolução de conflito de zona legada sem SSH: cartão "Conflito de
+configuração" na tela do servidor mostrando zona, arquivo e linha
+exatos de cada bloco legado que colide com uma zona gerenciada, e
+bloqueio de publicação nomeando a mesma informação — cruza o que o
+agente já reporta desde a v1.3.26 (Fase 1); a remoção com 1 clique
+ainda é Fase 3, pendente); sobre a v1.3.26 (agente 0.9.0 — Fase 1 do plano de
 detecção e resolução de conflito de zona legada sem SSH: o agente
 percorre a cadeia real de includes do BIND, localiza blocos `zone {
 ... };` fora do include gerenciado pelo DNS Center, reporta isso na
 prontidão de rotina (~5 min) e barra o apply na hora, nomeando arquivo
 e linha exatos, se algum desses blocos colidir com uma zona que o
-apply está prestes a escrever — ainda sem cartão dedicado no painel
-nem remoção com 1 clique, que ficam pras Fases 2 e 3); sobre a v1.3.25
+apply está prestes a escrever); sobre a v1.3.25
 (agente 0.8.1 — hotfix pego ao vivo
 minutos depois do deploy da v1.3.24: `apply_staging` já reportava
 `diagnostics`/`rolled_back` certos, mas `sync_zones` relançava um erro
