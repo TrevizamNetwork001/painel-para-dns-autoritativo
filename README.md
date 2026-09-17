@@ -319,10 +319,15 @@ em produção. As evidências e limitações estão em
 | [Release 1.3.26](docs/RELEASE_1.3.26.md) | Agente 0.9.0 detecta blocos de zona legados fora do include gerenciado (Fase 1) |
 | [Release 1.3.27](docs/RELEASE_1.3.27.md) | Cartão "Conflito de configuração" no painel e bloqueio de publicação (Fase 2) |
 | [Release 1.3.28](docs/RELEASE_1.3.28.md) | Agente 0.10.0 remove bloco de zona legado com 1 clique, sem SSH (Fase 3 — fecha o plano) |
+| [Release 1.3.29](docs/RELEASE_1.3.29.md) | Hotfix: sanitizeResult() não descarta mais o resultado de remove_legacy_zone_block |
 
 ## Status do projeto
 
-**v1.3.28 pronta para deploy** (agente 0.10.0 — Fase 3, última do
+**v1.3.29 pronta para deploy** (hotfix pego ao vivo no primeiro uso
+real da Fase 3 em produção: a remoção do bloco legado em dns-primary e
+dns-secondary funcionou de verdade, mas `sanitizeResult()` não conhecia as
+chaves novas dessa ação e descartava o resultado inteiro, salvando um
+array vazio; corrigido); sobre a v1.3.28 (agente 0.10.0 — Fase 3, última do
 plano de detecção e resolução de conflito de zona legada sem SSH:
 botão "Remover declaração antiga" no cartão de conflito, nova
 operação autorizada `remove_legacy_zone_block` com reconfirmação por

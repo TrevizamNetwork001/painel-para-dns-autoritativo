@@ -628,6 +628,10 @@ class DnsBindRuntimeController extends Controller
             return null;
         }
 
+        // source_file/backup_dir intentionally go through the path-preserving
+        // sanitizer, not sanitize() — see sanitizePreservingPath() for why.
+        $pathBearingKeys = ['source_file', 'backup_dir'];
+
         return collect($result)
             ->only([
                 'bind_installed',
@@ -644,12 +648,29 @@ class DnsBindRuntimeController extends Controller
                 'changed',
                 'previous_version',
                 'diagnostics',
+                'removed',
+                'zone_name',
+                'source_file',
+                'start_line',
+                'end_line',
+                'backup_dir',
+                'zonefile_preserved',
             ])
-            ->map(fn ($value, $key) => $key === 'diagnostics'
-                ? $this->sanitizeDiagnostics($value)
-                : (is_bool($value)
-                    ? $value
-                    : (is_string($value) ? $this->sanitize($value) : null)))
+            ->map(function ($value, $key) use ($pathBearingKeys) {
+                if ($key === 'diagnostics') {
+                    return $this->sanitizeDiagnostics($value);
+                }
+
+                if (in_array($key, $pathBearingKeys, true)) {
+                    return $this->sanitizePreservingPath($value);
+                }
+
+                if (is_bool($value) || is_int($value)) {
+                    return $value;
+                }
+
+                return is_string($value) ? $this->sanitize($value) : null;
+            })
             ->all();
     }
 
@@ -669,27 +690,30 @@ class DnsBindRuntimeController extends Controller
 
         return collect($diagnostics)
             ->only(['command', 'returncode', 'stdout', 'stderr'])
-            ->map(function ($value) {
-                if (is_int($value) || is_bool($value)) {
-                    return $value;
-                }
-
-                if (is_string($value)) {
-                    $value = strip_tags($value);
-                    $value = preg_replace('/[\x00-\x1F\x7F]/u', ' ', $value) ?? '';
-                    $value = preg_replace(
-                        '/\b(token|secret|password|authorization|api[_-]?key)\s*[:=]\s*\S+/iu',
-                        '$1=[removido]',
-                        $value,
-                    ) ?? '';
-                    $value = trim(preg_replace('/\s+/u', ' ', $value) ?? '');
-
-                    return $value === '' ? null : Str::limit($value, 4000, '');
-                }
-
-                return null;
-            })
+            ->map(fn ($value) => $this->sanitizePreservingPath($value))
             ->all();
+    }
+
+    private function sanitizePreservingPath(mixed $value): string|int|bool|null
+    {
+        if (is_int($value) || is_bool($value)) {
+            return $value;
+        }
+
+        if (! is_string($value)) {
+            return null;
+        }
+
+        $value = strip_tags($value);
+        $value = preg_replace('/[\x00-\x1F\x7F]/u', ' ', $value) ?? '';
+        $value = preg_replace(
+            '/\b(token|secret|password|authorization|api[_-]?key)\s*[:=]\s*\S+/iu',
+            '$1=[removido]',
+            $value,
+        ) ?? '';
+        $value = trim(preg_replace('/\s+/u', ' ', $value) ?? '');
+
+        return $value === '' ? null : Str::limit($value, 4000, '');
     }
 
     private function audit(

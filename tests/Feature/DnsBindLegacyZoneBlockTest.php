@@ -144,6 +144,62 @@ class DnsBindLegacyZoneBlockTest extends TestCase
             ->assertJsonPath('operation.params.hash', str_repeat('a', 64));
     }
 
+    public function test_successful_report_preserves_result_fields_including_paths(): void
+    {
+        // Real bug caught live in production: sanitizeResult()'s whitelist
+        // never included this action's result keys, so a successful removal
+        // was silently stored as an empty result — the operation showed
+        // "succeeded" but nothing about what was actually removed.
+        $context = $this->context();
+        $this->conflictingZoneAndReadiness($context);
+
+        $this->actingAs($context['admin'])
+            ->postJson(route('servers.bind.legacy-block.remove', $context['server']), $this->blockPayload())
+            ->assertOk();
+
+        $operation = DnsBindOperation::query()->firstOrFail();
+
+        $this->withToken($context['token'])->postJson(
+            route('api.agent.bind.operations.report', $operation),
+            [
+                'event_id' => (string) Str::uuid(),
+                'authorization_nonce' => $operation->getRawOriginal('authorization_nonce'),
+                'status' => 'running',
+            ],
+        )->assertOk();
+
+        $this->withToken($context['token'])->postJson(
+            route('api.agent.bind.operations.report', $operation),
+            [
+                'event_id' => (string) Str::uuid(),
+                'authorization_nonce' => $operation->getRawOriginal('authorization_nonce'),
+                'status' => 'succeeded',
+                'result' => [
+                    'removed' => true,
+                    'zone_name' => 'example.com',
+                    'source_file' => '/etc/bind/named.conf.local',
+                    'start_line' => 2,
+                    'end_line' => 6,
+                    'backup_dir' => '/var/backups/dns-center-agent/20260917-legacy-removal',
+                    'zonefile_preserved' => false,
+                    'unexpected_key' => 'deve ser descartada',
+                ],
+            ],
+        )->assertOk();
+
+        $result = $operation->fresh()->result;
+        $this->assertTrue($result['removed']);
+        $this->assertSame('example.com', $result['zone_name']);
+        $this->assertSame('/etc/bind/named.conf.local', $result['source_file']);
+        $this->assertSame(2, $result['start_line']);
+        $this->assertSame(
+            '/var/backups/dns-center-agent/20260917-legacy-removal',
+            $result['backup_dir'],
+        );
+        $this->assertFalse($result['zonefile_preserved']);
+        $this->assertArrayNotHasKey('unexpected_key', $result);
+    }
+
     private function blockPayload(): array
     {
         return [
