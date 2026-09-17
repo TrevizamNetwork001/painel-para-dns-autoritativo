@@ -12,6 +12,7 @@ use App\Models\DnsTsigKey;
 use App\Models\DnsZone;
 use App\Models\DnsZoneVersion;
 use App\Services\BindZoneRenderer;
+use App\Services\DnsBindConfigConflicts;
 use App\Services\DnsReversePtrSynchronizer;
 use App\Services\DnsZoneNameserverSynchronizer;
 use App\Services\DnsZoneValidator;
@@ -706,6 +707,14 @@ class DnsZoneController extends Controller
                     ->orderBy('name')
                     ->get(['id', 'name'])
                 : collect(),
+            'legacyZoneConflicts' => $zone->servers
+                ->flatMap(fn (DnsServer $server) => collect((new DnsBindConfigConflicts)->forServer($server))
+                    ->where('zone_id', $zone->id)
+                    ->map(fn (array $conflict) => $conflict + [
+                        'server_id' => $server->id,
+                        'server_name' => $server->name,
+                    ]))
+                ->values(),
         ]);
     }
 

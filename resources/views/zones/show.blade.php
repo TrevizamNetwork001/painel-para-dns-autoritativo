@@ -1221,6 +1221,58 @@
                                 </small>
                             </form>
                         @endif
+                    @elseif ($canManageDomain && $legacyZoneConflicts->isNotEmpty())
+                        <div class="domain-validation-warnings" data-legacy-conflict-panel>
+                            <strong>Declaração de zona legada bloqueia a publicação</strong>
+
+                            <p>
+                                {{ $legacyZoneConflicts->count() === 1 ? 'Um servidor tem' : $legacyZoneConflicts->count().' servidores têm' }}
+                                esta zona declarada fora do include gerenciado — o
+                                <code>named-checkconf</code> vai recusar o apply até esses
+                                blocos serem removidos.
+                            </p>
+
+                            <ul class="agent-legacy-conflict-list">
+                                @foreach ($legacyZoneConflicts as $conflict)
+                                    <li>
+                                        <strong>{{ $conflict['server_name'] }}</strong>
+                                        <span class="agent-technical-value">{{ $conflict['source_file'] }}:{{ $conflict['start_line'] }}@if ($conflict['end_line'] > $conflict['start_line'])–{{ $conflict['end_line'] }}@endif</span>
+                                        @if ($conflict['snippet'])<pre class="apply-zones-diagnostics">{{ $conflict['snippet'] }}</pre>@endif
+                                    </li>
+                                @endforeach
+                            </ul>
+                        </div>
+
+                        <div class="domain-publication-action">
+                            <button
+                                type="button"
+                                class="button button-primary"
+                                data-legacy-resolve-publish
+                                data-legacy-resolve-publish-url="{{ route('zones.publish', $zone) }}"
+                                data-legacy-resolve-csrf="{{ csrf_token() }}"
+                                data-legacy-resolve-conflicts="{{ $legacyZoneConflicts->map(fn ($conflict) => [
+                                    'store_url' => route('servers.bind.legacy-block.remove', $conflict['server_id']),
+                                    'status_url_template' => route('servers.bind.legacy-block.status', [$conflict['server_id'], 'OPERATION_ID']),
+                                    'server_name' => $conflict['server_name'],
+                                    'source_file' => $conflict['source_file'],
+                                    'start_line' => $conflict['start_line'],
+                                    'end_line' => $conflict['end_line'],
+                                    'hash' => $conflict['hash'],
+                                    'zone_name' => $conflict['zone_name'],
+                                ])->toJson(JSON_UNESCAPED_SLASHES) }}"
+                                @disabled(! $validationOk)
+                            >
+                                Remover declarações antigas e publicar
+                            </button>
+
+                            <small data-legacy-resolve-status>
+                                Remove os blocos legados listados acima (com
+                                verificação de que ainda são os mesmos
+                                detectados) e, assim que todos forem
+                                confirmados, publica esta versão. Nenhum
+                                comando é enviado a mais nenhum servidor.
+                            </small>
+                        </div>
                     @elseif ($canManageDomain)
                         <div class="domain-publication-action">
                             <button
@@ -2865,5 +2917,110 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 </script>
 {{-- DNS-CENTER-FLASH-TOAST-END --}}
+
+<script nonce="{{ $cspNonce ?? '' }}">
+document.addEventListener('DOMContentLoaded', () => {
+    const button = document.querySelector('[data-legacy-resolve-publish]');
+    const statusText = document.querySelector('[data-legacy-resolve-status]');
+    if (!button || !statusText) return;
+
+    const defaultStatusText = statusText.textContent;
+    let conflicts;
+
+    try {
+        conflicts = JSON.parse(button.dataset.legacyResolveConflicts || '[]');
+    } catch (error) {
+        conflicts = [];
+    }
+
+    const poll = (statusUrl) => new Promise((resolve, reject) => {
+        const attempt = async () => {
+            let payload;
+
+            try {
+                const response = await fetch(statusUrl, { headers: { Accept: 'application/json' } });
+                payload = await response.json();
+            } catch (error) {
+                window.setTimeout(attempt, 4000);
+                return;
+            }
+
+            if (payload.status === 'succeeded') return resolve();
+            if (payload.status === 'failed' || payload.status === 'expired') {
+                return reject(payload.error || 'O agente não conseguiu remover a declaração antiga.');
+            }
+
+            window.setTimeout(attempt, 4000);
+        };
+
+        attempt();
+    });
+
+    const removeOne = async (conflict) => {
+        const response = await fetch(conflict.store_url, {
+            method: 'POST',
+            headers: {
+                Accept: 'application/json',
+                'Content-Type': 'application/json',
+                'X-CSRF-TOKEN': button.dataset.legacyResolveCsrf,
+            },
+            body: JSON.stringify({
+                source_file: conflict.source_file,
+                start_line: conflict.start_line,
+                end_line: conflict.end_line,
+                hash: conflict.hash,
+                zone_name: conflict.zone_name,
+            }),
+        });
+
+        const payload = await response.json().catch(() => ({}));
+
+        if (!response.ok) {
+            throw new Error(payload.message || 'Não foi possível solicitar a remoção.');
+        }
+
+        const statusUrl = conflict.status_url_template.replace('OPERATION_ID', payload.operation_id);
+        await poll(statusUrl);
+    };
+
+    const submitPublish = () => {
+        const form = document.createElement('form');
+        form.method = 'POST';
+        form.action = button.dataset.legacyResolvePublishUrl;
+        form.style.display = 'none';
+
+        const token = document.createElement('input');
+        token.type = 'hidden';
+        token.name = '_token';
+        token.value = button.dataset.legacyResolveCsrf;
+        form.appendChild(token);
+
+        document.body.appendChild(form);
+        form.submit();
+    };
+
+    button.addEventListener('click', async () => {
+        if (button.disabled || conflicts.length === 0) return;
+
+        button.disabled = true;
+
+        for (let index = 0; index < conflicts.length; index++) {
+            const conflict = conflicts[index];
+            statusText.textContent = `Removendo declaração antiga em ${conflict.server_name} (${index + 1}/${conflicts.length})…`;
+
+            try {
+                await removeOne(conflict);
+            } catch (error) {
+                statusText.textContent = `Falha em ${conflict.server_name}: ${error.message || error}. Nada foi publicado.`;
+                button.disabled = false;
+                return;
+            }
+        }
+
+        statusText.textContent = 'Declarações antigas removidas. Publicando…';
+        submitPublish();
+    });
+});
+</script>
 
 @endsection

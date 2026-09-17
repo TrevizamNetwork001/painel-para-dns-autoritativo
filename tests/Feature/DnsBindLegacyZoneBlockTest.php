@@ -200,6 +200,55 @@ class DnsBindLegacyZoneBlockTest extends TestCase
         $this->assertArrayNotHasKey('unexpected_key', $result);
     }
 
+    public function test_zone_page_shows_conflict_panel_and_combined_action_data(): void
+    {
+        $context = $this->context();
+        $this->conflictingZoneAndReadiness($context);
+        $zone = DnsZone::query()->where('name', 'example.com')->sole();
+
+        $response = $this->actingAs($context['admin'])
+            ->get(route('zones.show', $zone))
+            ->assertOk()
+            ->assertSee('Declaração de zona legada bloqueia a publicação')
+            ->assertSee($context['server']->name)
+            ->assertSee('/etc/bind/named.conf.local:2')
+            ->assertSee('Remover declarações antigas e publicar');
+
+        $response->assertSee(route('servers.bind.legacy-block.remove', $context['server']), false);
+    }
+
+    public function test_zone_page_shows_normal_publish_actions_without_conflict(): void
+    {
+        $context = $this->context();
+        $zone = DnsZone::query()->create($this->zoneAttributes($context['organization']));
+        $zone->servers()->sync([$context['server']->id => ['role' => 'primary']]);
+
+        $this->actingAs($context['admin'])
+            ->get(route('zones.show', $zone))
+            ->assertOk()
+            ->assertSee('Publicar e sincronizar')
+            ->assertSee('Só publicar')
+            ->assertDontSee('Declaração de zona legada bloqueia a publicação');
+    }
+
+    public function test_conflict_on_a_different_zone_does_not_leak_into_this_zone_page(): void
+    {
+        $context = $this->context();
+        $this->conflictingZoneAndReadiness($context);
+
+        $otherZone = DnsZone::query()->create(array_merge(
+            $this->zoneAttributes($context['organization']),
+            ['name' => 'outra-zona.example'],
+        ));
+        $otherZone->servers()->sync([$context['server']->id => ['role' => 'primary']]);
+
+        $this->actingAs($context['admin'])
+            ->get(route('zones.show', $otherZone))
+            ->assertOk()
+            ->assertDontSee('Declaração de zona legada bloqueia a publicação')
+            ->assertSee('Publicar e sincronizar');
+    }
+
     private function blockPayload(): array
     {
         return [
