@@ -24,6 +24,7 @@ class DnsBindConfigConflicts
      *     end_line: int,
      *     declared_type: string|null,
      *     snippet: string|null,
+     *     hash: string,
      * }>
      */
     public function forServer(DnsServer $server): array
@@ -64,6 +65,7 @@ class DnsBindConfigConflicts
                 'end_line' => (int) ($block['end_line'] ?? 0),
                 'declared_type' => $block['declared_type'] ?? null,
                 'snippet' => $block['snippet'] ?? null,
+                'hash' => (string) ($block['hash'] ?? ''),
             ];
         }
 

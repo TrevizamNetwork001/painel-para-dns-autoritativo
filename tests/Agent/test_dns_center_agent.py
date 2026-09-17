@@ -303,6 +303,276 @@ class AgentTests(unittest.TestCase):
         self.assertEqual(1, len(conflicts))
         self.assertEqual("example.com", conflicts[0]["name"])
 
+    def test_remove_legacy_zone_block_secondary_does_not_preserve_zonefile(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            config = self.config(directory)
+            named_conf = root / "named.conf"
+            config["named_conf"] = str(named_conf)
+            local_conf = root / "named.conf.local"
+            local_conf.write_text(
+                'zone "example.com" {\n'
+                "    type slave;\n"
+                '    masters { 192.0.2.1 key "tsig"; };\n'
+                "};\n"
+                'zone "kept.test" {\n'
+                "    type slave;\n"
+                "};\n",
+                encoding="utf-8",
+            )
+            named_conf.write_text(
+                f'include "{local_conf}";\n',
+                encoding="utf-8",
+            )
+            block = agent.find_zone_blocks(
+                local_conf.read_text(encoding="utf-8"),
+            )[0]
+
+            params = {
+                "source_file": str(local_conf),
+                "start_line": block["start_line"],
+                "end_line": block["end_line"],
+                "hash": block["hash"],
+                "zone_name": "example.com",
+            }
+
+            with patch.object(
+                agent, "config_paths", return_value={
+                    "named_conf": named_conf,
+                    "managed_include": Path(config["managed_include"]),
+                    "backup_dir": Path(config["backup_dir"]),
+                },
+            ), patch.object(
+                agent, "run_command",
+                return_value=Mock(returncode=0, stdout="", stderr=""),
+            ), patch.object(agent.os, "geteuid", return_value=0):
+                result = agent.remove_legacy_zone_block(config, params)
+
+            self.assertTrue(result["removed"])
+            self.assertFalse(result["zonefile_preserved"])
+
+            remaining = local_conf.read_text(encoding="utf-8")
+            self.assertNotIn("example.com", remaining)
+            self.assertIn("kept.test", remaining)
+
+            backup_dir = Path(result["backup_dir"])
+            self.assertTrue((backup_dir / "named.conf.local").is_file())
+            self.assertIn(
+                "example.com",
+                (backup_dir / "named.conf.local").read_text(
+                    encoding="utf-8",
+                ),
+            )
+
+    def test_remove_legacy_zone_block_primary_preserves_real_zonefile(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            config = self.config(directory)
+            named_conf = root / "named.conf"
+            config["named_conf"] = str(named_conf)
+            local_conf = root / "named.conf.local"
+            zonefile = root / "example.com.hosts"
+            zonefile.write_text("$ORIGIN example.com.\n", encoding="utf-8")
+            local_conf.write_text(
+                'zone "example.com" {\n'
+                "    type master;\n"
+                f'    file "{zonefile}";\n'
+                "};\n",
+                encoding="utf-8",
+            )
+            named_conf.write_text(
+                f'include "{local_conf}";\n',
+                encoding="utf-8",
+            )
+            block = agent.find_zone_blocks(
+                local_conf.read_text(encoding="utf-8"),
+            )[0]
+
+            params = {
+                "source_file": str(local_conf),
+                "start_line": block["start_line"],
+                "end_line": block["end_line"],
+                "hash": block["hash"],
+                "zone_name": "example.com",
+            }
+
+            with patch.object(
+                agent, "config_paths", return_value={
+                    "named_conf": named_conf,
+                    "managed_include": Path(config["managed_include"]),
+                    "backup_dir": Path(config["backup_dir"]),
+                },
+            ), patch.object(
+                agent, "run_command",
+                return_value=Mock(returncode=0, stdout="", stderr=""),
+            ), patch.object(agent.os, "geteuid", return_value=0):
+                result = agent.remove_legacy_zone_block(config, params)
+
+            self.assertTrue(result["zonefile_preserved"])
+            backup_dir = Path(result["backup_dir"])
+            self.assertTrue(
+                (backup_dir / ("zonefile-" + zonefile.name)).is_file(),
+            )
+
+    def test_remove_legacy_zone_block_rejects_hash_mismatch(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            config = self.config(directory)
+            named_conf = root / "named.conf"
+            local_conf = root / "named.conf.local"
+            local_conf.write_text(
+                'zone "example.com" {\n    type slave;\n};\n',
+                encoding="utf-8",
+            )
+
+            params = {
+                "source_file": str(local_conf),
+                "start_line": 1,
+                "end_line": 3,
+                "hash": "0" * 64,
+                "zone_name": "example.com",
+            }
+
+            with patch.object(
+                agent, "config_paths", return_value={
+                    "named_conf": named_conf,
+                    "managed_include": Path(config["managed_include"]),
+                    "backup_dir": Path(config["backup_dir"]),
+                },
+            ), patch.object(agent.os, "geteuid", return_value=0):
+                with self.assertRaises(agent.AgentError) as raised:
+                    agent.remove_legacy_zone_block(config, params)
+
+            self.assertIn("mudou desde a detecção", str(raised.exception))
+            self.assertEqual(
+                'zone "example.com" {\n    type slave;\n};\n',
+                local_conf.read_text(encoding="utf-8"),
+            )
+
+    def test_remove_legacy_zone_block_rejects_missing_block(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            config = self.config(directory)
+            named_conf = root / "named.conf"
+            local_conf = root / "named.conf.local"
+            local_conf.write_text(
+                'zone "example.com" {\n    type slave;\n};\n',
+                encoding="utf-8",
+            )
+
+            params = {
+                "source_file": str(local_conf),
+                "start_line": 99,
+                "end_line": 101,
+                "hash": "0" * 64,
+                "zone_name": "example.com",
+            }
+
+            with patch.object(
+                agent, "config_paths", return_value={
+                    "named_conf": named_conf,
+                    "managed_include": Path(config["managed_include"]),
+                    "backup_dir": Path(config["backup_dir"]),
+                },
+            ), patch.object(agent.os, "geteuid", return_value=0):
+                with self.assertRaises(agent.AgentError) as raised:
+                    agent.remove_legacy_zone_block(config, params)
+
+            self.assertIn("não encontrado", str(raised.exception))
+
+    def test_remove_legacy_zone_block_rolls_back_on_checkconf_failure(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            config = self.config(directory)
+            named_conf = root / "named.conf"
+            config["named_conf"] = str(named_conf)
+            local_conf = root / "named.conf.local"
+            original = 'zone "example.com" {\n    type slave;\n};\n'
+            local_conf.write_text(original, encoding="utf-8")
+            named_conf.write_text(
+                f'include "{local_conf}";\n',
+                encoding="utf-8",
+            )
+            block = agent.find_zone_blocks(original)[0]
+
+            params = {
+                "source_file": str(local_conf),
+                "start_line": block["start_line"],
+                "end_line": block["end_line"],
+                "hash": block["hash"],
+                "zone_name": "example.com",
+            }
+
+            with patch.object(
+                agent, "config_paths", return_value={
+                    "named_conf": named_conf,
+                    "managed_include": Path(config["managed_include"]),
+                    "backup_dir": Path(config["backup_dir"]),
+                },
+            ), patch.object(
+                agent, "run_command",
+                return_value=Mock(
+                    returncode=1, stdout="",
+                    stderr="named.conf:1: syntax error",
+                ),
+            ), patch.object(agent.os, "geteuid", return_value=0):
+                with self.assertRaises(
+                    agent.AgentOperationError,
+                ) as raised:
+                    agent.remove_legacy_zone_block(config, params)
+
+            self.assertTrue(raised.exception.rolled_back)
+            self.assertEqual(
+                "named-checkconf",
+                raised.exception.diagnostics["command"],
+            )
+            self.assertEqual(
+                original,
+                local_conf.read_text(encoding="utf-8"),
+            )
+
+    def test_remove_legacy_zone_block_requires_root(self) -> None:
+        config = self.config("/tmp")
+
+        with patch.object(agent.os, "geteuid", return_value=1000):
+            with self.assertRaises(agent.AgentError):
+                agent.remove_legacy_zone_block(config, {})
+
+    def test_remove_legacy_zone_block_refuses_managed_include_as_source(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            config = self.config(directory)
+            managed_include = Path(config["managed_include"])
+            managed_include.parent.mkdir(parents=True, exist_ok=True)
+            managed_include.write_text("", encoding="utf-8")
+
+            params = {
+                "source_file": str(managed_include),
+                "start_line": 1,
+                "end_line": 1,
+                "hash": "0" * 64,
+                "zone_name": "example.com",
+            }
+
+            with patch.object(
+                agent, "config_paths", return_value={
+                    "named_conf": Path(directory) / "named.conf",
+                    "managed_include": managed_include,
+                    "backup_dir": Path(config["backup_dir"]),
+                },
+            ), patch.object(agent.os, "geteuid", return_value=0):
+                with self.assertRaises(agent.AgentError) as raised:
+                    agent.remove_legacy_zone_block(config, params)
+
+            self.assertIn("include gerenciado", str(raised.exception))
+
     def test_parse_rndc_zonestatus_normalizes_runtime_values(self) -> None:
         facts = agent.parse_rndc_zonestatus(
             "\n".join(
@@ -1730,6 +2000,65 @@ class AgentTests(unittest.TestCase):
             result = agent.run_authorized_operation(config)
 
         self.assertEqual("succeeded", result["status"])
+
+    def test_run_authorized_operation_dispatches_remove_legacy_zone_block(
+        self,
+    ) -> None:
+        config = {
+            "base_url": "https://panel.test", "token": "t",
+            "server": {"name": "ns1"},
+        }
+        params = {
+            "source_file": "/etc/bind/named.conf.local",
+            "start_line": 2, "end_line": 6,
+            "hash": "a" * 64, "zone_name": "example.com",
+        }
+
+        with patch.object(
+            agent, "request_json",
+            return_value={"operation": {
+                "id": 12, "action": "remove_legacy_zone_block",
+                "authorization_nonce": "nonce", "authorized_at": None,
+                "params": params,
+            }},
+        ), patch.object(
+            agent, "remove_legacy_zone_block",
+            return_value={"removed": True},
+        ) as removal, patch.object(
+            agent, "send_readiness",
+        ):
+            result = agent.run_authorized_operation(config)
+
+        removal.assert_called_once_with(config, params)
+        self.assertEqual("succeeded", result["status"])
+
+    def test_run_authorized_operation_rejects_missing_removal_params(
+        self,
+    ) -> None:
+        config = {
+            "base_url": "https://panel.test", "token": "t",
+            "server": {"name": "ns1"},
+        }
+
+        with patch.object(
+            agent, "request_json",
+            return_value={"operation": {
+                "id": 13, "action": "remove_legacy_zone_block",
+                "authorization_nonce": "nonce", "authorized_at": None,
+                "params": None,
+            }},
+        ), patch.object(
+            agent, "report_operation",
+            return_value={"status": "running"},
+        ) as report:
+            with self.assertRaises(agent.AgentError):
+                agent.run_authorized_operation(config)
+
+        failed_calls = [
+            call for call in report.call_args_list
+            if call.args[2:3] == ("failed",) or call.kwargs.get("status") == "failed"
+        ]
+        self.assertTrue(failed_calls)
 
     def test_command_execution_disables_shell_and_has_timeout(self) -> None:
         completed = Mock(returncode=0, stdout="ok", stderr="")

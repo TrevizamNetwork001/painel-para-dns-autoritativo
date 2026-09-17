@@ -75,10 +75,26 @@
                     <span class="agent-technical-value">{{ $conflict['source_file'] }}:{{ $conflict['start_line'] }}@if ($conflict['end_line'] > $conflict['start_line'])–{{ $conflict['end_line'] }}@endif</span>
                     @if ($conflict['declared_type'])<span class="status-badge status-neutral">type {{ $conflict['declared_type'] }}</span>@endif
                     @if ($conflict['snippet'])<pre class="apply-zones-diagnostics">{{ $conflict['snippet'] }}</pre>@endif
+                    <button
+                        type="button"
+                        class="button button-secondary"
+                        data-legacy-block-open
+                        data-legacy-block-zone-name="{{ $conflict['zone_name'] }}"
+                        data-legacy-block-source-file="{{ $conflict['source_file'] }}"
+                        data-legacy-block-start-line="{{ $conflict['start_line'] }}"
+                        data-legacy-block-end-line="{{ $conflict['end_line'] }}"
+                        data-legacy-block-hash="{{ $conflict['hash'] ?? '' }}"
+                        data-legacy-block-snippet="{{ $conflict['snippet'] }}"
+                        data-legacy-block-store-url="{{ route('servers.bind.legacy-block.remove', $server) }}"
+                        data-legacy-block-status-url-template="{{ route('servers.bind.legacy-block.status', [$server, 'OPERATION_ID']) }}"
+                        data-legacy-block-csrf="{{ csrf_token() }}"
+                    >
+                        Remover declaração antiga
+                    </button>
                 </li>
             @endforeach
         </ul>
-        <p class="agent-empty-message">Remoção com um clique ainda não disponível nesta versão — remova o bloco manualmente no servidor e execute uma nova descoberta ou aguarde a próxima verificação de prontidão (~5 min) pra confirmar.</p>
+        <p class="agent-empty-message">A remoção não aplica a zona automaticamente — depois de remover, use "Aplicar agora" na tela da zona como um passo separado.</p>
     </section>
 @endif
 

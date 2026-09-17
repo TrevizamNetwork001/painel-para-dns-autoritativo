@@ -8,6 +8,7 @@ use App\Http\Controllers\DnsAgentInstallAssignmentController;
 use App\Http\Controllers\DnsAuditLogController;
 use App\Http\Controllers\DnsBindApplyController;
 use App\Http\Controllers\DnsBindDiscoveryController;
+use App\Http\Controllers\DnsBindLegacyZoneBlockController;
 use App\Http\Controllers\DnsNameserverController;
 use App\Http\Controllers\DnsServerController;
 use App\Http\Controllers\DnsServerTransferController;
@@ -330,6 +331,16 @@ Route::middleware([
         '/servidores/{server}/bind/aplicar-zonas/status',
         [DnsBindApplyController::class, 'status'],
     )->name('servers.bind.apply.status');
+
+    Route::post(
+        '/servidores/{server}/bind/remover-bloco-legado',
+        [DnsBindLegacyZoneBlockController::class, 'store'],
+    )->middleware('throttle:5,1')->name('servers.bind.legacy-block.remove');
+
+    Route::get(
+        '/servidores/{server}/bind/remover-bloco-legado/{operation}/status',
+        [DnsBindLegacyZoneBlockController::class, 'status'],
+    )->name('servers.bind.legacy-block.status');
 });
 
 Route::middleware([

@@ -433,6 +433,28 @@
         </footer>
     </x-async-operation-modal>
 
+    <div class="record-modal-backdrop" data-legacy-block-modal aria-hidden="true">
+        <section class="record-modal" role="dialog" aria-modal="true" aria-labelledby="legacy-block-modal-title">
+            <header class="record-modal-header">
+                <div>
+                    <p class="eyebrow">Conflito de configuração</p>
+                    <h2 id="legacy-block-modal-title">Remover declaração de <span data-legacy-block-zone-label></span></h2>
+                    <p>Isso remove só o bloco de declaração antigo do arquivo — não altera nem aplica a zona. Use "Aplicar agora" na tela da zona depois, como um passo separado.</p>
+                </div>
+                <button type="button" class="record-modal-close" data-legacy-block-close aria-label="Fechar">×</button>
+            </header>
+            <div class="domain-publication-action" style="padding: 1.2rem;">
+                <p data-legacy-block-location class="agent-technical-value"></p>
+                <pre class="apply-zones-diagnostics" data-legacy-block-snippet-preview></pre>
+                <p data-legacy-block-state></p>
+                <div data-legacy-block-confirm-actions>
+                    <button type="button" class="button button-secondary" data-legacy-block-close>Cancelar</button>
+                    <button type="button" class="button button-primary" data-legacy-block-confirm>Confirmar remoção</button>
+                </div>
+            </div>
+        </section>
+    </div>
+
     <script nonce="{{ $cspNonce ?? '' }}">
         (() => {
             const watcher = document.querySelector('[data-agent-install-request-watcher]');
@@ -1057,6 +1079,149 @@
             document.addEventListener('visibilitychange', () => {
                 if (!document.hidden && button.dataset.agentUpgradeActive === 'true') poll();
             });
+            document.addEventListener('keydown', (event) => {
+                if (event.key === 'Escape' && modal.classList.contains('is-open')) close();
+            });
+        })();
+
+        (() => {
+            const modal = document.querySelector('[data-legacy-block-modal]');
+            const zoneLabel = document.querySelector('[data-legacy-block-zone-label]');
+            const location = document.querySelector('[data-legacy-block-location]');
+            const snippetPreview = document.querySelector('[data-legacy-block-snippet-preview]');
+            const stateText = document.querySelector('[data-legacy-block-state]');
+            const confirmActions = document.querySelector('[data-legacy-block-confirm-actions]');
+            const confirmButton = document.querySelector('[data-legacy-block-confirm]');
+
+            if (!modal || !zoneLabel || !location || !stateText || !confirmActions || !confirmButton) return;
+
+            let activeButton = null;
+            let pollTimer = null;
+
+            const open = () => {
+                modal.classList.add('is-open');
+                modal.setAttribute('aria-hidden', 'false');
+                document.body.classList.add('has-open-modal');
+            };
+
+            const close = () => {
+                window.clearTimeout(pollTimer);
+                pollTimer = null;
+                modal.classList.remove('is-open');
+                modal.setAttribute('aria-hidden', 'true');
+                document.body.classList.remove('has-open-modal');
+            };
+
+            const confirming = () => {
+                stateText.textContent = 'Confirma remover esta declaração antiga?';
+                confirmActions.hidden = false;
+                confirmButton.disabled = false;
+                modal.querySelectorAll('.apply-zones-diagnostics[data-legacy-block-error]').forEach((el) => el.remove());
+            };
+
+            const waiting = () => {
+                stateText.textContent = 'Solicitação enviada. Aguardando o agente pegar a operação (até ~30s)…';
+                confirmActions.hidden = true;
+            };
+
+            const succeeded = () => {
+                stateText.textContent = 'Bloco removido. A página vai atualizar.';
+                confirmActions.hidden = true;
+                window.setTimeout(() => window.location.reload(), 1200);
+            };
+
+            const failed = (message, diagnostics) => {
+                stateText.textContent = message || 'Falha ao remover.';
+                confirmActions.hidden = true;
+
+                const detail = diagnostics?.stderr || diagnostics?.stdout;
+
+                if (diagnostics?.command && detail) {
+                    const pre = document.createElement('pre');
+                    pre.className = 'apply-zones-diagnostics';
+                    pre.dataset.legacyBlockError = 'true';
+                    pre.textContent = `${diagnostics.command}:\n${detail}`;
+                    stateText.insertAdjacentElement('afterend', pre);
+                }
+            };
+
+            const poll = async (statusUrl) => {
+                let payload;
+
+                try {
+                    const response = await fetch(statusUrl, { headers: { Accept: 'application/json' } });
+                    payload = await response.json();
+                } catch (error) {
+                    pollTimer = window.setTimeout(() => poll(statusUrl), 4000);
+                    return;
+                }
+
+                if (payload.status === 'succeeded') return succeeded();
+                if (payload.status === 'failed' || payload.status === 'expired') return failed(payload.error, payload.result?.diagnostics);
+
+                pollTimer = window.setTimeout(() => poll(statusUrl), 4000);
+            };
+
+            confirmButton.addEventListener('click', async () => {
+                if (!activeButton) return;
+
+                confirmButton.disabled = true;
+                waiting();
+
+                const data = activeButton.dataset;
+                const storeUrl = data.legacyBlockStoreUrl;
+
+                try {
+                    const response = await fetch(storeUrl, {
+                        method: 'POST',
+                        headers: {
+                            Accept: 'application/json',
+                            'Content-Type': 'application/json',
+                            'X-CSRF-TOKEN': data.legacyBlockCsrf,
+                        },
+                        body: JSON.stringify({
+                            source_file: data.legacyBlockSourceFile,
+                            start_line: Number(data.legacyBlockStartLine),
+                            end_line: Number(data.legacyBlockEndLine),
+                            hash: data.legacyBlockHash,
+                            zone_name: data.legacyBlockZoneName,
+                        }),
+                    });
+
+                    const payload = await response.json().catch(() => ({}));
+
+                    if (!response.ok) {
+                        return failed(payload.message);
+                    }
+
+                    const statusUrl = data.legacyBlockStatusUrlTemplate.replace('OPERATION_ID', payload.operation_id);
+                    poll(statusUrl);
+                } catch (error) {
+                    return failed('Não foi possível conectar ao painel.');
+                }
+            });
+
+            document.querySelectorAll('[data-legacy-block-open]').forEach((button) => {
+                button.addEventListener('click', () => {
+                    activeButton = button;
+                    const data = button.dataset;
+                    zoneLabel.textContent = data.legacyBlockZoneName || '';
+                    location.textContent = `${data.legacyBlockSourceFile}:${data.legacyBlockStartLine}`;
+                    snippetPreview.textContent = data.legacyBlockSnippet || '';
+                    snippetPreview.hidden = !data.legacyBlockSnippet;
+                    confirming();
+                    open();
+                });
+            });
+
+            document.querySelectorAll('[data-legacy-block-close]').forEach((button) => {
+                button.addEventListener('click', close);
+            });
+
+            modal.addEventListener('click', (event) => {
+                if (event.target === modal) close();
+            });
+
             document.addEventListener('keydown', (event) => {
                 if (event.key === 'Escape' && modal.classList.contains('is-open')) close();
             });

@@ -35,7 +35,7 @@ from email.utils import parsedate_to_datetime
 from pathlib import Path
 from typing import Any
 
-AGENT_VERSION = "0.9.0"
+AGENT_VERSION = "0.10.0"
 OFFICIAL_BASE_URL = "https://dnscenter.trevizamnetwork.com.br"
 DEFAULT_CONFIG = Path("/etc/dns-center-agent/agent.json")
 DEFAULT_STATE_DIR = Path("/var/lib/dns-center-agent")
@@ -850,6 +850,8 @@ def find_zone_blocks(text: str) -> list[dict[str, Any]]:
             "name": name,
             "start_line": text.count("\n", 0, match.start()) + 1,
             "end_line": text.count("\n", 0, tail) + 1,
+            "start_offset": match.start(),
+            "end_offset": tail,
             "declared_type": type_match.group(1) if type_match else None,
             "hash": hashlib.sha256(raw.encode("utf-8")).hexdigest(),
             "snippet": raw[:2000],
@@ -909,6 +911,155 @@ def legacy_zone_conflicts(
         if str(block["name"]).strip().lower().rstrip(".")
         in managed_names
     ]
+
+
+def remove_legacy_zone_block(
+    config: dict[str, Any],
+    params: dict[str, Any],
+) -> dict[str, Any]:
+    """Remove one legacy static zone block, identified by the panel,
+    from its source config file — without ever touching apply/rndc.
+
+    Deliberately does not reuse backup_current()/restore_backup(): those
+    are hardcoded to the fixed set of DNS-Center-managed files and would
+    delete an unrecognized raw path like named.conf.local on rollback.
+    This builds its own generic, single-file backup instead.
+    """
+    if os.geteuid() != 0:
+        raise AgentError("Remoção exige execução como root.")
+
+    source_file = params.get("source_file")
+    expected_start_line = params.get("start_line")
+    expected_end_line = params.get("end_line")
+    expected_hash = params.get("hash")
+    zone_name = params.get("zone_name")
+
+    if not all([
+        isinstance(source_file, str),
+        isinstance(expected_start_line, int),
+        isinstance(expected_end_line, int),
+        isinstance(expected_hash, str),
+        isinstance(zone_name, str),
+    ]):
+        raise AgentError("Parâmetros de remoção inválidos ou incompletos.")
+
+    path = Path(source_file)
+
+    if not path.is_absolute():
+        raise AgentError("Caminho de origem deve ser absoluto.")
+
+    paths = config_paths(config)
+
+    if path == paths["managed_include"]:
+        raise AgentError(
+            "Recusado: o caminho de origem é o include gerenciado pelo "
+            "DNS Center, não um bloco legado."
+        )
+
+    reject_symlink(path)
+
+    if not path.is_file():
+        raise AgentError(f"Arquivo de origem não encontrado: {source_file}")
+
+    original_text = path.read_text(encoding="utf-8")
+    original_mode = stat.S_IMODE(path.stat().st_mode)
+
+    current_block = next(
+        (
+            block
+            for block in find_zone_blocks(original_text)
+            if block["start_line"] == expected_start_line
+            and block["end_line"] == expected_end_line
+        ),
+        None,
+    )
+
+    if current_block is None:
+        raise AgentError(
+            "Bloco não encontrado nessa posição — a configuração pode "
+            "ter mudado desde a última verificação. Aguarde a próxima "
+            "verificação de prontidão e tente novamente."
+        )
+
+    if current_block["hash"] != expected_hash:
+        raise AgentError(
+            "O bloco mudou desde a detecção — aguarde a próxima "
+            "verificação de prontidão e tente novamente."
+        )
+
+    reject_symlink(paths["backup_dir"])
+    backup_dir = paths["backup_dir"] / datetime.now().strftime(
+        "%Y%m%d-%H%M%S-legacy-removal"
+    )
+    backup_dir.mkdir(parents=True, exist_ok=True)
+    reject_symlink(backup_dir)
+    backup_file = backup_dir / path.name
+    shutil.copy2(path, backup_file)
+
+    zonefile_preserved = False
+
+    if current_block["declared_type"] == "master":
+        block_text = original_text[
+            current_block["start_offset"]:current_block["end_offset"]
+        ]
+        zonefile_match = re.search(r'file\s+"([^"]+)"\s*;', block_text)
+
+        if zonefile_match:
+            zonefile_path = Path(zonefile_match.group(1))
+
+            if (
+                zonefile_path.is_file()
+                and not zonefile_path.is_symlink()
+            ):
+                shutil.copy2(
+                    zonefile_path,
+                    backup_dir / ("zonefile-" + zonefile_path.name),
+                )
+                zonefile_preserved = True
+
+    new_text = (
+        original_text[:current_block["start_offset"]]
+        + original_text[current_block["end_offset"]:]
+    )
+
+    atomic_write(path, new_text, original_mode)
+
+    named_checkconf = command_path(
+        config,
+        "named_checkconf",
+        detected_binary(NAMED_CHECKCONF_CANDIDATES)
+        or NAMED_CHECKCONF_CANDIDATES[0],
+    )
+    result = run_command([named_checkconf, str(paths["named_conf"])])
+
+    if result.returncode != 0:
+        shutil.copy2(backup_file, path)
+        detail = (
+            result.stderr.strip()
+            or result.stdout.strip()
+            or f"named-checkconf saiu com código {result.returncode} sem saída"
+        )
+        raise AgentOperationError(
+            f"Remoção revertida: named-checkconf rejeitou a configuração "
+            f"resultante: {detail}",
+            rolled_back=True,
+            diagnostics={
+                "command": "named-checkconf",
+                "returncode": result.returncode,
+                "stdout": result.stdout.strip(),
+                "stderr": result.stderr.strip(),
+            },
+        )
+
+    return {
+        "removed": True,
+        "zone_name": zone_name,
+        "source_file": str(path),
+        "start_line": expected_start_line,
+        "end_line": expected_end_line,
+        "backup_dir": str(backup_dir),
+        "zonefile_preserved": zonefile_preserved,
+    }
 
 
 def include_wired_report(config: dict[str, Any]) -> dict[str, Any]:
@@ -2551,7 +2702,7 @@ def run_authorized_operation(
 
     if action not in {
         "install_bind", "configure_bind", "discover_bind_zones", "upgrade_agent",
-        "apply_zones",
+        "apply_zones", "remove_legacy_zone_block",
     }:
         # Tell the panel immediately instead of leaving the operation stuck
         # in "authorized" until its TTL sweep expires it — an older agent
@@ -2583,6 +2734,11 @@ def run_authorized_operation(
                 config, apply=True,
                 confirmation=f"APLICAR ZONAS {server_name}".strip(),
             )
+        elif action == "remove_legacy_zone_block":
+            params = operation.get("params")
+            if not isinstance(params, dict):
+                raise AgentError("Parâmetros de remoção ausentes.")
+            result = remove_legacy_zone_block(config, params)
         else:
             result = configure_bind(str(action))
     except AgentError as exception:

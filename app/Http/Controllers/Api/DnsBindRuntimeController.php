@@ -184,6 +184,7 @@ class DnsBindRuntimeController extends Controller
                 'action' => $operation->action,
                 'authorization_nonce' => $operation->getRawOriginal('authorization_nonce'),
                 'authorized_at' => $operation->authorized_at?->toIso8601String(),
+                'params' => $operation->params,
             ] : null,
         ]);
     }

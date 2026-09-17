@@ -318,16 +318,26 @@ em produção. As evidências e limitações estão em
 | [Release 1.3.25](docs/RELEASE_1.3.25.md) | Hotfix: sync_zones não descarta mais diagnostics/rolled_back de uma falha de apply |
 | [Release 1.3.26](docs/RELEASE_1.3.26.md) | Agente 0.9.0 detecta blocos de zona legados fora do include gerenciado (Fase 1) |
 | [Release 1.3.27](docs/RELEASE_1.3.27.md) | Cartão "Conflito de configuração" no painel e bloqueio de publicação (Fase 2) |
+| [Release 1.3.28](docs/RELEASE_1.3.28.md) | Agente 0.10.0 remove bloco de zona legado com 1 clique, sem SSH (Fase 3 — fecha o plano) |
 
 ## Status do projeto
 
-**v1.3.27 pronta para deploy** (Fase 2 do plano de detecção e
+**v1.3.28 pronta para deploy** (agente 0.10.0 — Fase 3, última do
+plano de detecção e resolução de conflito de zona legada sem SSH:
+botão "Remover declaração antiga" no cartão de conflito, nova
+operação autorizada `remove_legacy_zone_block` com reconfirmação por
+hash antes de agir, backup genérico próprio (não reaproveita
+backup_current/restore_backup, que apagariam um caminho não
+reconhecido num rollback), preserva o arquivo de zona real quando o
+bloco é primary, valida com named-checkconf e restaura do backup se
+falhar — sem nunca encadear com aplicar zona, que continua um passo
+separado e deliberado; com isso, as 4 fases do plano aberto pelo
+incidente do cliente-exemplo estão completas); sobre a v1.3.27 (Fase 2 do plano de detecção e
 resolução de conflito de zona legada sem SSH: cartão "Conflito de
 configuração" na tela do servidor mostrando zona, arquivo e linha
 exatos de cada bloco legado que colide com uma zona gerenciada, e
 bloqueio de publicação nomeando a mesma informação — cruza o que o
-agente já reporta desde a v1.3.26 (Fase 1); a remoção com 1 clique
-ainda é Fase 3, pendente); sobre a v1.3.26 (agente 0.9.0 — Fase 1 do plano de
+agente já reporta desde a v1.3.26 (Fase 1)); sobre a v1.3.26 (agente 0.9.0 — Fase 1 do plano de
 detecção e resolução de conflito de zona legada sem SSH: o agente
 percorre a cadeia real de includes do BIND, localiza blocos `zone {
 ... };` fora do include gerenciado pelo DNS Center, reporta isso na
