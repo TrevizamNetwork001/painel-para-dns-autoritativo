@@ -28,6 +28,10 @@ class EnsureOrganizationContext
             abort(403, 'O usuário não possui acesso à empresa selecionada.');
         }
 
+        if ($user->currentOrganization?->status !== 'active') {
+            abort(403, 'Esta empresa está desativada.');
+        }
+
         return $next($request);
     }
 }

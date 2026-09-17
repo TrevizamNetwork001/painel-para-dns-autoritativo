@@ -73,6 +73,8 @@ class EnsureAdminTwoFactor
             'nameservers.*',
             'zones.publish',
             'tsig.*',
+            'organizations.status',
+            'organizations.destroy',
         ]);
     }
 }

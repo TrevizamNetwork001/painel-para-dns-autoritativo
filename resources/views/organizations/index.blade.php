@@ -161,6 +161,7 @@
                             <th>Status</th>
                             <th>Usuários</th>
                             <th>Criada em</th>
+                            <th></th>
                         </tr>
                     </thead>
 
@@ -183,10 +184,48 @@
                                 <td>
                                     {{ $organization->created_at?->format('d/m/Y') }}
                                 </td>
+
+                                <td>
+                                    <div class="agent-actions">
+                                        @unless ($organization->is_default)
+                                            <form
+                                                method="POST"
+                                                action="{{ route('organizations.status', $organization) }}"
+                                                onsubmit="return confirm(
+                                                    '{{ $organization->status === 'active'
+                                                        ? 'Desativar esta empresa? Os usuários dela perdem acesso ao painel imediatamente.'
+                                                        : 'Reativar esta empresa?' }}'
+                                                )"
+                                            >
+                                                @csrf
+                                                @method('PATCH')
+
+                                                <button
+                                                    type="submit"
+                                                    class="button button-secondary button-small"
+                                                >
+                                                    {{ $organization->status === 'active'
+                                                        ? 'Desativar'
+                                                        : 'Reativar' }}
+                                                </button>
+                                            </form>
+
+                                            <button
+                                                type="button"
+                                                class="button button-danger-soft button-small"
+                                                data-delete-org-open
+                                                data-delete-org-name="{{ $organization->name }}"
+                                                data-delete-org-url="{{ route('organizations.destroy', $organization) }}"
+                                            >
+                                                Excluir
+                                            </button>
+                                        @endunless
+                                    </div>
+                                </td>
                             </tr>
                         @empty
                             <tr>
-                                <td colspan="4">
+                                <td colspan="5">
                                     Nenhuma empresa cadastrada.
                                 </td>
                             </tr>
@@ -197,4 +236,118 @@
         </article>
     </main>
 </div>
+
+<div
+    class="domains-modal-backdrop"
+    data-delete-org-modal
+    aria-hidden="true"
+>
+    <section
+        class="domains-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="delete-org-modal-title"
+    >
+        <header class="domains-modal-header">
+            <div>
+                <p class="eyebrow">Ação irreversível</p>
+                <h2 id="delete-org-modal-title">Excluir empresa</h2>
+
+                <p>
+                    Remove permanentemente a empresa
+                    <strong data-delete-org-name-target></strong>
+                    e tudo vinculado a ela: usuários, servidores,
+                    credenciais de agente, zonas e registros DNS.
+                    Nenhum comando é enviado aos servidores BIND — o
+                    que já estiver configurado neles continua
+                    rodando até uma ação manual no próprio servidor.
+                    Esta ação não pode ser desfeita.
+                </p>
+            </div>
+
+            <button
+                type="button"
+                class="domains-modal-close"
+                data-delete-org-close
+                aria-label="Fechar"
+            >
+                ×
+            </button>
+        </header>
+
+        <form
+            method="POST"
+            data-delete-org-form
+            class="record-modal-form"
+        >
+            @csrf
+            @method('DELETE')
+
+            <label class="domain-field">
+                <span>Digite o nome exato da empresa para confirmar</span>
+
+                <input
+                    type="text"
+                    name="confirmation"
+                    required
+                    autocomplete="off"
+                    data-delete-org-input
+                >
+            </label>
+
+            <footer class="domains-modal-footer">
+                <button
+                    type="button"
+                    class="button button-secondary"
+                    data-delete-org-close
+                >
+                    Cancelar
+                </button>
+
+                <button
+                    type="submit"
+                    class="button button-danger-soft"
+                >
+                    Excluir permanentemente
+                </button>
+            </footer>
+        </form>
+    </section>
+</div>
+
+<script nonce="{{ $cspNonce ?? '' }}">
+document.addEventListener('DOMContentLoaded', () => {
+    const modal = document.querySelector('[data-delete-org-modal]');
+    const form = modal?.querySelector('[data-delete-org-form]');
+    const input = modal?.querySelector('[data-delete-org-input]');
+    const nameTarget = modal?.querySelector('[data-delete-org-name-target]');
+
+    const close = () => {
+        modal?.classList.remove('is-open');
+        modal?.setAttribute('aria-hidden', 'true');
+        if (input) input.value = '';
+    };
+
+    document.querySelectorAll('[data-delete-org-open]').forEach((button) => {
+        button.addEventListener('click', () => {
+            if (form) form.action = button.dataset.deleteOrgUrl;
+            if (nameTarget) nameTarget.textContent = button.dataset.deleteOrgName;
+            modal?.classList.add('is-open');
+            modal?.setAttribute('aria-hidden', 'false');
+            input?.focus();
+        });
+    });
+
+    modal?.querySelectorAll('[data-delete-org-close]').forEach((button) => {
+        button.addEventListener('click', close);
+    });
+
+    form?.addEventListener('submit', (event) => {
+        if (input && input.value !== nameTarget?.textContent) {
+            event.preventDefault();
+            input.focus();
+        }
+    });
+});
+</script>
 @endsection

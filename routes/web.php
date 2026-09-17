@@ -178,6 +178,12 @@ Route::middleware([
 
     Route::post('/', [OrganizationController::class, 'store'])
         ->name('store');
+
+    Route::patch('/{organization}/status', [OrganizationController::class, 'updateStatus'])
+        ->name('status');
+
+    Route::delete('/{organization}', [OrganizationController::class, 'destroy'])
+        ->name('destroy');
 });
 
 Route::middleware([

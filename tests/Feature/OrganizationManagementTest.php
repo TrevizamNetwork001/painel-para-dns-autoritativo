@@ -154,6 +154,158 @@ class OrganizationManagementTest extends TestCase
             ->assertNotFound();
     }
 
+    public function test_platform_admin_can_deactivate_and_reactivate_organization(): void
+    {
+        $platformAdmin = $this->makePlatformAdmin();
+        $organization = Organization::factory()->create(['status' => 'active']);
+
+        $this->actingAs($platformAdmin)
+            ->patch(route('organizations.status', $organization))
+            ->assertRedirect();
+
+        $this->assertSame('inactive', $organization->fresh()->status);
+
+        $this->actingAs($platformAdmin)
+            ->patch(route('organizations.status', $organization))
+            ->assertRedirect();
+
+        $this->assertSame('active', $organization->fresh()->status);
+    }
+
+    public function test_deactivated_organization_blocks_member_access(): void
+    {
+        $organization = Organization::factory()->create(['status' => 'active']);
+        $member = User::factory()->create([
+            'current_organization_id' => $organization->id,
+            'status' => 'active',
+        ]);
+        $member->organizations()->attach($organization->id, [
+            'role' => 'organization_admin', 'status' => 'active', 'is_default' => true,
+        ]);
+
+        $this->actingAs($member)->get('/dashboard')->assertOk();
+
+        $organization->forceFill(['status' => 'inactive'])->save();
+
+        $this->actingAs($member->fresh())
+            ->get('/dashboard')
+            ->assertForbidden();
+    }
+
+    public function test_non_platform_admin_cannot_update_organization_status(): void
+    {
+        $organizationAdmin = $this->makeNonPlatformOrgAdmin();
+        $target = Organization::factory()->create(['status' => 'active']);
+
+        $this->actingAs($organizationAdmin)
+            ->patch(route('organizations.status', $target))
+            ->assertForbidden();
+
+        $this->assertSame('active', $target->fresh()->status);
+    }
+
+    public function test_default_organization_cannot_be_deactivated_or_deleted(): void
+    {
+        $platformAdmin = $this->makePlatformAdmin();
+        $default = Organization::query()->where('is_default', true)->sole();
+
+        $this->actingAs($platformAdmin)
+            ->patch(route('organizations.status', $default))
+            ->assertStatus(409);
+
+        $this->actingAs($platformAdmin)
+            ->delete(route('organizations.destroy', $default), ['confirmation' => $default->name])
+            ->assertStatus(409);
+
+        $this->assertDatabaseHas('organizations', ['id' => $default->id]);
+    }
+
+    public function test_platform_admin_can_delete_organization_with_correct_confirmation(): void
+    {
+        $platformAdmin = $this->makePlatformAdmin();
+        $organization = Organization::factory()->create(['name' => 'Cliente Cancelado']);
+        $server = DnsServer::factory()->create(['organization_id' => $organization->id]);
+        $onlyMember = User::factory()->create([
+            'current_organization_id' => $organization->id,
+            'is_platform_admin' => false,
+        ]);
+        $onlyMember->organizations()->attach($organization->id, [
+            'role' => 'organization_admin', 'status' => 'active', 'is_default' => true,
+        ]);
+
+        $this->actingAs($platformAdmin)
+            ->delete(route('organizations.destroy', $organization), [
+                'confirmation' => 'Cliente Cancelado',
+            ])
+            ->assertRedirect(route('organizations.index'));
+
+        $this->assertDatabaseMissing('organizations', ['id' => $organization->id]);
+        $this->assertDatabaseMissing('dns_servers', ['id' => $server->id]);
+        $this->assertDatabaseMissing('users', ['id' => $onlyMember->id]);
+        $this->assertDatabaseHas('dns_audit_logs', [
+            'action' => 'organization.deleted',
+            'record_name' => 'Cliente Cancelado',
+        ]);
+    }
+
+    public function test_delete_requires_exact_name_confirmation(): void
+    {
+        $platformAdmin = $this->makePlatformAdmin();
+        $organization = Organization::factory()->create(['name' => 'Cliente Exato']);
+
+        $this->actingAs($platformAdmin)
+            ->delete(route('organizations.destroy', $organization), [
+                'confirmation' => 'cliente exato',
+            ])
+            ->assertStatus(409);
+
+        $this->assertDatabaseHas('organizations', ['id' => $organization->id]);
+    }
+
+    public function test_delete_preserves_user_who_belongs_to_another_organization(): void
+    {
+        $platformAdmin = $this->makePlatformAdmin();
+        $organization = Organization::factory()->create(['name' => 'Empresa Um']);
+        $otherOrganization = Organization::factory()->create();
+
+        $sharedUser = User::factory()->create([
+            'current_organization_id' => $organization->id,
+            'is_platform_admin' => false,
+        ]);
+        $sharedUser->organizations()->attach($organization->id, [
+            'role' => 'organization_admin', 'status' => 'active', 'is_default' => true,
+        ]);
+        $sharedUser->organizations()->attach($otherOrganization->id, [
+            'role' => 'viewer', 'status' => 'active', 'is_default' => false,
+        ]);
+
+        $this->actingAs($platformAdmin)
+            ->delete(route('organizations.destroy', $organization), [
+                'confirmation' => 'Empresa Um',
+            ])
+            ->assertRedirect();
+
+        $this->assertDatabaseHas('users', ['id' => $sharedUser->id]);
+        $this->assertDatabaseHas('organization_user', [
+            'user_id' => $sharedUser->id,
+            'organization_id' => $otherOrganization->id,
+        ]);
+    }
+
+    public function test_non_platform_admin_cannot_delete_organization(): void
+    {
+        $organizationAdmin = $this->makeNonPlatformOrgAdmin();
+        $target = Organization::factory()->create(['name' => 'Alvo Protegido']);
+
+        $this->actingAs($organizationAdmin)
+            ->delete(route('organizations.destroy', $target), [
+                'confirmation' => 'Alvo Protegido',
+            ])
+            ->assertForbidden();
+
+        $this->assertDatabaseHas('organizations', ['id' => $target->id]);
+    }
+
     private function makePlatformAdmin(): User
     {
         $organization = Organization::query()->create([
