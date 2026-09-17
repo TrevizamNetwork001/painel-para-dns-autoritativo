@@ -8375,9 +8375,6 @@ body.has-open-modal {
 .dashboard-v2 .dashboard-heading .page-description { margin: 7px 0 0; color: #9baabd; font-size: 13px; }
 .dashboard-v2 .topbar-actions { gap: 16px; }
 .dashboard-header-right { display: grid; flex: none; justify-items: end; }
-.dashboard-search { display: grid; width: 40px; height: 40px; flex: none; place-items: center; border: 1px solid #263443; border-radius: 11px; background: #101b25; color: #aebccd; }
-.dashboard-search:hover { border-color: #3a5366; color: #fff; text-decoration: none; }
-.dashboard-search svg { width: 16px; height: 16px; flex: none; stroke: currentColor; stroke-width: 1.7; }
 .dashboard-v2 .header-account .organization-context { max-width: 190px; }
 .dashboard-v2 .header-account .organization-context strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .dashboard-v2 .header-account .organization-context:has(form) strong { display: none; }

@@ -269,9 +269,6 @@
 
             <div class="dashboard-header-right">
                 <div class="topbar-actions">
-                    <a class="dashboard-search" data-dashboard-search href="{{ route('servers.index') }}" aria-label="Abrir inventário de servidores" title="Buscar servidores (Ctrl + K)">
-                        <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="10.8" cy="10.8" r="6.8"/><path d="m16 16 5 5"/></svg>
-                    </a>
                     <x-account-menu />
                 </div>
             </div>
