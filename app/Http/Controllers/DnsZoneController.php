@@ -42,7 +42,9 @@ class DnsZoneController extends Controller
                 ->withCount('records')
                 ->with('servers')
                 ->orderBy('name')
-                ->get(),
+                ->get()
+                ->reject(fn (DnsZone $zone) => $zone->isReverseZone() || $zone->isIpv6ReverseZone())
+                ->values(),
             'clients' => DnsZone::query()
                 ->forOrganization($organizationId)
                 ->whereNotNull('client')
@@ -66,6 +68,36 @@ class DnsZoneController extends Controller
                 ->orderByDesc('is_default')
                 ->orderBy('name')
                 ->get(),
+        ]);
+    }
+
+    public function reverse(Request $request, ReverseZoneNameCalculator $calculator): View
+    {
+        $organizationId = $this->organizationId($request);
+
+        $zones = DnsZone::query()
+            ->forOrganization($organizationId)
+            ->withCount('records')
+            ->with('servers')
+            ->orderBy('name')
+            ->get();
+
+        $describe = fn (DnsZone $zone, bool $ipv6) => [
+            'zone' => $zone,
+            'block' => $ipv6
+                ? $calculator->toIpv6Prefix($zone->name)
+                : $calculator->toIpv4Cidr($zone->name),
+        ];
+
+        return view('zones.reverse', [
+            'ipv4Zones' => $zones
+                ->filter(fn (DnsZone $zone) => $zone->isReverseZone())
+                ->map(fn (DnsZone $zone) => $describe($zone, false))
+                ->values(),
+            'ipv6Zones' => $zones
+                ->filter(fn (DnsZone $zone) => $zone->isIpv6ReverseZone())
+                ->map(fn (DnsZone $zone) => $describe($zone, true))
+                ->values(),
         ]);
     }
 

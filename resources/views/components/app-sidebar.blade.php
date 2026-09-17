@@ -67,6 +67,16 @@
             Domínios
         </a>
 
+        <a href="{{ route('zones.reverse') }}" @class(['nav-item', 'is-active' => $active === 'zones-reverse'])>
+            <span class="nav-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none">
+                    <path d="M4 7h11M8 3l-4 4 4 4" />
+                    <path d="M20 17H9M16 13l4 4-4 4" />
+                </svg>
+            </span>
+            Reversos
+        </a>
+
         <span class="nav-section">Operações</span>
 
         @if ($canManageUsers && Route::has('users.index'))

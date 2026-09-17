@@ -400,6 +400,11 @@ Route::middleware([
     )->name('store');
 
     Route::get(
+        '/reversos',
+        [DnsZoneController::class, 'reverse'],
+    )->name('reverse');
+
+    Route::get(
         '/{zone}',
         [DnsZoneController::class, 'show'],
     )->name('show');
