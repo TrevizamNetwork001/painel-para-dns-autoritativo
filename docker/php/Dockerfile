@@ -24,7 +24,10 @@ RUN apt-get update \
         pcntl \
         pdo_pgsql \
         zip \
-    && pecl install redis \
+    && for attempt in 1 2 3; do \
+        pecl install redis && break || \
+        { [ "$attempt" -eq 3 ] && exit 1; echo "pecl install redis failed (attempt $attempt/3), retrying..." >&2; sleep $((attempt * 5)); }; \
+    done \
     && docker-php-ext-enable redis \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
