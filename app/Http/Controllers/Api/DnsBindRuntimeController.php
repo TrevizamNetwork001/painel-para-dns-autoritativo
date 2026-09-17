@@ -68,6 +68,17 @@ class DnsBindRuntimeController extends Controller
             'include_wired' => ['nullable', 'array'],
             'include_wired.expected_include' => ['nullable', 'string', 'max:255'],
             'include_wired.statement_found' => ['nullable', 'boolean'],
+            'legacy_zone_blocks' => ['nullable', 'array'],
+            'legacy_zone_blocks.checked_at' => ['nullable', 'date'],
+            'legacy_zone_blocks.managed_include' => ['nullable', 'string', 'max:255'],
+            'legacy_zone_blocks.blocks' => ['nullable', 'array', 'max:50'],
+            'legacy_zone_blocks.blocks.*.name' => ['required', 'string', 'max:255'],
+            'legacy_zone_blocks.blocks.*.source_file' => ['required', 'string', 'max:255'],
+            'legacy_zone_blocks.blocks.*.start_line' => ['required', 'integer', 'min:1'],
+            'legacy_zone_blocks.blocks.*.end_line' => ['required', 'integer', 'min:1'],
+            'legacy_zone_blocks.blocks.*.declared_type' => ['nullable', 'string', 'max:40'],
+            'legacy_zone_blocks.blocks.*.hash' => ['required', 'string', 'size:64', 'regex:/\A[0-9a-f]+\z/'],
+            'legacy_zone_blocks.blocks.*.snippet' => ['nullable', 'string', 'max:2000'],
         ]);
 
         foreach (self::ALLOWED_PATHS as $key => $allowed) {

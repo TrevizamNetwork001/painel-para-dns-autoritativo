@@ -316,10 +316,19 @@ em produção. As evidências e limitações estão em
 | [Release 1.3.23](docs/RELEASE_1.3.23.md) | Comandos do agente funcionam sem sudo instalado |
 | [Release 1.3.24](docs/RELEASE_1.3.24.md) | Agente 0.8.0 reporta o erro real de named-checkconf/checkzone/rndc, sem mais vir vazio |
 | [Release 1.3.25](docs/RELEASE_1.3.25.md) | Hotfix: sync_zones não descarta mais diagnostics/rolled_back de uma falha de apply |
+| [Release 1.3.26](docs/RELEASE_1.3.26.md) | Agente 0.9.0 detecta blocos de zona legados fora do include gerenciado (Fase 1) |
 
 ## Status do projeto
 
-**v1.3.25 pronta para deploy** (agente 0.8.1 — hotfix pego ao vivo
+**v1.3.26 pronta para deploy** (agente 0.9.0 — Fase 1 do plano de
+detecção e resolução de conflito de zona legada sem SSH: o agente
+percorre a cadeia real de includes do BIND, localiza blocos `zone {
+... };` fora do include gerenciado pelo DNS Center, reporta isso na
+prontidão de rotina (~5 min) e barra o apply na hora, nomeando arquivo
+e linha exatos, se algum desses blocos colidir com uma zona que o
+apply está prestes a escrever — ainda sem cartão dedicado no painel
+nem remoção com 1 clique, que ficam pras Fases 2 e 3); sobre a v1.3.25
+(agente 0.8.1 — hotfix pego ao vivo
 minutos depois do deploy da v1.3.24: `apply_staging` já reportava
 `diagnostics`/`rolled_back` certos, mas `sync_zones` relançava um erro
 genérico ao registrar o evento de publicação, descartando os dois

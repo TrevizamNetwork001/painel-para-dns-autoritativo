@@ -29,13 +29,13 @@ import urllib.parse
 import urllib.request
 import uuid
 from shutil import copyfileobj
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
 from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
 from pathlib import Path
 from typing import Any
 
-AGENT_VERSION = "0.8.1"
+AGENT_VERSION = "0.9.0"
 OFFICIAL_BASE_URL = "https://dnscenter.trevizamnetwork.com.br"
 DEFAULT_CONFIG = Path("/etc/dns-center-agent/agent.json")
 DEFAULT_STATE_DIR = Path("/var/lib/dns-center-agent")
@@ -769,6 +769,148 @@ def security_modules() -> dict[str, str]:
     return {"apparmor": apparmor, "selinux": selinux}
 
 
+def iter_config_chain(
+    named_conf: Path,
+    max_depth: int = 5,
+) -> Iterator[tuple[Path, str]]:
+    """Walk BIND's include chain starting at ``named_conf``, yielding
+    ``(path, text)`` for every config file actually read.
+
+    Follows both absolute and relative include paths — a relative
+    ``include`` is resolved against the directory of the file that
+    contains it, matching named's own resolution rule (a real gap in
+    the previous single-purpose version of this walk, which only
+    handled absolute paths).
+    """
+    visited: set[Path] = set()
+
+    def walk(path: Path, depth: int) -> Iterator[tuple[Path, str]]:
+        if depth > max_depth or path in visited or not path.is_file():
+            return
+
+        visited.add(path)
+
+        try:
+            text = path.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            return
+
+        yield path, text
+
+        for match in re.finditer(r'include\s+"([^"]+)"\s*;', text):
+            include_path = Path(match.group(1))
+            if not include_path.is_absolute():
+                include_path = path.parent / include_path
+            yield from walk(include_path, depth + 1)
+
+    yield from walk(named_conf, 0)
+
+
+def find_zone_blocks(text: str) -> list[dict[str, Any]]:
+    """Locate ``zone "name" { ... };`` blocks in a BIND config text.
+
+    Matches braces by depth instead of a greedy regex, so a nested
+    block inside the zone body (``allow-transfer { ... };``,
+    ``also-notify { ... };``) doesn't cut the match short.
+    """
+    blocks: list[dict[str, Any]] = []
+
+    for match in re.finditer(r'zone\s+"([^"]+)"', text):
+        name = match.group(1)
+        brace_start = text.find("{", match.end())
+
+        if brace_start == -1:
+            continue
+
+        depth = 0
+        end_index = None
+
+        for index in range(brace_start, len(text)):
+            character = text[index]
+
+            if character == "{":
+                depth += 1
+            elif character == "}":
+                depth -= 1
+                if depth == 0:
+                    end_index = index
+                    break
+
+        if end_index is None:
+            continue
+
+        tail = end_index + 1
+        if tail < len(text) and text[tail] == ";":
+            tail += 1
+
+        raw = text[match.start():tail]
+        type_match = re.search(r"\btype\s+(\w+)\s*;", raw)
+
+        blocks.append({
+            "name": name,
+            "start_line": text.count("\n", 0, match.start()) + 1,
+            "end_line": text.count("\n", 0, tail) + 1,
+            "declared_type": type_match.group(1) if type_match else None,
+            "hash": hashlib.sha256(raw.encode("utf-8")).hexdigest(),
+            "snippet": raw[:2000],
+        })
+
+    return blocks
+
+
+def legacy_zone_blocks_report(config: dict[str, Any]) -> dict[str, Any]:
+    """Find zone declarations sitting outside the DNS Center managed
+    include, anywhere in BIND's actual include chain.
+
+    These are exactly the static leftovers that silently collide with
+    a zone freshly created in the panel — the shape of the real
+    customer.example incident, where ``named-checkconf`` refused a
+    duplicate zone declared both in the managed include and in an old,
+    never-cleaned-up ``named.conf.local`` block.
+    """
+    paths = config_paths(config)
+    managed_include = paths["managed_include"]
+    named_conf = paths["named_conf"]
+    blocks: list[dict[str, Any]] = []
+
+    for path, text in iter_config_chain(named_conf):
+        if path == managed_include:
+            continue
+
+        for block in find_zone_blocks(text):
+            blocks.append({**block, "source_file": str(path)})
+
+    return {
+        "checked_at": utc_now(),
+        "managed_include": str(managed_include),
+        "blocks": blocks,
+    }
+
+
+def legacy_zone_conflicts(
+    manifest: list[dict[str, Any]],
+    report: dict[str, Any],
+) -> list[dict[str, Any]]:
+    """Cross-reference legacy static blocks against the zones this
+    apply is about to write to the managed include.
+
+    A block whose name doesn't match anything DNS Center currently
+    manages here is somebody else's business (out of scope for v1 —
+    see the plan's boundaries) and is left alone.
+    """
+    managed_names = {
+        str(item["name"]).strip().lower().rstrip(".")
+        for item in manifest
+    }
+
+    return [
+        block
+        for block in report.get("blocks", [])
+        if str(block["name"]).strip().lower().rstrip(".")
+        in managed_names
+    ]
+
+
 def include_wired_report(config: dict[str, Any]) -> dict[str, Any]:
     """Detect whether BIND's active config chain actually includes the
     file DNS Center manages, following include statements recursively.
@@ -782,30 +924,11 @@ def include_wired_report(config: dict[str, Any]) -> dict[str, Any]:
     include_statement = f'include "{paths["managed_include"]}";'
     named_conf = paths["named_conf"]
     found = False
-    visited: set[Path] = set()
 
-    def scan(path: Path, depth: int) -> None:
-        nonlocal found
-
-        if found or depth > 5 or path in visited or not path.is_file():
-            return
-
-        visited.add(path)
-
-        try:
-            text = path.read_text(encoding="utf-8", errors="replace")
-        except OSError:
-            return
-
+    for _path, text in iter_config_chain(named_conf):
         if include_statement in text:
             found = True
-            return
-
-        for match in re.finditer(r'include\s+"([^"]+)"\s*;', text):
-            scan(Path(match.group(1)), depth + 1)
-
-    if named_conf.is_file():
-        scan(named_conf, 0)
+            break
 
     return {
         "expected_include": str(paths["managed_include"]),
@@ -865,6 +988,11 @@ def readiness_report(config: dict[str, Any]) -> dict[str, Any]:
     except (AgentError, OSError):
         include_wired = None
 
+    try:
+        legacy_zone_blocks = legacy_zone_blocks_report(config)
+    except (AgentError, OSError):
+        legacy_zone_blocks = None
+
     return {
         "event_id": str(uuid.uuid4()),
         "detected_at": utc_now(),
@@ -872,6 +1000,7 @@ def readiness_report(config: dict[str, Any]) -> dict[str, Any]:
         "bind_installed": named is not None,
         "bind_version": bind_version,
         "include_wired": include_wired,
+        "legacy_zone_blocks": legacy_zone_blocks,
         "paths": {
             "named_conf": named_conf,
             "include_dir": include_dir,
@@ -4093,6 +4222,37 @@ def sync_zones(
 
         if os.geteuid() != 0:
             raise AgentError("Apply exige execução como root.")
+
+        # Re-check right before touching anything — readiness_report's
+        # scan runs on its own ~5min cadence, so config on disk may have
+        # drifted (or been fixed) since the last one. Failing fast here
+        # with the exact file/line is what replaces the SSH+journalctl
+        # detective work from the real customer.example incident.
+        try:
+            legacy_report = legacy_zone_blocks_report(config)
+        except (AgentError, OSError):
+            legacy_report = None
+
+        if legacy_report is not None:
+            conflicts = legacy_zone_conflicts(manifest, legacy_report)
+
+            if conflicts:
+                detail = "; ".join(
+                    f"zona '{block['name']}' já declarada em "
+                    f"{block['source_file']}:{block['start_line']}"
+                    for block in conflicts
+                )
+                raise AgentOperationError(
+                    "Apply bloqueado: há declaração de zona legada fora "
+                    "do include gerenciado. Remova o bloco antigo antes "
+                    "de aplicar.",
+                    diagnostics={
+                        "command": "legacy_zone_conflict_check",
+                        "returncode": 1,
+                        "stdout": "",
+                        "stderr": detail,
+                    },
+                )
 
         attempt_id = str(state["attempt_id"])
         pending_confirmation = (

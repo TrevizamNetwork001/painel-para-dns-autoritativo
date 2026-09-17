@@ -185,6 +185,50 @@ class DnsBindReadinessTest extends TestCase
         $this->assertStringNotContainsString('/etc/private', $failed->error);
     }
 
+    public function test_readiness_stores_legacy_zone_blocks_and_rejects_malformed_entries(): void
+    {
+        $context = $this->context();
+        $payload = $this->readinessPayload();
+        $payload['legacy_zone_blocks'] = [
+            'checked_at' => now()->toIso8601String(),
+            'managed_include' => '/etc/bind/dns-center-managed.conf',
+            'blocks' => [
+                [
+                    'name' => '0.2.0.192.in-addr.arpa',
+                    'source_file' => '/etc/bind/named.conf.local',
+                    'start_line' => 2,
+                    'end_line' => 6,
+                    'declared_type' => 'master',
+                    'hash' => str_repeat('a', 64),
+                    'snippet' => 'zone "0.2.0.192.in-addr.arpa" { type master; };',
+                ],
+            ],
+        ];
+
+        $this->withToken($context['token'])
+            ->postJson('/api/agent/bind/readiness', $payload)
+            ->assertOk();
+
+        $server = $context['server']->fresh();
+        $blocks = $server->bind_readiness['legacy_zone_blocks']['blocks'];
+        $this->assertCount(1, $blocks);
+        $this->assertSame('0.2.0.192.in-addr.arpa', $blocks[0]['name']);
+        $this->assertSame('/etc/bind/named.conf.local', $blocks[0]['source_file']);
+        $this->assertSame(2, $blocks[0]['start_line']);
+
+        $malformed = $this->readinessPayload();
+        $malformed['event_id'] = (string) Str::uuid();
+        $malformed['legacy_zone_blocks'] = [
+            'blocks' => [
+                ['name' => 'example.com'],
+            ],
+        ];
+
+        $this->withToken($context['token'])
+            ->postJson('/api/agent/bind/readiness', $malformed)
+            ->assertUnprocessable();
+    }
+
     public function test_server_page_shows_factual_readiness_without_health_claim(): void
     {
         $context = $this->context();

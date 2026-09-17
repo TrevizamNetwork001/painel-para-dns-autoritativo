@@ -202,6 +202,107 @@ class AgentTests(unittest.TestCase):
             self.assertIn("include_wired", report)
             self.assertFalse(report["include_wired"]["statement_found"])
 
+    def test_iter_config_chain_follows_relative_include(self) -> None:
+        # named itself resolves a relative include against the
+        # including file's own directory, not the process cwd — the
+        # old single-purpose scan() only handled absolute includes.
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            named_conf = root / "named.conf"
+            local_conf = root / "named.conf.local"
+
+            named_conf.write_text(
+                'include "named.conf.local";\n',
+                encoding="utf-8",
+            )
+            local_conf.write_text(
+                'zone "example.com" {\n    type master;\n};\n',
+                encoding="utf-8",
+            )
+
+            found = list(agent.iter_config_chain(named_conf))
+
+            self.assertEqual(
+                {named_conf, local_conf},
+                {path for path, _text in found},
+            )
+
+    def test_find_zone_blocks_respects_nested_braces(self) -> None:
+        text = (
+            'zone "example.com" {\n'
+            "    type master;\n"
+            '    file "/var/cache/bind/example.com.hosts";\n'
+            "    allow-transfer { key \"tsig\"; };\n"
+            "};\n"
+            'zone "other.test" {\n'
+            "    type slave;\n"
+            "};\n"
+        )
+
+        blocks = agent.find_zone_blocks(text)
+
+        self.assertEqual(2, len(blocks))
+        self.assertEqual("example.com", blocks[0]["name"])
+        self.assertEqual("master", blocks[0]["declared_type"])
+        self.assertEqual(1, blocks[0]["start_line"])
+        self.assertEqual(5, blocks[0]["end_line"])
+        self.assertEqual("other.test", blocks[1]["name"])
+        self.assertEqual("slave", blocks[1]["declared_type"])
+
+    def test_legacy_zone_blocks_report_finds_block_outside_managed_include(
+        self,
+    ) -> None:
+        # Real incident shape: named.conf.local kept an old static
+        # declaration for a zone that DNS Center now also manages
+        # through its own include, elsewhere in the same chain.
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            config = self.config(directory)
+            config["named_conf"] = str(root / "named.conf")
+            local_conf = root / "named.conf.local"
+            managed_include = Path(config["managed_include"])
+            managed_include.parent.mkdir(parents=True, exist_ok=True)
+            managed_include.write_text(
+                'zone "example.com" {\n    type master;\n};\n',
+                encoding="utf-8",
+            )
+
+            Path(config["named_conf"]).write_text(
+                f'include "{local_conf}";\n'
+                f'include "{managed_include}";\n',
+                encoding="utf-8",
+            )
+            local_conf.write_text(
+                'zone "example.com" {\n'
+                "    type master;\n"
+                '    file "/var/cache/bind/master-aut/example.com.hosts";\n'
+                "};\n",
+                encoding="utf-8",
+            )
+
+            report = agent.legacy_zone_blocks_report(config)
+
+            self.assertEqual(1, len(report["blocks"]))
+            self.assertEqual("example.com", report["blocks"][0]["name"])
+            self.assertEqual(
+                str(local_conf),
+                report["blocks"][0]["source_file"],
+            )
+
+    def test_legacy_zone_conflicts_matches_only_managed_names(self) -> None:
+        manifest = [{"name": "example.com."}]
+        report = {
+            "blocks": [
+                {"name": "example.com", "source_file": "x", "start_line": 1},
+                {"name": "unrelated.test", "source_file": "y", "start_line": 1},
+            ]
+        }
+
+        conflicts = agent.legacy_zone_conflicts(manifest, report)
+
+        self.assertEqual(1, len(conflicts))
+        self.assertEqual("example.com", conflicts[0]["name"])
+
     def test_parse_rndc_zonestatus_normalizes_runtime_values(self) -> None:
         facts = agent.parse_rndc_zonestatus(
             "\n".join(
@@ -2408,6 +2509,73 @@ options {
 
             self.assertTrue(raised.exception.rolled_back)
             self.assertEqual(diagnostics, raised.exception.diagnostics)
+
+    def test_sync_zones_blocks_apply_on_legacy_zone_conflict(self) -> None:
+        # Fase 1: fail fast, before touching anything, when a zone
+        # about to be applied is also declared by a legacy static
+        # block outside the managed include — the exact shape of the
+        # customer.example incident, caught here instead of by
+        # named-checkconf mid-apply.
+        with tempfile.TemporaryDirectory() as directory:
+            config = self.config(directory)
+            state = agent.empty_publication_state()
+            state["attempt_id"] = "attempt"
+            staging = Path(directory) / "staging"
+            staging.mkdir()
+            include = staging / "managed.conf"
+            include.write_text("", encoding="utf-8")
+
+            legacy_report = {
+                "checked_at": agent.utc_now(),
+                "managed_include": config["managed_include"],
+                "blocks": [
+                    {
+                        "name": "example.com",
+                        "source_file": "/etc/bind/named.conf.local",
+                        "start_line": 2,
+                        "end_line": 6,
+                        "declared_type": "master",
+                        "hash": "a" * 64,
+                        "snippet": "",
+                    }
+                ],
+            }
+
+            with patch.object(
+                agent,
+                "build_staging",
+                return_value=(
+                    [self.manifest_item()],
+                    [self.manifest_item()],
+                    staging,
+                    include,
+                    state,
+                ),
+            ), patch.object(
+                agent,
+                "legacy_zone_blocks_report",
+                return_value=legacy_report,
+            ), patch.object(
+                agent,
+                "apply_staging",
+            ) as apply_staging, patch.dict(
+                agent.os.environ,
+                {"DNS_CENTER_AGENT_ALLOW_APPLY": "1"},
+            ), patch.object(
+                agent.os,
+                "geteuid",
+                return_value=0,
+            ):
+                with self.assertRaises(
+                    agent.AgentOperationError
+                ) as raised:
+                    agent.sync_zones(config, True, "APLICAR ZONAS NS1")
+
+            apply_staging.assert_not_called()
+            self.assertIn(
+                "/etc/bind/named.conf.local:2",
+                raised.exception.diagnostics["stderr"],
+            )
 
     def test_staging_only_never_reports_applied(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
