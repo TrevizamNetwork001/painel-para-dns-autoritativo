@@ -91,3 +91,13 @@ de auditoria foram **mantidas** por decisão do operador.
   Configuração" e na mensagem de publicar quando não há nada novo).
 - Escrita direta no banco de produção pelo assistente é bloqueada pelo classificador da
   sessão; correções de dados devem passar pela interface (ou ser liberadas explicitamente).
+
+## Decisões de escopo (18/09/2026)
+
+- **Mini painel de estatísticas do cliente: descartado.** Estatísticas de consulta ficam com o
+  Zabbix (o BIND expõe `statistics-channels`); firewall e fail2ban não entram no painel.
+- **Adiados, sem decisão de fazer:** logs do BIND na tela, testar/forçar transferência (AXFR /
+  `rndc retransfer`) — juntos numa futura versão do agente — e alerta de secundário atrasado.
+- **Candidatos aprovados em conversa, ainda não implementados:** assistente de adoção em lote;
+  backup agendado do banco com cópia fora do servidor (hoje só há `pg_dump` a cada deploy, no
+  mesmo disco); restaurar versão anterior da zona.
