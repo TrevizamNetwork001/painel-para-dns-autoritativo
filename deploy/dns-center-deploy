@@ -65,6 +65,18 @@ set_version() {
     export DNS_CENTER_VERSION
 }
 
+use_running_version() {
+    # Comandos de manutenção usam a versão que está no ar (state), não a do
+    # deployment.env, que pode estar desatualizada.
+    if [ -f "${DNS_CENTER_STATE_DIR}/current-version" ]; then
+        set_version "$(<"${DNS_CENTER_STATE_DIR}/current-version")"
+    else
+        : "${DNS_CENTER_VERSION:?defina DNS_CENTER_VERSION no deployment.env}"
+    fi
+    validate_version "${DNS_CENTER_VERSION}"
+    export DNS_CENTER_VERSION
+}
+
 wait_for_postgres() {
     local attempt
     for attempt in $(seq 1 30); do
@@ -95,6 +107,116 @@ backup_database() {
     printf 'Backup: %s\n' "${backup_file}"
     printf 'Tamanho: %s bytes\n' "$(stat -c '%s' "${backup_file}")"
     printf 'SHA-256: %s\n' "$(cut -d ' ' -f 1 "${checksum_file}")"
+}
+
+prune_backups() {
+    # Mantém sempre os 10 dumps mais recentes; além desses, remove os mais antigos
+    # que DNS_CENTER_BACKUP_RETENTION_DAYS (padrão 14). Dump e .sha256 saem juntos.
+    local days="${DNS_CENTER_BACKUP_RETENTION_DAYS:-14}" keep=10 file index=0
+    case "${days}" in
+        ""|*[!0-9]*) fail "DNS_CENTER_BACKUP_RETENTION_DAYS deve ser um número de dias" ;;
+    esac
+
+    while IFS= read -r file; do
+        index=$((index + 1))
+        [ "${index}" -gt "${keep}" ] || continue
+        if [ -n "$(find "${file}" -mtime "+${days}" -print -quit)" ]; then
+            rm -f -- "${file}" "${file}.sha256"
+            printf 'Backup antigo removido: %s\n' "${file}"
+        fi
+    done < <(ls -1t "${DNS_CENTER_BACKUP_DIR}"/dns-center-*.dump 2>/dev/null || true)
+}
+
+upload_backup_remote() {
+    # Cópia fora do servidor (Cloudflare R2, API S3). O dump é SEMPRE criptografado
+    # antes de sair (gpg simétrico AES256); sem senha configurada, nada é enviado.
+    # Credenciais vão a curl por stdin (-K -), nunca na linha de comando.
+    local file="$1" remote_env="${DNS_CENTER_BACKUP_REMOTE_ENV:-}"
+    local pass_file="${DNS_CENTER_BACKUP_PASSPHRASE_FILE:-}"
+
+    if [ -z "${remote_env}" ] || [ ! -f "${remote_env}" ]; then
+        printf 'Cópia remota: não configurada (somente local).\n'
+        return 0
+    fi
+    [ "$(stat -c '%a' "${remote_env}")" = "600" ] \
+        || fail "${remote_env} deve ter modo 0600"
+    [ -n "${pass_file}" ] && [ -s "${pass_file}" ] \
+        || fail "senha de criptografia ausente (DNS_CENTER_BACKUP_PASSPHRASE_FILE); nada foi enviado"
+    [ "$(stat -c '%a' "${pass_file}")" = "600" ] \
+        || fail "${pass_file} deve ter modo 0600"
+    require_command gpg
+    require_command curl
+
+    (
+        # shellcheck disable=SC1090
+        source "${remote_env}"
+        : "${R2_ACCOUNT_ID:?ausente em ${remote_env}}"
+        : "${R2_BUCKET:?ausente em ${remote_env}}"
+        : "${R2_ACCESS_KEY_ID:?ausente em ${remote_env}}"
+        : "${R2_SECRET_ACCESS_KEY:?ausente em ${remote_env}}"
+
+        local encrypted="${file}.gpg" object url expected actual
+        object="${R2_PREFIX:-dns-center/}$(basename "${encrypted}")"
+        url="https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com/${R2_BUCKET}/${object}"
+        trap 'rm -f -- "${encrypted}"' EXIT
+
+        gpg --batch --yes --quiet --pinentry-mode loopback \
+            --passphrase-file "${pass_file}" \
+            --symmetric --cipher-algo AES256 -o "${encrypted}" "${file}"
+        expected="$(stat -c '%s' "${encrypted}")"
+
+        printf 'user = "%s:%s"\n' "${R2_ACCESS_KEY_ID}" "${R2_SECRET_ACCESS_KEY}" \
+            | curl --fail --silent --show-error -K - \
+                --aws-sigv4 "aws:amz:auto:s3" -T "${encrypted}" "${url}"
+
+        actual="$(printf 'user = "%s:%s"\n' "${R2_ACCESS_KEY_ID}" "${R2_SECRET_ACCESS_KEY}" \
+            | curl --fail --silent --show-error --head -K - \
+                --aws-sigv4 "aws:amz:auto:s3" "${url}" \
+            | tr -d '\r' | awk 'tolower($1) == "content-length:" { print $2 }')"
+        [ "${actual}" = "${expected}" ] \
+            || fail "conferência do envio falhou (esperado ${expected} bytes, remoto ${actual:-?})"
+
+        printf 'Cópia remota: %s/%s (%s bytes, criptografada)\n' "${R2_BUCKET}" "${object}" "${expected}"
+    )
+}
+
+verify_backup() {
+    # Prova que o dump restaura: restaura num banco descartável (nunca no de produção),
+    # confere checksum e contagens, e apaga o banco de teste ao final.
+    local file="${1:-}" live restored
+    # Global de propósito: o trap EXIT roda depois que a função retorna.
+    scratch="dns_center_restore_test"
+    if [ -z "${file}" ]; then
+        file="$(ls -1t "${DNS_CENTER_BACKUP_DIR}"/dns-center-*.dump 2>/dev/null | head -n 1 || true)"
+    fi
+    [ -n "${file}" ] && [ -s "${file}" ] || fail "nenhum backup encontrado em ${DNS_CENTER_BACKUP_DIR}"
+    [ -f "${file}.sha256" ] || fail "checksum ausente: ${file}.sha256"
+    (cd "$(dirname "${file}")" && sha256sum --check --quiet "$(basename "${file}").sha256") \
+        || fail "checksum não confere: ${file}"
+
+    drop_scratch() {
+        compose exec -T postgres sh -c \
+            "dropdb -U \"\$POSTGRES_USER\" --if-exists ${scratch}" >/dev/null 2>&1 || true
+    }
+    trap drop_scratch EXIT
+
+    compose exec -T postgres sh -eu -c \
+        "dropdb -U \"\$POSTGRES_USER\" --if-exists ${scratch}; createdb -U \"\$POSTGRES_USER\" ${scratch}"
+    compose exec -T postgres sh -eu -c \
+        "pg_restore -U \"\$POSTGRES_USER\" -d ${scratch} --no-owner --no-privileges --exit-on-error" < "${file}"
+
+    restored="$(compose exec -T postgres sh -eu -c \
+        "psql -U \"\$POSTGRES_USER\" -d ${scratch} -Atc \"select (select count(*) from dns_zones) || ' zonas, ' || (select count(*) from dns_records) || ' registros, ' || (select count(*) from users) || ' usuários'\"")"
+    live="$(compose exec -T postgres sh -eu -c \
+        "psql -U \"\$POSTGRES_USER\" -d \"\$POSTGRES_DB\" -Atc \"select (select count(*) from dns_zones) || ' zonas, ' || (select count(*) from dns_records) || ' registros, ' || (select count(*) from users) || ' usuários'\"")"
+
+    case "${restored}" in
+        "0 zonas,"*) [ "${live%% *}" = "0" ] || fail "restauração sem zonas, mas produção tem: ${live}" ;;
+    esac
+
+    printf 'Backup restaurado com sucesso: %s\n' "${file}"
+    printf 'No backup:  %s\n' "${restored}"
+    printf 'Em produção agora: %s\n' "${live}"
 }
 
 preflight_release() {
@@ -214,11 +336,12 @@ usage() {
 Uso:
   dns-center-deploy install <versão>
   dns-center-deploy update <versão>
-  dns-center-deploy backup
+  dns-center-deploy backup            # dump + limpeza + cópia criptografada (se configurada)
+  dns-center-deploy backup-verify [arquivo.dump]   # restaura num banco descartável e confere
   dns-center-deploy rollback
   dns-center-deploy status
 
-Todos os comandos são manuais. Não há deploy automático.
+Deploy é sempre manual. `backup` também roda agendado (ver docs/BACKUP_RESTORE.md).
 EOF
 }
 
@@ -239,11 +362,17 @@ main() {
             ;;
         backup)
             [ "$#" -eq 1 ] || fail "backup não recebe argumentos"
-            : "${DNS_CENTER_VERSION:?defina DNS_CENTER_VERSION no deployment.env}"
-            validate_version "${DNS_CENTER_VERSION}"
-            export DNS_CENTER_VERSION
+            use_running_version
             wait_for_postgres
             backup_database
+            prune_backups
+            upload_backup_remote "$(ls -1t "${DNS_CENTER_BACKUP_DIR}"/dns-center-*.dump | head -n 1)"
+            ;;
+        backup-verify)
+            [ "$#" -le 2 ] || fail "uso: backup-verify [arquivo.dump]"
+            use_running_version
+            wait_for_postgres
+            verify_backup "${2:-}"
             ;;
         rollback)
             [ "$#" -eq 1 ] || fail "rollback não recebe argumentos"

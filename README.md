@@ -333,6 +333,7 @@ em produção. As evidências e limitações estão em
 | [Release 1.3.40](docs/RELEASE_1.3.40.md) | Publicação sem alterações explica o motivo e leva à aba Configuração |
 | [Release 1.3.41](docs/RELEASE_1.3.41.md) | Alerta de NS repetido no apex e mensagem específica ao publicar |
 | [Release 1.3.42](docs/RELEASE_1.3.42.md) | Publicar e sincronizar: o secundário só aplica depois do primário |
+| [Backup e restauração](docs/BACKUP_RESTORE.md) | Backup diário do banco com limpeza, cópia criptografada no Cloudflare R2 e teste de restauração |
 | [Operação Cliente Exemplo — 18/09/2026](docs/OPERACAO_CLIENTE_EXEMPLO_2026_09_18.md) | Adoção das zonas reversas do dns-primary/02, runbook e pendências |
 
 ## Status do projeto

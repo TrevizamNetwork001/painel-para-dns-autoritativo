@@ -1,0 +1,5 @@
+# Backup diário do banco do DNS Center (dump + limpeza + cópia criptografada para o R2,
+# se configurada) e teste semanal de restauração. Instalar em /etc/cron.d/dns-center-backup
+# (root:root, modo 0644). Logs em /var/log/dns-center-backup.log.
+30 2 * * * root DNS_CENTER_DEPLOY_CONFIG=/etc/dns-center/deployment.env /opt/dns-center/deploy/dns-center-deploy backup >> /var/log/dns-center-backup.log 2>&1
+45 2 * * 0 root DNS_CENTER_DEPLOY_CONFIG=/etc/dns-center/deployment.env /opt/dns-center/deploy/dns-center-deploy backup-verify >> /var/log/dns-center-backup.log 2>&1
