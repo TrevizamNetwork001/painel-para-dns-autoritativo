@@ -331,16 +331,17 @@ em produção. As evidências e limitações estão em
 | [Release 1.3.38](docs/RELEASE_1.3.38.md) | Botão combinado remover+publicar espera o relatório de prontidão |
 | [Release 1.3.39](docs/RELEASE_1.3.39.md) | Agente 0.10.1: secundário espera a transferência antes de confirmar o serial |
 | [Release 1.3.40](docs/RELEASE_1.3.40.md) | Publicação sem alterações explica o motivo e leva à aba Configuração |
+| [Release 1.3.41](docs/RELEASE_1.3.41.md) | Alerta de NS repetido no apex e mensagem específica ao publicar |
 | [Operação Cliente Exemplo — 18/09/2026](docs/OPERACAO_CLIENTE_EXEMPLO_2026_09_18.md) | Adoção das zonas reversas do dns-primary/02, runbook e pendências |
 
 ## Status do projeto
 
-**v1.3.40 em produção** (agente 0.10.1). Desde a v1.3.29: página Reversos
+**v1.3.41 em produção** (agente 0.10.1). Desde a v1.3.29: página Reversos
 (1.3.30), desativar/excluir empresa (1.3.31), remover bloco antigo + publicar
 num passo (1.3.32/1.3.38), descoberta com comparação entre servidores e zonas
 ignoradas (1.3.33–1.3.35), correção dos NS duplicados (1.3.37), espera do
 secundário pela transferência (agente 0.10.1, 1.3.39) e mensagem clara quando
-não há nada a publicar (1.3.40). Detalhes e runbook em
+não há nada a publicar (1.3.40) e alerta de NS repetido (1.3.41). Detalhes e runbook em
 [docs/OPERACAO_CLIENTE_EXEMPLO_2026_09_18.md](docs/OPERACAO_CLIENTE_EXEMPLO_2026_09_18.md).
 
 Histórico anterior: **v1.3.29** (hotfix pego ao vivo no primeiro uso

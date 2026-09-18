@@ -1031,7 +1031,7 @@ class DnsZoneController extends Controller
             'status',
             $published
                 ? 'Publicação concluída. O artefato está disponível para os agentes configurados.'
-                : 'Sem alterações desde a última publicação. Para mudar servidores, perfil de nameservers ou SOA, salve na aba Configuração; se editou registros, publique de novo.',
+                : $this->nothingToPublishMessage($zone, $validator),
         );
 
         return $published ? $response : $response->with('status_go_tab', 'configuration');
@@ -1211,8 +1211,27 @@ class DnsZoneController extends Controller
             'nothing_new' => ! $published
                 && $targets->isNotEmpty()
                 && $targets->every(fn (array $target): bool => $target['skipped'] !== null),
+            'nothing_new_message' => $published ? null : $this->nothingToPublishMessage($zone, $validator),
             'targets' => $targets,
         ]);
+    }
+
+    /**
+     * Explica por que não há nada a publicar. Se a zona tem NS repetido (sintoma de
+     * uma configuração que precisa ser salva de novo), diz isso em vez de um "ok" mudo.
+     */
+    private function nothingToPublishMessage(DnsZone $zone, DnsZoneValidator $validator): string
+    {
+        $duplicates = $validator->apexNameserverDuplicates($zone->refresh());
+
+        if ($duplicates !== []) {
+            return sprintf(
+                'Nada novo para publicar, mas o apex desta zona tem NS repetido (%s). Salve a configuração na aba Configuração para normalizar e depois publique.',
+                implode(', ', $duplicates),
+            );
+        }
+
+        return 'Sem alterações desde a última publicação. Para mudar servidores, perfil de nameservers ou SOA, salve na aba Configuração; se editou registros, publique de novo.';
     }
 
     private function normalizeRecordName(

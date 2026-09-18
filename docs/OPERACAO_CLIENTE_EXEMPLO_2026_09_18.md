@@ -85,7 +85,7 @@ de auditoria foram **mantidas** por decisão do operador.
 - SOA das reversas importadas tem `retry (3600) > refresh (900)`, o que gera o alerta "SOA
   retry normalmente deve ser menor que o refresh"; valores herdados do BIND antigo, alerta não
   bloqueia a publicação.
-- Alerta de NS repetido e outras validações "guiadas" ficaram fora de escopo (o caso não deve
-  se repetir depois da 1.3.37).
+- Alerta de NS repetido: implementado na 1.3.41 (aparece em Alertas com botão "Ir para
+  Configuração" e na mensagem de publicar quando não há nada novo).
 - Escrita direta no banco de produção pelo assistente é bloqueada pelo classificador da
   sessão; correções de dados devem passar pela interface (ou ser liberadas explicitamente).

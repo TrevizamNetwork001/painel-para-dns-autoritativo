@@ -454,6 +454,50 @@ class DnsZoneWorkflowTest extends TestCase
             ->assertJsonPath('nothing_new', false);
     }
 
+    public function test_published_zone_with_duplicate_apex_ns_says_so_instead_of_a_silent_ok(): void
+    {
+        $context = $this->context(withAgents: true);
+        $zone = $this->createZone($context);
+
+        $this->actingAs($context['admin'])->post(route('zones.publish', $zone));
+
+        // Como uma zona importada do BIND deixava: o mesmo NS duas vezes, com
+        // e sem ponto final / TTL.
+        $ns = $zone->records()->where('type', 'NS')->first();
+        $zone->records()->create([
+            'organization_id' => $zone->organization_id,
+            'name' => $zone->name.'.',
+            'type' => 'NS',
+            'ttl' => 3600,
+            'content' => $ns->content.'.',
+            'enabled' => true,
+        ]);
+
+        $this->actingAs($context['admin'])
+            ->postJson(route('zones.publish-and-sync', $zone))
+            ->assertOk()
+            ->assertJsonPath('published', false)
+            ->assertJsonPath('nothing_new_message', fn (string $message): bool => str_contains($message, 'NS repetido'));
+
+        $this->actingAs($context['admin'])
+            ->followingRedirects()
+            ->post(route('zones.publish', $zone))
+            ->assertOk()
+            ->assertSee('NS repetido')
+            ->assertSee('data-go-tab="configuration"', false);
+    }
+
+    public function test_clean_zone_has_no_duplicate_ns_warning(): void
+    {
+        $context = $this->context(withAgents: true);
+        $zone = $this->createZone($context);
+
+        $this->actingAs($context['admin'])
+            ->get(route('zones.show', $zone))
+            ->assertOk()
+            ->assertDontSee('NS repetido');
+    }
+
     public function test_zone_page_offers_go_to_configuration_after_publish_without_changes(): void
     {
         $context = $this->context(withAgents: true);

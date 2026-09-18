@@ -225,6 +225,15 @@ class DnsZoneValidator
             }
         }
 
+        $duplicatedNameservers = $this->duplicatedApexNameservers($nsRecords, $zone);
+
+        if ($duplicatedNameservers !== []) {
+            $warnings[] = sprintf(
+                'O apex da zona tem NS repetido (%s). Salve a configuração na aba Configuração para normalizar.',
+                implode(', ', $duplicatedNameservers),
+            );
+        }
+
         if ($zone->soa_retry >= $zone->soa_refresh) {
             $warnings[] = 'O SOA retry normalmente deve ser menor que o refresh.';
         }
@@ -244,6 +253,40 @@ class DnsZoneValidator
                 'secondary_servers' => $secondaryCount,
             ],
         ];
+    }
+
+    /**
+     * Nameservers que aparecem mais de uma vez no apex (mesmo alvo, grafias
+     * diferentes: com/sem ponto final, outra caixa). Salvar a configuração da zona
+     * refaz os NS a partir do perfil e resolve.
+     *
+     * @return array<int, string>
+     */
+    public function apexNameserverDuplicates(DnsZone $zone): array
+    {
+        $zone->loadMissing('records');
+
+        $nsRecords = $zone->records
+            ->where('enabled', true)
+            ->where('type', 'NS')
+            ->values();
+
+        return $this->duplicatedApexNameservers($nsRecords, $zone);
+    }
+
+    /**
+     * @param  \Illuminate\Support\Collection<int, DnsRecord>  $nsRecords
+     * @return array<int, string>
+     */
+    private function duplicatedApexNameservers($nsRecords, DnsZone $zone): array
+    {
+        return $nsRecords
+            ->filter(fn (DnsRecord $record): bool => $this->owner($record, $zone) === '@')
+            ->groupBy(fn (DnsRecord $record): string => $this->domain($record->content))
+            ->filter(fn ($group): bool => $group->count() > 1)
+            ->keys()
+            ->values()
+            ->all();
     }
 
     private function owner(DnsRecord $record, DnsZone $zone): string

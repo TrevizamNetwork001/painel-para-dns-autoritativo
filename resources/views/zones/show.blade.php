@@ -1194,6 +1194,16 @@
                                     <li>{{ $warning }}</li>
                                 @endforeach
                             </ul>
+
+                            @if (collect($validationWarnings)->contains(fn ($warning) => str_contains($warning, 'NS repetido')))
+                                <button
+                                    type="button"
+                                    class="button button-secondary"
+                                    data-go-tab="configuration"
+                                >
+                                    Ir para Configuração
+                                </button>
+                            @endif
                         </div>
                     @endif
 
@@ -2863,7 +2873,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         if (payload.nothing_new) {
-            stateText.textContent = 'Sem alterações desde a última publicação: os servidores já estão com esta versão. Para mudar servidores, perfil de nameservers ou SOA, salve na aba Configuração; se editou registros, publique de novo.';
+            stateText.textContent = payload.nothing_new_message || 'Sem alterações desde a última publicação: os servidores já estão com esta versão.';
             targetsList.hidden = false;
             payload.targets.forEach((target) => targetsList.appendChild(rowFor(target)));
             document.querySelector('[data-publish-sync-go-config]').hidden = false;
