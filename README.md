@@ -336,11 +336,12 @@ em produção. As evidências e limitações estão em
 | [Release 1.3.43](docs/RELEASE_1.3.43.md) | Configurações → Backup: credenciais do R2 pelo painel, criptografadas, com teste de conexão |
 | [Release 1.3.44](docs/RELEASE_1.3.44.md) | Agente 0.10.2 e fluxos de upgrade, publicação e restauração mais robustos |
 | [Release 1.3.45](docs/RELEASE_1.3.45.md) | Hotfix: limite da API por agente; evita HTTP 429 compartilhado atrás do Docker |
+| [Release 1.3.46](docs/RELEASE_1.3.46.md) | Confirma upgrade pelo próximo poll autenticado do binário novo |
 | [Operação Cliente Exemplo — 18/09/2026](docs/OPERACAO_CLIENTE_EXEMPLO_2026_09_18.md) | Adoção das zonas reversas do dns-primary/02, runbook e pendências |
 
 ## Status do projeto
 
-**v1.3.45 publicada no painel** (artefato do agente 0.10.2; atualização dos hosts
+**v1.3.46 publicada no painel** (artefato do agente 0.10.2; atualização dos hosts
 autoritativos acompanhada separadamente). Desde a v1.3.29: página Reversos
 (1.3.30), desativar/excluir empresa (1.3.31), remover bloco antigo + publicar
 num passo (1.3.32/1.3.38), descoberta com comparação entre servidores e zonas

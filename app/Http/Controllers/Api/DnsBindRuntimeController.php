@@ -164,6 +164,32 @@ class DnsBindRuntimeController extends Controller
         /** @var DnsAgent $agent */
         $agent = $request->attributes->get('dns_agent');
 
+        // The process that installs a new binary may still report using its
+        // old version. Its next authenticated poll proves the new process is
+        // running and lets the panel confirm the upgrade before the heartbeat.
+        if (preg_match('/\Adns-center-agent\/(\d+\.\d+\.\d+)\z/', (string) $request->userAgent(), $matches) === 1) {
+            $reportedVersion = $matches[1];
+            $metadata = $agent->metadata ?? [];
+            $knownVersion = $metadata['agent_version'] ?? $agent->server?->agent_version;
+
+            if (! is_string($knownVersion) || version_compare($reportedVersion, $knownVersion, '>')) {
+                DB::transaction(function () use ($agent, $metadata, $reportedVersion): void {
+                    $agent->forceFill([
+                        'metadata' => [...$metadata, 'agent_version' => $reportedVersion],
+                        'last_seen_at' => now(),
+                    ])->save();
+                    $server = $agent->server;
+                    if ($server !== null) {
+                        $server->forceFill([
+                            'agent_version' => $reportedVersion,
+                            'agent_status' => 'online',
+                            'last_seen_at' => now(),
+                        ])->save();
+                    }
+                });
+            }
+        }
+
         DnsBindOperation::expireStaleOperations(
             $agent->dns_server_id,
             $agent->id,

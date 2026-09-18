@@ -346,6 +346,37 @@ class DnsAgentUpgradeTest extends TestCase
             ->assertJsonPath('version_confirmed', true);
     }
 
+    public function test_new_agent_poll_confirms_upgrade_before_next_heartbeat(): void
+    {
+        $context = $this->context();
+        $availableVersion = AgentArtifact::availableVersion();
+        $context['agent']->update(['metadata' => ['agent_version' => '0.10.1']]);
+        $context['server']->update(['agent_version' => '0.10.1']);
+        DnsBindOperation::query()->create([
+            'organization_id' => $context['organization']->id,
+            'dns_server_id' => $context['server']->id,
+            'dns_agent_id' => $context['agent']->id,
+            'action' => 'upgrade_agent',
+            'status' => 'succeeded',
+            'authorization_nonce' => (string) Str::uuid(),
+            'authorized_by' => $context['admin']->id,
+            'authorized_at' => now()->subMinute(),
+            'completed_at' => now(),
+            'result' => ['changed' => true, 'binary_changed' => true],
+        ]);
+
+        $this->withToken($context['token'])
+            ->withHeader('User-Agent', 'dns-center-agent/'.$availableVersion)
+            ->getJson('/api/agent/bind/operations/next')
+            ->assertOk();
+
+        $this->actingAs($context['admin'])
+            ->getJson(route('servers.agent.upgrade.status', $context['server']))
+            ->assertOk()
+            ->assertJsonPath('installed_version', $availableVersion)
+            ->assertJsonPath('version_confirmed', true);
+    }
+
     public function test_upgrade_result_confirms_version_before_next_heartbeat(): void
     {
         $context = $this->context();
