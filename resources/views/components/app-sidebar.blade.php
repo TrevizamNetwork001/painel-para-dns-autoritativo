@@ -114,6 +114,18 @@
                 </span>
                 Empresas
             </a>
+
+            @if (Route::has('settings.backup.edit'))
+                <a href="{{ route('settings.backup.edit') }}" @class(['nav-item', 'is-active' => $active === 'settings'])>
+                    <span class="nav-icon" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" fill="none">
+                            <circle cx="12" cy="12" r="3" />
+                            <path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6L7 7M17 17l1.4 1.4M5.6 18.4L7 17M17 7l1.4-1.4" />
+                        </svg>
+                    </span>
+                    Configurações
+                </a>
+            @endif
         @endif
     </nav>
 </aside>

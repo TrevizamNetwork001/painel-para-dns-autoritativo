@@ -75,6 +75,7 @@ class EnsureAdminTwoFactor
             'tsig.*',
             'organizations.status',
             'organizations.destroy',
+            'settings.*',
         ]);
     }
 }

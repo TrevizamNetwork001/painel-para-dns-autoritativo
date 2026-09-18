@@ -8651,3 +8651,6 @@ html[data-theme='light'] .dashboard-v2 .dashboard-activity-item .activity-icon-g
 html[data-theme='light'] .dashboard-v2 .dashboard-activity-item .activity-icon-orange { color: #9b5c00; }
 html[data-theme='light'] .dashboard-v2 .dashboard-quick-action { border-color: #dce5ec; background: #f5f8fb; }
 html[data-theme='light'] .dashboard-footer { color: #627286; }
+
+.form-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 0.75rem; margin-top: 1rem; }
+.panel form small { display: block; margin-top: 0.35rem; color: var(--text-soft); font-size: 0.72rem; }

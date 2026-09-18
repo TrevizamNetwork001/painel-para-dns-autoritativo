@@ -24,37 +24,40 @@ do `deployment.env`. O `flock` do deploy evita rodar junto com um deploy.
 ## Configuração da cópia no Cloudflare R2
 
 1. No painel da Cloudflare: R2 → criar um **bucket privado** (ex.: `dns-center-backups`) e um
-   **API token** (S3) com permissão de leitura/escrita **só nesse bucket**. Anote Account ID,
-   Access Key ID e Secret Access Key.
-2. No bucket, crie uma **regra de ciclo de vida** para apagar objetos após 30 dias (o
-   servidor só limpa a pasta local; a retenção no R2 é do R2).
-3. Na máquina, como root (os segredos ficam só em arquivos 0600, nunca no repositório):
+   **token de API** com *Leitura/gravação para objeto*, **restrito só a esse bucket**. Anote o
+   Account ID (aparece na URL do painel), o **ID da chave de acesso** e a **chave de acesso
+   secreta** (só aparece uma vez; não tire print nem cole em chat). Crie também uma **regra de
+   ciclo de vida** no bucket para apagar objetos após 30 dias (o servidor só limpa a pasta
+   local; a retenção no R2 é do R2).
+2. No DNS Center, como administrador da plataforma: **Configurações → Backup do banco**.
+   Preencha Account ID, bucket, pasta e as duas chaves, salve e use **Testar conexão** (envia,
+   confere e apaga um objeto minúsculo). As credenciais ficam **criptografadas com a
+   `APP_KEY`** (`platform_settings`) e a chave secreta nunca é exibida de novo. Deixar as chaves
+   em branco ao editar mantém as atuais.
+3. Crie a **senha de criptografia dos dumps** no servidor (ela **não** fica no painel: se
+   ficasse no banco, o backup não abriria no dia em que o banco se perdesse):
 
    ```bash
    install -m 600 /dev/null /etc/dns-center/backup.pass
-   openssl rand -base64 32 > /etc/dns-center/backup.pass      # senha de criptografia
-   install -m 600 /dev/null /etc/dns-center/backup-r2.env
-   cat > /etc/dns-center/backup-r2.env <<'ENV'
-   R2_ACCOUNT_ID=...
-   R2_BUCKET=dns-center-backups
-   R2_ACCESS_KEY_ID=...
-   R2_SECRET_ACCESS_KEY=...
-   R2_PREFIX=dns-center/
-   ENV
+   openssl rand -base64 32 > /etc/dns-center/backup.pass
    ```
 
-4. **Guarde uma cópia da senha (`backup.pass`) fora do servidor** (gerenciador de senhas).
-   Sem ela, os backups do R2 **não podem ser descriptografados**.
-5. Acrescente ao `/etc/dns-center/deployment.env` (modo 0600):
+   **Guarde uma cópia dela fora do servidor** (gerenciador de senhas). Sem ela os backups do R2
+   **não podem ser descriptografados**.
+4. O `/etc/dns-center/deployment.env` (modo 0600) precisa de:
 
    ```
-   DNS_CENTER_BACKUP_REMOTE_ENV=/etc/dns-center/backup-r2.env
    DNS_CENTER_BACKUP_PASSPHRASE_FILE=/etc/dns-center/backup.pass
    DNS_CENTER_BACKUP_RETENTION_DAYS=14
    ```
 
-6. Teste: `sudo DNS_CENTER_DEPLOY_CONFIG=/etc/dns-center/deployment.env /opt/dns-center/deploy/dns-center-deploy backup`
+5. Teste: `sudo DNS_CENTER_DEPLOY_CONFIG=/etc/dns-center/deployment.env /opt/dns-center/deploy/dns-center-deploy backup`
    deve terminar com "Cópia remota: … (N bytes, criptografada)".
+
+O script do servidor lê as credenciais do painel (`php artisan dns-center:backup-r2-config`,
+que só imprime `R2_*=valor` com caracteres seguros); se o painel não estiver configurado, cai
+para o arquivo `DNS_CENTER_BACKUP_REMOTE_ENV` (opcional, modo 0600, mesmas chaves `R2_*`).
+Sem credenciais em nenhum dos dois, o backup fica só local.
 
 ## Agendamento
 
@@ -80,6 +83,7 @@ Depois, apontar a aplicação para o banco recuperado (ou renomear) e rodar
 ## O que este backup NÃO cobre
 
 - `/etc/dns-center/app.env` (APP_KEY e segredos): guarde-o à parte; sem a `APP_KEY` os
-  segredos cifrados dentro do banco (ex.: chaves TSIG, 2FA) não abrem.
+  segredos cifrados dentro do banco (chaves TSIG, 2FA e as **credenciais do R2 da tela de
+  Configurações**) não abrem.
 - Configuração e zonas dos servidores BIND (`dns-primary`, `dns-secondary`): o agente já faz backup local
   antes de cada alteração, mas não há cópia central.

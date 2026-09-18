@@ -14,6 +14,7 @@ use App\Http\Controllers\DnsServerController;
 use App\Http\Controllers\DnsServerTransferController;
 use App\Http\Controllers\DnsTsigKeyController;
 use App\Http\Controllers\DnsZoneController;
+use App\Http\Controllers\BackupSettingsController;
 use App\Http\Controllers\OrganizationController;
 use App\Http\Controllers\PasswordChangeController;
 use App\Http\Controllers\PlatformOrganizationContextController;
@@ -184,6 +185,18 @@ Route::middleware([
 
     Route::delete('/{organization}', [OrganizationController::class, 'destroy'])
         ->name('destroy');
+});
+
+Route::middleware([
+    'auth',
+    'password.changed',
+])->prefix('configuracoes/backup')->name('settings.backup.')->group(function (): void {
+    Route::get('/', [BackupSettingsController::class, 'edit'])->name('edit');
+    Route::put('/', [BackupSettingsController::class, 'update'])->name('update');
+    Route::delete('/', [BackupSettingsController::class, 'destroy'])->name('destroy');
+    Route::post('/testar', [BackupSettingsController::class, 'test'])
+        ->middleware('throttle:5,1')
+        ->name('test');
 });
 
 Route::middleware([

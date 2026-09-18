@@ -127,19 +127,32 @@ prune_backups() {
     done < <(ls -1t "${DNS_CENTER_BACKUP_DIR}"/dns-center-*.dump 2>/dev/null || true)
 }
 
+panel_backup_config() {
+    # Credenciais do R2 cadastradas no painel (Configurações → Backup), lidas do app
+    # em execução. Só linhas KEY=VALOR com caracteres seguros passam pelo filtro.
+    compose exec -T app php artisan dns-center:backup-r2-config 2>/dev/null \
+        | grep -E '^R2_(ACCOUNT_ID|BUCKET|PREFIX|ACCESS_KEY_ID|SECRET_ACCESS_KEY)=[A-Za-z0-9._/-]*$' \
+        || true
+}
+
 upload_backup_remote() {
     # Cópia fora do servidor (Cloudflare R2, API S3). O dump é SEMPRE criptografado
     # antes de sair (gpg simétrico AES256); sem senha configurada, nada é enviado.
-    # Credenciais vão a curl por stdin (-K -), nunca na linha de comando.
+    # As credenciais vêm do painel (preferencial) ou de DNS_CENTER_BACKUP_REMOTE_ENV
+    # e vão a curl por stdin (-K -), nunca na linha de comando.
     local file="$1" remote_env="${DNS_CENTER_BACKUP_REMOTE_ENV:-}"
-    local pass_file="${DNS_CENTER_BACKUP_PASSPHRASE_FILE:-}"
+    local pass_file="${DNS_CENTER_BACKUP_PASSPHRASE_FILE:-}" panel_lines
 
-    if [ -z "${remote_env}" ] || [ ! -f "${remote_env}" ]; then
-        printf 'Cópia remota: não configurada (somente local).\n'
-        return 0
+    panel_lines="$(panel_backup_config)"
+
+    if [ -z "${panel_lines}" ]; then
+        if [ -z "${remote_env}" ] || [ ! -f "${remote_env}" ]; then
+            printf 'Cópia remota: não configurada (somente local).\n'
+            return 0
+        fi
+        [ "$(stat -c '%a' "${remote_env}")" = "600" ] \
+            || fail "${remote_env} deve ter modo 0600"
     fi
-    [ "$(stat -c '%a' "${remote_env}")" = "600" ] \
-        || fail "${remote_env} deve ter modo 0600"
     [ -n "${pass_file}" ] && [ -s "${pass_file}" ] \
         || fail "senha de criptografia ausente (DNS_CENTER_BACKUP_PASSPHRASE_FILE); nada foi enviado"
     [ "$(stat -c '%a' "${pass_file}")" = "600" ] \
@@ -148,16 +161,22 @@ upload_backup_remote() {
     require_command curl
 
     (
-        # shellcheck disable=SC1090
-        source "${remote_env}"
-        : "${R2_ACCOUNT_ID:?ausente em ${remote_env}}"
-        : "${R2_BUCKET:?ausente em ${remote_env}}"
-        : "${R2_ACCESS_KEY_ID:?ausente em ${remote_env}}"
-        : "${R2_SECRET_ACCESS_KEY:?ausente em ${remote_env}}"
+        if [ -n "${panel_lines}" ]; then
+            while IFS='=' read -r name value; do
+                export "${name}=${value}"
+            done <<< "${panel_lines}"
+        else
+            # shellcheck disable=SC1090
+            source "${remote_env}"
+        fi
+        : "${R2_ACCOUNT_ID:?credenciais do R2 incompletas}"
+        : "${R2_BUCKET:?credenciais do R2 incompletas}"
+        : "${R2_ACCESS_KEY_ID:?credenciais do R2 incompletas}"
+        : "${R2_SECRET_ACCESS_KEY:?credenciais do R2 incompletas}"
 
         local encrypted="${file}.gpg" object url expected actual
         object="${R2_PREFIX:-dns-center/}$(basename "${encrypted}")"
-        url="https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com/${R2_BUCKET}/${object}"
+        url="${DNS_CENTER_BACKUP_R2_ENDPOINT:-https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com}/${R2_BUCKET}/${object}"
         trap 'rm -f -- "${encrypted}"' EXIT
 
         gpg --batch --yes --quiet --pinentry-mode loopback \

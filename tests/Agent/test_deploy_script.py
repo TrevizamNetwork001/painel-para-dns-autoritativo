@@ -1,13 +1,86 @@
+import hashlib
+import hmac
+import http.server
 import os
 import pathlib
+import shutil
 import subprocess
 import tempfile
+import threading
 import time
 import unittest
+import urllib.parse
 
 
 PROJECT_ROOT = pathlib.Path(__file__).resolve().parents[2]
 DEPLOY_SCRIPT = PROJECT_ROOT / "deploy" / "dns-center-deploy"
+
+
+ACCESS_KEY = "AKIATESTTESTTEST0000"
+SECRET_KEY = "s3cr3tTESTTESTTESTTESTTESTTESTTESTTEST00"
+
+
+class FakeR2(http.server.BaseHTTPRequestHandler):
+    """R2 falso que verifica a assinatura SigV4 com uma implementação independente."""
+
+    objects: dict = {}
+    rejected: list = []
+
+    def log_message(self, *args):
+        pass
+
+    def _verify(self, body_hash_from_body: str) -> bool:
+        auth = self.headers.get("Authorization", "")
+        if not auth.startswith("AWS4-HMAC-SHA256 "):
+            return False
+        fields = dict(
+            part.strip().split("=", 1) for part in auth[len("AWS4-HMAC-SHA256 "):].split(",")
+        )
+        access_key, date, region, service, _ = fields["Credential"].split("/")
+        if access_key != ACCESS_KEY:
+            return False
+        signed = fields["SignedHeaders"].split(";")
+        payload = self.headers.get("x-amz-content-sha256", body_hash_from_body)
+        canonical_headers = "".join(f"{h}:{self.headers[h].strip()}\n" for h in signed)
+        parsed = urllib.parse.urlsplit(self.path)
+        canonical = "\n".join([
+            self.command, parsed.path, parsed.query, canonical_headers, ";".join(signed), payload,
+        ])
+        amz_date = self.headers["x-amz-date"]
+        to_sign = "\n".join([
+            "AWS4-HMAC-SHA256", amz_date, f"{date}/{region}/{service}/aws4_request",
+            hashlib.sha256(canonical.encode()).hexdigest(),
+        ])
+
+        def mac(key, msg):
+            return hmac.new(key, msg.encode(), hashlib.sha256).digest()
+
+        key = mac(mac(mac(mac(("AWS4" + SECRET_KEY).encode(), date), region), service), "aws4_request")
+        expected = hmac.new(key, to_sign.encode(), hashlib.sha256).hexdigest()
+        return hmac.compare_digest(expected, fields["Signature"])
+
+    def _handle(self):
+        length = int(self.headers.get("Content-Length") or 0)
+        body = self.rfile.read(length) if length and self.command == "PUT" else b""
+        if not self._verify(hashlib.sha256(body).hexdigest()):
+            FakeR2.rejected.append((self.command, self.path))
+            self.send_response(403)
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+            return
+        if self.command == "PUT":
+            FakeR2.objects[self.path] = body
+            self.send_response(200)
+            self.send_header("Content-Length", "0")
+        elif self.command == "HEAD" and self.path in FakeR2.objects:
+            self.send_response(200)
+            self.send_header("Content-Length", str(len(FakeR2.objects[self.path])))
+        else:
+            self.send_response(404)
+            self.send_header("Content-Length", "0")
+        self.end_headers()
+
+    do_PUT = do_HEAD = _handle
 
 
 class DeployScriptTest(unittest.TestCase):
@@ -116,6 +189,122 @@ class DeployScriptTest(unittest.TestCase):
         self.assertLess(branch.index("prune_backups"), branch.index("upload_backup_remote"))
         self.assertIn("use_running_version", branch)
         self.assertIn("backup-verify", script)
+
+    def _run_upload(self, panel_lines, remote_env_content=None):
+        """Executa upload_backup_remote do script real contra um R2 falso."""
+        if not (shutil.which("gpg") and shutil.which("curl")):
+            self.skipTest("gpg/curl indisponíveis")
+
+        FakeR2.objects = {}
+        FakeR2.rejected = []
+        server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), FakeR2)
+        threading.Thread(target=server.serve_forever, daemon=True).start()
+        self.addCleanup(server.server_close)
+        self.addCleanup(server.shutdown)
+        port = server.server_address[1]
+
+        script_text = DEPLOY_SCRIPT.read_text(encoding="utf-8")
+        panel = self._function("panel_backup_config")
+        upload = self._function("upload_backup_remote")
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = pathlib.Path(directory)
+            dump = root / "dns-center-20260918T000000Z.dump"
+            dump.write_bytes(os.urandom(4096))
+            passphrase = root / "backup.pass"
+            passphrase.write_text("senha-de-teste")
+            passphrase.chmod(0o600)
+            remote_env = root / "backup-r2.env"
+            if remote_env_content is not None:
+                remote_env.write_text(remote_env_content)
+                remote_env.chmod(0o600)
+
+            script = (
+                'fail() { echo "$*" >&2; exit 1; }\n'
+                'require_command() { command -v "$1" >/dev/null || fail "ausente $1"; }\n'
+                "compose() {\n"
+                "  cat <<'PANEL_EOF'\n"
+                f"{panel_lines}\n"
+                "PANEL_EOF\n"
+                "}\n"
+                f"DNS_CENTER_BACKUP_PASSPHRASE_FILE={passphrase}\n"
+                f"DNS_CENTER_BACKUP_REMOTE_ENV={remote_env}\n"
+                f"DNS_CENTER_BACKUP_R2_ENDPOINT=http://127.0.0.1:{port}\n"
+                f"panel_backup_config() {{{panel}\n}}\n"
+                f"upload_backup_remote() {{{upload}\n}}\n"
+                f"upload_backup_remote {dump}\n"
+            )
+            result = subprocess.run(["bash", "-c", script], capture_output=True, text=True)
+            encrypted_leftover = list(root.glob("*.gpg"))
+            objects = dict(FakeR2.objects)
+            dump_bytes = dump.read_bytes()
+
+            decrypted = None
+            if objects:
+                (root / "remote.gpg").write_bytes(next(iter(objects.values())))
+                proc = subprocess.run(
+                    ["gpg", "--batch", "--quiet", "--pinentry-mode", "loopback",
+                     "--passphrase-file", str(passphrase), "-d", str(root / "remote.gpg")],
+                    capture_output=True,
+                )
+                decrypted = proc.stdout
+
+        return result, objects, list(FakeR2.rejected), encrypted_leftover, dump_bytes, decrypted
+
+    def test_upload_from_panel_credentials_signs_encrypts_and_verifies(self):
+        lines = "\n".join([
+            "R2_ACCOUNT_ID=bec407d758365446312d1c62e87d8acf",
+            "R2_BUCKET=dns-center-backups",
+            "R2_PREFIX=dns-center/",
+            f"R2_ACCESS_KEY_ID={ACCESS_KEY}",
+            f"R2_SECRET_ACCESS_KEY={SECRET_KEY}",
+        ])
+        result, objects, rejected, leftover, dump_bytes, decrypted = self._run_upload(lines)
+
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertEqual([], rejected, "assinatura SigV4 recusada pelo R2 falso")
+        self.assertIn("criptografada", result.stdout)
+        self.assertEqual(1, len(objects))
+        path = next(iter(objects))
+        self.assertTrue(path.startswith("/dns-center-backups/dns-center/dns-center-"))
+        self.assertTrue(path.endswith(".dump.gpg"))
+        # O que foi enviado não é o dump em claro, mas abre com a senha e é idêntico.
+        self.assertNotEqual(dump_bytes, next(iter(objects.values())))
+        self.assertEqual(dump_bytes, decrypted)
+        self.assertEqual([], leftover, ".gpg temporário deve ser apagado")
+        # As chaves nunca aparecem na saída do script.
+        self.assertNotIn(SECRET_KEY, result.stdout + result.stderr)
+
+    def test_upload_falls_back_to_env_file_and_skips_when_nothing_configured(self):
+        env = (
+            "R2_ACCOUNT_ID=bec407d758365446312d1c62e87d8acf\n"
+            "R2_BUCKET=dns-center-backups\nR2_PREFIX=dns-center/\n"
+            f"R2_ACCESS_KEY_ID={ACCESS_KEY}\nR2_SECRET_ACCESS_KEY={SECRET_KEY}\n"
+        )
+        result, objects, rejected, _, _, _ = self._run_upload("", env)
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertEqual(1, len(objects))
+        self.assertEqual([], rejected)
+
+        result, objects, _, _, _, _ = self._run_upload("", None)
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertIn("não configurada", result.stdout)
+        self.assertEqual({}, objects)
+
+    def test_upload_with_wrong_secret_fails_and_leaves_no_encrypted_file(self):
+        lines = "\n".join([
+            "R2_ACCOUNT_ID=bec407d758365446312d1c62e87d8acf",
+            "R2_BUCKET=dns-center-backups",
+            "R2_PREFIX=dns-center/",
+            f"R2_ACCESS_KEY_ID={ACCESS_KEY}",
+            "R2_SECRET_ACCESS_KEY=chaveErradaChaveErradaChaveErrada00",
+        ])
+        result, objects, rejected, leftover, _, _ = self._run_upload(lines)
+
+        self.assertNotEqual(0, result.returncode)
+        self.assertEqual({}, objects)
+        self.assertTrue(rejected)
+        self.assertEqual([], leftover)
 
 
 if __name__ == "__main__":
