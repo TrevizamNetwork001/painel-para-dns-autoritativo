@@ -56,10 +56,11 @@ servidores.
   agente 0.10.1 e **voltou na `customer.example`** mesmo com 0.10.1 (o primário terminou
   3s depois de o secundário desistir): a correção definitiva é a **ordem primário →
   secundário no painel (1.3.42)**.
-- **Confirmação de upgrade do agente** depende do heartbeat, que roda a cada 5 min
-  (`dns-center-agent.timer`); o upgrade em si leva segundos. Não é lentidão; a espera varia
-  de segundos a 5 min conforme o momento do clique. Melhoria possível (heartbeat imediato
-  após o upgrade) foi avaliada e descartada por não compensar.
+- **Confirmação de upgrade do agente**: até a versão 0.10.1 dependia do heartbeat
+  (`dns-center-agent.timer`), que roda a cada 5 min. O painel 1.3.44 aceita a
+  versão instalada no resultado da operação do agente 0.10.2, separa o prazo
+  de coleta do prazo de execução e continua consultando até o estado final.
+  Os hosts ainda precisam receber o agente 0.10.2 para usar esse resultado.
 - **Erro de uso já visto**: escolher o mesmo servidor nos dois campos dá "secondary server id
   deve ser diferente de primary server id"; e **não** renomear o servidor em Servidores →
   Editar (o nome do dropdown "dns-primary — ns1…" foi parar no campo Nome do servidor 5 e teve
