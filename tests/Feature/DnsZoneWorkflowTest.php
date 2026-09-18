@@ -378,19 +378,98 @@ class DnsZoneWorkflowTest extends TestCase
 
         $this->assertSame('published', $zone->status);
 
-        $targets = $response->json('targets');
+        $targets = collect($response->json('targets'))->keyBy('server_id');
         $this->assertCount(2, $targets);
 
         foreach ($targets as $target) {
             $this->assertNull($target['skipped']);
             $this->assertNotEmpty($target['status_url']);
-
-            $this->assertDatabaseHas('dns_bind_operations', [
-                'dns_server_id' => $target['server_id'],
-                'action' => 'apply_zones',
-                'status' => 'authorized',
-            ]);
         }
+
+        // O primário aplica primeiro; o secundário fica adiado e sem operação.
+        $this->assertFalse($targets[$context['primary']->id]['deferred']);
+        $this->assertTrue($targets[$context['secondary']->id]['deferred']);
+
+        $this->assertDatabaseHas('dns_bind_operations', [
+            'dns_server_id' => $context['primary']->id,
+            'action' => 'apply_zones',
+            'status' => 'authorized',
+        ]);
+        $this->assertDatabaseMissing('dns_bind_operations', [
+            'dns_server_id' => $context['secondary']->id,
+            'action' => 'apply_zones',
+        ]);
+    }
+
+    public function test_secondary_is_released_only_after_primary_applied_the_zone(): void
+    {
+        $context = $this->context(withAgents: true);
+        $zone = $this->createZone($context);
+
+        $this->actingAs($context['admin'])
+            ->postJson(route('zones.publish-and-sync', $zone))
+            ->assertOk();
+
+        // Enquanto o primário não aplicou, repetir a chamada continua adiando o secundário.
+        $again = $this->actingAs($context['admin'])
+            ->postJson(route('zones.publish-and-sync', $zone))
+            ->assertOk();
+
+        $this->assertTrue(
+            collect($again->json('targets'))->firstWhere('server_id', $context['secondary']->id)['deferred'],
+        );
+        $this->assertDatabaseMissing('dns_bind_operations', [
+            'dns_server_id' => $context['secondary']->id,
+            'action' => 'apply_zones',
+        ]);
+
+        // Primário confirma a versão publicada.
+        DnsAgentPublication::query()
+            ->whereIn('dns_zone_version_id', $zone->versions()->pluck('id'))
+            ->where('dns_server_id', $context['primary']->id)
+            ->update(['status' => 'applied']);
+
+        $released = $this->actingAs($context['admin'])
+            ->postJson(route('zones.publish-and-sync', $zone))
+            ->assertOk();
+
+        $targets = collect($released->json('targets'))->keyBy('server_id');
+
+        $this->assertSame('já sincronizado', $targets[$context['primary']->id]['skipped']);
+        $this->assertFalse($targets[$context['secondary']->id]['deferred']);
+        $this->assertNull($targets[$context['secondary']->id]['skipped']);
+        $this->assertDatabaseHas('dns_bind_operations', [
+            'dns_server_id' => $context['secondary']->id,
+            'action' => 'apply_zones',
+            'status' => 'authorized',
+        ]);
+    }
+
+    public function test_secondary_stays_deferred_when_primary_publication_failed(): void
+    {
+        $context = $this->context(withAgents: true);
+        $zone = $this->createZone($context);
+
+        $this->actingAs($context['admin'])
+            ->postJson(route('zones.publish-and-sync', $zone))
+            ->assertOk();
+
+        DnsAgentPublication::query()
+            ->whereIn('dns_zone_version_id', $zone->versions()->pluck('id'))
+            ->where('dns_server_id', $context['primary']->id)
+            ->update(['status' => 'failed']);
+
+        $response = $this->actingAs($context['admin'])
+            ->postJson(route('zones.publish-and-sync', $zone))
+            ->assertOk();
+
+        $this->assertTrue(
+            collect($response->json('targets'))->firstWhere('server_id', $context['secondary']->id)['deferred'],
+        );
+        $this->assertDatabaseMissing('dns_bind_operations', [
+            'dns_server_id' => $context['secondary']->id,
+            'action' => 'apply_zones',
+        ]);
     }
 
     public function test_publish_and_sync_skips_server_already_synchronized(): void

@@ -2782,7 +2782,9 @@ document.addEventListener('DOMContentLoaded', () => {
         const status = document.createElement('span');
         status.className = 'status-badge status-neutral';
         status.dataset.publishSyncTargetStatus = '';
-        status.textContent = target.skipped ? 'Já sincronizado' : 'Aguardando agente…';
+        status.textContent = target.skipped
+            ? 'Já sincronizado'
+            : (target.deferred ? 'Aguardando o primário' : 'Aguardando agente…');
 
         if (target.skipped) {
             status.className = 'status-badge status-success';
@@ -2794,7 +2796,85 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const allSettled = () => Array.from(
         targetsList.querySelectorAll('[data-publish-sync-target-status]'),
-    ).every((el) => ['Aplicado', 'Falhou', 'Expirou', 'Já sincronizado'].includes(el.textContent));
+    ).every((el) => ['Aplicado', 'Falhou', 'Expirou', 'Já sincronizado', 'Não iniciado'].includes(el.textContent));
+
+    const DONE_STATES = ['Aplicado', 'Falhou', 'Expirou', 'Já sincronizado'];
+    let deferredStarting = false;
+    let deferredRetries = 0;
+
+    // Libera os servidores "adiados" (secundários) quando o primário já aplicou; se o
+    // primário falhou, marca os adiados como "Não iniciado". Reusa o mesmo endpoint,
+    // que agora não adia mais o secundário e cria a operação dele.
+    const startDeferred = async () => {
+        const statusEls = Array.from(targetsList.querySelectorAll('[data-publish-sync-target-status]'));
+        const waiting = statusEls.filter((el) => el.textContent === 'Aguardando o primário');
+
+        if (waiting.length === 0 || deferredStarting) return;
+
+        const active = statusEls.filter((el) => !waiting.includes(el));
+
+        if (active.some((el) => !DONE_STATES.includes(el.textContent))) return;
+
+        if (active.some((el) => ['Falhou', 'Expirou'].includes(el.textContent))) {
+            waiting.forEach((el) => {
+                el.textContent = 'Não iniciado';
+                el.className = 'status-badge status-warning';
+                el.title = 'O servidor primário não aplicou a zona; corrija e publique de novo.';
+            });
+            return;
+        }
+
+        deferredStarting = true;
+
+        try {
+            const response = await fetch(openButton.dataset.publishSyncStoreUrl, {
+                method: 'POST',
+                headers: {
+                    Accept: 'application/json',
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': '{{ csrf_token() }}',
+                },
+            });
+            const payload = await response.json().catch(() => ({}));
+
+            if (!response.ok || !payload.ok) throw new Error(payload.message || 'Falha ao liberar o secundário.');
+
+            payload.targets.forEach((target) => {
+                const statusEl = targetsList
+                    .querySelector(`[data-publish-sync-target-server="${target.server_id}"] [data-publish-sync-target-status]`);
+
+                if (!statusEl || statusEl.textContent !== 'Aguardando o primário' || target.deferred) return;
+
+                if (target.skipped) {
+                    statusEl.textContent = 'Já sincronizado';
+                    statusEl.className = 'status-badge status-success';
+                    return;
+                }
+
+                statusEl.textContent = 'Aguardando agente…';
+                statusEl.className = 'status-badge status-neutral';
+                pollTarget(target, statusEl);
+            });
+        } catch (error) {
+            waiting.forEach((el) => {
+                el.textContent = 'Falhou';
+                el.className = 'status-badge status-danger';
+                el.title = error.message;
+            });
+        } finally {
+            deferredStarting = false;
+        }
+
+        // Se o painel ainda considerou o primário pendente, tenta de novo (poucas vezes).
+        if (deferredRows().length > 0 && deferredRetries < 5) {
+            deferredRetries += 1;
+            pollTimers.push(window.setTimeout(() => startDeferred().then(finishIfSettled), 4000));
+        }
+    };
+
+    const deferredRows = () => Array.from(
+        targetsList.querySelectorAll('[data-publish-sync-target-status]'),
+    ).filter((el) => el.textContent === 'Aguardando o primário');
 
     const finishIfSettled = () => {
         if (!allSettled()) return;
@@ -2824,6 +2904,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (payload.status === 'succeeded') {
             statusEl.textContent = 'Aplicado';
             statusEl.className = 'status-badge status-success';
+            await startDeferred();
             return finishIfSettled();
         }
 
@@ -2836,6 +2917,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 statusEl.title = detail;
             }
 
+            await startDeferred();
             return finishIfSettled();
         }
 
@@ -2894,7 +2976,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const row = rowFor(target);
             targetsList.appendChild(row);
 
-            if (!target.skipped) {
+            if (!target.skipped && !target.deferred) {
                 const statusEl = row.querySelector('[data-publish-sync-target-status]');
                 pollTarget(target, statusEl);
             }

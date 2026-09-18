@@ -53,7 +53,9 @@ servidores.
   primário e secundário aplicam ao mesmo tempo e o secundário só tem o serial novo depois de
   transferir a zona; o agente esperava ~10s. Agora zonas `secondary` esperam até 45 tentativas
   (`serial_confirmation_attempts_secondary`, máx. 60). Ocorreu na `158` e na IPv6 antes do
-  agente 0.10.1.
+  agente 0.10.1 e **voltou na `customer.example`** mesmo com 0.10.1 (o primário terminou
+  3s depois de o secundário desistir): a correção definitiva é a **ordem primário →
+  secundário no painel (1.3.42)**.
 - **Confirmação de upgrade do agente** depende do heartbeat, que roda a cada 5 min
   (`dns-center-agent.timer`); o upgrade em si leva segundos. Não é lentidão; a espera varia
   de segundos a 5 min conforme o momento do clique. Melhoria possível (heartbeat imediato

@@ -1159,7 +1159,25 @@ class DnsZoneController extends Controller
 
         $zone->refresh()->load('servers.agent');
 
-        $targets = $zone->servers->map(function (DnsServer $server) use ($zone, $request): array {
+        // O secundário só tem o serial novo depois de transferir a zona do primário.
+        // Como cada agente consulta o painel no próprio relógio, aplicar nos dois ao
+        // mesmo tempo fazia o secundário desistir antes de o primário terminar de
+        // carregar. Enquanto a publicação desta versão não estiver aplicada no
+        // primário, o secundário fica "adiado" e a tela o libera depois.
+        $latestVersionId = $zone->versions()->max('id');
+        $primaryServerIds = $zone->servers
+            ->filter(fn (DnsServer $server): bool => $server->pivot->role === 'primary')
+            ->pluck('id');
+
+        $primaryNotApplied = $latestVersionId !== null
+            && $primaryServerIds->isNotEmpty()
+            && DnsAgentPublication::query()
+                ->where('dns_zone_version_id', $latestVersionId)
+                ->whereIn('dns_server_id', $primaryServerIds)
+                ->where('status', '!=', 'applied')
+                ->exists();
+
+        $targets = $zone->servers->map(function (DnsServer $server) use ($zone, $request, $primaryNotApplied): array {
             $hasPending = DnsAgentPublication::query()
                 ->where('dns_server_id', $server->id)
                 ->whereIn('status', ['pending', 'downloaded', 'applying', 'failed'])
@@ -1170,6 +1188,17 @@ class DnsZoneController extends Controller
                     'server_id' => $server->id,
                     'server_name' => $server->name,
                     'skipped' => 'já sincronizado',
+                    'deferred' => false,
+                    'status_url' => route('servers.bind.apply.status', $server),
+                ];
+            }
+
+            if ($server->pivot->role === 'secondary' && $primaryNotApplied) {
+                return [
+                    'server_id' => $server->id,
+                    'server_name' => $server->name,
+                    'skipped' => null,
+                    'deferred' => true,
                     'status_url' => route('servers.bind.apply.status', $server),
                 ];
             }
@@ -1199,6 +1228,7 @@ class DnsZoneController extends Controller
                 'server_id' => $server->id,
                 'server_name' => $server->name,
                 'skipped' => null,
+                'deferred' => false,
                 'status_url' => route('servers.bind.apply.status', $server),
             ];
         })->values();
