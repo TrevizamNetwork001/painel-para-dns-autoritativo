@@ -23,7 +23,6 @@ Route::post(
 
 Route::middleware([
     AuthenticateDnsAgent::class,
-    'throttle:120,1',
 ])->prefix('agent')->name('api.agent.')->group(
     function (): void {
         Route::post(

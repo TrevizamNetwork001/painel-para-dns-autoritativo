@@ -545,7 +545,7 @@ class DnsAgentEnrollmentController extends Controller
 
             abort_unless($agent, 409, 'Agente não vinculado ou revogado.');
             abort_if(
-                $server->agent_status !== 'online',
+                ! $this->agentRecentlySeen($server),
                 409,
                 'O agente está offline. Restabeleça a comunicação antes de solicitar a atualização.',
             );
@@ -639,13 +639,22 @@ class DnsAgentEnrollmentController extends Controller
             'expires_at' => ($operation->started_at
                 ? $operation->started_at->addMinutes(max(1, (int) config('security.agent_upgrade.running_ttl_minutes', 20)))
                 : $operation->authorized_at?->addMinutes(max(1, (int) config('security.agent_upgrade.ttl_minutes', 10))))?->toIso8601String(),
-            'agent_online' => $server->agent_status === 'online',
+            'agent_online' => $this->agentRecentlySeen($server),
             'agent_last_seen_at' => $server->agent?->last_seen_at?->toIso8601String(),
             'installed_version' => $resultConfirmed ? $reportedVersion : $installedVersion,
             'available_version' => $availableVersion,
             'target_version' => $availableVersion,
             'version_confirmed' => $changed === false || $resultConfirmed || $versionConfirmed,
         ]);
+    }
+
+    private function agentRecentlySeen(DnsServer $server): bool
+    {
+        $lastSeen = $server->agent?->last_seen_at;
+
+        return $server->agent_status === 'online'
+            && $lastSeen !== null
+            && $lastSeen->greaterThan(now()->subMinutes(10));
     }
 
     private function authorizeServer(

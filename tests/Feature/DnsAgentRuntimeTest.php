@@ -7,6 +7,7 @@ use App\Models\DnsServer;
 use App\Models\Organization;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Str;
 use Tests\TestCase;
 
@@ -72,6 +73,25 @@ class DnsAgentRuntimeTest extends TestCase
             ->postJson('/api/agent/heartbeat')
             ->assertUnauthorized()
             ->assertJsonPath('error', 'invalid_agent_token');
+    }
+
+    public function test_agent_rate_limit_isolated_by_authenticated_agent(): void
+    {
+        [$firstAgent, $firstToken] = $this->registeredAgent();
+        [, $secondToken] = $this->registeredAgent();
+
+        for ($attempt = 0; $attempt < 120; $attempt++) {
+            RateLimiter::hit('dns-agent-api:'.$firstAgent->id, 60);
+        }
+
+        $this->withToken($firstToken)
+            ->postJson('/api/agent/heartbeat')
+            ->assertStatus(429)
+            ->assertJsonPath('error', 'rate_limited');
+
+        $this->withToken($secondToken)
+            ->postJson('/api/agent/heartbeat')
+            ->assertOk();
     }
 
     public function test_admin_can_revoke_agent(): void

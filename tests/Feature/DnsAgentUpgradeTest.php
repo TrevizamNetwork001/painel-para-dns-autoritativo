@@ -59,6 +59,18 @@ class DnsAgentUpgradeTest extends TestCase
         $this->assertDatabaseCount('dns_bind_operations', 0);
     }
 
+    public function test_upgrade_rejects_stale_contact_even_if_saved_status_is_online(): void
+    {
+        $context = $this->context();
+        $context['agent']->update(['last_seen_at' => now()->subMinutes(11)]);
+
+        $this->actingAs($context['admin'])
+            ->post(route('servers.agent.upgrade', $context['server']))
+            ->assertStatus(409);
+
+        $this->assertDatabaseCount('dns_bind_operations', 0);
+    }
+
     public function test_other_tenant_cannot_request_upgrade(): void
     {
         $context = $this->context();
