@@ -55,6 +55,57 @@ class DnsZoneNameserverProfileTest extends TestCase
         ]);
     }
 
+    public function test_imported_fqdn_apex_nameservers_are_replaced_not_duplicated(): void
+    {
+        [$organization, $profile, $first, $second] = $this->context();
+
+        $zone = $this->zone($organization);
+
+        // Registros como chegam de uma zona importada do BIND: apex em FQDN com ponto
+        // final, em outra caixa, ou como "@", mais uma delegação de subdomínio.
+        foreach ([
+            [$zone->name.'.', 'ns-antigo1.legado.example.'],
+            [strtoupper($zone->name).'.', 'ns-antigo2.legado.example.'],
+            ['@', 'ns-antigo3.legado.example.'],
+            ['filial.'.$zone->name.'.', 'ns.filial.example.'],
+        ] as [$name, $content]) {
+            $zone->records()->create([
+                'organization_id' => $organization->id,
+                'name' => $name,
+                'type' => 'NS',
+                'ttl' => 3600,
+                'content' => $content,
+                'enabled' => true,
+            ]);
+        }
+
+        app(DnsZoneNameserverSynchronizer::class)
+            ->synchronize($zone, $profile);
+
+        $apexNs = $zone->records()
+            ->where('type', 'NS')
+            ->where('name', $zone->name)
+            ->pluck('content')
+            ->sort()
+            ->values()
+            ->all();
+
+        $this->assertSame(
+            collect([$first->hostname, $second->hostname])->sort()->values()->all(),
+            $apexNs,
+        );
+
+        $this->assertDatabaseMissing('dns_records', ['content' => 'ns-antigo1.legado.example.']);
+        $this->assertDatabaseMissing('dns_records', ['content' => 'ns-antigo2.legado.example.']);
+        $this->assertDatabaseMissing('dns_records', ['content' => 'ns-antigo3.legado.example.']);
+
+        $this->assertDatabaseHas('dns_records', [
+            'dns_zone_id' => $zone->id,
+            'name' => 'filial.'.$zone->name.'.',
+            'content' => 'ns.filial.example.',
+        ]);
+    }
+
     public function test_in_bailiwick_identity_generates_glue(): void
     {
         [$organization, $profile] = $this->context(

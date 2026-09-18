@@ -6,6 +6,7 @@ use App\Models\DnsNameserverProfile;
 use App\Models\DnsRecord;
 use App\Models\DnsZone;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
 class DnsZoneNameserverSynchronizer
@@ -95,14 +96,16 @@ class DnsZoneNameserverSynchronizer
         /*
          * Remove apenas NS do apex.
          * Delegações NS de subdomínios permanecem intactas.
+         *
+         * O apex pode vir como "@", "zona" ou "zona." (FQDN com ponto final, que é
+         * como zonas importadas do BIND chegam) e em qualquer caixa; sem cobrir
+         * todas as grafias, o NS antigo sobrevivia e a zona ficava com NS duplicado.
          */
+        $apex = strtolower($zone->name);
+
         $zone->records()
             ->where('type', 'NS')
-            ->where(function ($query) use ($zone): void {
-                $query
-                    ->where('name', '@')
-                    ->orWhere('name', $zone->name);
-            })
+            ->whereIn(DB::raw('lower(name)'), ['@', $apex, $apex.'.'])
             ->delete();
 
         foreach ($identities as $identity) {
