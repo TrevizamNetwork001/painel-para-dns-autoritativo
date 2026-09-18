@@ -70,8 +70,13 @@
         <p>Este servidor tem uma declaração estática de zona fora do include gerenciado pelo DNS Center — o apply será recusado pelo <code>named-checkconf</code> até o bloco antigo ser removido.</p>
         <ul class="agent-legacy-conflict-list">
             @foreach ($legacyZoneConflicts as $conflict)
+                @php
+                    $conflictBlock = app(\App\Services\ReverseZoneNameCalculator::class)->toIpv4Cidr($conflict['zone_name'])
+                        ?? app(\App\Services\ReverseZoneNameCalculator::class)->toIpv6Prefix($conflict['zone_name']);
+                @endphp
                 <li>
-                    <strong>{{ $conflict['zone_name'] }}</strong>
+                    <strong>{{ $conflictBlock ?? $conflict['zone_name'] }}</strong>
+                    @if ($conflictBlock)<span class="agent-technical-value">{{ $conflict['zone_name'] }}</span>@endif
                     <span class="agent-technical-value">{{ $conflict['source_file'] }}:{{ $conflict['start_line'] }}@if ($conflict['end_line'] > $conflict['start_line'])–{{ $conflict['end_line'] }}@endif</span>
                     @if ($conflict['declared_type'])<span class="status-badge status-neutral">type {{ $conflict['declared_type'] }}</span>@endif
                     @if ($conflict['snippet'])<pre class="apply-zones-diagnostics">{{ $conflict['snippet'] }}</pre>@endif
@@ -80,6 +85,7 @@
                         class="button button-secondary"
                         data-legacy-block-open
                         data-legacy-block-zone-name="{{ $conflict['zone_name'] }}"
+                        data-legacy-block-cidr="{{ $conflictBlock ?? '' }}"
                         data-legacy-block-source-file="{{ $conflict['source_file'] }}"
                         data-legacy-block-start-line="{{ $conflict['start_line'] }}"
                         data-legacy-block-end-line="{{ $conflict['end_line'] }}"

@@ -3,10 +3,12 @@
 namespace App\Http\Controllers;
 
 use App\Models\DnsBindDiscoveredZone;
+use App\Models\DnsBindIgnoredZone;
 use App\Models\DnsBindOperation;
 use App\Models\DnsRecord;
 use App\Models\DnsServer;
 use App\Models\DnsZone;
+use App\Services\DnsBindDiscoveryDivergence;
 use App\Support\SecurityAuditLogger;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -126,18 +128,41 @@ class DnsBindDiscoveryController extends Controller
             ? (clone $discoveredZones)->orderBy('name')->paginate(20)
             : DnsBindDiscoveredZone::query()->whereRaw('1 = 0')->paginate(20);
 
+        $ignored = DnsBindIgnoredZone::query()
+            ->where('dns_server_id', $server->id)
+            ->get()
+            ->keyBy(fn (DnsBindIgnoredZone $ignoredZone) => strtolower($ignoredZone->zone_name));
+
+        $ignoredNames = $ignored->keys()->all();
+
         $summary = [
             'total' => $zones->total(),
             'primary' => (clone $discoveredZones)->where('detected_type', 'primary')->count(),
             'secondary' => (clone $discoveredZones)->where('detected_type', 'secondary')->count(),
-            'new' => (clone $discoveredZones)->where('comparison_state', 'new')->count(),
+            'new' => (clone $discoveredZones)
+                ->where('comparison_state', 'new')
+                ->whereNotIn(DB::raw('lower(name)'), $ignoredNames)
+                ->count(),
+            'ignored' => (clone $discoveredZones)
+                ->whereIn(DB::raw('lower(name)'), $ignoredNames)
+                ->count(),
         ];
+
+        $divergence = $lastOperation && $lastOperation->status === 'succeeded'
+            ? (new DnsBindDiscoveryDivergence)->compare(
+                $server,
+                $zones->getCollection(),
+                (clone $discoveredZones)->pluck('name'),
+            )
+            : ['peers' => [], 'by_zone' => [], 'missing_here' => []];
 
         return view('servers.bind-discovery', [
             'server' => $server,
             'lastOperation' => $lastOperation,
             'zones' => $zones,
             'summary' => $summary,
+            'ignored' => $ignored,
+            'divergence' => $divergence,
         ]);
     }
 
@@ -192,6 +217,73 @@ class DnsBindDiscoveryController extends Controller
             ->with('status', "Importação concluída: {$imported} zona(s) importada(s), {$skipped} ignorada(s).");
     }
 
+    public function ignore(Request $request, DnsServer $server): RedirectResponse
+    {
+        $organizationId = $this->authorizeServer($request, $server);
+
+        $validated = $request->validate([
+            'zone_name' => ['required', 'string', 'max:255'],
+            'note' => ['nullable', 'string', 'max:255'],
+        ]);
+
+        $zoneName = strtolower(trim($validated['zone_name']));
+
+        $discovered = DnsBindDiscoveredZone::query()
+            ->where('organization_id', $organizationId)
+            ->where('dns_server_id', $server->id)
+            ->whereRaw('lower(name) = ?', [$zoneName])
+            ->latest('id')
+            ->first();
+
+        abort_unless($discovered, 404);
+        abort_if($discovered->comparison_state === 'imported', 409, 'Zona já importada não pode ser ignorada.');
+
+        DnsBindIgnoredZone::query()->updateOrCreate(
+            ['dns_server_id' => $server->id, 'zone_name' => $discovered->name],
+            [
+                'organization_id' => $organizationId,
+                'note' => $validated['note'] ?? null,
+                'ignored_by' => $request->user()->id,
+            ],
+        );
+
+        $this->auditImport($request, $discovered, 'dns.bind_zone_ignored', 'success');
+
+        return back()->with('status', "Zona {$discovered->name} marcada como legítima/ignorada. Nada foi alterado no servidor.");
+    }
+
+    public function unignore(Request $request, DnsServer $server): RedirectResponse
+    {
+        $organizationId = $this->authorizeServer($request, $server);
+
+        $validated = $request->validate([
+            'zone_name' => ['required', 'string', 'max:255'],
+        ]);
+
+        $ignoredZone = DnsBindIgnoredZone::query()
+            ->where('organization_id', $organizationId)
+            ->where('dns_server_id', $server->id)
+            ->whereRaw('lower(zone_name) = ?', [strtolower(trim($validated['zone_name']))])
+            ->first();
+
+        abort_unless($ignoredZone, 404);
+
+        $discovered = DnsBindDiscoveredZone::query()
+            ->where('organization_id', $organizationId)
+            ->where('dns_server_id', $server->id)
+            ->where('name', $ignoredZone->zone_name)
+            ->latest('id')
+            ->first();
+
+        $ignoredZone->delete();
+
+        if ($discovered) {
+            $this->auditImport($request, $discovered, 'dns.bind_zone_unignored', 'success');
+        }
+
+        return back()->with('status', "Zona {$ignoredZone->zone_name} voltou a ser considerada na descoberta.");
+    }
+
     private function importOne(
         Request $request,
         DnsServer $server,
@@ -211,6 +303,17 @@ class DnsBindDiscoveryController extends Controller
                     || (int) $discovered->organization_id !== $organizationId
                     || (int) $discovered->dns_server_id !== (int) $server->id
                 ) {
+                    return 'skipped';
+                }
+
+                if (
+                    DnsBindIgnoredZone::query()
+                        ->where('dns_server_id', $server->id)
+                        ->where('zone_name', $discovered->name)
+                        ->exists()
+                ) {
+                    $this->auditImport($request, $discovered, 'dns.bind_zone_import_skipped', 'ignored');
+
                     return 'skipped';
                 }
 

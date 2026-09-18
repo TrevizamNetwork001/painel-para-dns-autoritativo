@@ -329,6 +329,16 @@ Route::middleware([
     )->name('servers.bind.discovery.import');
 
     Route::post(
+        '/servidores/{server}/bind/descoberta/ignorar',
+        [DnsBindDiscoveryController::class, 'ignore'],
+    )->name('servers.bind.discovery.ignore');
+
+    Route::delete(
+        '/servidores/{server}/bind/descoberta/ignorar',
+        [DnsBindDiscoveryController::class, 'unignore'],
+    )->name('servers.bind.discovery.unignore');
+
+    Route::post(
         '/servidores/{server}/bind/aplicar-zonas',
         [DnsBindApplyController::class, 'store'],
     )->middleware('throttle:5,1')->name('servers.bind.apply');

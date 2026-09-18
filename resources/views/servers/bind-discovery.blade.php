@@ -61,6 +61,10 @@
                         <dt>Prontas para importar</dt>
                         <dd>{{ $summary['new'] }}</dd>
                     </div>
+                    <div>
+                        <dt>Ignoradas</dt>
+                        <dd>{{ $summary['ignored'] }}</dd>
+                    </div>
                 </dl>
             @else
                 <p>Nenhuma descoberta foi executada ainda.</p>
@@ -102,14 +106,19 @@
                                     <th>Nodes (BIND)</th>
                                     <th>Registros parseados</th>
                                     <th>Estado</th>
+                                    <th>Entre servidores</th>
                                     <th>Ação</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 @foreach ($zones as $zone)
+                                    @php
+                                        $isIgnored = $ignored->has(strtolower($zone->name));
+                                        $zoneDivergence = $divergence['by_zone'][$zone->name] ?? null;
+                                    @endphp
                                     <tr data-discovery-row data-zone-name="{{ strtolower($zone->name) }}">
                                         <td class="discovery-check">
-                                            @if ($zone->comparison_state === 'new')
+                                            @if ($zone->comparison_state === 'new' && ! $isIgnored)
                                                 <input type="checkbox" name="zone_ids[]" value="{{ $zone->id }}" data-discovery-check aria-label="Selecionar {{ $zone->name }}">
                                             @else
                                                 <span class="discovery-check-unavailable">—</span>
@@ -122,6 +131,9 @@
                                         <td>{{ $zone->node_count ?? '—' }}</td>
                                         <td>{{ is_array($zone->records) ? count($zone->records) : '—' }}</td>
                                         <td>
+                                            @if ($isIgnored)
+                                                <span class="status-badge status-neutral">Ignorada (legítima)</span>
+                                            @else
                                             <span class="status-badge {{ match ($zone->comparison_state) {
                                                 'new' => 'status-success',
                                                 'exists', 'imported' => 'status-neutral',
@@ -139,14 +151,36 @@
                                                     default => $zone->comparison_state,
                                                 } }}
                                             </span>
+                                            @endif
                                             @if (! empty($zone->warnings))
                                                 <br><small>{{ implode(' · ', $zone->warnings) }}</small>
+                                            @endif
+                                        </td>
+                                        <td>
+                                            @if ($zoneDivergence === null)
+                                                <span class="discovery-check-unavailable">—</span>
+                                            @elseif ($zoneDivergence['status'] === 'synced')
+                                                <span class="status-badge status-success">Sincronizada</span>
+                                            @else
+                                                <span class="status-badge status-warning">Divergente</span>
+                                                @foreach ($zoneDivergence['findings'] as $finding)
+                                                    @if ($finding['state'] === 'missing')
+                                                        <br><small>Ausente em {{ $finding['server'] }}</small>
+                                                    @elseif ($finding['state'] === 'serial')
+                                                        <br><small>Serial diferente em {{ $finding['server'] }} ({{ $finding['serial'] }})</small>
+                                                    @endif
+                                                @endforeach
                                             @endif
                                         </td>
                                         <td>
                                             <a class="discovery-detail-link" href="{{ route('servers.bind.discovery.zone', [$server, $zone]) }}">
                                                 Detalhes →
                                             </a>
+                                            @if ($isIgnored)
+                                                <button type="submit" form="unignore-zone-form" name="zone_name" value="{{ $zone->name }}" class="discovery-detail-link">Reativar</button>
+                                            @elseif ($zone->comparison_state !== 'imported')
+                                                <button type="submit" form="ignore-zone-form" name="zone_name" value="{{ $zone->name }}" class="discovery-detail-link">Ignorar</button>
+                                            @endif
                                         </td>
                                     </tr>
                                 @endforeach
@@ -177,8 +211,58 @@
                         </p>
                     @endif
                 </form>
+
+                <form method="POST" action="{{ route('servers.bind.discovery.ignore', $server) }}" id="ignore-zone-form">
+                    @csrf
+                </form>
+                <form method="POST" action="{{ route('servers.bind.discovery.unignore', $server) }}" id="unignore-zone-form">
+                    @csrf
+                    @method('DELETE')
+                </form>
             @endif
         </section>
+
+        @if (! empty($divergence['peers']))
+            <section class="panel-card bind-discovery-list">
+                <div class="panel-card-header">
+                    <div>
+                        <p class="eyebrow">Comparação entre servidores</p>
+                        <h2>Presentes em outros servidores, ausentes aqui</h2>
+                    </div>
+                </div>
+
+                <p class="bind-discovery-note">
+                    Comparado com a última descoberta de:
+                    @foreach ($divergence['peers'] as $peer)
+                        <strong>{{ $peer['name'] }}</strong>@if ($peer['collected_at']) ({{ $peer['collected_at']->format('d/m/Y H:i') }})@endif{{ $loop->last ? '.' : ',' }}
+                    @endforeach
+                    Serial e presença mudam entre coletas; rode a descoberta nos dois servidores para uma comparação justa.
+                </p>
+
+                @if (empty($divergence['missing_here']))
+                    <div class="bind-discovery-empty">
+                        <strong>Nenhuma zona extra nos outros servidores</strong>
+                    </div>
+                @else
+                    <div class="discovery-table-wrap">
+                        <table class="discovery-table">
+                            <thead>
+                                <tr><th>Zona</th><th>Servidor</th><th>Tipo lá</th></tr>
+                            </thead>
+                            <tbody>
+                                @foreach ($divergence['missing_here'] as $missing)
+                                    <tr>
+                                        <td>{{ $missing['name'] }}</td>
+                                        <td>{{ $missing['server'] }}</td>
+                                        <td>{{ ucfirst($missing['type'] ?? '—') }}</td>
+                                    </tr>
+                                @endforeach
+                            </tbody>
+                        </table>
+                    </div>
+                @endif
+            </section>
+        @endif
     </main>
 </div>
 

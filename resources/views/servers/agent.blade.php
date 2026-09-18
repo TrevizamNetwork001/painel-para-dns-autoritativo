@@ -439,6 +439,7 @@
                 <div>
                     <p class="eyebrow">Conflito de configuração</p>
                     <h2 id="legacy-block-modal-title">Remover declaração de <span data-legacy-block-zone-label></span></h2>
+                    <p class="agent-technical-value" data-legacy-block-zone-name-label></p>
                     <p>Isso remove só o bloco de declaração antigo do arquivo — não altera nem aplica a zona. Use "Aplicar agora" na tela da zona depois, como um passo separado.</p>
                 </div>
                 <button type="button" class="record-modal-close" data-legacy-block-close aria-label="Fechar">×</button>
@@ -447,6 +448,15 @@
                 <p data-legacy-block-location class="agent-technical-value"></p>
                 <pre class="apply-zones-diagnostics" data-legacy-block-snippet-preview></pre>
                 <p data-legacy-block-state></p>
+                <div class="legacy-block-progress" data-legacy-block-progress hidden>
+                    <div class="legacy-block-progress-track" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" data-legacy-block-progress-track>
+                        <span data-legacy-block-progress-fill></span>
+                    </div>
+                    <div class="async-operation-meta">
+                        <span data-legacy-block-progress-stage>Aguardando o agente</span>
+                        <span><strong data-legacy-block-elapsed>0s</strong></span>
+                    </div>
+                </div>
                 <div data-legacy-block-confirm-actions>
                     <button type="button" class="button button-secondary" data-legacy-block-close>Cancelar</button>
                     <button type="button" class="button button-primary" data-legacy-block-confirm>Confirmar remoção</button>
@@ -1092,11 +1102,59 @@
             const stateText = document.querySelector('[data-legacy-block-state]');
             const confirmActions = document.querySelector('[data-legacy-block-confirm-actions]');
             const confirmButton = document.querySelector('[data-legacy-block-confirm]');
+            const zoneNameLabel = document.querySelector('[data-legacy-block-zone-name-label]');
+            const progressBox = document.querySelector('[data-legacy-block-progress]');
+            const progressTrack = document.querySelector('[data-legacy-block-progress-track]');
+            const progressFill = document.querySelector('[data-legacy-block-progress-fill]');
+            const progressStage = document.querySelector('[data-legacy-block-progress-stage]');
+            const progressElapsed = document.querySelector('[data-legacy-block-elapsed]');
 
             if (!modal || !zoneLabel || !location || !stateText || !confirmActions || !confirmButton) return;
 
             let activeButton = null;
             let pollTimer = null;
+            let tickTimer = null;
+            let startedAt = 0;
+            let operationStatus = 'authorized';
+            // O agente consulta o painel a cada ~30s; a barra mostra o tempo decorrido
+            // dentro dessa janela e só chega a 100% quando o agente confirma.
+            const AGENT_WINDOW_SECONDS = 35;
+
+            const renderProgress = () => {
+                const elapsed = Math.floor((Date.now() - startedAt) / 1000);
+                let percent = Math.min(elapsed / AGENT_WINDOW_SECONDS, 1) * 85;
+                let stage = 'Aguardando o agente pegar a operação';
+
+                if (operationStatus === 'running') {
+                    percent = Math.max(percent, 90);
+                    stage = 'Agente removendo o bloco';
+                } else if (operationStatus === 'succeeded') {
+                    percent = 100;
+                    stage = 'Concluído';
+                } else if (elapsed > AGENT_WINDOW_SECONDS) {
+                    stage = 'Agente demorando mais que o normal';
+                }
+
+                progressFill.style.width = `${percent}%`;
+                progressTrack.setAttribute('aria-valuenow', String(Math.round(percent)));
+                progressStage.textContent = stage;
+                progressElapsed.textContent = `${elapsed}s`;
+            };
+
+            const startProgress = () => {
+                startedAt = Date.now();
+                operationStatus = 'authorized';
+                progressBox.hidden = false;
+                renderProgress();
+                window.clearInterval(tickTimer);
+                tickTimer = window.setInterval(renderProgress, 1000);
+            };
+
+            const stopProgress = (hide = true) => {
+                window.clearInterval(tickTimer);
+                tickTimer = null;
+                if (hide) progressBox.hidden = true;
+            };
 
             const open = () => {
                 modal.classList.add('is-open');
@@ -1107,6 +1165,7 @@
             const close = () => {
                 window.clearTimeout(pollTimer);
                 pollTimer = null;
+                stopProgress();
                 modal.classList.remove('is-open');
                 modal.setAttribute('aria-hidden', 'true');
                 document.body.classList.remove('has-open-modal');
@@ -1114,25 +1173,31 @@
 
             const confirming = () => {
                 stateText.textContent = 'Confirma remover esta declaração antiga?';
+                stopProgress();
                 confirmActions.hidden = false;
                 confirmButton.disabled = false;
                 modal.querySelectorAll('.apply-zones-diagnostics[data-legacy-block-error]').forEach((el) => el.remove());
             };
 
             const waiting = () => {
-                stateText.textContent = 'Solicitação enviada. Aguardando o agente pegar a operação (até ~30s)…';
+                stateText.textContent = 'Solicitação enviada.';
                 confirmActions.hidden = true;
+                startProgress();
             };
 
             const succeeded = () => {
                 stateText.textContent = 'Bloco removido. A página vai atualizar.';
                 confirmActions.hidden = true;
+                operationStatus = 'succeeded';
+                renderProgress();
+                stopProgress(false);
                 window.setTimeout(() => window.location.reload(), 1200);
             };
 
             const failed = (message, diagnostics) => {
                 stateText.textContent = message || 'Falha ao remover.';
                 confirmActions.hidden = true;
+                stopProgress();
 
                 const detail = diagnostics?.stderr || diagnostics?.stdout;
 
@@ -1154,6 +1219,11 @@
                 } catch (error) {
                     pollTimer = window.setTimeout(() => poll(statusUrl), 4000);
                     return;
+                }
+
+                if (payload.status === 'running') {
+                    operationStatus = 'running';
+                    renderProgress();
                 }
 
                 if (payload.status === 'succeeded') return succeeded();
@@ -1205,7 +1275,9 @@
                 button.addEventListener('click', () => {
                     activeButton = button;
                     const data = button.dataset;
-                    zoneLabel.textContent = data.legacyBlockZoneName || '';
+                    zoneLabel.textContent = data.legacyBlockCidr || data.legacyBlockZoneName || '';
+                    zoneNameLabel.textContent = data.legacyBlockCidr ? (data.legacyBlockZoneName || '') : '';
+                    zoneNameLabel.hidden = !data.legacyBlockCidr;
                     location.textContent = `${data.legacyBlockSourceFile}:${data.legacyBlockStartLine}`;
                     snippetPreview.textContent = data.legacyBlockSnippet || '';
                     snippetPreview.hidden = !data.legacyBlockSnippet;

@@ -249,6 +249,40 @@ class DnsBindLegacyZoneBlockTest extends TestCase
             ->assertSee('Publicar e sincronizar');
     }
 
+    public function test_agent_page_shows_reverse_conflict_as_cidr_block_with_progress_bar(): void
+    {
+        $context = $this->context();
+        $zone = DnsZone::query()->create(array_merge(
+            $this->zoneAttributes($context['organization']),
+            ['name' => '113.0.203.in-addr.arpa'],
+        ));
+        $zone->servers()->sync([$context['server']->id => ['role' => 'primary']]);
+
+        $context['server']->forceFill([
+            'bind_readiness' => [
+                'legacy_zone_blocks' => [
+                    'blocks' => [[
+                        'name' => '113.0.203.in-addr.arpa',
+                        'source_file' => '/etc/bind/named.conf.local',
+                        'start_line' => 6,
+                        'end_line' => 9,
+                        'declared_type' => 'master',
+                        'hash' => str_repeat('b', 64),
+                        'snippet' => 'zone "113.0.203.in-addr.arpa" { type master; };',
+                    ]],
+                ],
+            ],
+        ])->save();
+
+        $this->actingAs($context['admin'])
+            ->get(route('servers.agent.show', $context['server']))
+            ->assertOk()
+            ->assertSee('203.0.113.0/24')
+            ->assertSee('data-legacy-block-cidr="203.0.113.0/24"', false)
+            ->assertSee('data-legacy-block-progress-track', false)
+            ->assertDontSee('até ~30s');
+    }
+
     private function blockPayload(): array
     {
         return [
