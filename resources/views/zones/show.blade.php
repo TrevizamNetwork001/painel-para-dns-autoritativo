@@ -125,6 +125,16 @@
                     {{ session('status') }}
                 </span>
 
+                @if (session('status_go_tab') === 'configuration')
+                    <button
+                        type="button"
+                        class="button button-secondary"
+                        data-go-tab="configuration"
+                    >
+                        Ir para Configuração
+                    </button>
+                @endif
+
                 <button
                     type="button"
                     class="flash-toast-close"
@@ -1898,6 +1908,16 @@
                 <div data-publish-sync-close-actions hidden>
                     <button
                         type="button"
+                        class="button button-primary"
+                        data-go-tab="configuration"
+                        data-publish-sync-go-config
+                        hidden
+                    >
+                        Ir para Configuração
+                    </button>
+
+                    <button
+                        type="button"
                         class="button button-secondary"
                         data-publish-sync-close
                     >
@@ -2131,6 +2151,21 @@ document.addEventListener('DOMContentLoaded', () => {
     tabs.forEach((tab) => {
         tab.addEventListener('click', () => {
             activateTab(tab.dataset.domainTab);
+        });
+    });
+
+    // Botões "Ir para <aba>" (mensagem de publicação sem alterações): abre a aba
+    // certa, fecha o modal de publicação se estiver aberto e rola até ela.
+    document.querySelectorAll('[data-go-tab]').forEach((button) => {
+        button.addEventListener('click', () => {
+            const tabName = button.dataset.goTab;
+
+            document.querySelector('[data-publish-sync-modal]')
+                ?.querySelector('[data-publish-sync-close]')
+                ?.click();
+            activateTab(tabName);
+            document.querySelector(`[data-domain-panel="${tabName}"]`)
+                ?.scrollIntoView({ behavior: 'smooth', block: 'start' });
         });
     });
 
@@ -2823,6 +2858,15 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         } catch (error) {
             stateText.textContent = 'Não foi possível conectar ao painel.';
+            closeActions.hidden = false;
+            return;
+        }
+
+        if (payload.nothing_new) {
+            stateText.textContent = 'Sem alterações desde a última publicação: os servidores já estão com esta versão. Para mudar servidores, perfil de nameservers ou SOA, salve na aba Configuração; se editou registros, publique de novo.';
+            targetsList.hidden = false;
+            payload.targets.forEach((target) => targetsList.appendChild(rowFor(target)));
+            document.querySelector('[data-publish-sync-go-config]').hidden = false;
             closeActions.hidden = false;
             return;
         }

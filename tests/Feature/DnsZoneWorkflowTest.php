@@ -275,7 +275,8 @@ class DnsZoneWorkflowTest extends TestCase
         $this->actingAs($context['admin'])
             ->post(route('zones.publish', $zone))
             ->assertSessionHasNoErrors()
-            ->assertSessionHas('status', 'Esta versão da zona já está publicada.');
+            ->assertSessionHas('status_go_tab', 'configuration')
+            ->assertSessionHas('status', fn (string $status): bool => str_starts_with($status, 'Sem alterações desde a última publicação.'));
 
         $this->assertSame($publishedVersion, $zone->fresh()->version);
         $this->assertSame(
@@ -420,6 +421,52 @@ class DnsZoneWorkflowTest extends TestCase
         $this->assertSame('já sincronizado', $targets[$context['primary']->id]['skipped']);
         $this->assertSame('já sincronizado', $targets[$context['secondary']->id]['skipped']);
         $this->assertSame($operationsBefore, DnsBindOperation::query()->count());
+        $response->assertJsonPath('published', false)->assertJsonPath('nothing_new', true);
+    }
+
+    public function test_publish_and_sync_flags_first_publication_as_new_content(): void
+    {
+        $context = $this->context(withAgents: true);
+        $zone = $this->createZone($context);
+
+        $this->actingAs($context['admin'])
+            ->postJson(route('zones.publish-and-sync', $zone))
+            ->assertOk()
+            ->assertJsonPath('published', true)
+            ->assertJsonPath('nothing_new', false);
+    }
+
+    public function test_publish_and_sync_with_pending_server_is_not_reported_as_nothing_new(): void
+    {
+        $context = $this->context(withAgents: true);
+        $zone = $this->createZone($context);
+
+        $this->actingAs($context['admin'])
+            ->postJson(route('zones.publish-and-sync', $zone))
+            ->assertOk();
+
+        // Zona já publicada, mas as publicações ainda estão pendentes nos servidores:
+        // não é "sem alterações" — há trabalho de sincronização a fazer.
+        $this->actingAs($context['admin'])
+            ->postJson(route('zones.publish-and-sync', $zone))
+            ->assertOk()
+            ->assertJsonPath('published', false)
+            ->assertJsonPath('nothing_new', false);
+    }
+
+    public function test_zone_page_offers_go_to_configuration_after_publish_without_changes(): void
+    {
+        $context = $this->context(withAgents: true);
+        $zone = $this->createZone($context);
+
+        $this->actingAs($context['admin'])->post(route('zones.publish', $zone));
+
+        $this->actingAs($context['admin'])
+            ->followingRedirects()
+            ->post(route('zones.publish', $zone))
+            ->assertOk()
+            ->assertSee('Sem alterações desde a última publicação.')
+            ->assertSee('data-go-tab="configuration"', false);
     }
 
     public function test_publish_and_sync_returns_422_for_invalid_zone(): void

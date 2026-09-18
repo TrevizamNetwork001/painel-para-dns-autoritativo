@@ -1027,12 +1027,14 @@ class DnsZoneController extends Controller
             ]);
         }
 
-        return redirect(route('zones.show', $zone).'#publication')->with(
+        $response = redirect(route('zones.show', $zone).'#publication')->with(
             'status',
             $published
                 ? 'Publicação concluída. O artefato está disponível para os agentes configurados.'
-                : 'Esta versão da zona já está publicada.',
+                : 'Sem alterações desde a última publicação. Para mudar servidores, perfil de nameservers ou SOA, salve na aba Configuração; se editou registros, publique de novo.',
         );
+
+        return $published ? $response : $response->with('status_go_tab', 'configuration');
     }
 
     /**
@@ -1134,7 +1136,7 @@ class DnsZoneController extends Controller
         );
 
         try {
-            $this->performPublish($request, $zone, $renderer, $validator);
+            $published = $this->performPublish($request, $zone, $renderer, $validator);
         } catch (ValidationException $exception) {
             return response()->json([
                 'ok' => false,
@@ -1203,6 +1205,12 @@ class DnsZoneController extends Controller
 
         return response()->json([
             'ok' => true,
+            'published' => $published,
+            // Nada novo para publicar e nenhum servidor pendente: a tela deve dizer
+            // isso claramente (e apontar para a aba Configuração) em vez de um "ok" mudo.
+            'nothing_new' => ! $published
+                && $targets->isNotEmpty()
+                && $targets->every(fn (array $target): bool => $target['skipped'] !== null),
             'targets' => $targets,
         ]);
     }
