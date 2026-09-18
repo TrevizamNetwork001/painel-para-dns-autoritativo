@@ -92,6 +92,11 @@ class DnsBindLegacyZoneBlockController extends Controller
             'error' => $operation->error,
             'agent_online' => $server->agent_status === 'online',
             'agent_last_seen_at' => $server->agent?->last_seen_at?->toIso8601String(),
+            // A lista de conflitos vem do relatório de prontidão, que o agente envia
+            // depois da operação; a tela só deve recarregar quando ele já chegou.
+            'readiness_refreshed' => $operation->completed_at !== null
+                && $server->bind_readiness_at !== null
+                && $server->bind_readiness_at->gte($operation->completed_at),
         ]);
     }
 

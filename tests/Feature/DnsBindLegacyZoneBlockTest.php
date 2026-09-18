@@ -126,6 +126,33 @@ class DnsBindLegacyZoneBlockTest extends TestCase
             ->assertJsonPath('status', 'authorized');
     }
 
+    public function test_status_reports_whether_readiness_was_refreshed_after_the_operation(): void
+    {
+        $context = $this->context();
+        $this->conflictingZoneAndReadiness($context);
+
+        $this->actingAs($context['admin'])
+            ->postJson(route('servers.bind.legacy-block.remove', $context['server']), $this->blockPayload())
+            ->assertOk();
+
+        $operation = DnsBindOperation::query()->firstOrFail();
+        $operation->forceFill(['status' => 'succeeded', 'completed_at' => now()])->save();
+
+        $context['server']->forceFill(['bind_readiness_at' => now()->subMinute()])->save();
+
+        $this->actingAs($context['admin'])
+            ->getJson(route('servers.bind.legacy-block.status', [$context['server'], $operation]))
+            ->assertOk()
+            ->assertJsonPath('readiness_refreshed', false);
+
+        $context['server']->forceFill(['bind_readiness_at' => now()->addSecond()])->save();
+
+        $this->actingAs($context['admin'])
+            ->getJson(route('servers.bind.legacy-block.status', [$context['server'], $operation]))
+            ->assertOk()
+            ->assertJsonPath('readiness_refreshed', true);
+    }
+
     public function test_next_operation_endpoint_hands_params_to_the_agent(): void
     {
         $context = $this->context();

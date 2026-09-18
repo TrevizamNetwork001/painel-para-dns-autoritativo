@@ -1187,13 +1187,36 @@
                 startProgress();
             };
 
-            const succeeded = () => {
-                stateText.textContent = 'Bloco removido. A página vai atualizar.';
-                confirmActions.hidden = true;
+            const REFRESH_WAIT_MS = 30000;
+
+            const succeeded = (statusUrl, waitedSince = Date.now()) => {
                 operationStatus = 'succeeded';
                 renderProgress();
-                stopProgress(false);
-                window.setTimeout(() => window.location.reload(), 1200);
+                confirmActions.hidden = true;
+                stateText.textContent = 'Bloco removido. Atualizando o estado do servidor…';
+
+                const reload = () => {
+                    stopProgress(false);
+                    stateText.textContent = 'Bloco removido. A página vai atualizar.';
+                    window.setTimeout(() => window.location.reload(), 600);
+                };
+
+                const check = async () => {
+                    let refreshed = false;
+
+                    try {
+                        const response = await fetch(statusUrl, { headers: { Accept: 'application/json' } });
+                        refreshed = (await response.json()).readiness_refreshed === true;
+                    } catch (error) {
+                        refreshed = false;
+                    }
+
+                    if (refreshed || Date.now() - waitedSince > REFRESH_WAIT_MS) return reload();
+
+                    pollTimer = window.setTimeout(check, 2000);
+                };
+
+                check();
             };
 
             const failed = (message, diagnostics) => {
@@ -1228,7 +1251,7 @@
                     renderProgress();
                 }
 
-                if (payload.status === 'succeeded') return succeeded();
+                if (payload.status === 'succeeded') return succeeded(statusUrl);
                 if (payload.status === 'failed' || payload.status === 'expired') return failed(payload.error, payload.result?.diagnostics);
 
                 pollTimer = window.setTimeout(() => poll(statusUrl), 4000);
