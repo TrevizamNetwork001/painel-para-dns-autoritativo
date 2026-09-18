@@ -208,6 +208,31 @@ class DnsBindDiscoveryDivergenceTest extends TestCase
             ->assertStatus(409);
     }
 
+    public function test_agent_page_flags_discovery_older_than_24_hours_as_stale(): void
+    {
+        $context = $this->context();
+        $operation = $this->discover($context['server'], $context, [['name' => 'a.example', 'serial' => 1]]);
+        $operation->forceFill(['completed_at' => now()->subDays(2)])->save();
+
+        $this->actingAs($context['admin'])
+            ->get(route('servers.agent.show', $context['server']))
+            ->assertOk()
+            ->assertSee('class="discovery-stale-hint"', false)
+            ->assertSee('Desatualizada (mais de 24h)');
+    }
+
+    public function test_agent_page_does_not_flag_recent_discovery_as_stale(): void
+    {
+        $context = $this->context();
+        $this->discover($context['server'], $context, [['name' => 'a.example', 'serial' => 1]]);
+
+        $this->actingAs($context['admin'])
+            ->get(route('servers.agent.show', $context['server']))
+            ->assertOk()
+            ->assertDontSee('class="discovery-stale-hint"', false)
+            ->assertDontSee('Desatualizada (mais de 24h)');
+    }
+
     private function discover(DnsServer $server, array $context, array $zones): DnsBindOperation
     {
         $operation = DnsBindOperation::query()->create([

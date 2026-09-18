@@ -4233,6 +4233,8 @@ button.discovery-detail-link { background: none; border: 0; padding: 0; cursor: 
     font-weight: 650;
 }
 
+.discovery-time-stale { color: var(--warning); }
+.discovery-stale-hint { margin: 0.25rem 0 0; color: var(--warning); font-size: 0.7rem; line-height: 1.4; }
 .agent-discovery-metrics {
     display: grid;
     grid-template-columns: repeat(5, minmax(0, 1fr));

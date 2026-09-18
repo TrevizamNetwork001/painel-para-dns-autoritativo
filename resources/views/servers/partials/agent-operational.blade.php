@@ -12,6 +12,7 @@
     $lastContact = $agent->last_seen_at ?? $server->last_seen_at;
     $discoveryAt = $latestDiscoveryOperation?->completed_at ?? $latestDiscoveryOperation?->authorized_at;
     $discoverySucceeded = $latestDiscoveryOperation?->status === 'succeeded';
+    $discoveryStale = $discoverySucceeded && $discoveryAt && $discoveryAt->lt(now()->subDay());
     $discoveryInFlight = $latestDiscoveryOperation && in_array($latestDiscoveryOperation->status, ['authorized', 'running'], true);
     $upgradeInFlight = $latestAgentUpgradeOperation && in_array($latestAgentUpgradeOperation->status, ['authorized', 'running'], true);
     $upgradeStatusLabel = match (true) {
@@ -146,7 +147,7 @@
 <section class="panel-card agent-discovery-card">
     <header class="agent-section-header"><div><p class="eyebrow">Descoberta somente leitura</p><h2>Inventário de zonas</h2></div><span class="status-badge {{ $discoveryInFlight ? 'status-warning' : ($discoverySucceeded ? 'status-success' : 'status-neutral') }}" data-discovery-card-status>{{ $discoveryInFlight ? 'Descoberta em andamento' : ($discoverySucceeded ? 'Detectado' : 'Não iniciado') }}</span></header>
     <dl class="agent-discovery-metrics">
-        <div><dt>Última descoberta</dt><dd data-discovery-card-time>{{ $discoveryAt ? $discoveryAt->diffForHumans() : 'Não executada' }}</dd></div><div><dt>Resultado</dt><dd data-discovery-card-total>{{ $discoverySucceeded ? $discoveryStats['total'].' zonas' : 'Não disponível' }}</dd></div>
+        <div><dt>Última descoberta</dt><dd data-discovery-card-time @class(['discovery-time-stale' => $discoveryStale])>{{ $discoveryAt ? $discoveryAt->diffForHumans() : 'Não executada' }}</dd>@if ($discoveryStale)<dd class="discovery-stale-hint" data-discovery-stale-hint>Desatualizada (mais de 24h) — rode uma nova descoberta para conferir mudanças no BIND.</dd>@endif</div><div><dt>Resultado</dt><dd data-discovery-card-total>{{ $discoverySucceeded ? $discoveryStats['total'].' zonas' : 'Não disponível' }}</dd></div>
         <div><dt>Primary</dt><dd data-discovery-card-primary>{{ $discoverySucceeded ? $discoveryStats['primary'] : '—' }}</dd></div><div><dt>Secondary</dt><dd data-discovery-card-secondary>{{ $discoverySucceeded ? $discoveryStats['secondary'] : '—' }}</dd></div><div><dt>Alterações externas</dt><dd>Não verificado</dd></div>
     </dl>
     @if ($latestDiscoveryOperation?->status === 'failed')<p class="agent-inline-error" role="alert">A última descoberta não foi concluída. Tente novamente ou consulte os registros administrativos.</p>@endif

@@ -675,6 +675,8 @@
                 card.status.textContent = 'Descoberta concluída';
                 card.status.className = 'status-badge status-success';
                 card.time.textContent = 'agora';
+                card.time.classList.remove('discovery-time-stale');
+                document.querySelector('[data-discovery-stale-hint]')?.remove();
                 card.total.textContent = `${data.total} zonas`;
                 card.primary.textContent = data.primary;
                 card.secondary.textContent = data.secondary;
