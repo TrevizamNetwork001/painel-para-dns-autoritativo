@@ -35,7 +35,7 @@ from email.utils import parsedate_to_datetime
 from pathlib import Path
 from typing import Any
 
-AGENT_VERSION = "0.10.0"
+AGENT_VERSION = "0.10.1"
 OFFICIAL_BASE_URL = "https://dnscenter.trevizamnetwork.com.br"
 DEFAULT_CONFIG = Path("/etc/dns-center-agent/agent.json")
 DEFAULT_STATE_DIR = Path("/var/lib/dns-center-agent")
@@ -3773,9 +3773,20 @@ def authoritative_serial(
     config: dict[str, Any],
     zone_name: str,
     expected_serial: int,
+    zone_type: str = "primary",
 ) -> int:
     rndc = command_path(config, "rndc", "/usr/sbin/rndc")
-    attempts = max(1, min(int(config.get("serial_confirmation_attempts", 10)), 60))
+
+    # A secondary só passa a ter o serial novo depois de transferir a zona do
+    # primário, que é publicado ao mesmo tempo; esperar só ~10s fazia a primeira
+    # tentativa falhar e a segunda passar. O primário carrega do disco, então
+    # continua com a espera curta.
+    if zone_type == "secondary":
+        setting, default_attempts = "serial_confirmation_attempts_secondary", 45
+    else:
+        setting, default_attempts = "serial_confirmation_attempts", 10
+
+    attempts = max(1, min(int(config.get(setting, default_attempts)), 60))
 
     for attempt in range(attempts):
         result = run_command([rndc, "zonestatus", zone_name], timeout=15)
@@ -4520,6 +4531,7 @@ def sync_zones(
                     config,
                     str(item["name"]),
                     int(item["serial"]),
+                    str(item.get("type", "primary")),
                 )
                 response = report_publication(
                     config,

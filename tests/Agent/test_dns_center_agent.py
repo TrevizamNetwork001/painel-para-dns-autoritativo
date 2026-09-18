@@ -625,6 +625,66 @@ class AgentTests(unittest.TestCase):
                 self.assertEqual(expected, status["status"])
                 self.assertLessEqual(len(status["error"]), 1000)
 
+    def _zonestatus_sequence(self, serials: list[int]) -> Mock:
+        results = [
+            Mock(returncode=0, stdout=f"name: z\nserial: {serial}\n")
+            for serial in serials
+        ]
+        return Mock(side_effect=results)
+
+    def test_authoritative_serial_secondary_waits_for_transfer(self) -> None:
+        # Regressão real: o secundário transfere a zona do primário e a primeira
+        # publicação falhava por esperar só 10 tentativas.
+        run = self._zonestatus_sequence([1] * 30 + [2])
+
+        with patch.object(agent, "run_command", run), patch.object(
+            agent.time, "sleep"
+        ):
+            observed = agent.authoritative_serial({}, "z", 2, "secondary")
+
+        self.assertEqual(2, observed)
+        self.assertEqual(31, run.call_count)
+
+    def test_authoritative_serial_primary_keeps_short_wait(self) -> None:
+        run = self._zonestatus_sequence([1] * 10)
+
+        with patch.object(agent, "run_command", run), patch.object(
+            agent.time, "sleep"
+        ):
+            with self.assertRaises(agent.AgentError):
+                agent.authoritative_serial({}, "z", 2)
+
+        self.assertEqual(10, run.call_count)
+
+    def test_authoritative_serial_secondary_gives_up_after_limit(self) -> None:
+        run = self._zonestatus_sequence([1] * 45)
+
+        with patch.object(agent, "run_command", run), patch.object(
+            agent.time, "sleep"
+        ):
+            with self.assertRaises(agent.AgentError):
+                agent.authoritative_serial({}, "z", 2, "secondary")
+
+        self.assertEqual(45, run.call_count)
+
+    def test_authoritative_serial_secondary_limit_is_configurable_and_capped(
+        self,
+    ) -> None:
+        run = self._zonestatus_sequence([1] * 60)
+
+        with patch.object(agent, "run_command", run), patch.object(
+            agent.time, "sleep"
+        ):
+            with self.assertRaises(agent.AgentError):
+                agent.authoritative_serial(
+                    {"serial_confirmation_attempts_secondary": 500},
+                    "z",
+                    2,
+                    "secondary",
+                )
+
+        self.assertEqual(60, run.call_count)
+
     def test_authoritative_status_detects_recovered_serial(self) -> None:
         status = agent.zone_status_from_facts(
             "secondary",
