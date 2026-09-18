@@ -101,3 +101,22 @@ de auditoria foram **mantidas** por decisão do operador.
 - **Candidatos aprovados em conversa, ainda não implementados:** assistente de adoção em lote;
   backup agendado do banco com cópia fora do servidor (hoje só há `pg_dump` a cada deploy, no
   mesmo disco); restaurar versão anterior da zona.
+
+## Etapa futura anotada: cópia do backup fora do servidor (R2)
+
+Deixada para depois por decisão do operador. O que já está pronto e o que falta:
+
+- **Pronto:** backup diário local (02:30) com limpeza e teste de restauração semanal (cron);
+  tela **Configurações → Backup do banco** (1.3.43) para informar as credenciais do R2, com
+  teste de conexão; bucket privado `dns-center-backups` criado na Cloudflare com regra de
+  ciclo de vida de 30 dias; script de envio criptografado testado contra um R2 falso.
+- **Falta (quando retomar):**
+  1. Criar um **novo token de API** do R2 (só o bucket `dns-center-backups`, leitura/gravação
+     de objetos). O primeiro token teve as chaves expostas numa captura de tela durante a
+     configuração e **deve ser excluído na Cloudflare** (R2 → Tokens de API → `dns-center-backup`).
+  2. Preencher a tela Configurações → Backup do banco e usar "Testar conexão".
+  3. Criar `/etc/dns-center/backup.pass` (`openssl rand -base64 32`, modo 600) e **guardar uma
+     cópia fora do servidor**; sem ela os backups do R2 não abrem.
+  4. Rodar `dns-center-deploy backup` uma vez e conferir o `.gpg` no bucket.
+- Enquanto isso, o backup fica **somente local** no mesmo disco do painel (o risco descrito
+  acima persiste); ver `docs/BACKUP_RESTORE.md`.
