@@ -320,10 +320,30 @@ em produção. As evidências e limitações estão em
 | [Release 1.3.27](docs/RELEASE_1.3.27.md) | Cartão "Conflito de configuração" no painel e bloqueio de publicação (Fase 2) |
 | [Release 1.3.28](docs/RELEASE_1.3.28.md) | Agente 0.10.0 remove bloco de zona legado com 1 clique, sem SSH (Fase 3 — fecha o plano) |
 | [Release 1.3.29](docs/RELEASE_1.3.29.md) | Hotfix: sanitizeResult() não descarta mais o resultado de remove_legacy_zone_block |
+| [Release 1.3.30](docs/RELEASE_1.3.30.md) | Página "Reversos": zonas reversas separadas de Domínios, com bloco CIDR |
+| [Release 1.3.31](docs/RELEASE_1.3.31.md) | Desativar e excluir empresa (cancelamento de cliente), com cascata e confirmação forte |
+| [Release 1.3.32](docs/RELEASE_1.3.32.md) | "Remover declarações antigas e publicar" num só passo |
+| [Release 1.3.33](docs/RELEASE_1.3.33.md) | Descoberta: comparação entre servidores, zonas ignoradas, modal com CIDR e barra de progresso |
+| [Release 1.3.34](docs/RELEASE_1.3.34.md) | Comparação só entre servidores relacionados |
+| [Release 1.3.35](docs/RELEASE_1.3.35.md) | Descoberta com mais de 24h destacada como desatualizada |
+| [Release 1.3.36](docs/RELEASE_1.3.36.md) | Modal de remoção espera o relatório de prontidão antes de recarregar |
+| [Release 1.3.37](docs/RELEASE_1.3.37.md) | Sincronizador de nameservers não duplica mais os NS do apex |
+| [Release 1.3.38](docs/RELEASE_1.3.38.md) | Botão combinado remover+publicar espera o relatório de prontidão |
+| [Release 1.3.39](docs/RELEASE_1.3.39.md) | Agente 0.10.1: secundário espera a transferência antes de confirmar o serial |
+| [Release 1.3.40](docs/RELEASE_1.3.40.md) | Publicação sem alterações explica o motivo e leva à aba Configuração |
+| [Operação Cliente Exemplo — 18/09/2026](docs/OPERACAO_CLIENTE_EXEMPLO_2026_09_18.md) | Adoção das zonas reversas do dns-primary/02, runbook e pendências |
 
 ## Status do projeto
 
-**v1.3.29 pronta para deploy** (hotfix pego ao vivo no primeiro uso
+**v1.3.40 em produção** (agente 0.10.1). Desde a v1.3.29: página Reversos
+(1.3.30), desativar/excluir empresa (1.3.31), remover bloco antigo + publicar
+num passo (1.3.32/1.3.38), descoberta com comparação entre servidores e zonas
+ignoradas (1.3.33–1.3.35), correção dos NS duplicados (1.3.37), espera do
+secundário pela transferência (agente 0.10.1, 1.3.39) e mensagem clara quando
+não há nada a publicar (1.3.40). Detalhes e runbook em
+[docs/OPERACAO_CLIENTE_EXEMPLO_2026_09_18.md](docs/OPERACAO_CLIENTE_EXEMPLO_2026_09_18.md).
+
+Histórico anterior: **v1.3.29** (hotfix pego ao vivo no primeiro uso
 real da Fase 3 em produção: a remoção do bloco legado em dns-primary e
 dns-secondary funcionou de verdade, mas `sanitizeResult()` não conhecia as
 chaves novas dessa ação e descartava o resultado inteiro, salvando um
