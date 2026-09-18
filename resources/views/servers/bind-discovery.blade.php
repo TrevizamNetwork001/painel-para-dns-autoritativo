@@ -172,7 +172,7 @@
                                                 @endforeach
                                             @endif
                                         </td>
-                                        <td>
+                                        <td class="discovery-actions">
                                             <a class="discovery-detail-link" href="{{ route('servers.bind.discovery.zone', [$server, $zone]) }}">
                                                 Detalhes →
                                             </a>
@@ -232,7 +232,7 @@
                 </div>
 
                 <p class="bind-discovery-note">
-                    Comparado com a última descoberta de:
+                    Comparado com a última descoberta dos servidores relacionados (que compartilham zonas com este):
                     @foreach ($divergence['peers'] as $peer)
                         <strong>{{ $peer['name'] }}</strong>@if ($peer['collected_at']) ({{ $peer['collected_at']->format('d/m/Y H:i') }})@endif{{ $loop->last ? '.' : ',' }}
                     @endforeach

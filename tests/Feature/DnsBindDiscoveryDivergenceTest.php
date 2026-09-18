@@ -58,6 +58,53 @@ class DnsBindDiscoveryDivergenceTest extends TestCase
             ->assertDontSee('Divergente');
     }
 
+    public function test_unrelated_server_in_same_organization_is_not_compared(): void
+    {
+        $context = $this->context();
+        $unrelated = $this->peerServer($context, 'ns1-outro-cliente');
+
+        $this->discover($context['server'], $context, [['name' => 'a.example', 'serial' => 1]]);
+        $this->discover($unrelated, $context, [['name' => 'outro-cliente.example', 'serial' => 9]]);
+
+        $this->actingAs($context['admin'])
+            ->get(route('servers.bind.discovery.show', $context['server']))
+            ->assertOk()
+            ->assertDontSee('outro-cliente.example')
+            ->assertDontSee('Ausente em ns1-outro-cliente')
+            ->assertDontSee('Divergente');
+    }
+
+    public function test_server_sharing_a_managed_zone_is_compared_even_without_overlapping_discovery(): void
+    {
+        $context = $this->context();
+        $newSlave = $this->peerServer($context, 'ns2-novo');
+
+        $zone = DnsZone::query()->create([
+            'organization_id' => $context['organization']->id,
+            'name' => 'a.example',
+            'kind' => 'primary',
+            'serial' => 1,
+            'default_ttl' => 3600,
+            'soa_mname' => 'ns1.a.example.',
+            'soa_rname' => 'hostmaster.a.example.',
+            'status' => 'published',
+            'version' => 1,
+            'enabled' => true,
+        ]);
+        $zone->servers()->sync([
+            $context['server']->id => ['role' => 'primary'],
+            $newSlave->id => ['role' => 'secondary'],
+        ]);
+
+        $this->discover($context['server'], $context, [['name' => 'a.example', 'serial' => 1]]);
+        $this->discover($newSlave, $context, [['name' => 'lixo.example', 'serial' => 1]]);
+
+        $this->actingAs($context['admin'])
+            ->get(route('servers.bind.discovery.show', $context['server']))
+            ->assertOk()
+            ->assertSee('Ausente em ns2-novo');
+    }
+
     public function test_peer_of_another_tenant_is_never_compared(): void
     {
         $context = $this->context();
