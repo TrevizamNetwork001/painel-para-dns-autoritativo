@@ -2933,7 +2933,14 @@ document.addEventListener('DOMContentLoaded', () => {
         conflicts = [];
     }
 
+    // Depois que o agente remove o bloco, o relatório de prontidão (usado pela
+    // validação de publicação) chega alguns segundos depois. Publicar antes disso
+    // faz o painel recusar por um conflito que já foi resolvido.
+    const READINESS_WAIT_MS = 30000;
+
     const poll = (statusUrl) => new Promise((resolve, reject) => {
+        let succeededAt = null;
+
         const attempt = async () => {
             let payload;
 
@@ -2945,7 +2952,17 @@ document.addEventListener('DOMContentLoaded', () => {
                 return;
             }
 
-            if (payload.status === 'succeeded') return resolve();
+            if (payload.status === 'succeeded') {
+                succeededAt = succeededAt ?? Date.now();
+
+                if (payload.readiness_refreshed === true || Date.now() - succeededAt > READINESS_WAIT_MS) {
+                    return resolve();
+                }
+
+                statusText.textContent = 'Bloco removido. Aguardando o servidor confirmar o novo estado…';
+                window.setTimeout(attempt, 2000);
+                return;
+            }
             if (payload.status === 'failed' || payload.status === 'expired') {
                 return reject(payload.error || 'O agente não conseguiu remover a declaração antiga.');
             }

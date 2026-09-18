@@ -244,6 +244,20 @@ class DnsBindLegacyZoneBlockTest extends TestCase
         $response->assertSee(route('servers.bind.legacy-block.remove', $context['server']), false);
     }
 
+    public function test_combined_publish_script_waits_for_readiness_refresh(): void
+    {
+        // Sem isso, a publicação é enviada logo após a remoção e o validador ainda
+        // enxerga o conflito no relatório de prontidão antigo.
+        $context = $this->context();
+        $this->conflictingZoneAndReadiness($context);
+        $zone = DnsZone::query()->where('name', 'example.com')->sole();
+
+        $this->actingAs($context['admin'])
+            ->get(route('zones.show', $zone))
+            ->assertOk()
+            ->assertSee('payload.readiness_refreshed === true', false);
+    }
+
     public function test_zone_page_shows_normal_publish_actions_without_conflict(): void
     {
         $context = $this->context();
