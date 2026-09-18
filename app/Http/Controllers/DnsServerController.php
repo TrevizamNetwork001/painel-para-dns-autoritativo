@@ -10,6 +10,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
 
 class DnsServerController extends Controller
@@ -293,6 +294,15 @@ class DnsServerController extends Controller
         ]);
 
         $validated['name'] = trim($validated['name']);
+
+        if (preg_match(
+            '/\s+[—–-]\s+'.preg_quote($validated['hostname'], '/').'\z/iu',
+            $validated['name'],
+        )) {
+            throw ValidationException::withMessages([
+                'name' => 'Informe apenas o nome amigável, sem o hostname exibido na lista.',
+            ]);
+        }
 
         $validated['ipv4_address'] =
             $validated['ipv4_address'] ?? null;

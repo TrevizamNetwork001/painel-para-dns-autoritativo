@@ -1120,6 +1120,87 @@ class DnsZoneController extends Controller
         });
     }
 
+    public function restoreVersion(
+        Request $request,
+        DnsZone $zone,
+        DnsZoneVersion $version,
+        BindZoneRenderer $renderer,
+        DnsZoneValidator $validator,
+    ): RedirectResponse {
+        $this->authorizeWrite($request);
+        $this->authorizeZone($request, $zone);
+        abort_unless((int) $version->dns_zone_id === (int) $zone->id, 404);
+
+        DB::transaction(function () use ($request, $zone, $version, $renderer, $validator): void {
+            $zone = DnsZone::query()->lockForUpdate()->findOrFail($zone->id);
+            $this->authorizeZone($request, $zone);
+            $snapshot = $version->snapshot;
+            $oldZone = $snapshot['zone'] ?? null;
+            $records = $snapshot['records'] ?? null;
+            abort_unless(
+                is_array($oldZone) && is_array($records),
+                422,
+                'Versão sem snapshot restaurável.',
+            );
+
+            $fields = ['default_ttl', 'soa_mname', 'soa_rname', 'soa_refresh', 'soa_retry', 'soa_expire', 'soa_minimum'];
+            foreach ($fields as $field) {
+                abort_unless(
+                    array_key_exists($field, $oldZone),
+                    422,
+                    'Snapshot incompleto.',
+                );
+            }
+
+            $zone->records()->delete();
+            foreach ($records as $record) {
+                $zone->records()->create([
+                    'organization_id' => $zone->organization_id,
+                    'name' => $record['name'],
+                    'type' => $record['type'],
+                    'ttl' => $record['ttl'],
+                    'priority' => $record['priority'],
+                    'content' => $record['content'],
+                    'enabled' => $record['enabled'],
+                ]);
+            }
+
+            $zone->forceFill([
+                ...array_intersect_key($oldZone, array_flip($fields)),
+                'serial' => $this->nextSerial($zone->serial),
+                'version' => $zone->version + 1,
+                'status' => $zone->status === 'disabled' ? 'disabled' : 'ready',
+            ])->save();
+            $zone->refresh()->load([
+                'records',
+                'servers.agent',
+                'nameserverProfile.identities',
+            ]);
+            $result = $validator->validate($zone);
+            if (! $result['ok']) {
+                throw ValidationException::withMessages(['zone' => $result['errors']]);
+            }
+            $renderer->render($zone);
+            $this->saveVersion(
+                $zone,
+                $request,
+                'Registros e SOA restaurados da versão '.$version->version.'.',
+                $renderer,
+            );
+            DnsAuditLogger::record(
+                organizationId: $zone->organization_id,
+                user: $request->user(),
+                action: 'zone.version_restored',
+                domain: $zone->name,
+            );
+        });
+
+        return redirect()->route('zones.show', $zone)->with(
+            'status',
+            'Registros e SOA restaurados como alteração pendente. Revise e publique para aplicar nos servidores.',
+        );
+    }
+
     public function publishAndSync(
         Request $request,
         DnsZone $zone,
@@ -1162,8 +1243,8 @@ class DnsZoneController extends Controller
         // O secundário só tem o serial novo depois de transferir a zona do primário.
         // Como cada agente consulta o painel no próprio relógio, aplicar nos dois ao
         // mesmo tempo fazia o secundário desistir antes de o primário terminar de
-        // carregar. Enquanto a publicação desta versão não estiver aplicada no
-        // primário, o secundário fica "adiado" e a tela o libera depois.
+        // carregar. A confirmação do primário libera o secundário no servidor;
+        // esta chamada só apresenta o estado atual ao navegador.
         $latestVersionId = $zone->versions()->max('id');
         $primaryServerIds = $zone->servers
             ->filter(fn (DnsServer $server): bool => $server->pivot->role === 'primary')
@@ -1203,26 +1284,30 @@ class DnsZoneController extends Controller
                 ];
             }
 
-            DnsBindOperation::expireStaleOperations($server->id);
+            DB::transaction(function () use ($server, $zone, $request): void {
+                $lockedServer = DnsServer::query()->lockForUpdate()->findOrFail($server->id);
+                DnsBindOperation::expireStaleOperations($lockedServer->id);
 
-            $inFlight = DnsBindOperation::query()
-                ->where('dns_server_id', $server->id)
-                ->where('action', 'apply_zones')
-                ->whereIn('status', ['authorized', 'running'])
-                ->exists();
+                $inFlight = DnsBindOperation::query()
+                    ->where('dns_server_id', $lockedServer->id)
+                    ->where('action', 'apply_zones')
+                    ->whereIn('status', ['authorized', 'running'])
+                    ->exists();
 
-            if (! $inFlight) {
-                DnsBindOperation::query()->create([
-                    'organization_id' => $zone->organization_id,
-                    'dns_server_id' => $server->id,
-                    'dns_agent_id' => $server->agent->id,
-                    'action' => 'apply_zones',
-                    'status' => 'authorized',
-                    'authorization_nonce' => (string) Str::uuid(),
-                    'authorized_by' => $request->user()->id,
-                    'authorized_at' => now(),
-                ]);
-            }
+                $agent = $lockedServer->agent;
+                if (! $inFlight && $agent && $agent->revoked_at === null) {
+                    DnsBindOperation::query()->create([
+                        'organization_id' => $zone->organization_id,
+                        'dns_server_id' => $lockedServer->id,
+                        'dns_agent_id' => $agent->id,
+                        'action' => 'apply_zones',
+                        'status' => 'authorized',
+                        'authorization_nonce' => (string) Str::uuid(),
+                        'authorized_by' => $request->user()->id,
+                        'authorized_at' => now(),
+                    ]);
+                }
+            });
 
             return [
                 'server_id' => $server->id,

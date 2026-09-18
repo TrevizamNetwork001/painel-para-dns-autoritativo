@@ -694,7 +694,6 @@
                 if (++attempts > 200) {
                     status.textContent = 'Ainda aguardando o agente';
                     message.textContent = 'A operação continua em segundo plano e será processada quando o agente se comunicar.';
-                    return;
                 }
                 polling = true;
                 let payload;
@@ -948,7 +947,7 @@
             };
             const expired = (errorText, installed, available) => {
                 title.textContent = 'Solicitação expirada';
-                status.textContent = 'O agente não coletou a atualização';
+                status.textContent = 'O prazo da atualização terminou';
                 spinner.hidden = true;
                 summary.hidden = true;
                 meta.hidden = true;

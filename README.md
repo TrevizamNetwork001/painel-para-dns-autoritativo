@@ -10,13 +10,12 @@ desabilitada nos servidores gerenciados.
 
 ## Estado atual
 
-A avaliação técnica e as melhorias de confiabilidade de 2026-09-08 estão
-registradas em [Avaliação e melhorias](docs/AVALIACAO_E_MELHORIAS_2026_09_08.md),
-com resultados dos testes e pendências operacionais.
-O funcionamento e a revisão específica do agente estão em
-[Avaliação do Agent](docs/AGENT_AVALIACAO_2026_09_08.md).
-O deploy e a atualização do agente 0.7.7 estão registrados em
-[Release 1.3.6](docs/RELEASE_1.3.6.md).
+A avaliação atual do produto e do agente está em
+[Revisão do produto](docs/REVISAO_PRODUTO_2026_09_18.md) e
+[Revisão do agente](docs/REVISAO_AGENT_2026_09_18.md).
+O código do agente neste checkout declara a versão 0.10.2; a instalação
+nos servidores requer rollout separado. As avaliações e releases anteriores
+permanecem no histórico em `docs/`.
 
 O projeto já possui:
 
@@ -335,11 +334,13 @@ em produção. As evidências e limitações estão em
 | [Release 1.3.42](docs/RELEASE_1.3.42.md) | Publicar e sincronizar: o secundário só aplica depois do primário |
 | [Backup e restauração](docs/BACKUP_RESTORE.md) | Backup diário do banco com limpeza, cópia criptografada no Cloudflare R2 e teste de restauração |
 | [Release 1.3.43](docs/RELEASE_1.3.43.md) | Configurações → Backup: credenciais do R2 pelo painel, criptografadas, com teste de conexão |
+| [Release 1.3.44](docs/RELEASE_1.3.44.md) | Agente 0.10.2 e fluxos de upgrade, publicação e restauração mais robustos |
 | [Operação Cliente Exemplo — 18/09/2026](docs/OPERACAO_CLIENTE_EXEMPLO_2026_09_18.md) | Adoção das zonas reversas do dns-primary/02, runbook e pendências |
 
 ## Status do projeto
 
-**v1.3.43 em produção** (agente 0.10.1). Desde a v1.3.29: página Reversos
+**v1.3.44 publicada no painel** (artefato do agente 0.10.2; atualização dos hosts
+autoritativos acompanhada separadamente). Desde a v1.3.29: página Reversos
 (1.3.30), desativar/excluir empresa (1.3.31), remover bloco antigo + publicar
 num passo (1.3.32/1.3.38), descoberta com comparação entre servidores e zonas
 ignoradas (1.3.33–1.3.35), correção dos NS duplicados (1.3.37), espera do

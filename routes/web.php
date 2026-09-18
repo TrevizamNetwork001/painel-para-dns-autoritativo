@@ -3,6 +3,7 @@
 use App\Http\Controllers\AdminTwoFactorController;
 use App\Http\Controllers\Auth\ForgotPasswordController;
 use App\Http\Controllers\Auth\ResetPasswordController;
+use App\Http\Controllers\BackupSettingsController;
 use App\Http\Controllers\DnsAgentEnrollmentController;
 use App\Http\Controllers\DnsAgentInstallAssignmentController;
 use App\Http\Controllers\DnsAuditLogController;
@@ -14,7 +15,6 @@ use App\Http\Controllers\DnsServerController;
 use App\Http\Controllers\DnsServerTransferController;
 use App\Http\Controllers\DnsTsigKeyController;
 use App\Http\Controllers\DnsZoneController;
-use App\Http\Controllers\BackupSettingsController;
 use App\Http\Controllers\OrganizationController;
 use App\Http\Controllers\PasswordChangeController;
 use App\Http\Controllers\PlatformOrganizationContextController;
@@ -467,6 +467,11 @@ Route::middleware([
         '/{zone}/publicar-e-sincronizar',
         [DnsZoneController::class, 'publishAndSync'],
     )->name('publish-and-sync');
+
+    Route::post(
+        '/{zone}/versoes/{version}/restaurar',
+        [DnsZoneController::class, 'restoreVersion'],
+    )->name('versions.restore');
 
     Route::post(
         '/{zone}/adotar',

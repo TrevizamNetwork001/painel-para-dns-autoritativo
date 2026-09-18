@@ -162,6 +162,35 @@ class DnsAgentUpgradeTest extends TestCase
         $this->assertDatabaseHas('dns_bind_operations', ['status' => 'expired']);
     }
 
+    public function test_running_upgrade_has_its_own_execution_deadline(): void
+    {
+        config()->set('security.agent_upgrade.ttl_minutes', 10);
+        config()->set('security.agent_upgrade.running_ttl_minutes', 30);
+        $context = $this->context();
+        $operation = DnsBindOperation::query()->create([
+            'organization_id' => $context['organization']->id,
+            'dns_server_id' => $context['server']->id,
+            'dns_agent_id' => $context['agent']->id,
+            'action' => 'upgrade_agent',
+            'status' => 'running',
+            'authorization_nonce' => (string) Str::uuid(),
+            'authorized_by' => $context['admin']->id,
+            'authorized_at' => now()->subMinutes(16),
+            'started_at' => now()->subMinutes(12),
+        ]);
+
+        $this->actingAs($context['admin'])
+            ->getJson(route('servers.agent.upgrade.status', $context['server']))
+            ->assertOk()
+            ->assertJsonPath('status', 'running');
+
+        $operation->update(['started_at' => now()->subMinutes(31)]);
+        $this->actingAs($context['admin'])
+            ->getJson(route('servers.agent.upgrade.status', $context['server']))
+            ->assertOk()
+            ->assertJsonPath('status', 'expired');
+    }
+
     public function test_status_endpoint_reflects_operation_lifecycle(): void
     {
         $context = $this->context();
@@ -305,6 +334,36 @@ class DnsAgentUpgradeTest extends TestCase
             ->assertJsonPath('version_confirmed', true);
     }
 
+    public function test_upgrade_result_confirms_version_before_next_heartbeat(): void
+    {
+        $context = $this->context();
+        $availableVersion = AgentArtifact::availableVersion();
+        DnsBindOperation::query()->create([
+            'organization_id' => $context['organization']->id,
+            'dns_server_id' => $context['server']->id,
+            'dns_agent_id' => $context['agent']->id,
+            'action' => 'upgrade_agent',
+            'status' => 'succeeded',
+            'authorization_nonce' => (string) Str::uuid(),
+            'authorized_by' => $context['admin']->id,
+            'authorized_at' => now()->subMinute(),
+            'completed_at' => now(),
+            'result' => [
+                'binary_changed' => true,
+                'changed' => true,
+                'previous_version' => '0.5.0',
+                'installed_version' => $availableVersion,
+            ],
+        ]);
+        $context['agent']->update(['metadata' => ['agent_version' => '0.5.0']]);
+
+        $this->actingAs($context['admin'])
+            ->getJson(route('servers.agent.upgrade.status', $context['server']))
+            ->assertOk()
+            ->assertJsonPath('installed_version', $availableVersion)
+            ->assertJsonPath('version_confirmed', true);
+    }
+
     public function test_upgrade_no_op_reinstall_is_confirmed_without_waiting_for_heartbeat(): void
     {
         $context = $this->context();
@@ -438,7 +497,12 @@ class DnsAgentUpgradeTest extends TestCase
                 'event_id' => (string) Str::uuid(),
                 'authorization_nonce' => $operation->getRawOriginal('authorization_nonce'),
                 'status' => 'succeeded',
-                'result' => ['binary_changed' => true, 'units_changed' => false, 'changed' => true],
+                'result' => [
+                    'binary_changed' => true,
+                    'units_changed' => false,
+                    'changed' => true,
+                    'installed_version' => AgentArtifact::availableVersion(),
+                ],
             ],
         );
 
@@ -447,7 +511,9 @@ class DnsAgentUpgradeTest extends TestCase
 
         $status = $this->actingAs($context['admin'])
             ->getJson(route('servers.agent.upgrade.status', $context['server']));
-        $status->assertOk()->assertJsonPath('status', 'succeeded');
+        $status->assertOk()
+            ->assertJsonPath('status', 'succeeded')
+            ->assertJsonPath('version_confirmed', true);
     }
 
     public function test_report_preserves_diagnostics_paths_but_redacts_secrets_and_unknown_keys(): void

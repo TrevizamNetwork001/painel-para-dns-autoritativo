@@ -5,6 +5,7 @@ Wants=network-online.target
 
 [Service]
 Type=oneshot
+TimeoutStartSec=18min
 User=root
 Group=root
 Environment=DNS_CENTER_AGENT_ALLOW_APPLY=1

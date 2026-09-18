@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import base64
 import filecmp
+import fcntl
 import hashlib
 import html
 import getpass
@@ -30,12 +31,13 @@ import urllib.request
 import uuid
 from shutil import copyfileobj
 from collections.abc import Callable, Iterator
+from contextlib import contextmanager
 from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
 from pathlib import Path
 from typing import Any
 
-AGENT_VERSION = "0.10.1"
+AGENT_VERSION = "0.10.2"
 OFFICIAL_BASE_URL = "https://dnscenter.trevizamnetwork.com.br"
 DEFAULT_CONFIG = Path("/etc/dns-center-agent/agent.json")
 DEFAULT_STATE_DIR = Path("/var/lib/dns-center-agent")
@@ -255,6 +257,33 @@ def write_json_state(path: Path, payload: dict[str, Any], mode: int = 0o600) -> 
 
 def save_config(path: Path, payload: dict[str, Any]) -> None:
     write_json_state(path, payload)
+
+
+@contextmanager
+def agent_state_lock(config: dict[str, Any], *, wait: bool = True) -> Iterator[None]:
+    """Serialize timer processes that read or change the local publication state."""
+    state_dir = config_paths(config)["state_dir"]
+    try:
+        state_dir.mkdir(parents=True, exist_ok=True)
+    except OSError as exception:
+        raise AgentError("Não foi possível preparar o estado do agente.") from exception
+    reject_symlink(state_dir)
+    lock_path = state_dir / "agent.lock"
+    flags = os.O_CREAT | os.O_RDWR | getattr(os, "O_NOFOLLOW", 0)
+    try:
+        descriptor = os.open(lock_path, flags, 0o600)
+    except OSError as exception:
+        raise AgentError("Não foi possível abrir o lock do agente.") from exception
+
+    try:
+        try:
+            flags = fcntl.LOCK_EX if wait else fcntl.LOCK_EX | fcntl.LOCK_NB
+            fcntl.flock(descriptor, flags)
+        except BlockingIOError as exception:
+            raise AgentError("Outra execução do agente ainda está em andamento.") from exception
+        yield
+    finally:
+        os.close(descriptor)
 
 
 def request_json(
@@ -2321,6 +2350,7 @@ def upgrade_agent_self(config: dict[str, Any]) -> dict[str, Any]:
     base_url = normalize_base_url(str(config["base_url"]))
     binary_changed = False
     units_changed = False
+    installed_version: str | None = AGENT_VERSION
 
     # dir= pins the temp dir to install_path's own filesystem so the
     # os.replace() swaps below are guaranteed atomic renames. The default
@@ -2386,6 +2416,12 @@ def upgrade_agent_self(config: dict[str, Any]) -> dict[str, Any]:
                     "Falha na validação do novo agente; binário anterior "
                     "restaurado."
                 )
+            reported_version = version_check.stdout.strip()
+            installed_version = (
+                reported_version
+                if re.fullmatch(r"\d+\.\d+\.\d+", reported_version)
+                else None
+            )
 
         systemd_dir = DEFAULT_SYSTEMD_DIR
         unit_backups: dict[Path, Path] = {}
@@ -2490,6 +2526,7 @@ def upgrade_agent_self(config: dict[str, Any]) -> dict[str, Any]:
         "binary_changed": binary_changed,
         "units_changed": units_changed,
         "previous_version": AGENT_VERSION,
+        "installed_version": installed_version,
         "changed": binary_changed or units_changed,
     }
 
@@ -2666,24 +2703,102 @@ def report_operation(
     result: dict[str, Any] | None = None,
     error: str | None = None,
 ) -> dict[str, Any]:
+    payload = {
+        "event_id": str(uuid.uuid4()),
+        "authorization_nonce": operation["authorization_nonce"],
+        "status": status_value,
+        "result": result,
+        "error": error,
+    }
+    pending_path = _pending_operation_report_path(config)
+    terminal = status_value in {"succeeded", "failed"}
+
+    if terminal and pending_path is not None:
+        try:
+            write_json_state(pending_path, {
+                "operation_id": operation["id"],
+                "payload": payload,
+            })
+        except OSError as exception:
+            raise AgentError("Não foi possível salvar o resultado da operação.") from exception
+
+    try:
+        response = _send_operation_report(config, operation["id"], payload)
+    except AgentHttpError as exception:
+        if terminal and pending_path is not None and exception.status in {404, 409, 422}:
+            pending_path.unlink(missing_ok=True)
+        raise
+    if terminal and pending_path is not None:
+        if response.get("status") not in {None, status_value}:
+            pending_path.unlink(missing_ok=True)
+            raise AgentError(
+                "O painel não confirmou o resultado final da operação "
+                f"(status: {response.get('status')})."
+            )
+        pending_path.unlink(missing_ok=True)
+
+    return response
+
+
+def _pending_operation_report_path(config: dict[str, Any]) -> Path | None:
+    # Configs created by enrollment always contain state_dir. A config without
+    # one is a legacy/manual invocation; it retains the previous behavior.
+    if "state_dir" not in config:
+        return None
+    state_dir = config_paths(config)["state_dir"]
+    try:
+        state_dir.mkdir(parents=True, exist_ok=True)
+    except OSError as exception:
+        raise AgentError("Não foi possível preparar o estado do agente.") from exception
+    reject_symlink(state_dir)
+    path = state_dir / "pending-operation-report.json"
+    reject_symlink(path)
+    return path
+
+
+def _send_operation_report(
+    config: dict[str, Any], operation_id: int, payload: dict[str, Any]
+) -> dict[str, Any]:
     return request_json(
         "POST",
         normalize_base_url(str(config["base_url"]))
-        + f"/api/agent/bind/operations/{operation['id']}/report",
-        {
-            "event_id": str(uuid.uuid4()),
-            "authorization_nonce": operation["authorization_nonce"],
-            "status": status_value,
-            "result": result,
-            "error": error,
-        },
+        + f"/api/agent/bind/operations/{operation_id}/report",
+        payload,
         str(config["token"]),
     )
+
+
+def flush_pending_operation_report(config: dict[str, Any]) -> None:
+    path = _pending_operation_report_path(config)
+    if path is None or not path.exists():
+        return
+
+    pending = read_json(path)
+    operation_id = pending.get("operation_id")
+    payload = pending.get("payload")
+    if not isinstance(operation_id, int) or not isinstance(payload, dict):
+        raise AgentError("Relatório final pendente inválido.")
+    if payload.get("status") not in {"succeeded", "failed"}:
+        raise AgentError("Estado do relatório final pendente inválido.")
+
+    try:
+        response = _send_operation_report(config, operation_id, payload)
+    except AgentHttpError as exception:
+        if exception.status in {404, 409, 422}:
+            path.unlink(missing_ok=True)
+        raise
+    path.unlink(missing_ok=True)
+    if response.get("status") not in {None, payload["status"]}:
+        raise AgentError(
+            "O painel já encerrou a operação com outro resultado "
+            f"(status: {response.get('status')})."
+        )
 
 
 def run_authorized_operation(
     config: dict[str, Any],
 ) -> dict[str, Any]:
+    flush_pending_operation_report(config)
     response = request_json(
         "GET",
         normalize_base_url(str(config["base_url"]))
@@ -2730,10 +2845,11 @@ def run_authorized_operation(
             result = upgrade_agent_self(config)
         elif action == "apply_zones":
             server_name = str(config.get("server", {}).get("name", ""))
-            result = sync_zones(
-                config, apply=True,
-                confirmation=f"APLICAR ZONAS {server_name}".strip(),
-            )
+            with agent_state_lock(config):
+                result = sync_zones(
+                    config, apply=True,
+                    confirmation=f"APLICAR ZONAS {server_name}".strip(),
+                )
         elif action == "remove_legacy_zone_block":
             params = operation.get("params")
             if not isinstance(params, dict):
@@ -2778,7 +2894,8 @@ def run_authorized_operation(
         # a stale "serial divergente" alert until the next --observe-bind
         # tick (up to 5 minutes later, per dns-center-agent.timer).
         try:
-            send_authoritative_observation(config)
+            with agent_state_lock(config):
+                send_authoritative_observation(config)
         except Exception:
             pass
 
@@ -4665,7 +4782,12 @@ def main() -> int:
 
         for selected, handler in handlers:
             if selected:
-                print(json.dumps(handler(), indent=2, ensure_ascii=False))
+                if args.sync_zones or args.observe_bind:
+                    with agent_state_lock(config, wait=False):
+                        result = handler()
+                else:
+                    result = handler()
+                print(json.dumps(result, indent=2, ensure_ascii=False))
                 return 0
 
         raise AgentError("Operação não reconhecida.")

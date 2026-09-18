@@ -6,6 +6,7 @@ import io
 import json
 import logging
 import argparse
+from contextlib import nullcontext
 import os
 import stat
 import subprocess
@@ -36,6 +37,43 @@ SPEC.loader.exec_module(agent)
 
 
 class AgentTests(unittest.TestCase):
+    def test_agent_state_lock_rejects_parallel_timer_runs(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            config = self.config(directory)
+            with agent.agent_state_lock(config):
+                with self.assertRaisesRegex(agent.AgentError, "Outra execução"):
+                    with agent.agent_state_lock(config, wait=False):
+                        pass
+
+            with agent.agent_state_lock(config):
+                self.assertTrue((Path(config["state_dir"]) / "agent.lock").is_file())
+
+    def test_terminal_operation_report_survives_network_failure(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            config = self.config(directory)
+            operation = {
+                "id": 42,
+                "authorization_nonce": "nonce",
+            }
+            pending_path = Path(config["state_dir"]) / "pending-operation-report.json"
+
+            with patch.object(
+                agent,
+                "request_json",
+                side_effect=[agent.AgentError("rede indisponível"), {"status": "succeeded"}],
+            ) as request:
+                with self.assertRaisesRegex(agent.AgentError, "rede indisponível"):
+                    agent.report_operation(config, operation, "succeeded", result={"changed": True})
+
+                self.assertTrue(pending_path.is_file())
+                self.assertEqual(0o600, stat.S_IMODE(pending_path.stat().st_mode))
+                saved_event = json.loads(pending_path.read_text())["payload"]["event_id"]
+                agent.flush_pending_operation_report(config)
+
+            self.assertFalse(pending_path.exists())
+            self.assertEqual(2, request.call_count)
+            self.assertEqual(saved_event, request.call_args_list[1].args[2]["event_id"])
+
     def config(self, directory: str) -> dict:
         root = Path(directory)
 
@@ -2023,6 +2061,8 @@ class AgentTests(unittest.TestCase):
             agent, "sync_zones",
             return_value={"status": "applied", "updates": 1},
         ) as sync, patch.object(
+            agent, "agent_state_lock", return_value=nullcontext(),
+        ), patch.object(
             agent, "send_readiness",
         ) as readiness, patch.object(
             agent, "send_authoritative_observation",
@@ -2051,6 +2091,8 @@ class AgentTests(unittest.TestCase):
         ), patch.object(
             agent, "sync_zones",
             return_value={"status": "applied", "updates": 1},
+        ), patch.object(
+            agent, "agent_state_lock", return_value=nullcontext(),
         ), patch.object(
             agent, "send_readiness",
         ), patch.object(

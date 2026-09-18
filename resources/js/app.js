@@ -325,6 +325,30 @@ usersClearFilters?.addEventListener('click', () => {
 
 const serverModal = document.querySelector('[data-server-modal]');
 
+document.querySelectorAll('[data-zone-server-pair]').forEach((pair) => {
+    const primary = pair.querySelector('[name="primary_server_id"]');
+    const secondary = pair.querySelector('[name="secondary_server_id"]');
+    if (!primary || !secondary) return;
+
+    const updateOptions = () => {
+        primary.querySelectorAll('option[value]').forEach((option) => {
+            option.disabled = Boolean(secondary.value) && option.value === secondary.value;
+        });
+        secondary.querySelectorAll('option[value]').forEach((option) => {
+            option.disabled = Boolean(primary.value) && option.value === primary.value;
+        });
+        secondary.setCustomValidity(
+            primary.value && primary.value === secondary.value
+                ? 'Escolha um servidor diferente do principal.'
+                : ''
+        );
+    };
+
+    primary.addEventListener('change', updateOptions);
+    secondary.addEventListener('change', updateOptions);
+    updateOptions();
+});
+
 if (serverModal) {
     const serverForm = serverModal.querySelector('[data-server-form]');
     const serverMethod = serverModal.querySelector('[data-server-method]');

@@ -532,39 +532,43 @@ class DnsAgentEnrollmentController extends Controller
     {
         $organizationId = $this->authorizeServer($request, $server);
 
-        DnsBindOperation::expireStaleOperations($server->id);
+        DB::transaction(function () use ($request, $server, $organizationId): void {
+            $server = DnsServer::query()->lockForUpdate()->findOrFail($server->id);
+            $this->authorizeServer($request, $server);
+            DnsBindOperation::expireStaleOperations($server->id);
 
-        $agent = DnsAgent::query()
-            ->where('organization_id', $organizationId)
-            ->where('dns_server_id', $server->id)
-            ->whereNull('revoked_at')
-            ->first();
+            $agent = DnsAgent::query()
+                ->where('organization_id', $organizationId)
+                ->where('dns_server_id', $server->id)
+                ->whereNull('revoked_at')
+                ->first();
 
-        abort_unless($agent, 409, 'Agente não vinculado ou revogado.');
-        abort_if(
-            $server->agent_status !== 'online',
-            409,
-            'O agente está offline. Restabeleça a comunicação antes de solicitar a atualização.',
-        );
+            abort_unless($agent, 409, 'Agente não vinculado ou revogado.');
+            abort_if(
+                $server->agent_status !== 'online',
+                409,
+                'O agente está offline. Restabeleça a comunicação antes de solicitar a atualização.',
+            );
 
-        $inFlight = DnsBindOperation::query()
-            ->where('dns_server_id', $server->id)
-            ->where('action', 'upgrade_agent')
-            ->whereIn('status', ['authorized', 'running'])
-            ->exists();
+            $inFlight = DnsBindOperation::query()
+                ->where('dns_server_id', $server->id)
+                ->where('action', 'upgrade_agent')
+                ->whereIn('status', ['authorized', 'running'])
+                ->exists();
 
-        abort_if($inFlight, 409, 'Já existe uma atualização de agente em andamento para este servidor.');
+            abort_if($inFlight, 409, 'Já existe uma atualização de agente em andamento para este servidor.');
 
-        DnsBindOperation::query()->create([
-            'organization_id' => $organizationId,
-            'dns_server_id' => $server->id,
-            'dns_agent_id' => $agent->id,
-            'action' => 'upgrade_agent',
-            'status' => 'authorized',
-            'authorization_nonce' => (string) Str::uuid(),
-            'authorized_by' => $request->user()->id,
-            'authorized_at' => now(),
-        ]);
+            DnsBindOperation::query()->create([
+                'organization_id' => $organizationId,
+                'dns_server_id' => $server->id,
+                'dns_agent_id' => $agent->id,
+                'action' => 'upgrade_agent',
+                'status' => 'authorized',
+                'authorization_nonce' => (string) Str::uuid(),
+                'authorized_by' => $request->user()->id,
+                'authorized_at' => now(),
+            ]);
+        });
 
         SecurityAuditLogger::record(
             event: 'agent.upgrade_requested',
@@ -615,6 +619,9 @@ class DnsAgentEnrollmentController extends Controller
 
         $result = $operation->status === 'succeeded' ? $operation->result : null;
         $changed = $result['changed'] ?? null;
+        $reportedVersion = $result['installed_version'] ?? null;
+        $resultConfirmed = is_string($reportedVersion)
+            && $reportedVersion === $availableVersion;
 
         return response()->json([
             'ok' => true,
@@ -622,21 +629,22 @@ class DnsAgentEnrollmentController extends Controller
             'status' => $operation->status,
             'error' => match ($operation->status) {
                 'failed' => 'O agente não conseguiu concluir a atualização.',
-                'expired' => 'A solicitação expirou porque o agente não a coletou dentro do prazo.',
+                'expired' => $operation->started_at
+                    ? 'A atualização excedeu o prazo de execução. Verifique o agente antes de tentar novamente.'
+                    : 'A solicitação expirou porque o agente não a coletou dentro do prazo.',
                 default => null,
             },
             'result' => $result,
             'requested_at' => $operation->authorized_at?->toIso8601String(),
-            'expires_at' => $operation->authorized_at?->addMinutes(max(
-                1,
-                (int) config('security.agent_upgrade.ttl_minutes', 10),
-            ))->toIso8601String(),
+            'expires_at' => ($operation->started_at
+                ? $operation->started_at->addMinutes(max(1, (int) config('security.agent_upgrade.running_ttl_minutes', 20)))
+                : $operation->authorized_at?->addMinutes(max(1, (int) config('security.agent_upgrade.ttl_minutes', 10))))?->toIso8601String(),
             'agent_online' => $server->agent_status === 'online',
             'agent_last_seen_at' => $server->agent?->last_seen_at?->toIso8601String(),
-            'installed_version' => $installedVersion,
+            'installed_version' => $resultConfirmed ? $reportedVersion : $installedVersion,
             'available_version' => $availableVersion,
             'target_version' => $availableVersion,
-            'version_confirmed' => $changed === false ? true : $versionConfirmed,
+            'version_confirmed' => $changed === false || $resultConfirmed || $versionConfirmed,
         ]);
     }
 

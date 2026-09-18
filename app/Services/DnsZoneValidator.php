@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\DnsRecord;
 use App\Models\DnsServer;
 use App\Models\DnsZone;
+use Illuminate\Support\Collection;
 
 class DnsZoneValidator
 {
@@ -275,7 +276,7 @@ class DnsZoneValidator
     }
 
     /**
-     * @param  \Illuminate\Support\Collection<int, DnsRecord>  $nsRecords
+     * @param  Collection<int, DnsRecord>  $nsRecords
      * @return array<int, string>
      */
     private function duplicatedApexNameservers($nsRecords, DnsZone $zone): array

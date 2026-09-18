@@ -217,6 +217,30 @@ class DnsServerManagementTest extends TestCase
         ]);
     }
 
+    public function test_server_name_rejects_label_copied_from_server_selector(): void
+    {
+        [$admin, $organization] = $this->admin();
+        $server = DnsServer::factory()->create([
+            'organization_id' => $organization->id,
+            'name' => 'DNS original',
+            'hostname' => 'ns1.example.test',
+        ]);
+
+        $this->actingAs($admin)
+            ->put(route('servers.update', $server), [
+                'name' => 'DNS original — ns1.example.test',
+                'hostname' => 'ns1.example.test',
+                'ipv4_address' => '192.0.2.60',
+                'ipv6_address' => '',
+                'role' => 'primary',
+                'environment' => 'production',
+                'notes' => '',
+            ])
+            ->assertSessionHasErrors('name');
+
+        $this->assertSame('DNS original', $server->fresh()->name);
+    }
+
     public function test_admin_can_disable_and_enable_server(): void
     {
         [$admin, $organization] = $this->admin();

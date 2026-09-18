@@ -445,6 +445,90 @@ class DnsZoneWorkflowTest extends TestCase
         ]);
     }
 
+    public function test_agent_confirmation_releases_secondary_without_an_open_browser(): void
+    {
+        $context = $this->context(withAgents: true);
+        $zone = $this->createZone($context);
+
+        $this->actingAs($context['admin'])
+            ->postJson(route('zones.publish-and-sync', $zone))
+            ->assertOk();
+
+        $version = $zone->versions()->latest('id')->firstOrFail();
+        $publication = DnsAgentPublication::query()
+            ->where('dns_zone_version_id', $version->id)
+            ->where('dns_server_id', $context['primary']->id)
+            ->firstOrFail();
+
+        $this->withToken($context['agentTokens'][0])
+            ->postJson(route('api.agent.publications.apply', $publication), [
+                'event_id' => (string) Str::uuid(),
+                'status' => 'applied',
+                'installed_version' => $version->version,
+                'authoritative_serial' => $version->serial,
+            ])->assertOk();
+
+        $this->assertSame(1, DnsBindOperation::query()
+            ->where('dns_server_id', $context['secondary']->id)
+            ->where('action', 'apply_zones')
+            ->where('status', 'authorized')
+            ->count());
+
+        // A segunda confirmação não pode criar outra operação.
+        $this->withToken($context['agentTokens'][0])
+            ->postJson(route('api.agent.publications.apply', $publication), [
+                'event_id' => (string) Str::uuid(),
+                'status' => 'applied',
+                'installed_version' => $version->version,
+                'authoritative_serial' => $version->serial,
+            ])->assertOk();
+
+        $this->assertSame(1, DnsBindOperation::query()
+            ->where('dns_server_id', $context['secondary']->id)
+            ->where('action', 'apply_zones')
+            ->count());
+    }
+
+    public function test_restoring_history_creates_pending_change_with_a_new_serial(): void
+    {
+        $context = $this->context(withAgents: true);
+        $zone = $this->createZone($context);
+        $this->actingAs($context['admin'])
+            ->post(route('zones.publish', $zone))
+            ->assertRedirect();
+        $version = $zone->versions()->latest('id')->firstOrFail();
+        $originalCount = $zone->records()->count();
+
+        $zone->records()->where('type', 'NS')->firstOrFail()->update(['ttl' => 7200]);
+        $zone->forceFill(['status' => 'ready'])->save();
+        $beforeSerial = $zone->serial;
+
+        $this->actingAs($context['admin'])
+            ->post(route('zones.versions.restore', [$zone, $version]))
+            ->assertRedirect(route('zones.show', $zone));
+
+        $zone->refresh();
+        $this->assertSame('ready', $zone->status);
+        $this->assertGreaterThan($beforeSerial, $zone->serial);
+        $this->assertSame($originalCount, $zone->records()->count());
+        $this->assertNull($zone->records()->where('type', 'NS')->firstOrFail()->ttl);
+        $this->assertSame('Registros e SOA restaurados da versão '.$version->version.'.',
+            $zone->versions()->latest('id')->firstOrFail()->reason);
+    }
+
+    public function test_restoring_history_rejects_a_version_from_another_zone(): void
+    {
+        $context = $this->context();
+        $zone = $this->createZone($context);
+        $foreign = $this->context('Outra empresa');
+        $foreignZone = $this->createZone($foreign);
+        $foreignVersion = $foreignZone->versions()->firstOrFail();
+
+        $this->actingAs($context['admin'])
+            ->post(route('zones.versions.restore', [$zone, $foreignVersion]))
+            ->assertNotFound();
+    }
+
     public function test_secondary_stays_deferred_when_primary_publication_failed(): void
     {
         $context = $this->context(withAgents: true);

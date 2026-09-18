@@ -35,6 +35,7 @@ return [
 
     'agent_upgrade' => [
         'ttl_minutes' => (int) env('AGENT_UPGRADE_TTL_MINUTES', 10),
+        'running_ttl_minutes' => (int) env('AGENT_UPGRADE_RUNNING_TTL_MINUTES', 20),
     ],
 
     'agent_operations' => [

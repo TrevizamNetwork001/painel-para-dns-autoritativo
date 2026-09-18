@@ -153,28 +153,25 @@ formas, ambas exigindo `DNS_CENTER_AGENT_ALLOW_APPLY=1` e execução como root:
   autorização humana aconteceu no clique de confirmação do modal do painel,
   não por digitação de texto.
 
-Em ambos os casos `DNS_CENTER_AGENT_ALLOW_APPLY=1` é a decisão local do
-sysadmin do servidor e não vem do painel. Para habilitar o botão "Aplicar
-agora" sem precisar de SSH a cada aplicação, defina essa variável de forma
-persistente no serviço do timer de operações:
+Desde o agente 0.7.8, a unit `dns-center-agent-operation.service` instala
+`DNS_CENTER_AGENT_ALLOW_APPLY=1` por padrão. Portanto, no fluxo pelo painel,
+a autorização efetiva é a operação criada por um administrador no painel; a
+variável de ambiente não é mais uma aprovação local independente. O comando
+manual continua exigindo a variável e a frase de confirmação. Uma instalação
+antiga que ainda use a unit anterior precisa de atualização do agente ou da
+unit para aceitar aplicações pelo painel. A instalação automática de pacotes
+BIND não faz parte deste ciclo.
 
-```bash
-sudo systemctl edit dns-center-agent-operation.service
-```
+Desde 0.10.2, um resultado final `succeeded`/`failed` é salvo em
+`state_dir/pending-operation-report.json` antes do envio. Se a rede falhar, o
+próximo ciclo de operações reenvia o mesmo `event_id` antes de buscar novo
+trabalho. O arquivo é removido após a confirmação do painel.
 
-```ini
-[Service]
-Environment=DNS_CENTER_AGENT_ALLOW_APPLY=1
-```
-
-```bash
-sudo systemctl daemon-reload
-```
-
-Sem isso, `apply_zones` disparado pelo painel falha com a mesma mensagem do
-CLI manual ("Apply bloqueado: defina DNS_CENTER_AGENT_ALLOW_APPLY=1."),
-reportada de volta como operação `failed` — não é um erro silencioso. A
-instalação automática de pacotes BIND não faz parte deste ciclo.
+O upgrade aguarda até dez minutos para ser coletado e, depois de iniciado,
+tem até vinte minutos para terminar (configurações separadas no painel). A
+unit de operações 0.10.2 limita a execução local a dezoito minutos. O agente
+reporta a versão instalada no resultado do upgrade, permitindo confirmação
+sem esperar o heartbeat periódico.
 
 ### Estado local e retomada
 

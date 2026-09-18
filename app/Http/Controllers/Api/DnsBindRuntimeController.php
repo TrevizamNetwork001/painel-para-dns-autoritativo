@@ -647,6 +647,7 @@ class DnsBindRuntimeController extends Controller
                 'units_changed',
                 'changed',
                 'previous_version',
+                'installed_version',
                 'diagnostics',
                 'removed',
                 'zone_name',

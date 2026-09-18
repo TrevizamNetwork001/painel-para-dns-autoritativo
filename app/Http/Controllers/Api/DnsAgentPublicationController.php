@@ -6,6 +6,8 @@ use App\Http\Controllers\Controller;
 use App\Models\DnsAgent;
 use App\Models\DnsAgentPublication;
 use App\Models\DnsAgentPublicationEvent;
+use App\Models\DnsBindOperation;
+use App\Models\DnsServer;
 use App\Support\SecurityAuditLogger;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -206,6 +208,10 @@ class DnsAgentPublicationController extends Controller
                     : null,
             ])->save();
 
+            if ($validated['status'] === 'applied') {
+                $this->authorizeWaitingSecondaries($locked);
+            }
+
             return ['kind' => 'updated', 'destination' => $locked];
         });
 
@@ -252,6 +258,76 @@ class DnsAgentPublicationController extends Controller
             'serial_confirmed_at' => $current->serial_confirmed_at?->toIso8601String(),
             'confirmed_at' => $current->last_apply_at?->toIso8601String(),
         ]);
+    }
+
+    private function authorizeWaitingSecondaries(DnsAgentPublication $publication): void
+    {
+        $version = $publication->zoneVersion;
+        $zone = $version->zone;
+
+        // An old confirmation must never start work for a newer publication.
+        if ((int) $zone->versions()->max('id') !== (int) $version->id) {
+            return;
+        }
+
+        $primaryIds = $zone->servers()->wherePivot('role', 'primary')->pluck('dns_servers.id');
+        if (! $primaryIds->contains($publication->dns_server_id)) {
+            return;
+        }
+
+        $primaryOperation = DnsBindOperation::query()
+            ->whereIn('dns_server_id', $primaryIds)
+            ->where('action', 'apply_zones')
+            ->where('authorized_at', '>=', $version->created_at)
+            ->latest('id')
+            ->first();
+
+        if (! $primaryOperation || DnsAgentPublication::query()
+            ->where('dns_zone_version_id', $version->id)
+            ->whereIn('dns_server_id', $primaryIds)
+            ->where('status', '!=', 'applied')
+            ->exists()) {
+            return;
+        }
+
+        foreach ($zone->servers()->wherePivot('role', 'secondary')->get() as $secondary) {
+            /** @var DnsServer $secondary */
+            $secondary = DnsServer::query()->lockForUpdate()->findOrFail($secondary->id);
+            $agent = $secondary->agent;
+            if (! $agent || $agent->revoked_at !== null) {
+                continue;
+            }
+
+            $hasPending = DnsAgentPublication::query()
+                ->where('dns_zone_version_id', $version->id)
+                ->where('dns_server_id', $secondary->id)
+                ->whereIn('status', ['pending', 'downloaded', 'applying', 'failed'])
+                ->exists();
+            if (! $hasPending) {
+                continue;
+            }
+
+            DnsBindOperation::expireStaleOperations($secondary->id);
+            $inFlight = DnsBindOperation::query()
+                ->where('dns_server_id', $secondary->id)
+                ->where('action', 'apply_zones')
+                ->whereIn('status', ['authorized', 'running'])
+                ->exists();
+            if ($inFlight) {
+                continue;
+            }
+
+            DnsBindOperation::query()->create([
+                'organization_id' => $zone->organization_id,
+                'dns_server_id' => $secondary->id,
+                'dns_agent_id' => $agent->id,
+                'action' => 'apply_zones',
+                'status' => 'authorized',
+                'authorization_nonce' => (string) Str::uuid(),
+                'authorized_by' => $primaryOperation->authorized_by,
+                'authorized_at' => now(),
+            ]);
+        }
     }
 
     private function sanitizeError(?string $message): ?string

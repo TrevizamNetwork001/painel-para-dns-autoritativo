@@ -38,10 +38,12 @@ class DnsBindOperation extends Model
         return $this->belongsTo(DnsServer::class, 'dns_server_id');
     }
 
-    private static function ttlMinutesFor(string $action): int
+    private static function ttlMinutesFor(string $action, string $status): int
     {
         return max(1, (int) match ($action) {
-            'upgrade_agent' => config('security.agent_upgrade.ttl_minutes', 10),
+            'upgrade_agent' => $status === 'running'
+                ? config('security.agent_upgrade.running_ttl_minutes', 20)
+                : config('security.agent_upgrade.ttl_minutes', 10),
             default => config('security.agent_operations.ttl_minutes', 20),
         });
     }
@@ -60,17 +62,18 @@ class DnsBindOperation extends Model
         $expired = 0;
 
         foreach (self::ACTIONS as $action) {
-            $cutoff = now()->subMinutes(self::ttlMinutesFor($action));
+            $authorizedCutoff = now()->subMinutes(self::ttlMinutesFor($action, 'authorized'));
+            $runningCutoff = now()->subMinutes(self::ttlMinutesFor($action, 'running'));
 
             $expired += self::query()
                 ->where('action', $action)
-                ->where(function ($query) use ($cutoff): void {
-                    $query->where(function ($query) use ($cutoff): void {
+                ->where(function ($query) use ($authorizedCutoff, $runningCutoff): void {
+                    $query->where(function ($query) use ($authorizedCutoff): void {
                         $query->where('status', 'authorized')
-                            ->where('authorized_at', '<=', $cutoff);
-                    })->orWhere(function ($query) use ($cutoff): void {
+                            ->where('authorized_at', '<=', $authorizedCutoff);
+                    })->orWhere(function ($query) use ($runningCutoff): void {
                         $query->where('status', 'running')
-                            ->where('started_at', '<=', $cutoff);
+                            ->where('started_at', '<=', $runningCutoff);
                     });
                 })
                 ->when($serverId !== null, fn ($query) => $query->where('dns_server_id', $serverId))

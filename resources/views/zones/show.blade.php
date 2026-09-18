@@ -704,7 +704,7 @@
                                 </p>
                             </div>
 
-                            <div class="domain-form-grid">
+                            <div class="domain-form-grid" data-zone-server-pair>
                                 <label class="domain-field">
                                     <span>Servidor de publicação principal</span>
 
@@ -1575,6 +1575,13 @@
                                     ) }}
                                 </time>
                             </div>
+                            @if ($canManageDomain)
+                                <form method="POST" action="{{ route('zones.versions.restore', [$zone, $version]) }}"
+                                    onsubmit="return confirm('Restaurar registros e SOA da versão {{ $version->version }} como alteração pendente? Os servidores não serão alterados até a publicação.');">
+                                    @csrf
+                                    <button type="submit" class="button button-secondary button-small">Restaurar registros e SOA</button>
+                                </form>
+                            @endif
                         </article>
                     @empty
                         <div class="domain-history-empty">
@@ -2041,7 +2048,7 @@
                     </label>
                 </div>
 
-                <div class="reverse-modal-grid">
+                <div class="reverse-modal-grid" data-zone-server-pair>
                     <label class="domain-field">
                         <span>Servidor de publicação principal</span>
 
