@@ -129,6 +129,16 @@ class DnsAgentRuntimeController extends Controller
                 'array',
                 'max:200',
             ],
+            'inventory.cpu_count' => ['sometimes', 'integer', 'between:1,4096'],
+            'inventory.load_1m' => ['sometimes', 'numeric', 'between:0,100000'],
+            'inventory.cpu_load_percent' => ['sometimes', 'numeric', 'between:0,100'],
+            'inventory.memory_total_mb' => ['sometimes', 'integer', 'between:1,1073741824'],
+            'inventory.memory_available_mb' => ['sometimes', 'integer', 'between:0,1073741824'],
+            'inventory.memory_used_percent' => ['sometimes', 'numeric', 'between:0,100'],
+            'inventory.disk_total_gb' => ['sometimes', 'numeric', 'between:0,1073741824'],
+            'inventory.disk_free_gb' => ['sometimes', 'numeric', 'between:0,1073741824'],
+            'inventory.disk_used_percent' => ['sometimes', 'numeric', 'between:0,100'],
+            'inventory.uptime_seconds' => ['sometimes', 'integer', 'between:0,3155760000'],
         ]);
 
         /** @var DnsAgent $agent */

@@ -55,6 +55,14 @@ class DnsAgentRuntimeTest extends TestCase
                 'inventory' => [
                     'cpu_count' => 4,
                     'memory_mb' => 8192,
+                    'cpu_load_percent' => 12.5,
+                    'memory_total_mb' => 8192,
+                    'memory_available_mb' => 4096,
+                    'memory_used_percent' => 50.0,
+                    'disk_total_gb' => 100.0,
+                    'disk_free_gb' => 75.0,
+                    'disk_used_percent' => 25.0,
+                    'uptime_seconds' => 90061,
                 ],
             ])
             ->assertOk()
@@ -66,6 +74,27 @@ class DnsAgentRuntimeTest extends TestCase
         $this->assertSame('13', $server->operating_system_version);
         $this->assertSame('9.20.0', $server->bind_version);
         $this->assertSame(4, $server->inventory['cpu_count']);
+        $this->assertSame(12.5, $server->inventory['cpu_load_percent']);
+        $this->assertSame(90061, $server->inventory['uptime_seconds']);
+    }
+
+    public function test_agent_inventory_rejects_invalid_host_metrics(): void
+    {
+        [, $token] = $this->registeredAgent();
+
+        $this->withToken($token)
+            ->postJson('/api/agent/inventory', [
+                'operating_system' => 'Debian',
+                'inventory' => [
+                    'cpu_load_percent' => 101,
+                    'memory_used_percent' => -1,
+                ],
+            ])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors([
+                'inventory.cpu_load_percent',
+                'inventory.memory_used_percent',
+            ]);
     }
 
     public function test_invalid_agent_token_is_rejected(): void
@@ -179,6 +208,18 @@ class DnsAgentRuntimeTest extends TestCase
             'status' => 'online',
             'agent_version' => '0.6.0',
             'bind_version' => 'BIND 9.20.26',
+            'inventory' => [
+                'cpu_count' => 4,
+                'load_1m' => 1.0,
+                'cpu_load_percent' => 25.0,
+                'memory_total_mb' => 8192,
+                'memory_available_mb' => 4096,
+                'memory_used_percent' => 50.0,
+                'disk_total_gb' => 100.0,
+                'disk_free_gb' => 75.0,
+                'disk_used_percent' => 25.0,
+                'uptime_seconds' => 90061,
+            ],
             'bind_readiness_at' => now(),
             'bind_readiness' => [
                 'bind_installed' => true,
@@ -212,6 +253,10 @@ class DnsAgentRuntimeTest extends TestCase
             ->assertSee('Zona de risco')
             ->assertSee('Revogar credencial')
             ->assertSee('Software do agente')
+            ->assertSee('Carga CPU')
+            ->assertSee('Memória')
+            ->assertSee('Disco raiz')
+            ->assertSee('1d 1h')
             ->assertDontSee('Gerar vínculo');
     }
 

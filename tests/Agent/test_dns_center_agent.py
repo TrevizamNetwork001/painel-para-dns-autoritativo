@@ -8,6 +8,7 @@ import logging
 import argparse
 from contextlib import nullcontext
 import os
+import shutil
 import stat
 import subprocess
 import tempfile
@@ -37,6 +38,62 @@ SPEC.loader.exec_module(agent)
 
 
 class AgentTests(unittest.TestCase):
+    def test_collect_host_metrics_reads_proc_and_disk_without_commands(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            proc_root = Path(directory)
+            (proc_root / "meminfo").write_text(
+                "MemTotal:       8388608 kB\n"
+                "MemAvailable:   4194304 kB\n",
+                encoding="utf-8",
+            )
+            (proc_root / "uptime").write_text(
+                "90061.25 123.00\n",
+                encoding="utf-8",
+            )
+            disk_usage = shutil._ntuple_diskusage(
+                100 * 1024**3,
+                25 * 1024**3,
+                75 * 1024**3,
+            )
+
+            with patch.object(agent.os, "cpu_count", return_value=4), patch.object(
+                agent.os,
+                "getloadavg",
+                return_value=(1.0, 0.5, 0.25),
+            ), patch.object(
+                agent.shutil,
+                "disk_usage",
+                return_value=disk_usage,
+            ), patch.object(agent.subprocess, "run") as run:
+                metrics = agent.collect_host_metrics(
+                    proc_root=proc_root,
+                    disk_path=Path("/"),
+                )
+
+            run.assert_not_called()
+            self.assertEqual(4, metrics["cpu_count"])
+            self.assertEqual(25.0, metrics["cpu_load_percent"])
+            self.assertEqual(50.0, metrics["memory_used_percent"])
+            self.assertEqual(25.0, metrics["disk_used_percent"])
+            self.assertEqual(90061, metrics["uptime_seconds"])
+
+    def test_collect_host_metrics_tolerates_unavailable_proc_data(self) -> None:
+        with tempfile.TemporaryDirectory() as directory, patch.object(
+            agent.os,
+            "cpu_count",
+            return_value=None,
+        ), patch.object(
+            agent.shutil,
+            "disk_usage",
+            side_effect=OSError("unavailable"),
+        ):
+            metrics = agent.collect_host_metrics(
+                proc_root=Path(directory),
+                disk_path=Path("/missing"),
+            )
+
+        self.assertEqual({}, metrics)
+
     def test_doctor_reports_local_health_without_network(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

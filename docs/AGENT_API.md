@@ -57,7 +57,7 @@ Exemplo:
 ```json
 {
   "hostname": "ns1.exemplo.net",
-  "agent_version": "1.0.0",
+  "agent_version": "0.12.0",
   "status": "online",
   "capabilities": {
     "bind": true,
@@ -86,10 +86,24 @@ Exemplo:
   },
   "inventory": {
     "cpu_count": 4,
-    "memory_mb": 8192
+    "load_1m": 0.8,
+    "cpu_load_percent": 20.0,
+    "memory_total_mb": 8192,
+    "memory_available_mb": 4096,
+    "memory_used_percent": 50.0,
+    "disk_total_gb": 100.0,
+    "disk_free_gb": 75.0,
+    "disk_used_percent": 25.0,
+    "uptime_seconds": 90061
   }
 }
 ```
+
+Desde o agent 0.12.0, esses indicadores são coletados localmente por leitura
+do sistema e enviados pelo endpoint autenticado. `cpu_load_percent` é a carga
+de 1 minuto normalizada pela quantidade de CPUs lógicas; não é uma amostra
+instantânea de utilização. Nenhum comando, processo, log, endereço ou segredo
+é incluído nessa telemetria.
 
 ## Revogação
 

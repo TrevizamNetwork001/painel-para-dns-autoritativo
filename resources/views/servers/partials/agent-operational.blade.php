@@ -43,6 +43,14 @@
         'online' => 'Online', 'offline' => 'Offline', 'blocked' => 'Bloqueado',
         'pending' => 'Aguardando contato', default => ucfirst(str_replace('_', ' ', $server->agent_status)),
     };
+    $hostInventory = $server->inventory ?? [];
+    $cpuLoadPercent = data_get($hostInventory, 'cpu_load_percent');
+    $memoryUsedPercent = data_get($hostInventory, 'memory_used_percent');
+    $diskUsedPercent = data_get($hostInventory, 'disk_used_percent');
+    $uptimeSeconds = data_get($hostInventory, 'uptime_seconds');
+    $uptimeLabel = is_numeric($uptimeSeconds)
+        ? ((int) floor($uptimeSeconds / 86400)).'d '.((int) floor(($uptimeSeconds % 86400) / 3600)).'h'
+        : 'Não informado';
 @endphp
 
 <section class="agent-ops-hero" aria-labelledby="agent-operational-title">
@@ -123,6 +131,10 @@
     <article class="agent-metric-card"><span>Readiness</span><strong>{{ strtoupper($readinessState) }}</strong><small>{{ $readinessState === 'ok' ? 'Verificações operacionais OK' : $readinessIssueCount.' itens requerem atenção' }}</small></article>
     <article class="agent-metric-card"><span>Publicações</span><strong>{{ $pendingPublicationCount }} pendente{{ $pendingPublicationCount === 1 ? '' : 's' }}</strong><small>{{ $latestPublication ? 'Último estado: '.$publicationStatus : 'Nenhuma publicação destinada' }}</small></article>
     <article class="agent-metric-card"><span>Zonas</span><strong>{{ $discoverySucceeded ? $discoveredZoneCount.' descobertas' : 'Não verificadas' }}</strong><small>{{ $discoveryAt ? 'Descoberta '.$discoveryAt->diffForHumans() : 'Descoberta ainda não executada' }}</small></article>
+    <article class="agent-metric-card"><span>Carga CPU</span><strong>{{ is_numeric($cpuLoadPercent) ? number_format($cpuLoadPercent, 1, ',', '.').'%' : 'Não informada' }}</strong><small>{{ data_get($hostInventory, 'cpu_count') ? data_get($hostInventory, 'cpu_count').' CPUs lógicas · média de 1 min' : 'Aguardando inventário 0.12.0+' }}</small></article>
+    <article class="agent-metric-card"><span>Memória</span><strong>{{ is_numeric($memoryUsedPercent) ? number_format($memoryUsedPercent, 1, ',', '.').'%' : 'Não informada' }}</strong><small>{{ data_get($hostInventory, 'memory_available_mb') !== null ? number_format(data_get($hostInventory, 'memory_available_mb'), 0, ',', '.').' MB disponíveis' : 'Aguardando inventário 0.12.0+' }}</small></article>
+    <article class="agent-metric-card"><span>Disco raiz</span><strong>{{ is_numeric($diskUsedPercent) ? number_format($diskUsedPercent, 1, ',', '.').'%' : 'Não informado' }}</strong><small>{{ data_get($hostInventory, 'disk_free_gb') !== null ? number_format(data_get($hostInventory, 'disk_free_gb'), 1, ',', '.').' GB livres' : 'Aguardando inventário 0.12.0+' }}</small></article>
+    <article class="agent-metric-card"><span>Uptime</span><strong>{{ $uptimeLabel }}</strong><small>Tempo desde a última inicialização</small></article>
 </section>
 
 <section class="agent-ops-grid">
@@ -183,6 +195,7 @@
         </dl></section>
         <section><h3>Observabilidade</h3><dl class="agent-technical-list">
             <div><dt>Última descoberta exata</dt><dd>{{ $discoveryAt?->format('d/m/Y H:i:s') ?: 'Não executada' }}</dd></div><div><dt>Estado da descoberta</dt><dd>{{ $latestDiscoveryOperation?->status ?: 'Não iniciada' }}</dd></div><div><dt>Última coleta autoritativa</dt><dd>{{ $server->authoritative_observed_at?->format('d/m/Y H:i:s') ?: 'Não recebida' }}</dd></div><div><dt>Sequência observada</dt><dd>{{ $server->authoritative_sequence ?? 'Não recebida' }}</dd></div><div><dt>Serial observado</dt><dd>{{ $latestAppliedPublication?->reported_serial ?? 'Não recebido' }}</dd></div>
+            <div><dt>CPU / carga 1 min</dt><dd>{{ data_get($hostInventory, 'cpu_count', '—') }} / {{ data_get($hostInventory, 'load_1m', '—') }}</dd></div><div><dt>Memória total</dt><dd>{{ data_get($hostInventory, 'memory_total_mb') !== null ? number_format(data_get($hostInventory, 'memory_total_mb'), 0, ',', '.').' MB' : 'Não recebida' }}</dd></div><div><dt>Disco raiz total</dt><dd>{{ data_get($hostInventory, 'disk_total_gb') !== null ? number_format(data_get($hostInventory, 'disk_total_gb'), 1, ',', '.').' GB' : 'Não recebido' }}</dd></div><div><dt>Uptime</dt><dd>{{ $uptimeLabel }}</dd></div>
         </dl></section>
     </div>
 </details>

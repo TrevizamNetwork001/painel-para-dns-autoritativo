@@ -37,7 +37,7 @@ from email.utils import parsedate_to_datetime
 from pathlib import Path
 from typing import Any
 
-AGENT_VERSION = "0.11.0"
+AGENT_VERSION = "0.12.0"
 OFFICIAL_BASE_URL = "https://dnscenter.trevizamnetwork.com.br"
 DEFAULT_CONFIG = Path("/etc/dns-center-agent/agent.json")
 DEFAULT_STATE_DIR = Path("/var/lib/dns-center-agent")
@@ -1575,6 +1575,79 @@ def heartbeat(config: dict[str, Any]) -> dict[str, Any]:
     )
 
 
+def collect_host_metrics(
+    proc_root: Path = Path("/proc"),
+    disk_path: Path = Path("/"),
+) -> dict[str, int | float]:
+    """Collect bounded, read-only host telemetry without external commands."""
+    metrics: dict[str, int | float] = {}
+    cpu_count = os.cpu_count()
+
+    if cpu_count is not None and cpu_count > 0:
+        metrics["cpu_count"] = cpu_count
+
+        try:
+            load_1m = max(0.0, float(os.getloadavg()[0]))
+            metrics["load_1m"] = round(load_1m, 2)
+            metrics["cpu_load_percent"] = round(
+                min(100.0, load_1m / cpu_count * 100),
+                1,
+            )
+        except (AttributeError, OSError):
+            pass
+
+    try:
+        memory_values: dict[str, int] = {}
+        for line in (proc_root / "meminfo").read_text(
+            encoding="utf-8",
+            errors="replace",
+        ).splitlines():
+            key, separator, raw_value = line.partition(":")
+            if not separator or key not in {"MemTotal", "MemAvailable"}:
+                continue
+
+            value = raw_value.strip().split()[0]
+            memory_values[key] = int(value) * 1024
+
+        memory_total = memory_values.get("MemTotal", 0)
+        memory_available = memory_values.get("MemAvailable", 0)
+        if memory_total > 0 and 0 <= memory_available <= memory_total:
+            metrics["memory_total_mb"] = round(memory_total / 1024 / 1024)
+            metrics["memory_available_mb"] = round(
+                memory_available / 1024 / 1024
+            )
+            metrics["memory_used_percent"] = round(
+                (memory_total - memory_available) / memory_total * 100,
+                1,
+            )
+    except (OSError, ValueError, IndexError):
+        pass
+
+    try:
+        disk = shutil.disk_usage(disk_path)
+        if disk.total > 0:
+            metrics["disk_total_gb"] = round(disk.total / 1024**3, 1)
+            metrics["disk_free_gb"] = round(disk.free / 1024**3, 1)
+            metrics["disk_used_percent"] = round(
+                disk.used / disk.total * 100,
+                1,
+            )
+    except OSError:
+        pass
+
+    try:
+        uptime_seconds = float(
+            (proc_root / "uptime")
+            .read_text(encoding="utf-8", errors="replace")
+            .split()[0]
+        )
+        metrics["uptime_seconds"] = max(0, round(uptime_seconds))
+    except (OSError, ValueError, IndexError):
+        pass
+
+    return metrics
+
+
 def inventory(config: dict[str, Any]) -> dict[str, Any]:
     report = readiness_report(config)
 
@@ -1604,6 +1677,7 @@ def inventory(config: dict[str, Any]) -> dict[str, Any]:
                 "machine": platform.machine(),
                 "python": platform.python_version(),
                 "processor": platform.processor(),
+                **collect_host_metrics(),
             },
         },
         str(config["token"]),
