@@ -46,6 +46,11 @@ Fail2Ban e eventos resumidos do BIND podem ser avaliados futuramente, mas devem
 usar contratos fechados, allowlist de dados e sanitização no agent. Não devem
 reintroduzir shell remoto ou transformar o painel em console administrativo.
 
+A eventual recuperação da página de firewall foi especificada separadamente
+em `PROPOSTA_FIREWALL_VIA_AGENT_2026_09_19.md`. A tela pertenceria ao painel
+central, no contexto de cada servidor, enquanto inventário, validação,
+aplicação isolada e rollback seriam responsabilidades exclusivas do agent.
+
 ## Segurança do material analisado
 
 O ZIP original em `/tmp` contém endereços e domínio reais e não pode ser
