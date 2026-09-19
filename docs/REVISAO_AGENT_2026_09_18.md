@@ -10,7 +10,8 @@ Três testes adicionais de deploy que abrem servidor HTTP local falham por
 restrição de socket deste sandbox. Em contêineres isolados, passaram 365 testes
 PHP (1.805 verificações), Pint (191 arquivos) e o build Vite. O build Vite
 exigiu remover uma fonte remota que tornava a publicação dependente da rede.
-A nova versão de artefato do agente é 0.10.2 e ainda precisa de rollout nos hosts.
+A nova versão de artefato do agente é 0.10.2. O rollout foi concluído nos dois
+hosts autoritativos após o hotfix do limite HTTP 429 compartilhado.
 
 ## Padrão visto no histórico
 
@@ -121,7 +122,5 @@ O teste simula a queda e confirma que o reenvio usa o mesmo evento.
 
 ## Rollout recomendado
 
-Atualizar um secondary piloto,
-confirmar `succeeded`, versão 0.10.2 e timer ativo; depois atualizar o
-primary. Conferir aplicação e serial em ambos e observar pelo menos dois
-ciclos. Esta revisão não alterou os hosts autoritativos.
+O rollout foi concluído no primary e no secondary, ambos confirmados na versão
+0.10.2. As publicações seguintes foram aplicadas nos dois destinos.

@@ -31,8 +31,9 @@ escopo desta rodada por decisão do operador.
 
 ## Pendências operacionais e de maturidade
 
-- Duas zonas reais ainda têm NS duplicados; a correção dos dados deve ser
-  feita pela interface e confirmada nas respostas DNS dos dois servidores.
+- Os NS duplicados das duas zonas reais foram corrigidos pela interface. A
+  conferência posterior encontrou zero duplicatas e as versões mais recentes
+  foram aplicadas nos dois servidores.
 - O controlador de zonas e o agente são módulos grandes. Separar regras DNS,
   orquestração e apresentação em partes menores reduzirá o custo dos próximos
   ajustes, mas exige testes de contrato para manter o comportamento atual.
@@ -43,7 +44,8 @@ escopo desta rodada por decisão do operador.
 ## Ordem de validação antes do rollout
 
 1. Exercitar publicação primary → secondary fechando o modal logo após o POST.
-2. Simular upgrade com rede lenta e perda da resposta final; conferir que a
-   versão aparece sem esperar heartbeat e que o relatório final é reenviado.
-3. Atualizar um agente piloto para 0.10.2, confirmar timers e então avançar
-   host a host.
+2. Simular upgrade com rede lenta e perda da resposta final; conferir que o
+   relatório final é reenviado.
+
+O rollout do agente 0.10.2 foi concluído em `dns-primary` e `dns-secondary`. Após o
+hotfix do limite HTTP 429 compartilhado, os upgrades levaram 57 e 45 segundos.

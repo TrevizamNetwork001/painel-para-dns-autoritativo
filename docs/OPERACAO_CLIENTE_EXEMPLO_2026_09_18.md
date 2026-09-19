@@ -81,7 +81,9 @@ de auditoria foram **mantidas** por decisão do operador.
 
 ## Pendências
 
-- `158` e `customer.example`: limpar NS duplicados (ver acima).
+- ~~`158` e `customer.example`: limpar NS duplicados.~~ Concluído pela
+  interface; consulta posterior encontrou zero duplicatas e a versão mais
+  recente foi aplicada no primário e no secundário.
 - Perfil de nameservers `teste` e a zona `test-zone.example` (rascunho, sem servidor) são sobra de
   testes; remover se confirmado.
 - "Perfil padrão" de nameservers está "Não definido" (só sugere o perfil ao criar zona).
@@ -92,6 +94,11 @@ de auditoria foram **mantidas** por decisão do operador.
   Configuração" e na mensagem de publicar quando não há nada novo).
 - Escrita direta no banco de produção pelo assistente é bloqueada pelo classificador da
   sessão; correções de dados devem passar pela interface (ou ser liberadas explicitamente).
+
+Estado posterior: `dns-primary` e `dns-secondary` atualizados para o agente 0.10.2;
+publicações sem pendências. Permanece um cliente antigo 0.10.0 tentando usar
+credencial inválida (HTTP 401), que precisa ser localizado e desativado no host
+de origem.
 
 ## Decisões de escopo (18/09/2026)
 
