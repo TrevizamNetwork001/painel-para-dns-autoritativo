@@ -275,6 +275,16 @@ record_success() {
         >> "${DNS_CENTER_STATE_DIR}/history"
 }
 
+install_agent_firewall_guard() {
+    require_command nft
+    install -m 0750 "${PROJECT_DIR}/deploy/dns-center-agent-firewall-sync" /usr/local/sbin/dns-center-agent-firewall-sync
+    install -m 0644 "${PROJECT_DIR}/deploy/systemd/dns-center-agent-firewall.service" /etc/systemd/system/dns-center-agent-firewall.service
+    install -m 0644 "${PROJECT_DIR}/deploy/systemd/dns-center-agent-firewall.timer" /etc/systemd/system/dns-center-agent-firewall.timer
+    systemctl daemon-reload
+    systemctl enable --now dns-center-agent-firewall.timer
+    systemctl start dns-center-agent-firewall.service
+}
+
 deploy_release() {
     local mode="$1" target="$2" current=""
     validate_version "${target}"
@@ -310,6 +320,7 @@ deploy_release() {
     compose exec -T app php artisan queue:restart
     run_security_check
     record_success "${current}" "${target}"
+    install_agent_firewall_guard
 
     printf 'Versão ativa: %s\n' "${target}"
     printf 'Rollback da aplicação: %s rollback\n' "$0"

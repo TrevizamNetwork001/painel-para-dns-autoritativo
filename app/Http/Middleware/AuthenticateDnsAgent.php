@@ -2,6 +2,7 @@
 
 namespace App\Http\Middleware;
 
+use App\Models\BlockedAgentSource;
 use App\Models\DnsAgent;
 use Closure;
 use Illuminate\Http\JsonResponse;
@@ -25,10 +26,19 @@ class AuthenticateDnsAgent
             );
         }
 
+        $tokenHash = hash('sha256', $plainToken);
+        $blocked = BlockedAgentSource::query()->where('token_hash', $tokenHash)->first();
+        if ($blocked) {
+            $blocked->increment('attempt_count');
+            $blocked->forceFill(['last_attempt_at' => now()])->save();
+
+            return $this->unauthorized($request, 'blocked_agent_token', 'Credencial bloqueada.', 403);
+        }
+
         $agent = DnsAgent::query()
             ->where(
                 'token_hash',
-                hash('sha256', $plainToken),
+                $tokenHash,
             )
             ->first();
 

@@ -2,10 +2,12 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\BlockedAgentSource;
 use App\Models\DnsAuditLog;
 use App\Models\Organization;
 use App\Models\SecurityAudit;
 use App\Models\User;
+use App\Support\AgentSourceBlocker;
 use App\Support\DnsAuditLogger;
 use Closure;
 use Illuminate\Http\RedirectResponse;
@@ -29,6 +31,7 @@ class OrganizationController extends Controller
 
         return view('organizations.index', [
             'organizations' => $organizations,
+            'blockedAgentSources' => BlockedAgentSource::query()->latest('updated_at')->limit(100)->get(),
         ]);
     }
 
@@ -177,6 +180,7 @@ class OrganizationController extends Controller
             $organizationId,
             $memberUserIds,
         ): void {
+            app(AgentSourceBlocker::class)->blockDeletedOrganization($organizationId);
             // Tenant deletion is a full erasure operation. Delete audit rows
             // before the organization so no orphaned text, actor, IP address
             // or historical event remains after the foreign key cascade.

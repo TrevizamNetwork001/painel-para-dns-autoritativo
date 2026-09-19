@@ -1,0 +1,8 @@
+[Unit]
+Description=Sincroniza bloqueios de agentes DNS Center no nftables
+After=docker.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/dns-center-agent-firewall-sync

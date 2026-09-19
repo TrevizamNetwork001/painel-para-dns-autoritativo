@@ -2,12 +2,14 @@
 
 namespace Tests\Feature;
 
+use App\Models\DnsAgent;
 use App\Models\DnsAuditLog;
 use App\Models\DnsServer;
 use App\Models\Organization;
 use App\Models\SecurityAudit;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Str;
 use Tests\TestCase;
 
 class OrganizationManagementTest extends TestCase
@@ -226,7 +228,19 @@ class OrganizationManagementTest extends TestCase
     {
         $platformAdmin = $this->makePlatformAdmin();
         $organization = Organization::factory()->create(['name' => 'Cliente Cancelado']);
-        $server = DnsServer::factory()->create(['organization_id' => $organization->id]);
+        $server = DnsServer::factory()->create([
+            'organization_id' => $organization->id,
+            'ipv4_address' => '203.0.113.42',
+        ]);
+        $tokenHash = hash('sha256', 'deleted-agent-token');
+        DnsAgent::query()->create([
+            'organization_id' => $organization->id,
+            'dns_server_id' => $server->id,
+            'agent_uuid' => (string) Str::uuid(),
+            'fingerprint' => 'deleted-agent',
+            'token_hash' => $tokenHash,
+            'registered_at' => now(),
+        ]);
         $onlyMember = User::factory()->create([
             'current_organization_id' => $organization->id,
             'is_platform_admin' => false,
@@ -264,6 +278,14 @@ class OrganizationManagementTest extends TestCase
         $this->assertDatabaseMissing('dns_audit_logs', ['id' => $dnsAudit->id]);
         $this->assertDatabaseMissing('security_audits', ['id' => $securityAudit->id]);
         $this->assertDatabaseMissing('dns_audit_logs', ['record_name' => 'Cliente Cancelado']);
+        $this->assertDatabaseHas('blocked_agent_sources', [
+            'token_hash' => $tokenHash,
+            'reason' => 'organization_deleted',
+        ]);
+        $this->assertDatabaseHas('blocked_agent_sources', [
+            'ip_address' => '203.0.113.42',
+            'reason' => 'organization_deleted',
+        ]);
     }
 
     public function test_delete_requires_exact_name_confirmation(): void

@@ -234,6 +234,19 @@
                 </table>
             </div>
         </article>
+
+        <article class="panel-card">
+            <div class="section-heading"><div><p class="eyebrow">Proteção adicional</p><h2>Agentes bloqueados</h2><p>Credenciais revogadas são negadas pela API. IPs de empresas excluídas também são aplicados no firewall do host.</p></div></div>
+            <div class="table-wrap"><table class="data-table">
+                <thead><tr><th>Origem</th><th>Motivo</th><th>Firewall</th><th>Tentativas</th><th>Última tentativa</th><th>Bloqueado em</th></tr></thead>
+                <tbody>@forelse ($blockedAgentSources as $blocked)<tr>
+                    <td>{{ $blocked->ip_address ?: 'Credencial '.substr($blocked->getRawOriginal('token_hash'), 0, 12).'…' }}</td>
+                    <td>{{ $blocked->reason === 'organization_deleted' ? 'Empresa excluída' : 'Credencial revogada' }}</td>
+                    <td>@if (! $blocked->ip_address) API @elseif ($blocked->firewall_synced_at && $blocked->firewall_synced_at->gte($blocked->updated_at)) Aplicado @else Aguardando sincronização @endif</td>
+                    <td>{{ $blocked->attempt_count }}</td><td>{{ $blocked->last_attempt_at?->format('d/m/Y H:i:s') ?? '—' }}</td><td>{{ $blocked->created_at?->format('d/m/Y H:i:s') }}</td>
+                </tr>@empty<tr><td colspan="6">Nenhuma origem bloqueada.</td></tr>@endforelse</tbody>
+            </table></div>
+        </article>
     </main>
 </div>
 

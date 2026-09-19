@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Models\BlockedAgentSource;
 use App\Models\DnsAgent;
 use App\Models\DnsServer;
 use App\Models\Organization;
@@ -118,7 +119,13 @@ class DnsAgentRuntimeTest extends TestCase
         $this->withToken($token)
             ->postJson('/api/agent/heartbeat')
             ->assertForbidden()
-            ->assertJsonPath('error', 'revoked_agent_token');
+            ->assertJsonPath('error', 'blocked_agent_token');
+
+        $block = BlockedAgentSource::query()
+            ->where('token_hash', hash('sha256', $token))->sole();
+        $this->assertSame('credential_revoked', $block->reason);
+        $this->assertSame(1, $block->attempt_count);
+        $this->assertNotNull($block->last_attempt_at);
 
         $this->assertSame(
             0,

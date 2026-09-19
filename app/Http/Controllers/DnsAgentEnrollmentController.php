@@ -10,6 +10,7 @@ use App\Models\DnsBindOperation;
 use App\Models\DnsServer;
 use App\Services\DnsBindConfigConflicts;
 use App\Support\AgentArtifact;
+use App\Support\AgentSourceBlocker;
 use App\Support\SecurityAuditLogger;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -496,6 +497,8 @@ class DnsAgentEnrollmentController extends Controller
                 ->first();
 
             abort_unless($agent, 404, 'Agente ativo não encontrado.');
+
+            app(AgentSourceBlocker::class)->blockToken($agent);
 
             $now = now();
 
