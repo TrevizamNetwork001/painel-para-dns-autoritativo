@@ -2,8 +2,9 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\DnsZone;
+use App\Models\DnsAuditLog;
 use App\Models\Organization;
+use App\Models\SecurityAudit;
 use App\Models\User;
 use App\Support\DnsAuditLogger;
 use Closure;
@@ -171,33 +172,20 @@ class OrganizationController extends Controller
             ->where('is_platform_admin', false)
             ->pluck('users.id');
 
-        $summary = [
-            'servers' => $organization->dnsServers()->count(),
-            'users' => $memberUserIds->count(),
-            'zones' => DnsZone::query()->where('organization_id', $organizationId)->count(),
-        ];
-
         DB::transaction(function () use (
-            $request,
             $organization,
             $organizationId,
-            $organizationName,
             $memberUserIds,
-            $summary,
         ): void {
-            DnsAuditLogger::record(
-                organizationId: $organizationId,
-                user: $request->user(),
-                action: 'organization.deleted',
-                recordName: $organizationName,
-                message: sprintf(
-                    '%d servidor(es), %d usuário(s), %d zona(s) removidos em cascata. '
-                    .'Credenciais de agente revogadas automaticamente; nenhum comando foi enviado aos servidores BIND.',
-                    $summary['servers'],
-                    $summary['users'],
-                    $summary['zones'],
-                ),
-            );
+            // Tenant deletion is a full erasure operation. Delete audit rows
+            // before the organization so no orphaned text, actor, IP address
+            // or historical event remains after the foreign key cascade.
+            DnsAuditLog::query()
+                ->where('organization_id', $organizationId)
+                ->delete();
+            SecurityAudit::query()
+                ->where('organization_id', $organizationId)
+                ->delete();
 
             $organization->delete();
 

@@ -2,8 +2,10 @@
 
 namespace Tests\Feature;
 
+use App\Models\DnsAuditLog;
 use App\Models\DnsServer;
 use App\Models\Organization;
+use App\Models\SecurityAudit;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -232,6 +234,23 @@ class OrganizationManagementTest extends TestCase
         $onlyMember->organizations()->attach($organization->id, [
             'role' => 'organization_admin', 'status' => 'active', 'is_default' => true,
         ]);
+        $dnsAudit = DnsAuditLog::query()->create([
+            'organization_id' => $organization->id,
+            'user_id' => $onlyMember->id,
+            'actor' => $onlyMember->email,
+            'action' => 'zone.created',
+            'domain' => 'cliente-cancelado.test',
+            'record_name' => 'Cliente Cancelado',
+        ]);
+        $securityAudit = SecurityAudit::query()->create([
+            'organization_id' => $organization->id,
+            'user_id' => $onlyMember->id,
+            'event' => 'auth.login.succeeded',
+            'actor' => 'user:'.$onlyMember->id,
+            'source' => 'web',
+            'result' => 'success',
+            'reason' => 'Cliente Cancelado',
+        ]);
 
         $this->actingAs($platformAdmin)
             ->delete(route('organizations.destroy', $organization), [
@@ -242,10 +261,9 @@ class OrganizationManagementTest extends TestCase
         $this->assertDatabaseMissing('organizations', ['id' => $organization->id]);
         $this->assertDatabaseMissing('dns_servers', ['id' => $server->id]);
         $this->assertDatabaseMissing('users', ['id' => $onlyMember->id]);
-        $this->assertDatabaseHas('dns_audit_logs', [
-            'action' => 'organization.deleted',
-            'record_name' => 'Cliente Cancelado',
-        ]);
+        $this->assertDatabaseMissing('dns_audit_logs', ['id' => $dnsAudit->id]);
+        $this->assertDatabaseMissing('security_audits', ['id' => $securityAudit->id]);
+        $this->assertDatabaseMissing('dns_audit_logs', ['record_name' => 'Cliente Cancelado']);
     }
 
     public function test_delete_requires_exact_name_confirmation(): void
