@@ -15,7 +15,7 @@ painel, mas ainda exigia um passo manual de SSH em cada servidor —
 `systemctl edit dns-center-agent-operation.service` adicionando
 `DNS_CENTER_AGENT_ALLOW_APPLY=1` — antes que a operação `apply_zones`
 funcionasse de verdade. Isso foi confirmado ao vivo hoje: o primeiro
-`apply_zones` real disparado no ns1 da Cliente Legado falhou com "Apply
+`apply_zones` real disparado no ns1 de cliente legado falhou com "Apply
 bloqueado: defina DNS_CENTER_AGENT_ALLOW_APPLY=1." porque esse opt-in
 nunca tinha sido feito nesse servidor.
 

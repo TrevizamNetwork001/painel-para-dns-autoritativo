@@ -20,7 +20,7 @@ próxima fase"). Pedido do operador ao notar o placeholder na zona
 - **IPv4**: só blocos alinhados em octeto (`/8`, `/16`, `/24`) no v1 —
   RFC 2317 (delegação classless `/25`-`/31`) fica pra depois.
 - **IPv6**: prefixo alinhado a nibble (múltiplo de 4 bits), formato
-  já visto nos dados reais da Cliente Legado (`2001:db8::/32` →
+  já visto nos dados reais de cliente legado (`2001:db8::/32` →
   `8.b.d.0.1.0.0.2.ip6.arpa`).
 - A zona reversa é criada pelo mesmo caminho de criação de zona normal
   (`DnsZoneController::createZone()`, extraído de `store()` pra ser
@@ -63,7 +63,7 @@ próxima fase"). Pedido do operador ao notar o placeholder na zona
 - `tests/Unit/ReverseZoneNameCalculatorTest.php`: 9 testes — blocos
   IPv4 `/24`/`/16`/`/8` válidos, rejeição de prefixo não
   octeto-alinhado, rejeição de endereço que não é o de rede, rejeição
-  de CIDR sem prefixo; IPv6 `/32` batendo com o dado real da Cliente Legado,
+  de CIDR sem prefixo; IPv6 `/32` batendo com o dado real de cliente legado,
   rejeição de prefixo não múltiplo de 4, rejeição de endereço que não
   é o de rede.
 - `tests/Feature/DnsReverseZoneWizardTest.php`: 7 testes — criação de

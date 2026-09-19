@@ -13,7 +13,7 @@ sudo DNS_CENTER_AGENT_ALLOW_APPLY=1 dns-center-agent --sync-zones --apply --conf
 ```
 
 Isso foi feito manualmente hoje mesmo pra zona
-`192.0.2.in-addr.arpa` da Cliente Legado (ficou presa em
+`192.0.2.in-addr.arpa` de cliente legado (ficou presa em
 `downloaded`/`pending` até o comando ser rodado nos dois servidores).
 
 ### Como funciona
@@ -102,7 +102,7 @@ volta como `failed`, visível no modal, não silencioso.
 
 ## Rollout
 
-Servidores já cadastrados (ns1/ns2 da Cliente Legado) precisam do agente
+Servidores já cadastrados (ns1/ns2 de cliente legado) precisam do agente
 atualizado pra 0.7.6 (botão "Atualizar agente" no painel) e do opt-in
 `DNS_CENTER_AGENT_ALLOW_APPLY=1` no `dns-center-agent-operation.service`
 (passo manual único, documentado acima e em `docs/AGENT_API.md`) antes
@@ -136,6 +136,6 @@ serviços da aplicação (`app`, `web`, `queue`, `scheduler`) confirmados
 na imagem `1.3.4` e saudáveis.
 
 Pendente (operacional, não faz parte deste deploy): atualizar o agente
-em ns1/ns2 da Cliente Legado pra 0.7.6 e adicionar o opt-in
+em ns1/ns2 de cliente legado pra 0.7.6 e adicionar o opt-in
 `DNS_CENTER_AGENT_ALLOW_APPLY=1` nos dois — sem isso o botão "Aplicar
 agora" existe na tela mas ainda falha nesses dois servidores.

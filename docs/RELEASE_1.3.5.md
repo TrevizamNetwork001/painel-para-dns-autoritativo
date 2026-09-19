@@ -32,7 +32,7 @@ Detalhes: [avaliação e melhorias](AVALIACAO_E_MELHORIAS_2026_09_08.md).
 - Versão ativa: 1.3.4; serviços saudáveis; HTTPS `/up` respondeu 200.
 - Fila Redis com `retry_after=90`, sem override externo: o padrão 180 será
   adotado pelos novos containers.
-- Agentes ns1/ns2 da Cliente Legado já reportam versão 0.7.6.
+- Agentes ns1/ns2 de cliente legado já reportam versão 0.7.6.
 - As 14 publicações registradas estão `applied`; nenhuma está pendente.
 - Consultas SOA diretas aos dois servidores responderam `NOERROR`, com flag
   autoritativa `aa` e seriais iguais ao painel nas seis zonas verificadas.

@@ -28,7 +28,7 @@ class ReverseZoneNameCalculatorTest extends TestCase
     public function test_ipv4_slash_16_computes_two_reversed_octets(): void
     {
         $this->assertSame(
-            '162.196.in-addr.arpa',
+            '18.198.in-addr.arpa',
             $this->calculator->fromIpv4Cidr('198.18.0.0/16'),
         );
     }
@@ -36,7 +36,7 @@ class ReverseZoneNameCalculatorTest extends TestCase
     public function test_ipv4_slash_8_computes_one_octet(): void
     {
         $this->assertSame(
-            '196.in-addr.arpa',
+            '10.in-addr.arpa',
             $this->calculator->fromIpv4Cidr('10.0.0.0/8'),
         );
     }

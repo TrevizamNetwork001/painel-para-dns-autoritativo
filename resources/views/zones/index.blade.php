@@ -337,7 +337,7 @@
                             name="client"
                             list="zone-client-options"
                             maxlength="255"
-                            placeholder="Ex.: Cliente Exemplo Networks"
+                            placeholder="Ex.: Cliente Exemplo"
                             value="{{ old('client') }}"
                         >
                     </label>

@@ -5,7 +5,7 @@ Data: 2026-09-08
 ## Escopo
 
 Nova checagem de prontidão que detecta, antes da publicação, o
-problema que causou o incidente da importação da Cliente Legado: um
+problema que causou o incidente da importação de cliente legado: um
 BIND que existia antes do DNS Center pode ter um `named.conf.local`
 com declarações antigas de zona e nenhum `include
 "/etc/bind/dns-center-managed.conf";` em lugar nenhum da cadeia de
@@ -15,7 +15,7 @@ gerenciado pelo painel.
 
 Antes disso só era descoberto na prática, depois de adoção, TSIG, PTR
 e SOA já resolvidos (~40 minutos de diagnóstico manual via SSH nos
-dois servidores da Cliente Legado).
+dois servidores de cliente legado).
 
 ### Agente (`agent/dns-center-agent.py`, v0.7.5)
 
@@ -45,7 +45,7 @@ dois servidores da Cliente Legado).
 ### Rollout
 
 O fato só aparece depois que o agente reportar prontidão na versão
-0.7.5+. Servidores já cadastrados (ns1/ns2 da Cliente Legado, e qualquer
+0.7.5+. Servidores já cadastrados (ns1/ns2 de cliente legado, e qualquer
 outro) recebem a atualização pelo botão "Atualizar agente" já
 existente no painel — não depende de SSH manual.
 
@@ -91,6 +91,6 @@ os 4 serviços da aplicação (`app`, `web`, `queue`, `scheduler`)
 confirmados na imagem `1.3.3` e saudáveis.
 
 Pendente (operacional, não faz parte deste deploy): atualizar o
-agente instalado em ns1/ns2 da Cliente Legado (e outros servidores) da
+agente instalado em ns1/ns2 de cliente legado (e outros servidores) da
 versão 0.7.4 pra 0.7.5, pelo botão "Atualizar agente" no painel — sem
 isso, `include_wired` não aparece na prontidão desses servidores.

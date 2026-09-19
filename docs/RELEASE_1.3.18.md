@@ -84,7 +84,7 @@ Conferido de forma independente após o deploy:
 serviços da aplicação confirmados na imagem `1.3.18`.
 
 Pendente (operacional, fora deste deploy): publicar e aplicar de novo
-as 7 zonas da Cliente Legado que ficaram em `ready` depois da atualização de
+as 7 zonas de cliente legado que ficaram em `ready` depois da atualização de
 TTL (`legacy.example` + as 5 zonas reversas + a zona de
 delegação `1.0.0.0.8.b.d.0.1.0.0.2.ip6.arpa`), pra o `$TTL 300`
 realmente valer nos servidores BIND.

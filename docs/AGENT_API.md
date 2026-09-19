@@ -173,6 +173,13 @@ unit de operações 0.10.2 limita a execução local a dezoito minutos. O agente
 reporta a versão instalada no resultado do upgrade, permitindo confirmação
 sem esperar o heartbeat periódico.
 
+Desde 0.11.0, todas as operações autorizadas que tocam BIND compartilham o
+mesmo lock usado pela sincronização periódica. Um relatório terminal local
+corrompido é preservado em `state_dir/quarantine` e deixa de bloquear todos os
+ciclos futuros. O diagnóstico local, sem acesso ao painel, está disponível em
+`dns-center-agent --doctor`; detalhes em
+`AGENT_HARDENING_2026_09_19.md`.
+
 ### Estado local e retomada
 
 `state_dir/state.json` é gravado atomicamente com modo `0600` e contém:

@@ -7,7 +7,7 @@ Data: 2026-09-08
 Ajuste de UX, sem alteração de schema. Ao publicar uma zona com
 sucesso, a tela agora volta pra lista de domínios (`/zonas`) em vez de
 ficar presa na própria zona — pedido do operador enquanto trabalhava
-zona por zona na importação da Cliente Legado, pra facilitar escolher
+zona por zona na importação de cliente legado, pra facilitar escolher
 a próxima zona sem precisar navegar manualmente até a lista.
 
 `adopt()` continua redirecionando pra mesma zona (ainda falta publicar

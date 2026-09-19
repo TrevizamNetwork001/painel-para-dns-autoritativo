@@ -13,9 +13,11 @@ desabilitada nos servidores gerenciados.
 A avaliação atual do produto e do agente está em
 [Revisão do produto](docs/REVISAO_PRODUTO_2026_09_18.md) e
 [Revisão do agente](docs/REVISAO_AGENT_2026_09_18.md).
-O código do agente neste checkout declara a versão 0.10.2; a instalação
+O código do agente neste checkout declara a versão 0.11.0; a instalação
 nos servidores requer rollout separado. As avaliações e releases anteriores
 permanecem no histórico em `docs/`.
+O endurecimento e o procedimento de rollout dessa versão estão em
+[Endurecimento do agent 0.11.0](docs/AGENT_HARDENING_2026_09_19.md).
 
 O projeto já possui:
 
@@ -339,7 +341,7 @@ em produção. As evidências e limitações estão em
 | [Release 1.3.46](docs/RELEASE_1.3.46.md) | Confirma upgrade pelo próximo poll autenticado do binário novo |
 | [Release 1.3.47](docs/RELEASE_1.3.47.md) | Exclusão integral do tenant, inclusive auditorias vinculadas |
 | [Release 1.3.48](docs/RELEASE_1.3.48.md) | Bloqueio de agentes órfãos na API e no firewall, visível no painel |
-| [Operação Cliente Exemplo — 18/09/2026](docs/OPERACAO_CLIENTE_EXEMPLO_2026_09_18.md) | Adoção das zonas reversas do dns-primary/02, runbook e pendências |
+| [Operação Cliente Exemplo — 18/09/2026](docs/OPERACAO_CLIENTE_EXEMPLO_2026_09_18.md) | Adoção das zonas reversas do dns-primary/secondary, runbook e pendências |
 
 ## Status do projeto
 
@@ -425,7 +427,7 @@ de backend/agente); sobre a v1.3.16 em produção desde 2026-09-16 (agente 0.7.9
 autoritativa na hora em vez de esperar até 5 minutos pelo próximo
 ciclo do `--observe-bind`; corrige o alerta "Serial divergente" que
 ficava visível mesmo com o apply confirmado, encontrado ao vivo em
-produção logo após o rollout da v1.3.15 no ns1/ns2 da Cliente Legado); sobre
+produção logo após o rollout da v1.3.15 no ns1/ns2 de cliente legado); sobre
 a v1.3.15 em produção desde 2026-09-16 (agente 0.7.8 passa a
 habilitar `DNS_CENTER_AGENT_ALLOW_APPLY=1` por padrão — decisão
 consciente confirmada com o operador após o primeiro `apply_zones`
@@ -496,7 +498,7 @@ reaproveita o mesmo mecanismo de operação autorizada de
 `install_bind`/`upgrade_agent`; sobre a v1.3.3, que fez a checagem de
 prontidão do agente detectar, antes de publicar, quando um BIND
 existente não está lendo o include gerenciado do DNS Center — o
-problema real que travou a importação da Cliente Legado agora aparece
+problema real que travou a importação de cliente legado agora aparece
 como aviso em "Correções necessárias" em vez de só ser descoberto
 depois de adoção/TSIG/PTR/SOA já resolvidos; sobre a v1.3.2 que fez
 publicar uma zona

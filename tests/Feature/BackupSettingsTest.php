@@ -16,9 +16,9 @@ class BackupSettingsTest extends TestCase
 {
     use RefreshDatabase;
 
-    private const ACCOUNT = 'bec407d758365446312d1c62e87d8acf';
+    private const ACCOUNT = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
 
-    private const KEY_ID = 'AKIATESTTESTTEST0000';
+    private const KEY_ID = 'TESTACCESSKEY00000000';
 
     private const SECRET = 's3cr3tTESTTESTTESTTESTTESTTESTTESTTEST00';
 
@@ -66,7 +66,7 @@ class BackupSettingsTest extends TestCase
         $page->assertSee('Configurado')
             ->assertSee(self::ACCOUNT)
             ->assertSee('dns-center-backups')
-            ->assertSee('AKIA…0000')
+            ->assertSee('TEST…0000')
             ->assertDontSee(self::SECRET)
             ->assertDontSee(self::KEY_ID);
 
@@ -211,7 +211,7 @@ class BackupSettingsTest extends TestCase
 
     public function test_sigv4_matches_the_documented_aws_example(): void
     {
-        // Exemplo "GET Object" (com Range) da documentação do AWS SigV4 para S3.
+        // Exemplo público e deliberadamente fictício da documentação AWS SigV4.
         $headers = R2Client::sign(
             'GET', 'examplebucket.s3.amazonaws.com', '/test.txt', '',
             [

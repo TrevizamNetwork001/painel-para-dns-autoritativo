@@ -37,6 +37,53 @@ SPEC.loader.exec_module(agent)
 
 
 class AgentTests(unittest.TestCase):
+    def test_doctor_reports_local_health_without_network(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            config = self.config(directory)
+            config_path = root / "agent.json"
+            config_path.write_text(json.dumps(config), encoding="utf-8")
+            config_path.chmod(0o600)
+
+            unit_names = {
+                "dns-center-agent.service",
+                "dns-center-agent.timer",
+                "dns-center-agent-operation.service",
+                "dns-center-agent-operation.timer",
+            }
+            original_is_file = Path.is_file
+
+            def fake_is_file(path: Path) -> bool:
+                if path.parent == agent.DEFAULT_SYSTEMD_DIR and path.name in unit_names:
+                    return True
+                return original_is_file(path)
+
+            with patch.object(agent, "detected_binary", return_value="/usr/bin/tool"), patch.object(
+                Path, "is_file", autospec=True, side_effect=fake_is_file,
+            ):
+                report = agent.doctor(config, config_path)
+
+            self.assertTrue(report["healthy"])
+            self.assertEqual(0, report["summary"]["error"])
+
+    def test_doctor_rejects_exposed_config_permissions(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            config = self.config(directory)
+            config_path = root / "agent.json"
+            config_path.write_text(json.dumps(config), encoding="utf-8")
+            config_path.chmod(0o644)
+
+            with patch.object(agent, "detected_binary", return_value=None):
+                report = agent.doctor(config, config_path)
+
+            self.assertFalse(report["healthy"])
+            permissions = next(
+                item for item in report["checks"]
+                if item["code"] == "config.permissions"
+            )
+            self.assertEqual("error", permissions["status"])
+
     def test_agent_state_lock_rejects_parallel_timer_runs(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             config = self.config(directory)
@@ -73,6 +120,25 @@ class AgentTests(unittest.TestCase):
             self.assertFalse(pending_path.exists())
             self.assertEqual(2, request.call_count)
             self.assertEqual(saved_event, request.call_args_list[1].args[2]["event_id"])
+
+    def test_corrupt_terminal_report_is_quarantined_and_does_not_block_forever(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            config = self.config(directory)
+            state_dir = Path(config["state_dir"])
+            state_dir.mkdir(parents=True)
+            pending_path = state_dir / "pending-operation-report.json"
+            pending_path.write_text("{broken", encoding="utf-8")
+
+            with self.assertRaisesRegex(agent.AgentError, "quarentena"):
+                agent.flush_pending_operation_report(config)
+
+            self.assertFalse(pending_path.exists())
+            quarantined = list((state_dir / "quarantine").glob("*.json"))
+            self.assertEqual(1, len(quarantined))
+            self.assertEqual("{broken", quarantined[0].read_text(encoding="utf-8"))
+
+            # A próxima execução do timer deixa de ficar bloqueada para sempre.
+            agent.flush_pending_operation_report(config)
 
     def config(self, directory: str) -> dict:
         root = Path(directory)
@@ -1407,7 +1473,7 @@ class AgentTests(unittest.TestCase):
             "$ORIGIN example.com.\n"
             "$TTL 3600\n"
             "sip._tcp\t3600\tIN\tSRV\t10 20 5060 sip.example.com.\n"
-            "www\t3600\tIN\tA\t1.2.3.4\n"
+            "www\t3600\tIN\tA\t192.0.2.4\n"
         )
 
         parsed = agent.parse_canonical_zone_dump(dump, "example.com")
@@ -1540,7 +1606,7 @@ class AgentTests(unittest.TestCase):
                     stdout=(
                         "$ORIGIN example.com.\n$TTL 3600\n"
                         "@\t3600\tIN\tSOA\tns1.example.com. hostmaster.example.com. 1 3600 900 1209600 300\n"
-                        "www\t3600\tIN\tA\t1.2.3.4\n"
+                        "www\t3600\tIN\tA\t192.0.2.4\n"
                     ),
                     stderr="",
                 )
@@ -1702,6 +1768,8 @@ class AgentTests(unittest.TestCase):
         ) as request, patch.object(
             agent, "discover_bind_zones", return_value={"zones": []},
         ) as discover, patch.object(
+            agent, "agent_state_lock", return_value=nullcontext(),
+        ), patch.object(
             agent, "send_readiness",
         ) as readiness:
             result = agent.run_authorized_operation({"base_url": "https://panel.test", "token": "t"})
@@ -2045,6 +2113,34 @@ class AgentTests(unittest.TestCase):
         readiness.assert_not_called()
         observation.assert_not_called()
 
+    def test_bind_operations_share_the_state_lock(self) -> None:
+        config = self.config("/tmp/unused")
+        operation = {"action": "configure_bind"}
+
+        with patch.object(
+            agent, "agent_state_lock", return_value=nullcontext(),
+        ) as state_lock, patch.object(
+            agent, "configure_bind", return_value={"configured": True},
+        ) as configure:
+            result = agent.execute_authorized_operation(config, operation)
+
+        self.assertEqual({"configured": True}, result)
+        state_lock.assert_called_once_with(config)
+        configure.assert_called_once_with("configure_bind")
+
+    def test_upgrade_operation_does_not_wait_for_bind_state_lock(self) -> None:
+        config = self.config("/tmp/unused")
+        operation = {"action": "upgrade_agent"}
+
+        with patch.object(agent, "agent_state_lock") as state_lock, patch.object(
+            agent, "upgrade_agent_self", return_value={"changed": True},
+        ) as upgrade:
+            result = agent.execute_authorized_operation(config, operation)
+
+        self.assertEqual({"changed": True}, result)
+        state_lock.assert_not_called()
+        upgrade.assert_called_once_with(config)
+
     def test_run_authorized_operation_dispatches_apply_zones(self) -> None:
         config = {
             "base_url": "https://panel.test", "token": "t",
@@ -2127,6 +2223,8 @@ class AgentTests(unittest.TestCase):
             agent, "remove_legacy_zone_block",
             return_value={"removed": True},
         ) as removal, patch.object(
+            agent, "agent_state_lock", return_value=nullcontext(),
+        ), patch.object(
             agent, "send_readiness",
         ):
             result = agent.run_authorized_operation(config)

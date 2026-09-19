@@ -8,7 +8,7 @@ Feature nova, sem alteração de schema: botão "Vincular PTR das
 identidades de nameserver" em zonas reversas (`*.in-addr.arpa`).
 
 Motivação real: ao importar a zona reversa `192.0.2.in-addr.arpa`
-da Cliente Legado, o PTR de cada IP do bloco veio com o conteúdo
+de cliente legado, o PTR de cada IP do bloco veio com o conteúdo
 genérico do BIND (`ip-45-162-196-242.legacy.example.`), não com
 o hostname real do nameserver — corrigir isso exigia abrir a zona e
 editar registro por registro em meio a ~250 outras entradas.
@@ -28,7 +28,7 @@ Ver commit `3184d45` para o detalhamento técnico completo.
 
 ## Testes e gates
 
-- 5 testes novos (`DnsZonePtrSyncTest`): caso real da Cliente Legado
+- 5 testes novos (`DnsZonePtrSyncTest`): caso real de cliente legado
   (só os PTR de ns1/ns2 mudam, resto intocado, zona bumpa), criação de
   PTR ausente, identidade fora da rede da zona (ignorada, sem bump),
   zona forward/papel sem permissão (404/403), idempotência (rodar duas

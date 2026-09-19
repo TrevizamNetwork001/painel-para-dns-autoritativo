@@ -14,7 +14,7 @@ cadastra".
 - `ReverseZoneNameCalculator::toIpv4Cidr()`/`toIpv6Prefix()`: inverso
   das funções `fromIpv4Cidr()`/`fromIpv6Prefix()` já existentes desde a
   v1.3.9. Funciona pra qualquer zona reversa, não só as criadas pelo
-  assistente — inclusive as 5 zonas reais da Cliente Legado que já existiam
+  assistente — inclusive as 5 zonas reais de cliente legado que já existiam
   antes desse assistente existir.
 - O bloco calculado aparece no cabeçalho de uma zona reversa aberta
   (junto com registros/versão/serial) e em cada linha da lista da aba
@@ -22,7 +22,7 @@ cadastra".
 - Confirmado com dado real: `2001:db8:1::/48` →
   `1.0.0.0.8.b.d.0.1.0.0.2.ip6.arpa` (zona de teste criada ao vivo
   pelo operador) e `2001:db8::/32` → `8.b.d.0.1.0.0.2.ip6.arpa`
-  (zona real da Cliente Legado).
+  (zona real de cliente legado).
 
 ## Testes e gates
 

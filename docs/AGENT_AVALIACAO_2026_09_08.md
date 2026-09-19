@@ -88,7 +88,7 @@ em replay infinito.
 Na produção, antes da correção do agente, havia três operações `upgrade_agent`
 expiradas e duas falhas históricas. Uma falha registrada foi incompatibilidade
 de filesystem, corrigida anteriormente usando diretório temporário no mesmo
-filesystem. Os agentes ns1/ns2 da Cliente Legado estavam em 0.7.6, online, com seis
+filesystem. Os agentes ns1/ns2 de cliente legado estavam em 0.7.6, online, com seis
 zonas sincronizadas e seriais iguais nos dois servidores.
 
 As reproduções dos problemas atuais foram feitas com mocks e arquivos

@@ -71,10 +71,10 @@ servidores.
 - **Comparação só entre servidores relacionados** (1.3.34): dividem zona descoberta ou zona
   gerenciada; senão um servidor de outro ambiente da mesma empresa aparecia como "Ausente".
 
-## Cancelamento do cliente Cliente Legado (mesma sessão)
+## Cancelamento do cliente legado (mesma sessão)
 
 Empresa desativada e depois excluída pelo mecanismo novo (1.3.31). Restos de uma homologação
-antiga na empresa padrão (servidores `ns1`/`ns2` conectanetwork, 6 zonas, 2075 registros,
+antiga na empresa padrão (servidores `ns1`/`ns2` legacy-customer, 6 zonas, 2075 registros,
 descobertas e operações) foram removidos à parte, numa transação, sem enviar nada aos
 servidores BIND. Fora dos logs de auditoria não resta nenhuma menção ao nome; as 20 entradas
 de auditoria foram **mantidas** por decisão do operador.

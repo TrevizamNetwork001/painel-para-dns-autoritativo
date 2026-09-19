@@ -37,7 +37,7 @@ from email.utils import parsedate_to_datetime
 from pathlib import Path
 from typing import Any
 
-AGENT_VERSION = "0.10.2"
+AGENT_VERSION = "0.11.0"
 OFFICIAL_BASE_URL = "https://dnscenter.trevizamnetwork.com.br"
 DEFAULT_CONFIG = Path("/etc/dns-center-agent/agent.json")
 DEFAULT_STATE_DIR = Path("/var/lib/dns-center-agent")
@@ -1413,6 +1413,142 @@ def status(args: argparse.Namespace) -> int:
     return 0
 
 
+def _doctor_check(
+    checks: list[dict[str, str]],
+    code: str,
+    status_value: str,
+    message: str,
+) -> None:
+    checks.append({
+        "code": code,
+        "status": status_value,
+        "message": message,
+    })
+
+
+def doctor(config: dict[str, Any], config_path: Path) -> dict[str, Any]:
+    """Inspect local prerequisites without contacting the panel or changing BIND."""
+    checks: list[dict[str, str]] = []
+
+    try:
+        normalize_base_url(str(config["base_url"]))
+        _doctor_check(checks, "config.base_url", "ok", "URL do painel válida.")
+    except (KeyError, AgentError):
+        _doctor_check(checks, "config.base_url", "error", "URL do painel ausente ou inválida.")
+
+    token = config.get("token")
+    has_token = isinstance(token, str) and bool(token)
+    _doctor_check(
+        checks,
+        "config.token",
+        "ok" if has_token else "error",
+        "Credencial configurada." if has_token else "Credencial ausente.",
+    )
+
+    try:
+        config_mode = stat.S_IMODE(config_path.stat().st_mode)
+        secure_mode = config_mode & 0o077 == 0
+        _doctor_check(
+            checks,
+            "config.permissions",
+            "ok" if secure_mode else "error",
+            f"Permissões do arquivo de configuração: {config_mode:04o}.",
+        )
+    except OSError:
+        _doctor_check(checks, "config.permissions", "error", "Não foi possível inspecionar a configuração.")
+
+    paths = config_paths(config)
+    state_dir = paths["state_dir"]
+    try:
+        reject_symlink(state_dir)
+        state_target = state_dir if state_dir.exists() else state_dir.parent
+        writable = state_target.is_dir() and os.access(state_target, os.W_OK)
+        _doctor_check(
+            checks,
+            "state.directory",
+            "ok" if writable else "error",
+            "Diretório de estado disponível." if writable else "Diretório de estado indisponível para escrita.",
+        )
+    except AgentError:
+        _doctor_check(checks, "state.directory", "error", "Diretório de estado é um link simbólico.")
+
+    state_path = state_dir / "state.json"
+    if state_path.exists():
+        try:
+            read_json(state_path)
+            _doctor_check(checks, "state.publications", "ok", "Estado de publicações válido.")
+        except AgentError:
+            _doctor_check(checks, "state.publications", "error", "Estado de publicações inválido.")
+    else:
+        _doctor_check(checks, "state.publications", "ok", "Ainda não há estado de publicações.")
+
+    pending_path = state_dir / "pending-operation-report.json"
+    if pending_path.exists():
+        try:
+            pending = read_json(pending_path)
+            payload = pending.get("payload")
+            valid_pending = (
+                isinstance(pending.get("operation_id"), int)
+                and isinstance(payload, dict)
+                and payload.get("status") in {"succeeded", "failed"}
+                and isinstance(payload.get("event_id"), str)
+            )
+        except AgentError:
+            valid_pending = False
+        _doctor_check(
+            checks,
+            "operations.pending_report",
+            "warning" if valid_pending else "error",
+            "Há resultado terminal aguardando reenvio."
+            if valid_pending else "O resultado terminal pendente está corrompido.",
+        )
+    else:
+        _doctor_check(checks, "operations.pending_report", "ok", "Nenhum resultado terminal pendente.")
+
+    required_commands = {
+        "named-checkconf": detected_binary(NAMED_CHECKCONF_CANDIDATES),
+        "named-checkzone": detected_binary(NAMED_CHECKZONE_CANDIDATES),
+        "rndc": detected_binary(RNDC_CANDIDATES),
+    }
+    for name, detected in required_commands.items():
+        _doctor_check(
+            checks,
+            f"bind.command.{name}",
+            "ok" if detected else "error",
+            f"{name} encontrado." if detected else f"{name} não encontrado.",
+        )
+
+    unit_names = (
+        "dns-center-agent.service",
+        "dns-center-agent.timer",
+        "dns-center-agent-operation.service",
+        "dns-center-agent-operation.timer",
+    )
+    missing_units = [
+        name for name in unit_names
+        if not (DEFAULT_SYSTEMD_DIR / name).is_file()
+    ]
+    _doctor_check(
+        checks,
+        "systemd.units",
+        "ok" if not missing_units else "error",
+        "Units principais instaladas."
+        if not missing_units else "Units ausentes: " + ", ".join(missing_units),
+    )
+
+    counts = {
+        status_value: sum(1 for check in checks if check["status"] == status_value)
+        for status_value in ("ok", "warning", "error")
+    }
+    return {
+        "healthy": counts["error"] == 0,
+        "version": AGENT_VERSION,
+        "checked_at": utc_now(),
+        "summary": counts,
+        "checks": checks,
+    }
+
+
 def heartbeat(config: dict[str, Any]) -> dict[str, Any]:
     named = detected_binary(NAMED_CANDIDATES)
     named_checkzone = detected_binary(NAMED_CHECKZONE_CANDIDATES)
@@ -2773,13 +2909,28 @@ def flush_pending_operation_report(config: dict[str, Any]) -> None:
     if path is None or not path.exists():
         return
 
-    pending = read_json(path)
+    try:
+        pending = read_json(path)
+    except AgentError as exception:
+        quarantined = quarantine_pending_operation_report(path)
+        raise AgentError(
+            "Relatório final pendente inválido; preservado em quarentena "
+            f"como {quarantined.name}."
+        ) from exception
     operation_id = pending.get("operation_id")
     payload = pending.get("payload")
     if not isinstance(operation_id, int) or not isinstance(payload, dict):
-        raise AgentError("Relatório final pendente inválido.")
+        quarantined = quarantine_pending_operation_report(path)
+        raise AgentError(
+            "Relatório final pendente inválido; preservado em quarentena "
+            f"como {quarantined.name}."
+        )
     if payload.get("status") not in {"succeeded", "failed"}:
-        raise AgentError("Estado do relatório final pendente inválido.")
+        quarantined = quarantine_pending_operation_report(path)
+        raise AgentError(
+            "Estado do relatório final pendente inválido; preservado em "
+            f"quarentena como {quarantined.name}."
+        )
 
     try:
         response = _send_operation_report(config, operation_id, payload)
@@ -2795,9 +2946,64 @@ def flush_pending_operation_report(config: dict[str, Any]) -> None:
         )
 
 
-def run_authorized_operation(
-    config: dict[str, Any],
+def quarantine_pending_operation_report(path: Path) -> Path:
+    """Preserve malformed durable reports without blocking every future poll."""
+    quarantine_dir = path.parent / "quarantine"
+    try:
+        reject_symlink(quarantine_dir)
+        quarantine_dir.mkdir(mode=0o700, parents=True, exist_ok=True)
+        os.chmod(quarantine_dir, 0o700)
+        destination = quarantine_dir / (
+            "pending-operation-report.invalid-"
+            + datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S")
+            + f"-{uuid.uuid4().hex}.json"
+        )
+        os.replace(path, destination)
+        return destination
+    except OSError as exception:
+        raise AgentError(
+            "Relatório final pendente inválido e não pôde ser isolado."
+        ) from exception
+
+
+SUPPORTED_OPERATION_ACTIONS = {
+    "install_bind",
+    "configure_bind",
+    "discover_bind_zones",
+    "upgrade_agent",
+    "apply_zones",
+    "remove_legacy_zone_block",
+}
+
+
+def execute_authorized_operation(
+    config: dict[str, Any], operation: dict[str, Any]
 ) -> dict[str, Any]:
+    """Dispatch one authorized action; serialize every operation touching BIND."""
+    action = str(operation["action"])
+
+    if action == "upgrade_agent":
+        return upgrade_agent_self(config)
+
+    with agent_state_lock(config):
+        if action == "discover_bind_zones":
+            return discover_bind_zones(config)
+        if action == "apply_zones":
+            server_name = str(config.get("server", {}).get("name", ""))
+            return sync_zones(
+                config,
+                apply=True,
+                confirmation=f"APLICAR ZONAS {server_name}".strip(),
+            )
+        if action == "remove_legacy_zone_block":
+            params = operation.get("params")
+            if not isinstance(params, dict):
+                raise AgentError("Parâmetros de remoção ausentes.")
+            return remove_legacy_zone_block(config, params)
+        return configure_bind(action)
+
+
+def run_authorized_operation(config: dict[str, Any]) -> dict[str, Any]:
     flush_pending_operation_report(config)
     response = request_json(
         "GET",
@@ -2815,10 +3021,7 @@ def run_authorized_operation(
 
     action = operation.get("action")
 
-    if action not in {
-        "install_bind", "configure_bind", "discover_bind_zones", "upgrade_agent",
-        "apply_zones", "remove_legacy_zone_block",
-    }:
+    if action not in SUPPORTED_OPERATION_ACTIONS:
         # Tell the panel immediately instead of leaving the operation stuck
         # in "authorized" until its TTL sweep expires it — an older agent
         # that predates a newly-added action would otherwise go silent.
@@ -2839,24 +3042,7 @@ def run_authorized_operation(
         )
 
     try:
-        if action == "discover_bind_zones":
-            result = discover_bind_zones(config)
-        elif action == "upgrade_agent":
-            result = upgrade_agent_self(config)
-        elif action == "apply_zones":
-            server_name = str(config.get("server", {}).get("name", ""))
-            with agent_state_lock(config):
-                result = sync_zones(
-                    config, apply=True,
-                    confirmation=f"APLICAR ZONAS {server_name}".strip(),
-                )
-        elif action == "remove_legacy_zone_block":
-            params = operation.get("params")
-            if not isinstance(params, dict):
-                raise AgentError("Parâmetros de remoção ausentes.")
-            result = remove_legacy_zone_block(config, params)
-        else:
-            result = configure_bind(str(action))
+        result = execute_authorized_operation(config, operation)
     except AgentError as exception:
         message = sanitize_message(exception)
         rolled_back = (
@@ -4734,6 +4920,7 @@ def build_parser() -> argparse.ArgumentParser:
     actions.add_argument("--request-approval", action="store_true")
     actions.add_argument("--enroll", action="store_true")
     actions.add_argument("--status", action="store_true")
+    actions.add_argument("--doctor", action="store_true")
     actions.add_argument("--heartbeat", action="store_true")
     actions.add_argument("--inventory", action="store_true")
     actions.add_argument("--readiness", action="store_true")
@@ -4763,7 +4950,13 @@ def main() -> int:
         if args.status:
             return status(args)
 
-        config = read_json(Path(args.config))
+        config_path = Path(args.config)
+        config = read_json(config_path)
+
+        if args.doctor:
+            result = doctor(config, config_path)
+            print(json.dumps(result, indent=2, ensure_ascii=False))
+            return 0 if result["healthy"] else 2
 
         handlers: list[tuple[bool, Callable[[], dict[str, Any]]]] = [
             (args.heartbeat, lambda: heartbeat(config)),

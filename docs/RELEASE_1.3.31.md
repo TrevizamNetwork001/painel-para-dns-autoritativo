@@ -31,8 +31,8 @@ os acessos nem de remover os dados de uma empresa.
 - 9 testes novos em `OrganizationManagementTest`.
 
 ### Caso real (18/09/2026)
-Cancelamento do cliente Cliente Legado: empresa desativada e depois excluída; verificado por
+Cancelamento do Cliente legado: empresa desativada e depois excluída; verificado por
 consulta direta que a cascata foi completa. Restos de uma homologação antiga (servidores
-`ns1`/`ns2` do conectanetwork, 6 zonas em rascunho, 2075 registros, descobertas e
+`ns1`/`ns2` do legacy-customer, 6 zonas em rascunho, 2075 registros, descobertas e
 operações) estavam na empresa padrão e foram removidos à parte. As 20 entradas de
 log de auditoria que citam o nome foram **mantidas por decisão do operador**.

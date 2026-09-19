@@ -6,7 +6,7 @@ Data: 2026-09-16
 
 Duas melhorias de legibilidade no assistente de DNS reverso, sem
 alteração de schema — pedidas pelo operador ao vivo, olhando a tela
-real da zona `8.b.d.0.1.0.0.2.ip6.arpa` da Cliente Legado.
+real da zona `8.b.d.0.1.0.0.2.ip6.arpa` de cliente legado.
 
 1. **Lista de zonas reversas** (aba "DNS reverso"): mostra só "bloco
    X/NN · N registro(s)" como texto principal, sem repetir a família
@@ -42,7 +42,7 @@ de concatenar. Agora usa a mesma checagem já usada em
 
 - `tests/Unit/ReverseZoneNameCalculatorTest.php`: 18 testes (4 novos)
   — IPv4/IPv6 batendo com dado real (`2001:db8::242`, o IPv6 real do
-  ns1 da Cliente Legado), retorno nulo pra nome parcial/incompleto.
+  ns1 de cliente legado), retorno nulo pra nome parcial/incompleto.
 - `php artisan test`: 269 testes, 1375 assertions — sem regressão.
 - Pint: 169 arquivos aprovados.
 - `composer audit`: sem vulnerabilidades.
