@@ -79,7 +79,38 @@ class DnsBindRuntimeController extends Controller
             'legacy_zone_blocks.blocks.*.declared_type' => ['nullable', 'string', 'max:40'],
             'legacy_zone_blocks.blocks.*.hash' => ['required', 'string', 'size:64', 'regex:/\A[0-9a-f]+\z/'],
             'legacy_zone_blocks.blocks.*.snippet' => ['nullable', 'string', 'max:2000'],
+            'firewall' => ['sometimes', 'array'],
+            'firewall.observed_at' => ['required_with:firewall', 'date'],
+            'firewall.nftables_available' => ['required_with:firewall', 'boolean'],
+            'firewall.status' => ['required_with:firewall', Rule::in(['unavailable', 'inaccessible', 'absent', 'observed', 'invalid_output'])],
+            'firewall.table' => ['required_with:firewall', 'array'],
+            'firewall.table.family' => ['required_with:firewall', Rule::in(['inet'])],
+            'firewall.table.name' => ['required_with:firewall', Rule::in(['dns_center'])],
+            'firewall.table_present' => ['required_with:firewall', 'boolean'],
+            'firewall.table_hash' => ['nullable', 'string', 'size:64', 'regex:/\A[0-9a-f]+\z/'],
+            'firewall.counts' => ['required_with:firewall', 'array'],
+            'firewall.counts.chains' => ['required_with:firewall', 'integer', 'between:0,10000'],
+            'firewall.counts.rules' => ['required_with:firewall', 'integer', 'between:0,100000'],
+            'firewall.counts.sets' => ['required_with:firewall', 'integer', 'between:0,10000'],
+            'firewall.last_validation_at' => ['nullable', 'date'],
         ]);
+
+        if (isset($validated['firewall'])) {
+            $firewall = $validated['firewall'];
+            $observed = $firewall['status'] === 'observed';
+            $nftablesExpected = ! in_array($firewall['status'], ['unavailable'], true);
+            if (
+                $firewall['table_present'] !== $observed
+                || (($firewall['table_hash'] ?? null) !== null) !== $observed
+                || $firewall['nftables_available'] !== $nftablesExpected
+            ) {
+                return response()->json([
+                    'ok' => false,
+                    'error' => 'invalid_firewall_inventory',
+                    'message' => 'O inventário de firewall contém um estado inconsistente.',
+                ], 422);
+            }
+        }
 
         foreach (self::ALLOWED_PATHS as $key => $allowed) {
             $path = data_get($validated, 'paths.'.$key);

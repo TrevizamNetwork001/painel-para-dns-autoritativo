@@ -65,6 +65,48 @@ class DnsBindReadinessTest extends TestCase
             ->assertJsonPath('error', 'event_replay');
     }
 
+    public function test_readiness_accepts_sanitized_firewall_inventory_and_rejects_inconsistent_state(): void
+    {
+        $context = $this->context();
+        $payload = $this->readinessPayload();
+        $payload['firewall'] = [
+            'observed_at' => now()->toIso8601String(),
+            'nftables_available' => true,
+            'status' => 'observed',
+            'table' => ['family' => 'inet', 'name' => 'dns_center'],
+            'table_present' => true,
+            'table_hash' => str_repeat('a', 64),
+            'counts' => ['chains' => 2, 'rules' => 7, 'sets' => 1],
+            'last_validation_at' => null,
+        ];
+
+        $this->withToken($context['token'])
+            ->postJson('/api/agent/bind/readiness', $payload)
+            ->assertOk();
+
+        $firewall = $context['server']->fresh()->bind_readiness['firewall'];
+        $this->assertSame('observed', $firewall['status']);
+        $this->assertSame(7, $firewall['counts']['rules']);
+        $this->assertArrayNotHasKey('ruleset', $firewall);
+
+        $payload['event_id'] = (string) Str::uuid();
+        $payload['firewall']['table_present'] = false;
+
+        $this->withToken($context['token'])
+            ->postJson('/api/agent/bind/readiness', $payload)
+            ->assertUnprocessable()
+            ->assertJsonPath('error', 'invalid_firewall_inventory');
+
+        $payload['event_id'] = (string) Str::uuid();
+        $payload['firewall']['status'] = 'unavailable';
+        $payload['firewall']['table_hash'] = null;
+
+        $this->withToken($context['token'])
+            ->postJson('/api/agent/bind/readiness', $payload)
+            ->assertUnprocessable()
+            ->assertJsonPath('error', 'invalid_firewall_inventory');
+    }
+
     public function test_agent_cannot_change_another_server_readiness_or_operation(): void
     {
         $context = $this->context();

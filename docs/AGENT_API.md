@@ -105,6 +105,19 @@ de 1 minuto normalizada pela quantidade de CPUs lógicas; não é uma amostra
 instantânea de utilização. Nenhum comando, processo, log, endereço ou segredo
 é incluído nessa telemetria.
 
+## Inventário de firewall (Fase 1)
+
+Desde o agent 0.13.0, o payload periódico de `POST /api/agent/bind/readiness`
+inclui o bloco opcional `firewall`. A coleta é estritamente somente leitura e
+limitada à tabela `inet dns_center`: o agent detecta o binário `nft`, enumera
+as tabelas e, somente quando a tabela gerenciada existe, consulta seu JSON.
+
+O painel recebe apenas o estado (`unavailable`, `inaccessible`, `absent`,
+`observed` ou `invalid_output`), presença, SHA-256 determinístico e contagens de
+chains, regras e sets. O ruleset, stdout, stderr e caminhos locais nunca são
+enviados. `last_validation_at` permanece nulo nesta fase, pois `nft -c` e
+qualquer aplicação pertencem às fases posteriores.
+
 ## Revogação
 
 A revogação é feita pelo painel administrativo, vinculada à empresa e ao

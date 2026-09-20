@@ -38,6 +38,73 @@ SPEC.loader.exec_module(agent)
 
 
 class AgentTests(unittest.TestCase):
+    def test_firewall_inventory_reports_absent_without_listing_rules(self) -> None:
+        tables = subprocess.CompletedProcess(
+            [], 0, stdout='{"nftables": [{"metainfo": {}}]}', stderr="",
+        )
+        tables.stdout_truncated = False
+
+        with patch.object(agent, "detected_binary", return_value="/usr/sbin/nft"), patch.object(
+            agent, "run_command", return_value=tables,
+        ) as run:
+            report = agent.firewall_inventory()
+
+        self.assertEqual("absent", report["status"])
+        self.assertFalse(report["table_present"])
+        self.assertIsNone(report["table_hash"])
+        run.assert_called_once_with(
+            ["/usr/sbin/nft", "--json", "list", "tables"],
+            timeout=10,
+            max_output_bytes=1024 * 1024,
+        )
+
+    def test_firewall_inventory_hashes_and_counts_only_managed_table(self) -> None:
+        outputs = [
+            '{"nftables":[{"table":{"family":"inet","name":"dns_center"}}]}',
+            '{"nftables":[{"table":{"name":"dns_center","family":"inet"}},'
+            '{"chain":{"family":"inet","table":"dns_center","name":"input"}},'
+            '{"set":{"family":"inet","table":"dns_center","name":"admins"}},'
+            '{"rule":{"family":"inet","table":"dns_center","chain":"input"}}]}',
+        ]
+        results = []
+        for output in outputs:
+            result = subprocess.CompletedProcess([], 0, stdout=output, stderr="")
+            result.stdout_truncated = False
+            results.append(result)
+
+        with patch.object(agent, "detected_binary", return_value="/usr/sbin/nft"), patch.object(
+            agent, "run_command", side_effect=results,
+        ):
+            report = agent.firewall_inventory()
+
+        self.assertEqual("observed", report["status"])
+        self.assertTrue(report["table_present"])
+        self.assertRegex(report["table_hash"], r"^[0-9a-f]{64}$")
+        self.assertEqual({"chains": 1, "rules": 1, "sets": 1}, report["counts"])
+
+    def test_firewall_inventory_does_not_expose_nft_error(self) -> None:
+        result = subprocess.CompletedProcess(
+            [], 1, stdout="", stderr="permission denied secret=private",
+        )
+        result.stdout_truncated = False
+
+        with patch.object(agent, "detected_binary", return_value="/usr/sbin/nft"), patch.object(
+            agent, "run_command", return_value=result,
+        ):
+            report = agent.firewall_inventory()
+
+        self.assertEqual("inaccessible", report["status"])
+        self.assertNotIn("error", report)
+
+    def test_firewall_inventory_does_not_break_readiness_on_timeout(self) -> None:
+        with patch.object(agent, "detected_binary", return_value="/usr/sbin/nft"), patch.object(
+            agent, "run_command", side_effect=agent.AgentError("timeout secret=private"),
+        ):
+            report = agent.firewall_inventory()
+
+        self.assertEqual("inaccessible", report["status"])
+        self.assertNotIn("error", report)
+
     def test_collect_host_metrics_reads_proc_and_disk_without_commands(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             proc_root = Path(directory)

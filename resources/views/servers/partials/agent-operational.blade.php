@@ -51,6 +51,13 @@
     $uptimeLabel = is_numeric($uptimeSeconds)
         ? ((int) floor($uptimeSeconds / 86400)).'d '.((int) floor(($uptimeSeconds % 86400) / 3600)).'h'
         : 'Não informado';
+    $firewall = data_get($readiness, 'firewall');
+    $firewallStatus = data_get($firewall, 'status');
+    $firewallStatusLabel = match ($firewallStatus) {
+        'observed' => 'Tabela detectada', 'absent' => 'Tabela ausente',
+        'unavailable' => 'nftables indisponível', 'inaccessible' => 'Sem acesso de leitura',
+        'invalid_output' => 'Resposta inválida', default => 'Não observado',
+    };
 @endphp
 
 <section class="agent-ops-hero" aria-labelledby="agent-operational-title">
@@ -135,6 +142,7 @@
     <article class="agent-metric-card"><span>Memória</span><strong>{{ is_numeric($memoryUsedPercent) ? number_format($memoryUsedPercent, 1, ',', '.').'%' : 'Não informada' }}</strong><small>{{ data_get($hostInventory, 'memory_available_mb') !== null ? number_format(data_get($hostInventory, 'memory_available_mb'), 0, ',', '.').' MB disponíveis' : 'Aguardando inventário 0.12.0+' }}</small></article>
     <article class="agent-metric-card"><span>Disco raiz</span><strong>{{ is_numeric($diskUsedPercent) ? number_format($diskUsedPercent, 1, ',', '.').'%' : 'Não informado' }}</strong><small>{{ data_get($hostInventory, 'disk_free_gb') !== null ? number_format(data_get($hostInventory, 'disk_free_gb'), 1, ',', '.').' GB livres' : 'Aguardando inventário 0.12.0+' }}</small></article>
     <article class="agent-metric-card"><span>Uptime</span><strong>{{ $uptimeLabel }}</strong><small>Tempo desde a última inicialização</small></article>
+    <article class="agent-metric-card"><span>Firewall</span><strong>{{ $firewallStatusLabel }}</strong><small>Inventário somente leitura · tabela inet dns_center</small></article>
 </section>
 
 <section class="agent-ops-grid">
@@ -196,6 +204,9 @@
         <section><h3>Observabilidade</h3><dl class="agent-technical-list">
             <div><dt>Última descoberta exata</dt><dd>{{ $discoveryAt?->format('d/m/Y H:i:s') ?: 'Não executada' }}</dd></div><div><dt>Estado da descoberta</dt><dd>{{ $latestDiscoveryOperation?->status ?: 'Não iniciada' }}</dd></div><div><dt>Última coleta autoritativa</dt><dd>{{ $server->authoritative_observed_at?->format('d/m/Y H:i:s') ?: 'Não recebida' }}</dd></div><div><dt>Sequência observada</dt><dd>{{ $server->authoritative_sequence ?? 'Não recebida' }}</dd></div><div><dt>Serial observado</dt><dd>{{ $latestAppliedPublication?->reported_serial ?? 'Não recebido' }}</dd></div>
             <div><dt>CPU / carga 1 min</dt><dd>{{ data_get($hostInventory, 'cpu_count', '—') }} / {{ data_get($hostInventory, 'load_1m', '—') }}</dd></div><div><dt>Memória total</dt><dd>{{ data_get($hostInventory, 'memory_total_mb') !== null ? number_format(data_get($hostInventory, 'memory_total_mb'), 0, ',', '.').' MB' : 'Não recebida' }}</dd></div><div><dt>Disco raiz total</dt><dd>{{ data_get($hostInventory, 'disk_total_gb') !== null ? number_format(data_get($hostInventory, 'disk_total_gb'), 1, ',', '.').' GB' : 'Não recebido' }}</dd></div><div><dt>Uptime</dt><dd>{{ $uptimeLabel }}</dd></div>
+        </dl></section>
+        <section><h3>Firewall (somente leitura)</h3><dl class="agent-technical-list">
+            <div><dt>nftables</dt><dd>{{ data_get($firewall, 'nftables_available') === true ? 'Detectado' : 'Não detectado' }}</dd></div><div><dt>Estado</dt><dd>{{ $firewallStatusLabel }}</dd></div><div><dt>Tabela gerenciada</dt><dd class="agent-technical-value">inet dns_center</dd></div><div><dt>Hash observado</dt><dd class="agent-technical-value">{{ data_get($firewall, 'table_hash') ?: 'Não disponível' }}</dd></div><div><dt>Chains / regras / sets</dt><dd>{{ data_get($firewall, 'counts.chains', 0) }} / {{ data_get($firewall, 'counts.rules', 0) }} / {{ data_get($firewall, 'counts.sets', 0) }}</dd></div><div><dt>Observado em</dt><dd>{{ data_get($firewall, 'observed_at') ?: 'Não recebido' }}</dd></div><div><dt>Última validação</dt><dd>{{ data_get($firewall, 'last_validation_at') ?: 'Ainda não executada (Fase 1)' }}</dd></div>
         </dl></section>
     </div>
 </details>

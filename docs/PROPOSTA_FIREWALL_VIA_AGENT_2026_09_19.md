@@ -122,9 +122,13 @@ integração com `sudo`, scripts antigos, credenciais ou dados de ambiente.
 - manter rollback automático e evidência de auditoria;
 - observar vários ciclos do agent antes de ampliar o rollout.
 
-## Decisão atual
+## Estado da implementação
 
-A funcionalidade é útil, mas está adiada. Nenhum código de firewall do projeto
-antigo será incorporado agora. Quando retomada, a interface ficará no painel
-central e toda leitura ou alteração real será executada localmente pelo agent,
-sem SSH e dentro do limite de propriedade descrito neste documento.
+A Fase 1 foi implementada em 20/09/2026 no agent 0.13.0. O relatório periódico
+detecta `nftables` e observa exclusivamente `inet dns_center`, devolvendo ao
+painel presença, estado, hash e contagens. A interface operacional do servidor
+exibe esse resumo sem receber o ruleset ou diagnósticos brutos.
+
+Não há criação, validação ou alteração de regras nesta fase. As Fases 2 a 4
+continuam adiadas e dependerão de decisão explícita; nenhum código de firewall
+do projeto antigo foi incorporado.

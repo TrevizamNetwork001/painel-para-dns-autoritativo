@@ -341,6 +341,8 @@ em produção. As evidências e limitações estão em
 | [Release 1.3.46](docs/RELEASE_1.3.46.md) | Confirma upgrade pelo próximo poll autenticado do binário novo |
 | [Release 1.3.47](docs/RELEASE_1.3.47.md) | Exclusão integral do tenant, inclusive auditorias vinculadas |
 | [Release 1.3.48](docs/RELEASE_1.3.48.md) | Bloqueio de agentes órfãos na API e no firewall, visível no painel |
+| [Release 1.3.49](docs/RELEASE_1.3.49.md) | Agent 0.13.0 observa a tabela de firewall gerenciada em modo somente leitura |
+| [Homologação do firewall — Fase 1](docs/HOMOLOGACAO_FIREWALL_FASE_1.md) | Roteiro seguro e critérios de aprovação em servidor não crítico |
 | [Operação Cliente Exemplo — 18/09/2026](docs/OPERACAO_CLIENTE_EXEMPLO_2026_09_18.md) | Adoção das zonas reversas do dns-primary/secondary, runbook e pendências |
 
 ## Status do projeto

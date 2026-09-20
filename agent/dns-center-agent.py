@@ -37,7 +37,7 @@ from email.utils import parsedate_to_datetime
 from pathlib import Path
 from typing import Any
 
-AGENT_VERSION = "0.12.0"
+AGENT_VERSION = "0.13.0"
 OFFICIAL_BASE_URL = "https://dnscenter.trevizamnetwork.com.br"
 DEFAULT_CONFIG = Path("/etc/dns-center-agent/agent.json")
 DEFAULT_STATE_DIR = Path("/var/lib/dns-center-agent")
@@ -688,6 +688,103 @@ NAMED_CHECKZONE_CANDIDATES = (
     "/usr/bin/named-checkzone",
     "/usr/sbin/named-checkzone",
 )
+NFT_CANDIDATES = ("/usr/sbin/nft", "/usr/bin/nft")
+
+
+def firewall_inventory() -> dict[str, Any]:
+    """Observe only the DNS Center-owned nftables table."""
+    nft = detected_binary(NFT_CANDIDATES)
+    base = {
+        "observed_at": utc_now(),
+        "nftables_available": nft is not None,
+        "status": "unavailable" if nft is None else "inaccessible",
+        "table": {"family": "inet", "name": "dns_center"},
+        "table_present": False,
+        "table_hash": None,
+        "counts": {"chains": 0, "rules": 0, "sets": 0},
+        "last_validation_at": None,
+    }
+
+    if nft is None:
+        return base
+
+    try:
+        tables_result = run_command(
+            [nft, "--json", "list", "tables"],
+            timeout=10,
+            max_output_bytes=1024 * 1024,
+        )
+    except AgentError:
+        return base
+    if tables_result.returncode != 0:
+        return base
+    if tables_result.stdout_truncated:
+        return {**base, "status": "invalid_output"}
+
+    try:
+        tables_document = json.loads(tables_result.stdout)
+        tables = tables_document["nftables"]
+        if not isinstance(tables, list):
+            raise ValueError("invalid nftables collection")
+    except (json.JSONDecodeError, KeyError, TypeError, ValueError):
+        return {**base, "status": "invalid_output"}
+
+    table_present = any(
+        isinstance(item, dict)
+        and item.get("table", {}).get("family") == "inet"
+        and item.get("table", {}).get("name") == "dns_center"
+        for item in tables
+    )
+    if not table_present:
+        return {**base, "status": "absent"}
+
+    try:
+        result = run_command(
+            [nft, "--json", "list", "table", "inet", "dns_center"],
+            timeout=10,
+            max_output_bytes=1024 * 1024,
+        )
+    except AgentError:
+        return base
+    if result.returncode != 0:
+        return base
+    if result.stdout_truncated:
+        return {**base, "status": "invalid_output"}
+
+    try:
+        document = json.loads(result.stdout)
+        objects = document["nftables"]
+        if not isinstance(objects, list):
+            raise ValueError("invalid nftables collection")
+    except (json.JSONDecodeError, KeyError, TypeError, ValueError):
+        return {**base, "status": "invalid_output"}
+
+    canonical = json.dumps(
+        document,
+        ensure_ascii=False,
+        separators=(",", ":"),
+        sort_keys=True,
+    ).encode("utf-8")
+    counts = {
+        kind: sum(
+            singular in item
+            for item in objects
+            if isinstance(item, dict)
+        )
+        for kind, singular in (
+            ("chains", "chain"),
+            ("rules", "rule"),
+            ("sets", "set"),
+        )
+    }
+
+    return {
+        **base,
+        "status": "observed",
+        "table_present": True,
+        "table_hash": hashlib.sha256(canonical).hexdigest(),
+        "counts": counts,
+    }
 
 
 def detected_binary(candidates: tuple[str, ...]) -> str | None:
@@ -1181,6 +1278,7 @@ def readiness_report(config: dict[str, Any]) -> dict[str, Any]:
         "bind_version": bind_version,
         "include_wired": include_wired,
         "legacy_zone_blocks": legacy_zone_blocks,
+        "firewall": firewall_inventory(),
         "paths": {
             "named_conf": named_conf,
             "include_dir": include_dir,
@@ -1569,6 +1667,7 @@ def heartbeat(config: dict[str, Any]) -> dict[str, Any]:
                 "named_checkconf": named_checkconf is not None,
                 "atomic_apply": True,
                 "rollback": True,
+                "firewall_read_only_inventory": True,
             },
         },
         str(config["token"]),
