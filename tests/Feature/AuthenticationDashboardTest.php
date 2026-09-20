@@ -133,6 +133,37 @@ class AuthenticationDashboardTest extends TestCase
             ->assertDontSee('Nenhuma zona configurada');
     }
 
+    public function test_dashboard_success_indicators_ignore_disabled_servers(): void
+    {
+        $organization = Organization::factory()->create();
+        $user = User::factory()->create(['current_organization_id' => $organization->id]);
+        $user->organizations()->attach($organization->id, ['role' => 'organization_admin', 'status' => 'active']);
+
+        DnsServer::factory()->create([
+            'organization_id' => $organization->id,
+            'name' => 'ns-ativo',
+            'role' => 'standalone',
+            'status' => 'online',
+            'enabled' => true,
+        ]);
+        DnsServer::factory()->create([
+            'organization_id' => $organization->id,
+            'name' => 'ns-desativado',
+            'status' => 'maintenance',
+            'enabled' => false,
+        ]);
+
+        $this->actingAs($user)->get(route('dashboard'))
+            ->assertOk()
+            ->assertSee('Ambiente operacional')
+            ->assertSee('1 de 1 servidores online')
+            ->assertSee('data-dashboard-kpi="pendencias"', false)
+            ->assertSee('data-dashboard-kpi="zonas-autoritativas"', false)
+            ->assertSee('dashboard-kpi-card dashboard-kpi-online', false)
+            ->assertSee('Ambiente sem alertas')
+            ->assertDontSee('ns-desativado');
+    }
+
     public function test_dashboard_neutral_empty_state_and_read_only_actions(): void
     {
         $organization = Organization::factory()->create();

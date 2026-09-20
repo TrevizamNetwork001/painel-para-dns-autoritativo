@@ -9,6 +9,7 @@
 
     $dashboardServers = App\Models\DnsServer::query()
         ->forOrganization($organizationId)
+        ->enabled()
         ->where('status', '!=', 'transferred')
         ->orderBy('name')
         ->get();
@@ -296,9 +297,24 @@
                 ['Serviços', $serviceOnlineCount, $serviceOnlineCount.' online · '.max(0, $serverCount - $serviceOnlineCount).' offline', 'servers.index', 'online', $serverCount ? $serviceOnlineCount / $serverCount * 100 : 0],
                 ['Pendências', $activeAlertCount, $hasAlerts ? 'Requerem atenção' : 'Ambiente sem alertas', null, 'alert', min(100, $activeAlertCount * 15)],
             ] as [$label, $value, $detail, $destination, $icon, $progress])
-                <article class="dashboard-kpi-card dashboard-kpi-{{ $icon }}">
-                    <span class="dashboard-kpi-icon kpi-icon-{{ $icon === 'alert' && ! $hasAlerts ? 'online' : $icon }}" aria-hidden="true"><x-dashboard-icon :name="$icon" /></span>
-                    <div class="dashboard-kpi-content"><strong class="dashboard-kpi-value" @if ($icon === 'zone') data-dashboard-zone-count @endif>{{ $value }}</strong><span class="dashboard-kpi-label">{{ $label }}</span><span class="dashboard-kpi-detail">{{ $detail }}</span><span class="dashboard-kpi-progress"><span style="width: {{ $progress }}%"></span></span></div>
+                @php
+                    $resolvedIcon = match (true) {
+                        $icon === 'alert' && ! $hasAlerts => 'online',
+                        $icon === 'zone' && $mismatchZoneCount === 0 => 'online',
+                        $icon === 'zone' && $mismatchZoneCount > 0 => 'alert',
+                        default => $icon,
+                    };
+                    $resolvedProgress = in_array($icon, ['alert', 'zone'], true)
+                        && $resolvedIcon === 'online' ? 100 : $progress;
+                    $kpiKey = match ($label) {
+                        'Pendências' => 'pendencias',
+                        'Zonas autoritativas' => 'zonas-autoritativas',
+                        default => null,
+                    };
+                @endphp
+                <article class="dashboard-kpi-card dashboard-kpi-{{ $resolvedIcon }}" @if ($kpiKey) data-dashboard-kpi="{{ $kpiKey }}" @endif>
+                    <span class="dashboard-kpi-icon kpi-icon-{{ $resolvedIcon }}" aria-hidden="true"><x-dashboard-icon :name="$resolvedIcon" /></span>
+                    <div class="dashboard-kpi-content"><strong class="dashboard-kpi-value" @if ($icon === 'zone') data-dashboard-zone-count @endif>{{ $value }}</strong><span class="dashboard-kpi-label">{{ $label }}</span><span class="dashboard-kpi-detail">{{ $detail }}</span><span class="dashboard-kpi-progress"><span style="width: {{ $resolvedProgress }}%"></span></span></div>
                     @if ($destination)<a class="dashboard-kpi-arrow" href="{{ route($destination) }}" aria-label="Ver {{ strtolower($label) }}">›</a>@endif
                 </article>
             @endforeach
