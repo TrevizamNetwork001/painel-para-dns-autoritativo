@@ -284,7 +284,11 @@ class DnsAuthoritativeObservationTest extends TestCase
             ->assertSee('data-authoritative-value="1"', false)
             ->assertSee('data-authoritative-value="0"', false)
             ->assertSee('dashboard-authoritative-online', false)
-            ->assertSee('Sem serial mismatch');
+            ->assertSee('Sem serial mismatch')
+            ->assertSee('Sem falhas')
+            ->assertSee('Nenhuma expirada')
+            ->assertSee('Nenhuma pendente')
+            ->assertSee('dashboard-authoritative-secondary-item is-healthy', false);
 
         DnsAuthoritativeObservation::query()
             ->where('dns_zone_id', $zone->id)

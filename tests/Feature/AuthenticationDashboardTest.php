@@ -29,6 +29,8 @@ class AuthenticationDashboardTest extends TestCase
 
     public function test_authenticated_member_can_access_dashboard(): void
     {
+        config(['app.release' => '1.3.51']);
+
         $organization = Organization::query()->create([
             'name' => 'Trevizam Network',
             'slug' => 'trevizam-network',
@@ -51,6 +53,7 @@ class AuthenticationDashboardTest extends TestCase
             ->get('/dashboard')
             ->assertOk()
             ->assertSee('Trevizam Network')
+            ->assertSee('DNS Center v1.3.51')
             ->assertSee($user->name)
             ->assertSee(route('servers.index'), false)
             ->assertSee(route('nameservers.index'), false)

@@ -81,6 +81,11 @@
         ->whereIn('status', ['pending', 'downloaded', 'applying'])
         ->get();
     $pendingPublicationCount = $dashboardPublications->count();
+    $authoritativeSecondaryStats = [
+        ['key' => 'transferencias-falhando', 'label' => 'Transferências', 'value' => $failedTransferCount, 'icon' => 'server', 'healthy' => 'Sem falhas', 'alert' => 'Falhando'],
+        ['key' => 'zonas-expiradas', 'label' => 'Zonas expiradas', 'value' => $expiredZoneCount, 'icon' => 'clock', 'healthy' => 'Nenhuma expirada', 'alert' => 'Requer atenção'],
+        ['key' => 'publicacoes-pendentes', 'label' => 'Publicações pendentes', 'value' => $pendingPublicationCount, 'icon' => 'upload', 'healthy' => 'Nenhuma pendente', 'alert' => 'Aguardando aplicação'],
+    ];
     $pendingItems = collect();
     foreach ($dashboardServers as $server) {
         if (in_array($server->status, ['offline', 'warning'], true)) {
@@ -403,7 +408,12 @@
                     <div class="dashboard-authoritative-stat dashboard-authoritative-{{ $resolvedKey }}{{ $key === 'zonas-divergentes' && $value > 0 ? ' has-alert' : '' }}"><span class="dashboard-auth-icon" aria-hidden="true"><x-dashboard-icon :name="$resolvedKey" /></span><span>{{ $label }}</span><strong data-authoritative-counter="{{ $key }}" data-authoritative-value="{{ $value }}">{{ $value }}@if ($total !== null)<small> / {{ $total }}</small>@endif</strong><small>{{ $key === 'primaries-online' || $key === 'secondaries-online' ? ($total - $value).' offline' : ($key === 'zonas-divergentes' ? ($value === 0 ? 'Sem serial mismatch' : 'Serial mismatch') : 'Zonas convergentes') }}</small><span class="dashboard-auth-progress"><span style="width: {{ $resolvedProgress }}%"></span></span></div>
                 @endforeach
             </div>
-            <div class="dashboard-authoritative-secondary"><span><i><x-dashboard-icon name="server" /></i>Transferências<strong data-authoritative-counter="transferencias-falhando" data-authoritative-value="{{ $failedTransferCount }}">{{ $failedTransferCount }}</strong><small>Falhando</small></span><span><i><x-dashboard-icon name="clock" /></i>Zonas expiradas<strong data-authoritative-counter="zonas-expiradas" data-authoritative-value="{{ $expiredZoneCount }}">{{ $expiredZoneCount }}</strong><small>Requer atenção</small></span><span><i><x-dashboard-icon name="upload" /></i>Publicações pendentes<strong data-authoritative-counter="publicacoes-pendentes" data-authoritative-value="{{ $pendingPublicationCount }}">{{ $pendingPublicationCount }}</strong><small>Aguardando aplicação</small></span></div>
+            <div class="dashboard-authoritative-secondary">
+                @foreach ($authoritativeSecondaryStats as $stat)
+                    @php($isHealthy = $stat['value'] === 0)
+                    <span class="dashboard-authoritative-secondary-item {{ $isHealthy ? 'is-healthy' : 'is-alert' }}"><i><x-dashboard-icon :name="$isHealthy ? 'online' : $stat['icon']" /></i>{{ $stat['label'] }}<strong data-authoritative-counter="{{ $stat['key'] }}" data-authoritative-value="{{ $stat['value'] }}">{{ $stat['value'] }}</strong><small>{{ $isHealthy ? $stat['healthy'] : $stat['alert'] }}</small></span>
+                @endforeach
+            </div>
         </section>
 
             <article class="dashboard-panel dashboard-activity-panel">
@@ -429,7 +439,7 @@
                 </div>
             </article>
         </section>
-        <footer class="dashboard-footer"><span>“DNS estável. Internet mais confiável.”</span><span>DNS Center v1.0 <i></i> {{ auth()->user()->currentOrganization?->name ?? config('app.name') }}</span></footer>
+        <footer class="dashboard-footer"><span>“DNS estável. Internet mais confiável.”</span><span>DNS Center v{{ config('app.release') }} <i></i> {{ auth()->user()->currentOrganization?->name ?? config('app.name') }}</span></footer>
     </main>
 </div>
 @endsection

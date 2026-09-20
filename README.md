@@ -343,7 +343,7 @@ em produção. As evidências e limitações estão em
 | [Release 1.3.48](docs/RELEASE_1.3.48.md) | Bloqueio de agentes órfãos na API e no firewall, visível no painel |
 | [Release 1.3.49](docs/RELEASE_1.3.49.md) | Agent 0.13.0 observa a tabela de firewall gerenciada em modo somente leitura |
 | [Release 1.3.50](docs/RELEASE_1.3.50.md) | Dashboard ignora servidores desativados e usa indicadores semânticos de sucesso/alerta |
-| [Release 1.3.51](docs/RELEASE_1.3.51.md) | Serial mismatch usa sucesso verde quando não há divergências e alerta quando necessário |
+| [Release 1.3.51](docs/RELEASE_1.3.51.md) | Serial mismatch usa estado semântico e o rodapé acompanha automaticamente a release implantada |
 | [Homologação do firewall — Fase 1](docs/HOMOLOGACAO_FIREWALL_FASE_1.md) | Roteiro seguro e critérios de aprovação em servidor não crítico |
 | [Operação Cliente Exemplo — 18/09/2026](docs/OPERACAO_CLIENTE_EXEMPLO_2026_09_18.md) | Adoção das zonas reversas do dns-primary/secondary, runbook e pendências |
 
