@@ -282,7 +282,9 @@ class DnsAuthoritativeObservationTest extends TestCase
             ->assertSee('data-authoritative-counter="zonas-sincronizadas"', false)
             ->assertSee('data-authoritative-counter="zonas-divergentes"', false)
             ->assertSee('data-authoritative-value="1"', false)
-            ->assertSee('data-authoritative-value="0"', false);
+            ->assertSee('data-authoritative-value="0"', false)
+            ->assertSee('dashboard-authoritative-online', false)
+            ->assertSee('Sem serial mismatch');
 
         DnsAuthoritativeObservation::query()
             ->where('dns_zone_id', $zone->id)
