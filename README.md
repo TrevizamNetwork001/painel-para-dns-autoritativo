@@ -276,6 +276,7 @@ em produção. As evidências e limitações estão em
 
 | Documento | Conteúdo |
 | --- | --- |
+| [Pendências técnicas conhecidas](docs/KNOWN_ISSUES.md) | Falhas confirmadas, impacto, contorno e critérios para correção futura |
 | [API do agente](docs/AGENT_API.md) | Enrollment, autenticação e contrato operacional do agente |
 | [Operação segura do agente](docs/BIND_AGENT_OPERATIONS.md) | Download, validação, aplicação e rollback local |
 | [Núcleo autoritativo](docs/BIND_AUTHORITATIVE.md) | Modelo de zonas, registros, versões e publicações |
