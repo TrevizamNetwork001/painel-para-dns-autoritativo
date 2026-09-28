@@ -9,6 +9,7 @@ use App\Models\DnsRecord;
 use App\Models\DnsServer;
 use App\Models\DnsZone;
 use App\Services\DnsBindDiscoveryDivergence;
+use App\Support\DnsRecordCanonicalizer;
 use App\Support\SecurityAuditLogger;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -401,13 +402,9 @@ class DnsBindDiscoveryController extends Controller
             return [$content, null];
         }
 
-        $parts = preg_split('/\s+/', trim($content), 2);
+        [$priority, $host] = DnsRecordCanonicalizer::splitMxContent($content);
 
-        if (count($parts) === 2 && ctype_digit($parts[0])) {
-            return [$parts[1], (int) $parts[0]];
-        }
-
-        return [$content, 10];
+        return [$host, $priority];
     }
 
     private function auditImport(Request $request, DnsBindDiscoveredZone $discovered, string $event, string $result): void

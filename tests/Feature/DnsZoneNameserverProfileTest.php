@@ -99,10 +99,15 @@ class DnsZoneNameserverProfileTest extends TestCase
         $this->assertDatabaseMissing('dns_records', ['content' => 'ns-antigo2.legado.example.']);
         $this->assertDatabaseMissing('dns_records', ['content' => 'ns-antigo3.legado.example.']);
 
+        // Grafia de entrada era FQDN com ponto final ("filial.<zona>." /
+        // "ns.filial.example."), mas todo registro NS é canonizado ao ser
+        // salvo (DnsRecordCanonicalizer, DISC-001): a delegação de subdomínio
+        // sobrevive (não é apagada pela sincronização do apex), só que já na
+        // forma canônica, sem ponto final.
         $this->assertDatabaseHas('dns_records', [
             'dns_zone_id' => $zone->id,
-            'name' => 'filial.'.$zone->name.'.',
-            'content' => 'ns.filial.example.',
+            'name' => 'filial.'.$zone->name,
+            'content' => 'ns.filial.example',
         ]);
     }
 

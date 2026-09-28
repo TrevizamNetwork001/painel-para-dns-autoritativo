@@ -10,6 +10,7 @@ use App\Models\DnsBindOperation;
 use App\Models\DnsBindOperationEvent;
 use App\Models\DnsRecord;
 use App\Models\DnsZone;
+use App\Support\DnsRecordCanonicalizer;
 use App\Support\SecurityAuditLogger;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -653,11 +654,61 @@ class DnsBindRuntimeController extends Controller
             return 'imported';
         }
 
-        $recordCount = is_array($zone['records']) ? count($zone['records']) : null;
         $sameSerial = $zone['serial'] !== null && (int) $zone['serial'] === (int) $existing->serial;
-        $sameCount = $recordCount !== null && $recordCount === $existing->records()->count();
 
-        return ($sameSerial && $sameCount) ? 'exists' : 'conflict';
+        if (! $sameSerial) {
+            return 'conflict';
+        }
+
+        // Contagem/linha bruta falha com falso conflito quando o banco acumulou
+        // a mesma informação em grafias equivalentes (com/sem ponto final,
+        // maiúsculas) — DISC-001. Compara os dois lados pelo CONJUNTO de formas
+        // canônicas (sem repetição): uma linha duplicada só por grafia não muda
+        // o que de fato é servido, então não deve, sozinha, virar "conflito" —
+        // ela continua sinalizada para limpeza pelo comando de reconciliação.
+        $discoveredKeys = $this->canonicalRecordKeySet(is_array($zone['records']) ? $zone['records'] : []);
+        $existingKeys = $this->canonicalRecordKeySet(
+            $existing->records()
+                ->get(['type', 'name', 'content', 'priority'])
+                ->map(fn (DnsRecord $record): array => [
+                    'type' => $record->type,
+                    'name' => $record->name,
+                    'content' => $record->content,
+                    'priority' => $record->priority,
+                ])
+                ->all(),
+        );
+
+        return $discoveredKeys === $existingKeys ? 'exists' : 'conflict';
+    }
+
+    /**
+     * @param  list<array<string, mixed>>  $records
+     * @return list<string> chaves canônicas únicas, ordenadas (comparação como conjunto)
+     */
+    private function canonicalRecordKeySet(array $records): array
+    {
+        $keys = [];
+
+        foreach ($records as $record) {
+            if (! is_array($record) || ! is_string($record['type'] ?? null) || ! is_string($record['name'] ?? null)) {
+                continue;
+            }
+
+            $priority = $record['priority'] ?? null;
+
+            $keys[] = DnsRecordCanonicalizer::comparisonKey(
+                $record['type'],
+                $record['name'],
+                is_string($record['content'] ?? null) ? $record['content'] : '',
+                is_int($priority) ? $priority : null,
+            );
+        }
+
+        $keys = array_values(array_unique($keys));
+        sort($keys);
+
+        return $keys;
     }
 
     private function sanitize(?string $value): ?string

@@ -11,6 +11,7 @@ use App\Models\Organization;
 use App\Models\SecurityAudit;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Tests\TestCase;
 
@@ -85,6 +86,123 @@ class DnsBindDiscoveryTest extends TestCase
         $this->assertSame('secondary_external', $states['secondary.example.com']);
         $this->assertSame('not_supported', $states['unsupported.example.com']);
         $this->assertContains($states['existing.example.com'], ['exists', 'conflict']);
+    }
+
+    public function test_grafia_only_duplicates_no_longer_cause_a_false_conflict(): void
+    {
+        // Reprodução literal do DISC-001: 14 registros descobertos no BIND
+        // (canônicos) contra 18 linhas no painel, sendo 4 duplicatas que só
+        // divergem por maiúsculas/ponto final (A/AAAA de ns1 e ns2). Inserido
+        // via DB::table para simular dado legado anterior à canonização no
+        // modelo — Eloquent hoje não deixaria essas duplicatas nascerem.
+        $context = $this->context();
+        $operation = $this->authorizedDiscoveryOperation($context);
+
+        $zone = DnsZone::query()->create($this->zoneAttributes($context, 'disc001.example.com', [
+            'serial' => 2026091807,
+        ]));
+
+        $clean = [
+            ['name' => 'disc001.example.com', 'type' => 'NS', 'content' => 'ns1.disc001.example.com', 'priority' => null],
+            ['name' => 'disc001.example.com', 'type' => 'NS', 'content' => 'ns2.disc001.example.com', 'priority' => null],
+            ['name' => 'ns1.disc001.example.com', 'type' => 'A', 'content' => '198.51.100.10', 'priority' => null],
+            ['name' => 'ns2.disc001.example.com', 'type' => 'A', 'content' => '198.51.100.11', 'priority' => null],
+        ];
+        // Só o NOME diverge (maiúsculas + ponto final) — o conteúdo é idêntico ao
+        // canônico, exatamente como no caso real (DISC-001 não é sobre o IP, é
+        // sobre o nome do dono do registro).
+        $dirtyDuplicates = [
+            ['name' => 'NS1.disc001.example.com.', 'type' => 'A', 'content' => '198.51.100.10', 'priority' => null],
+            ['name' => 'NS2.disc001.example.com.', 'type' => 'A', 'content' => '198.51.100.11', 'priority' => null],
+            ['name' => 'NS1.disc001.example.com.', 'type' => 'AAAA', 'content' => '2001:db8::10', 'priority' => null],
+            ['name' => 'NS2.disc001.example.com.', 'type' => 'AAAA', 'content' => '2001:db8::11', 'priority' => null],
+        ];
+        $cleanAaaa = [
+            ['name' => 'ns1.disc001.example.com', 'type' => 'AAAA', 'content' => '2001:db8::10', 'priority' => null],
+            ['name' => 'ns2.disc001.example.com', 'type' => 'AAAA', 'content' => '2001:db8::11', 'priority' => null],
+        ];
+
+        $now = now();
+
+        foreach (array_merge($clean, $cleanAaaa, $dirtyDuplicates) as $record) {
+            DB::table('dns_records')->insert(array_merge($record, [
+                'organization_id' => $context['organization']->id,
+                'dns_zone_id' => $zone->id,
+                'ttl' => 3600,
+                'enabled' => true,
+                'created_at' => $now,
+                'updated_at' => $now,
+            ]));
+        }
+
+        $this->assertSame(10, $zone->records()->count(), 'pré-condição: 6 canônicos + 4 duplicatas só por grafia');
+
+        // No payload bruto do agente (antes da sanitização em sanitizeDiscoveredRecord)
+        // o conteúdo do registro chega como "rdata", não "content".
+        $discoveredRecords = array_map(
+            fn (array $record) => ['name' => $record['name'], 'ttl' => 3600, 'type' => $record['type'], 'rdata' => $record['content']],
+            array_merge($clean, $cleanAaaa),
+        );
+
+        $this->markOperationRunning($operation, $context['token']);
+
+        $this->withToken($context['token'])->postJson(
+            route('api.agent.bind.operations.report', $operation),
+            $this->reportDiscoveryPayload($operation, 'succeeded', [
+                $this->sampleZone([
+                    'name' => 'disc001.example.com',
+                    'serial' => 2026091807,
+                    'records' => $discoveredRecords,
+                ]),
+            ]),
+        )->assertOk();
+
+        $state = DnsBindDiscoveredZone::query()
+            ->where('dns_bind_operation_id', $operation->id)
+            ->where('name', 'disc001.example.com')
+            ->value('comparison_state');
+
+        $this->assertSame('exists', $state);
+    }
+
+    public function test_serial_matches_but_content_genuinely_differs_still_flags_conflict(): void
+    {
+        $context = $this->context();
+        $operation = $this->authorizedDiscoveryOperation($context);
+
+        $zone = DnsZone::query()->create($this->zoneAttributes($context, 'real-conflict.example.com', [
+            'serial' => 2026091900,
+        ]));
+        $zone->records()->create([
+            'organization_id' => $context['organization']->id,
+            'name' => 'real-conflict.example.com',
+            'type' => 'A',
+            'content' => '198.51.100.10',
+            'enabled' => true,
+        ]);
+
+        $this->markOperationRunning($operation, $context['token']);
+
+        $this->withToken($context['token'])->postJson(
+            route('api.agent.bind.operations.report', $operation),
+            $this->reportDiscoveryPayload($operation, 'succeeded', [
+                $this->sampleZone([
+                    'name' => 'real-conflict.example.com',
+                    'serial' => 2026091900,
+                    'records' => [
+                        // IP diferente do que está no banco: divergência real, não de grafia.
+                        ['name' => 'real-conflict.example.com.', 'ttl' => 3600, 'type' => 'A', 'rdata' => '198.51.100.99'],
+                    ],
+                ]),
+            ]),
+        )->assertOk();
+
+        $state = DnsBindDiscoveredZone::query()
+            ->where('dns_bind_operation_id', $operation->id)
+            ->where('name', 'real-conflict.example.com')
+            ->value('comparison_state');
+
+        $this->assertSame('conflict', $state);
     }
 
     public function test_repeated_report_with_same_event_in_same_second_is_idempotent(): void
