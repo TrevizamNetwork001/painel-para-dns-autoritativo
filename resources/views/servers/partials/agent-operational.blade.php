@@ -161,6 +161,19 @@
             <div><dt>Agente</dt><dd data-agent-upgrade-card-version>{{ $agentVersion }}</dd></div><div><dt>BIND</dt><dd>{{ $bindVersion }}</dd></div>
             <div><dt>Listeners</dt><dd>TCP 53 {{ $tcpReady ? '✓' : '—' }} · UDP 53 {{ $udpReady ? '✓' : '—' }}</dd></div><div><dt>Readiness</dt><dd>{{ strtoupper($readinessState) }}</dd></div>
         </dl>
+        @if ($server->agent_status === 'online')
+            <button
+                type="button"
+                class="button button-secondary"
+                data-bind-log-open
+                data-bind-log-store-url="{{ route('servers.bind.log.store', $server) }}"
+                data-bind-log-status-url-template="{{ route('servers.bind.log.status', [$server, 'OPERATION_ID']) }}"
+                data-bind-log-csrf="{{ csrf_token() }}"
+                style="margin-top: 0.75rem;"
+            >
+                Ver últimas linhas do log do BIND
+            </button>
+        @endif
     </article>
 </section>
 

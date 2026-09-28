@@ -8,6 +8,7 @@ use App\Http\Controllers\DnsAgentEnrollmentController;
 use App\Http\Controllers\DnsAgentInstallAssignmentController;
 use App\Http\Controllers\DnsAuditLogController;
 use App\Http\Controllers\DnsBindApplyController;
+use App\Http\Controllers\DnsBindDiagnosticsController;
 use App\Http\Controllers\DnsBindDiscoveryController;
 use App\Http\Controllers\DnsBindLegacyZoneBlockController;
 use App\Http\Controllers\DnsNameserverController;
@@ -370,6 +371,26 @@ Route::middleware([
         '/servidores/{server}/bind/remover-bloco-legado/{operation}/status',
         [DnsBindLegacyZoneBlockController::class, 'status'],
     )->name('servers.bind.legacy-block.status');
+
+    Route::post(
+        '/servidores/{server}/bind/log',
+        [DnsBindDiagnosticsController::class, 'storeLog'],
+    )->middleware('throttle:5,1')->name('servers.bind.log.store');
+
+    Route::get(
+        '/servidores/{server}/bind/log/{operation}/status',
+        [DnsBindDiagnosticsController::class, 'logStatus'],
+    )->name('servers.bind.log.status');
+
+    Route::post(
+        '/servidores/{server}/bind/zonas/{zone}/retransferir',
+        [DnsBindDiagnosticsController::class, 'storeTransfer'],
+    )->middleware('throttle:5,1')->name('servers.bind.transfer.store');
+
+    Route::get(
+        '/servidores/{server}/bind/retransferir/{operation}/status',
+        [DnsBindDiagnosticsController::class, 'transferStatus'],
+    )->name('servers.bind.transfer.status');
 });
 
 Route::middleware([

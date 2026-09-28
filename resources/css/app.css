@@ -7033,6 +7033,8 @@ body.has-open-modal {
     box-shadow: 0 28px 90px rgba(0, 0, 0, 0.46);
 }
 
+.record-modal.record-modal-wide { width: min(100%, 920px); }
+
 .record-modal-header {
     display: flex;
     align-items: flex-start;

@@ -37,7 +37,7 @@ from email.utils import parsedate_to_datetime
 from pathlib import Path
 from typing import Any
 
-AGENT_VERSION = "0.13.0"
+AGENT_VERSION = "0.14.0"
 OFFICIAL_BASE_URL = "https://dnscenter.trevizamnetwork.com.br"
 DEFAULT_CONFIG = Path("/etc/dns-center-agent/agent.json")
 DEFAULT_STATE_DIR = Path("/var/lib/dns-center-agent")
@@ -3146,6 +3146,8 @@ SUPPORTED_OPERATION_ACTIONS = {
     "upgrade_agent",
     "apply_zones",
     "remove_legacy_zone_block",
+    "tail_bind_log",
+    "force_zone_transfer",
 }
 
 
@@ -3173,6 +3175,14 @@ def execute_authorized_operation(
             if not isinstance(params, dict):
                 raise AgentError("Parâmetros de remoção ausentes.")
             return remove_legacy_zone_block(config, params)
+        if action == "tail_bind_log":
+            params = operation.get("params") if isinstance(operation.get("params"), dict) else {}
+            return tail_bind_log(config, int(params.get("lines", 200)))
+        if action == "force_zone_transfer":
+            params = operation.get("params")
+            if not isinstance(params, dict):
+                raise AgentError("Parâmetros de transferência ausentes.")
+            return force_zone_transfer(config, params)
         return configure_bind(action)
 
 
@@ -4379,6 +4389,113 @@ def bind_recent_events(config: dict[str, Any]) -> str:
         timeout=15,
     )
     return result.stdout if result.returncode == 0 else ""
+
+
+# Bytes ample for ~200 short-iso BIND journal lines without truncating —
+# separate from bind_recent_events()'s internal 8000-byte default (tuned for
+# that function's own short-snippet use in status computation, not a viewer).
+TAIL_LOG_MAX_BYTES = 200_000
+
+
+def tail_bind_log(config: dict[str, Any], lines: int = 200) -> dict[str, Any]:
+    """Somente leitura: as últimas linhas do log do BIND (journalctl), para o
+    painel mostrar sem precisar de SSH. Nunca escreve, nunca reinicia nada.
+    """
+    journalctl = detected_binary(("/usr/bin/journalctl", "/bin/journalctl"))
+
+    if not journalctl:
+        raise AgentError("journalctl não foi detectado neste servidor.")
+
+    family = os_family()
+    service = (
+        bind_service_name(family) if family in {"debian", "rhel"} else "named"
+    )
+    lines = max(1, min(int(lines), 1000))
+
+    result = run_command(
+        [
+            journalctl,
+            "--unit",
+            service,
+            "--no-pager",
+            "--lines",
+            str(lines),
+            "--output",
+            "short-iso",
+        ],
+        timeout=20,
+        max_output_bytes=TAIL_LOG_MAX_BYTES,
+    )
+
+    if result.returncode != 0:
+        raise AgentError(
+            "Falha ao ler o journal do BIND: "
+            f"{sanitize_message(result.stderr or result.stdout)}"
+        )
+
+    # Sanitiza CADA linha (não o blob inteiro): o regex de "token/secret/..."
+    # consome o resto da linha ao encontrar o rótulo — aplicado ao blob
+    # inteiro, uma única ocorrência no meio do log apagaria todo o restante.
+    sanitized_lines = [
+        sanitize_message(line) for line in result.stdout.splitlines() if line.strip()
+    ]
+
+    return {
+        "unit": service,
+        "lines": sanitized_lines,
+        "truncated": bool(getattr(result, "stdout_truncated", False)),
+        "requested_lines": lines,
+    }
+
+
+def force_zone_transfer(config: dict[str, Any], params: dict[str, Any]) -> dict[str, Any]:
+    """Pede ao BIND para transferir a zona de novo agora (rndc retransfer),
+    em vez de esperar o próximo refresh natural — para destravar um
+    secundário atrasado. Não altera named.conf nem nenhum arquivo; é a mesma
+    operação de rede que o BIND já faz sozinho periodicamente.
+    """
+    if os.geteuid() != 0:
+        raise AgentError("Forçar transferência exige execução como root.")
+
+    zone_name = params.get("zone_name")
+
+    if not isinstance(zone_name, str) or not re.match(
+        r"^[A-Za-z0-9_](?:[A-Za-z0-9_.-]{0,253})$", zone_name
+    ):
+        raise AgentError("Nome de zona inválido ou ausente.")
+
+    rndc = command_path(config, "rndc", "/usr/sbin/rndc")
+
+    before = run_command([rndc, "zonestatus", zone_name], timeout=15)
+
+    if before.returncode != 0:
+        raise AgentError(
+            f"Zona '{zone_name}' não encontrada neste servidor "
+            f"({sanitize_message(before.stderr or before.stdout)})."
+        )
+
+    retransfer = run_command([rndc, "retransfer", zone_name], timeout=15)
+
+    if retransfer.returncode != 0:
+        raise AgentError(
+            "rndc retransfer falhou: "
+            f"{sanitize_message(retransfer.stderr or retransfer.stdout)}"
+        )
+
+    # A transferência acontece em segundo plano no BIND; espera um pouco
+    # antes de reportar o estado resultante, sem bloquear demais o agente.
+    time.sleep(3)
+
+    after = run_command([rndc, "zonestatus", zone_name], timeout=15)
+    facts = parse_rndc_zonestatus(after.stdout) if after.returncode == 0 else {}
+
+    return {
+        "requested": True,
+        "zone_name": zone_name,
+        "serial_before": parse_rndc_zonestatus(before.stdout).get("observed_serial"),
+        "serial_after": facts.get("observed_serial"),
+        "zone_state": facts.get("zone_state"),
+    }
 
 
 def journal_event_time(lines: str, terms: tuple[str, ...]) -> str | None:

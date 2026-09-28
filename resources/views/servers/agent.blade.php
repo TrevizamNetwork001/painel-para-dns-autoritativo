@@ -465,6 +465,126 @@
         </section>
     </div>
 
+    <div class="record-modal-backdrop" data-bind-log-modal aria-hidden="true">
+        <section class="record-modal record-modal-wide" role="dialog" aria-modal="true" aria-labelledby="bind-log-modal-title">
+            <header class="record-modal-header">
+                <div>
+                    <p class="eyebrow">Somente leitura</p>
+                    <h2 id="bind-log-modal-title">Log do BIND — {{ $server->name }}</h2>
+                    <p>Últimas linhas do journal do serviço BIND deste servidor. Nada é alterado.</p>
+                </div>
+                <button type="button" class="record-modal-close" data-bind-log-close aria-label="Fechar">×</button>
+            </header>
+            <div class="domain-publication-action" style="padding: 1.2rem;">
+                <p data-bind-log-state>Carregando…</p>
+                <pre class="apply-zones-diagnostics" data-bind-log-lines style="max-height: 420px; overflow: auto;" hidden></pre>
+                <div data-bind-log-close-actions hidden>
+                    <button type="button" class="button button-secondary" data-bind-log-close>Fechar</button>
+                </div>
+            </div>
+        </section>
+    </div>
+
+    <script nonce="{{ $cspNonce ?? '' }}">
+        (() => {
+            const openButton = document.querySelector('[data-bind-log-open]');
+            const modal = document.querySelector('[data-bind-log-modal]');
+            if (!openButton || !modal) return;
+
+            const stateText = modal.querySelector('[data-bind-log-state]');
+            const linesBox = modal.querySelector('[data-bind-log-lines]');
+            const closeActions = modal.querySelector('[data-bind-log-close-actions]');
+            let pollTimer = null;
+
+            const open = () => {
+                modal.classList.add('is-open');
+                modal.setAttribute('aria-hidden', 'false');
+                document.body.classList.add('has-open-modal');
+            };
+
+            const close = () => {
+                window.clearTimeout(pollTimer);
+                modal.classList.remove('is-open');
+                modal.setAttribute('aria-hidden', 'true');
+                document.body.classList.remove('has-open-modal');
+            };
+
+            const poll = async (statusUrl) => {
+                let payload;
+
+                try {
+                    const response = await fetch(statusUrl, { headers: { Accept: 'application/json' } });
+                    payload = await response.json();
+                } catch (error) {
+                    pollTimer = window.setTimeout(() => poll(statusUrl), 3000);
+                    return;
+                }
+
+                if (payload.status === 'succeeded') {
+                    const lines = payload.result?.lines || [];
+                    stateText.textContent = lines.length > 0
+                        ? `${lines.length} linha(s)${payload.result?.truncated ? ' (log maior que o exibido)' : ''}.`
+                        : 'Nenhuma linha recente encontrada.';
+                    if (lines.length > 0) {
+                        linesBox.textContent = lines.join('\n');
+                        linesBox.hidden = false;
+                        linesBox.scrollTop = linesBox.scrollHeight;
+                    }
+                    closeActions.hidden = false;
+                    return;
+                }
+
+                if (payload.status === 'failed' || payload.status === 'expired') {
+                    stateText.textContent = payload.error || 'Não foi possível ler o log.';
+                    closeActions.hidden = false;
+                    return;
+                }
+
+                stateText.textContent = 'Aguardando o agente…';
+                pollTimer = window.setTimeout(() => poll(statusUrl), 3000);
+            };
+
+            openButton.addEventListener('click', async () => {
+                stateText.textContent = 'Solicitando ao agente…';
+                linesBox.hidden = true;
+                closeActions.hidden = true;
+                open();
+
+                try {
+                    const response = await fetch(openButton.dataset.bindLogStoreUrl, {
+                        method: 'POST',
+                        headers: {
+                            Accept: 'application/json',
+                            'Content-Type': 'application/json',
+                            'X-CSRF-TOKEN': openButton.dataset.bindLogCsrf,
+                        },
+                    });
+                    const payload = await response.json().catch(() => ({}));
+
+                    if (!response.ok || !payload.ok) {
+                        stateText.textContent = payload.message || 'Não foi possível solicitar o log.';
+                        closeActions.hidden = false;
+                        return;
+                    }
+
+                    const statusUrl = openButton.dataset.bindLogStatusUrlTemplate.replace('OPERATION_ID', payload.operation_id);
+                    poll(statusUrl);
+                } catch (error) {
+                    stateText.textContent = 'Não foi possível conectar ao painel.';
+                    closeActions.hidden = false;
+                }
+            });
+
+            modal.querySelectorAll('[data-bind-log-close]').forEach((button) => {
+                button.addEventListener('click', close);
+            });
+
+            modal.addEventListener('click', (event) => {
+                if (event.target === modal) close();
+            });
+        })();
+    </script>
+
     <script nonce="{{ $cspNonce ?? '' }}">
         (() => {
             const watcher = document.querySelector('[data-agent-install-request-watcher]');

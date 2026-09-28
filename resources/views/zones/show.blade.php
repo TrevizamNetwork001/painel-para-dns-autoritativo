@@ -1479,6 +1479,28 @@
                             </div>
                         </dl>
 
+                        @if ($canManageDomain && $secondaryServer)
+                            <div class="domain-publication-action" data-transfer-action>
+                                <button
+                                    type="button"
+                                    class="button button-secondary"
+                                    data-force-transfer-open
+                                    data-force-transfer-server-name="{{ $secondaryServer->name }}"
+                                    data-force-transfer-store-url="{{ route('servers.bind.transfer.store', [$secondaryServer, $zone]) }}"
+                                    data-force-transfer-status-url-template="{{ route('servers.bind.transfer.status', [$secondaryServer, 'OPERATION_ID']) }}"
+                                    data-force-transfer-csrf="{{ csrf_token() }}"
+                                >
+                                    Forçar transferência em {{ $secondaryServer->name }}
+                                </button>
+
+                                <small>
+                                    Pede ao secundário para buscar a zona de novo agora,
+                                    em vez de esperar o próximo refresh natural. Não altera
+                                    nenhuma configuração.
+                                </small>
+                            </div>
+                        @endif
+
                         @if ($canManageDomain)
                             @php
                                 $pendingTargets = $publicationTargets
@@ -1852,6 +1874,44 @@
                     >
                         Confirmar aplicação
                     </button>
+                </div>
+            </div>
+        </section>
+    </div>
+@endif
+
+@if ($canManageDomain && $secondaryServer)
+    <div class="record-modal-backdrop" data-force-transfer-modal aria-hidden="true">
+        <section class="record-modal" role="dialog" aria-modal="true" aria-labelledby="force-transfer-modal-title">
+            <header class="record-modal-header">
+                <div>
+                    <p class="eyebrow">Transferência de zona</p>
+
+                    <h2 id="force-transfer-modal-title">
+                        Forçar transferência em <span data-force-transfer-server-label></span>
+                    </h2>
+
+                    <p>
+                        Pede ao BIND deste servidor (<code>rndc retransfer</code>) para
+                        buscar a zona de novo agora, em vez de esperar o próximo refresh
+                        natural. Não altera nenhum arquivo de configuração — é a mesma
+                        transferência de rede que o BIND já faz sozinho periodicamente.
+                    </p>
+                </div>
+
+                <button type="button" class="record-modal-close" data-force-transfer-close aria-label="Fechar">×</button>
+            </header>
+
+            <div class="domain-publication-action" style="padding: 1.2rem;">
+                <p data-force-transfer-state></p>
+
+                <div data-force-transfer-confirm-actions>
+                    <button type="button" class="button button-secondary" data-force-transfer-close>Cancelar</button>
+                    <button type="button" class="button button-primary" data-force-transfer-confirm>Forçar agora</button>
+                </div>
+
+                <div data-force-transfer-close-actions hidden>
+                    <button type="button" class="button button-secondary" data-force-transfer-close>Fechar</button>
                 </div>
             </div>
         </section>
@@ -3179,6 +3239,117 @@ document.addEventListener('DOMContentLoaded', () => {
 
         statusText.textContent = 'Declarações antigas removidas. Publicando…';
         submitPublish();
+    });
+});
+</script>
+
+<script nonce="{{ $cspNonce ?? '' }}">
+document.addEventListener('DOMContentLoaded', () => {
+    const openButton = document.querySelector('[data-force-transfer-open]');
+    const modal = document.querySelector('[data-force-transfer-modal]');
+    if (!openButton || !modal) return;
+
+    const label = modal.querySelector('[data-force-transfer-server-label]');
+    const stateText = modal.querySelector('[data-force-transfer-state]');
+    const confirmActions = modal.querySelector('[data-force-transfer-confirm-actions]');
+    const confirmButton = modal.querySelector('[data-force-transfer-confirm]');
+    const closeActions = modal.querySelector('[data-force-transfer-close-actions]');
+    let pollTimer = null;
+
+    const open = () => {
+        modal.classList.add('is-open');
+        modal.setAttribute('aria-hidden', 'false');
+        document.body.classList.add('has-open-modal');
+    };
+
+    const close = () => {
+        window.clearTimeout(pollTimer);
+        modal.classList.remove('is-open');
+        modal.setAttribute('aria-hidden', 'true');
+        document.body.classList.remove('has-open-modal');
+    };
+
+    const confirming = () => {
+        stateText.textContent = 'Confirma pedir a transferência agora?';
+        confirmActions.hidden = false;
+        closeActions.hidden = true;
+        confirmButton.disabled = false;
+    };
+
+    const poll = async (statusUrl) => {
+        let payload;
+
+        try {
+            const response = await fetch(statusUrl, { headers: { Accept: 'application/json' } });
+            payload = await response.json();
+        } catch (error) {
+            pollTimer = window.setTimeout(() => poll(statusUrl), 4000);
+            return;
+        }
+
+        if (payload.status === 'succeeded') {
+            const result = payload.result || {};
+            const before = result.serial_before ?? '?';
+            const after = result.serial_after ?? '?';
+            stateText.textContent = after !== before
+                ? `Transferência concluída. Serial: ${before} → ${after}.`
+                : `Transferência pedida. Serial continua ${after} (pode já estar em dia, ou o BIND ainda está transferindo — tente de novo em alguns segundos se precisar).`;
+            closeActions.hidden = false;
+            return;
+        }
+
+        if (payload.status === 'failed' || payload.status === 'expired') {
+            stateText.textContent = payload.error || 'Não foi possível transferir a zona.';
+            closeActions.hidden = false;
+            return;
+        }
+
+        stateText.textContent = 'Solicitação enviada. Aguardando o agente…';
+        pollTimer = window.setTimeout(() => poll(statusUrl), 4000);
+    };
+
+    confirmButton.addEventListener('click', async () => {
+        confirmButton.disabled = true;
+        confirmActions.hidden = true;
+        stateText.textContent = 'Enviando solicitação…';
+
+        try {
+            const response = await fetch(openButton.dataset.forceTransferStoreUrl, {
+                method: 'POST',
+                headers: {
+                    Accept: 'application/json',
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': openButton.dataset.forceTransferCsrf,
+                },
+            });
+            const payload = await response.json().catch(() => ({}));
+
+            if (!response.ok || !payload.ok) {
+                stateText.textContent = payload.message || 'Não foi possível solicitar a transferência.';
+                closeActions.hidden = false;
+                return;
+            }
+
+            const statusUrl = openButton.dataset.forceTransferStatusUrlTemplate.replace('OPERATION_ID', payload.operation_id);
+            poll(statusUrl);
+        } catch (error) {
+            stateText.textContent = 'Não foi possível conectar ao painel.';
+            closeActions.hidden = false;
+        }
+    });
+
+    openButton.addEventListener('click', () => {
+        label.textContent = openButton.dataset.forceTransferServerName || '';
+        confirming();
+        open();
+    });
+
+    modal.querySelectorAll('[data-force-transfer-close]').forEach((button) => {
+        button.addEventListener('click', close);
+    });
+
+    modal.addEventListener('click', (event) => {
+        if (event.target === modal) close();
     });
 });
 </script>

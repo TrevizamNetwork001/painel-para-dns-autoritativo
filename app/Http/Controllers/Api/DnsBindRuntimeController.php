@@ -764,10 +764,26 @@ class DnsBindRuntimeController extends Controller
                 'end_line',
                 'backup_dir',
                 'zonefile_preserved',
+                'unit',
+                'lines',
+                'truncated',
+                'requested_lines',
+                'requested',
+                'serial_before',
+                'serial_after',
+                'zone_state',
             ])
             ->map(function ($value, $key) use ($pathBearingKeys) {
                 if ($key === 'diagnostics') {
                     return $this->sanitizeDiagnostics($value);
+                }
+
+                if ($key === 'lines') {
+                    // Cada linha já vem sanitizada pelo agente; sanitiza de novo aqui
+                    // por defesa em profundidade — nunca confiar cegamente no agente.
+                    return is_array($value)
+                        ? collect($value)->map(fn ($line) => is_string($line) ? $this->sanitize($line) : null)->filter()->values()->all()
+                        : [];
                 }
 
                 if (in_array($key, $pathBearingKeys, true)) {

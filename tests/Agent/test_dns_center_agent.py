@@ -801,6 +801,181 @@ class AgentTests(unittest.TestCase):
 
             self.assertIn("include gerenciado", str(raised.exception))
 
+    def test_tail_bind_log_returns_sanitized_lines_and_reports_the_unit(self) -> None:
+        config = self.config("/tmp")
+        raw = (
+            "2026-09-28T03:15:00+0000 host named[1]: general: info: "
+            "zone example.com/IN: loaded serial 2026092801\n"
+            "2026-09-28T03:15:01+0000 host named[1]: security: info: "
+            "client 192.0.2.1#5353: view internal: query: example.com IN A\n"
+        )
+
+        with patch.object(
+            agent, "detected_binary", return_value="/usr/bin/journalctl"
+        ), patch.object(agent, "os_family", return_value="debian"), patch.object(
+            agent,
+            "run_command",
+            return_value=Mock(
+                returncode=0, stdout=raw, stderr="", stdout_truncated=False
+            ),
+        ) as run_command:
+            result = agent.tail_bind_log(config, lines=50)
+
+        self.assertEqual("named", result["unit"])
+        self.assertFalse(result["truncated"])
+        self.assertEqual(2, len(result["lines"]))
+        self.assertIn("loaded serial 2026092801", result["lines"][0])
+
+        command = run_command.call_args.args[0]
+        self.assertEqual(
+            ["/usr/bin/journalctl", "--unit", "named", "--no-pager", "--lines", "50", "--output", "short-iso"],
+            command,
+        )
+        self.assertEqual(20, run_command.call_args.kwargs["timeout"])
+        self.assertEqual(
+            agent.TAIL_LOG_MAX_BYTES, run_command.call_args.kwargs["max_output_bytes"]
+        )
+
+    def test_tail_bind_log_sanitizes_a_leaked_secret_without_wiping_the_whole_line(
+        self,
+    ) -> None:
+        config = self.config("/tmp")
+        raw = (
+            "2026-09-28T03:15:00+0000 host named[1]: general: notice: "
+            'key "external-secondary" { secret "aGVsbG8gd29ybGQ="; }; loaded\n'
+        )
+
+        with patch.object(
+            agent, "detected_binary", return_value="/usr/bin/journalctl"
+        ), patch.object(agent, "os_family", return_value="debian"), patch.object(
+            agent,
+            "run_command",
+            return_value=Mock(
+                returncode=0, stdout=raw, stderr="", stdout_truncated=False
+            ),
+        ):
+            result = agent.tail_bind_log(config)
+
+        line = result["lines"][0]
+        self.assertNotIn("aGVsbG8gd29ybGQ=", line)
+        self.assertIn("[removido]", line)
+
+    def test_tail_bind_log_clamps_requested_line_count(self) -> None:
+        config = self.config("/tmp")
+
+        with patch.object(
+            agent, "detected_binary", return_value="/usr/bin/journalctl"
+        ), patch.object(agent, "os_family", return_value="debian"), patch.object(
+            agent,
+            "run_command",
+            return_value=Mock(
+                returncode=0, stdout="", stderr="", stdout_truncated=False
+            ),
+        ) as run_command:
+            agent.tail_bind_log(config, lines=999999)
+
+        command = run_command.call_args.args[0]
+        self.assertEqual("1000", command[command.index("--lines") + 1])
+
+    def test_tail_bind_log_raises_without_journalctl(self) -> None:
+        config = self.config("/tmp")
+
+        with patch.object(agent, "detected_binary", return_value=None):
+            with self.assertRaises(agent.AgentError):
+                agent.tail_bind_log(config)
+
+    def test_tail_bind_log_raises_on_journalctl_failure(self) -> None:
+        config = self.config("/tmp")
+
+        with patch.object(
+            agent, "detected_binary", return_value="/usr/bin/journalctl"
+        ), patch.object(agent, "os_family", return_value="debian"), patch.object(
+            agent,
+            "run_command",
+            return_value=Mock(
+                returncode=1,
+                stdout="",
+                stderr="Failed to add match: No such unit",
+                stdout_truncated=False,
+            ),
+        ):
+            with self.assertRaises(agent.AgentError) as raised:
+                agent.tail_bind_log(config)
+
+        self.assertIn("journal do BIND", str(raised.exception))
+
+    def test_force_zone_transfer_requires_root(self) -> None:
+        config = self.config("/tmp")
+
+        with patch.object(agent.os, "geteuid", return_value=1000):
+            with self.assertRaises(agent.AgentError):
+                agent.force_zone_transfer(config, {"zone_name": "example.com"})
+
+    def test_force_zone_transfer_rejects_invalid_zone_name(self) -> None:
+        config = self.config("/tmp")
+
+        with patch.object(agent.os, "geteuid", return_value=0):
+            for bad_name in ["", "-example.com", "example com", "rm -rf /", None, 123]:
+                with self.assertRaises(agent.AgentError):
+                    agent.force_zone_transfer(config, {"zone_name": bad_name})
+
+    def test_force_zone_transfer_runs_retransfer_shell_false_and_reports_serials(
+        self,
+    ) -> None:
+        config = self.config("/tmp")
+
+        zonestatus_calls = {"count": 0}
+
+        def fake_run_command(command, timeout=30, **kwargs):
+            if command[:2] == ["/usr/sbin/rndc", "zonestatus"]:
+                zonestatus_calls["count"] += 1
+                serial = 2026092801 if zonestatus_calls["count"] == 1 else 2026092802
+                return Mock(returncode=0, stdout=f"serial: {serial}\nstate: running\n", stderr="")
+            if command[:2] == ["/usr/sbin/rndc", "retransfer"]:
+                return Mock(returncode=0, stdout="", stderr="")
+            raise AssertionError(f"unexpected command: {' '.join(command)}")
+
+        with patch.object(agent.os, "geteuid", return_value=0), patch.object(
+            agent, "run_command", side_effect=fake_run_command
+        ), patch.object(agent.time, "sleep"):
+            result = agent.force_zone_transfer(config, {"zone_name": "example.com"})
+
+        self.assertTrue(result["requested"])
+        self.assertEqual("example.com", result["zone_name"])
+        self.assertEqual(2026092801, result["serial_before"])
+        self.assertEqual(2026092802, result["serial_after"])
+
+    def test_force_zone_transfer_fails_cleanly_for_unknown_zone(self) -> None:
+        config = self.config("/tmp")
+
+        with patch.object(agent.os, "geteuid", return_value=0), patch.object(
+            agent,
+            "run_command",
+            return_value=Mock(returncode=1, stdout="", stderr="not found"),
+        ):
+            with self.assertRaises(agent.AgentError) as raised:
+                agent.force_zone_transfer(config, {"zone_name": "example.com"})
+
+        self.assertIn("não encontrada", str(raised.exception))
+
+    def test_force_zone_transfer_reports_retransfer_command_failure(self) -> None:
+        config = self.config("/tmp")
+
+        def fake_run_command(command, timeout=30, **kwargs):
+            if command[:2] == ["/usr/sbin/rndc", "zonestatus"]:
+                return Mock(returncode=0, stdout="serial: 1\n", stderr="")
+            if command[:2] == ["/usr/sbin/rndc", "retransfer"]:
+                return Mock(returncode=1, stdout="", stderr="rejected")
+            raise AssertionError("unexpected command")
+
+        with patch.object(agent.os, "geteuid", return_value=0), patch.object(
+            agent, "run_command", side_effect=fake_run_command
+        ):
+            with self.assertRaises(agent.AgentError) as raised:
+                agent.force_zone_transfer(config, {"zone_name": "example.com"})
+
+        self.assertIn("retransfer falhou", str(raised.exception))
+
     def test_parse_rndc_zonestatus_normalizes_runtime_values(self) -> None:
         facts = agent.parse_rndc_zonestatus(
             "\n".join(
