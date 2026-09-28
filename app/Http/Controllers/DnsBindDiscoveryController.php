@@ -5,10 +5,12 @@ namespace App\Http\Controllers;
 use App\Models\DnsBindDiscoveredZone;
 use App\Models\DnsBindIgnoredZone;
 use App\Models\DnsBindOperation;
+use App\Models\DnsNameserverProfile;
 use App\Models\DnsRecord;
 use App\Models\DnsServer;
 use App\Models\DnsZone;
 use App\Services\DnsBindDiscoveryDivergence;
+use App\Services\DnsZoneNameserverSynchronizer;
 use App\Support\DnsRecordCanonicalizer;
 use App\Support\SecurityAuditLogger;
 use Illuminate\Http\JsonResponse;
@@ -16,6 +18,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
+use Illuminate\Validation\Rule;
 use Illuminate\View\View;
 
 class DnsBindDiscoveryController extends Controller
@@ -164,6 +167,17 @@ class DnsBindDiscoveryController extends Controller
             'summary' => $summary,
             'ignored' => $ignored,
             'divergence' => $divergence,
+            'publishServers' => DnsServer::query()
+                ->where('organization_id', $organizationId)
+                ->where('enabled', true)
+                ->orderBy('name')
+                ->get(['id', 'name', 'hostname']),
+            'nameserverProfiles' => DnsNameserverProfile::query()
+                ->where('organization_id', $organizationId)
+                ->where('enabled', true)
+                ->orderByDesc('is_default')
+                ->orderBy('name')
+                ->get(['id', 'name']),
         ]);
     }
 
@@ -195,27 +209,77 @@ class DnsBindDiscoveryController extends Controller
         ]);
     }
 
-    public function import(Request $request, DnsServer $server): RedirectResponse
+    public function import(Request $request, DnsServer $server, DnsZoneNameserverSynchronizer $nameservers): RedirectResponse
     {
         $organizationId = $this->authorizeServer($request, $server);
 
         $validated = $request->validate([
             'zone_ids' => ['required', 'array', 'min:1'],
             'zone_ids.*' => ['integer'],
+            // Opcionais: quando informados, cada zona importada já sai
+            // configurada e adotada (equivalente a fazer, para cada uma,
+            // Configuração → Salvar → Concluir adoção manualmente).
+            'nameserver_profile_id' => ['nullable', 'integer'],
+            'primary_server_id' => [
+                'nullable',
+                'integer',
+                'required_with:nameserver_profile_id',
+                Rule::exists('dns_servers', 'id')->where('organization_id', $organizationId),
+            ],
+            'secondary_server_id' => [
+                'nullable',
+                'integer',
+                'different:primary_server_id',
+                Rule::exists('dns_servers', 'id')->where('organization_id', $organizationId),
+            ],
         ]);
+
+        $nameserverProfile = null;
+
+        if (! empty($validated['nameserver_profile_id'])) {
+            $nameserverProfile = $nameservers->profileForOrganization(
+                (int) $validated['nameserver_profile_id'],
+                $organizationId,
+            );
+        }
 
         $batchId = (string) Str::uuid();
         $imported = 0;
+        $configured = 0;
         $skipped = 0;
 
         foreach ($validated['zone_ids'] as $zoneId) {
-            $outcome = $this->importOne($request, $server, $organizationId, (int) $zoneId, $batchId);
-            $outcome === 'imported' ? $imported++ : $skipped++;
+            $outcome = $this->importOne(
+                $request,
+                $server,
+                $organizationId,
+                (int) $zoneId,
+                $batchId,
+                $nameserverProfile,
+                isset($validated['primary_server_id']) ? (int) $validated['primary_server_id'] : null,
+                isset($validated['secondary_server_id']) ? (int) $validated['secondary_server_id'] : null,
+                $nameservers,
+            );
+
+            if ($outcome === 'imported_and_configured') {
+                $imported++;
+                $configured++;
+            } elseif ($outcome === 'imported') {
+                $imported++;
+            } else {
+                $skipped++;
+            }
+        }
+
+        $status = "Importação concluída: {$imported} zona(s) importada(s), {$skipped} ignorada(s).";
+
+        if ($configured > 0) {
+            $status .= " {$configured} já saíram configuradas e adotadas — falta só publicar.";
         }
 
         return redirect()
             ->route('servers.bind.discovery.show', $server)
-            ->with('status', "Importação concluída: {$imported} zona(s) importada(s), {$skipped} ignorada(s).");
+            ->with('status', $status);
     }
 
     public function ignore(Request $request, DnsServer $server): RedirectResponse
@@ -291,9 +355,23 @@ class DnsBindDiscoveryController extends Controller
         int $organizationId,
         int $discoveredZoneId,
         string $batchId,
+        ?DnsNameserverProfile $nameserverProfile,
+        ?int $primaryServerId,
+        ?int $secondaryServerId,
+        DnsZoneNameserverSynchronizer $nameservers,
     ): string {
         try {
-            return DB::transaction(function () use ($request, $server, $organizationId, $discoveredZoneId, $batchId): string {
+            return DB::transaction(function () use (
+                $request,
+                $server,
+                $organizationId,
+                $discoveredZoneId,
+                $batchId,
+                $nameserverProfile,
+                $primaryServerId,
+                $secondaryServerId,
+                $nameservers,
+            ): string {
                 $discovered = DnsBindDiscoveredZone::query()
                     ->whereKey($discoveredZoneId)
                     ->lockForUpdate()
@@ -387,7 +465,27 @@ class DnsBindDiscoveryController extends Controller
 
                 $this->auditImport($request, $discovered, 'dns.bind_zone_imported', 'success');
 
-                return 'imported';
+                if ($nameserverProfile === null || $primaryServerId === null) {
+                    return 'imported';
+                }
+
+                // Mesmos passos de "Configuração → Salvar" + "Concluir adoção" na
+                // tela da zona, aplicados aqui para poupar o clique-a-clique de
+                // adotar várias zonas do mesmo cliente/servidor de uma vez —
+                // reaproveita o mesmo synchronizer, sem lógica nova de escrita.
+                $servers = [$primaryServerId => ['role' => 'primary']];
+
+                if ($secondaryServerId !== null) {
+                    $servers[$secondaryServerId] = ['role' => 'secondary'];
+                }
+
+                $zone->servers()->sync($servers);
+                $nameservers->synchronize($zone, $nameserverProfile);
+                $zone->forceFill(['origin' => 'managed'])->save();
+
+                $this->auditImport($request, $discovered, 'dns.bind_zone_imported_and_configured', 'success');
+
+                return 'imported_and_configured';
             });
         } catch (\Throwable $exception) {
             report($exception);

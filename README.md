@@ -346,6 +346,7 @@ em produção. As evidências e limitações estão em
 | [Release 1.3.50](docs/RELEASE_1.3.50.md) | Dashboard ignora servidores desativados e usa indicadores semânticos de sucesso/alerta |
 | [Release 1.3.51](docs/RELEASE_1.3.51.md) | Serial mismatch usa estado semântico e o rodapé acompanha automaticamente a release implantada |
 | [Release 1.3.52](docs/RELEASE_1.3.52.md) | Corrige DISC-001: falso conflito de descoberta por grafia de nome DNS (canonização única no modelo + comando de reconciliação) |
+| [Release 1.3.53](docs/RELEASE_1.3.53.md) | Limpeza automática de disco (cron) e importar+configurar zonas em lote na descoberta |
 | [Homologação do firewall — Fase 1](docs/HOMOLOGACAO_FIREWALL_FASE_1.md) | Roteiro seguro e critérios de aprovação em servidor não crítico |
 | [Operação Cliente Exemplo — 18/09/2026](docs/OPERACAO_CLIENTE_EXEMPLO_2026_09_18.md) | Adoção das zonas reversas do dns-primary/secondary, runbook e pendências |
 

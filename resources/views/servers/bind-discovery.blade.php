@@ -190,6 +190,48 @@
 
                     <p class="bind-discovery-no-results" data-discovery-no-results hidden>Nenhuma zona corresponde à busca.</p>
 
+                    <div class="bind-discovery-batch-config">
+                        <p class="eyebrow">Importar e configurar em lote (opcional)</p>
+                        <p class="bind-discovery-note">
+                            Escolha aqui o perfil de nameservers e os servidores de publicação para
+                            aplicar às zonas selecionadas assim que forem importadas — poupa abrir
+                            cada uma depois em Configuração. Deixe em branco para só importar (fica
+                            do jeito de sempre, configurando zona por zona).
+                        </p>
+
+                        <div class="domain-form-grid">
+                            <label class="domain-field">
+                                <span>Perfil de nameservers</span>
+                                <select name="nameserver_profile_id" data-discovery-batch-profile>
+                                    <option value="">Não configurar agora</option>
+                                    @foreach ($nameserverProfiles as $profile)
+                                        <option value="{{ $profile->id }}">{{ $profile->name }}</option>
+                                    @endforeach
+                                </select>
+                            </label>
+
+                            <label class="domain-field">
+                                <span>Servidor principal</span>
+                                <select name="primary_server_id" data-discovery-batch-primary disabled>
+                                    <option value="">Selecione o servidor</option>
+                                    @foreach ($publishServers as $publishServer)
+                                        <option value="{{ $publishServer->id }}">{{ $publishServer->name }} — {{ $publishServer->hostname }}</option>
+                                    @endforeach
+                                </select>
+                            </label>
+
+                            <label class="domain-field">
+                                <span>Servidor secundário</span>
+                                <select name="secondary_server_id" data-discovery-batch-secondary disabled>
+                                    <option value="">Sem servidor secundário</option>
+                                    @foreach ($publishServers as $publishServer)
+                                        <option value="{{ $publishServer->id }}">{{ $publishServer->name }} — {{ $publishServer->hostname }}</option>
+                                    @endforeach
+                                </select>
+                            </label>
+                        </div>
+                    </div>
+
                     <div class="bind-discovery-footer">
                         <div>{{ $zones->links() }}</div>
                         <div class="bind-discovery-import-action">
@@ -305,6 +347,22 @@
             empty.hidden = visible > 0;
         });
         update();
+
+        const batchProfile = form.querySelector('[data-discovery-batch-profile]');
+        const batchPrimary = form.querySelector('[data-discovery-batch-primary]');
+        const batchSecondary = form.querySelector('[data-discovery-batch-secondary]');
+
+        if (batchProfile && batchPrimary && batchSecondary) {
+            const toggleBatchServers = () => {
+                const enabled = batchProfile.value !== '';
+                batchPrimary.disabled = !enabled;
+                batchPrimary.required = enabled;
+                batchSecondary.disabled = !enabled;
+                if (!enabled) batchPrimary.value = '';
+            };
+            batchProfile.addEventListener('change', toggleBatchServers);
+            toggleBatchServers();
+        }
     })();
 </script>
 @endif

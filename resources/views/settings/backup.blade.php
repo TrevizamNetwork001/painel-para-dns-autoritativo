@@ -144,6 +144,27 @@
             </article>
         @endif
 
+        @if ($disk)
+            <article class="panel">
+                <div class="compact-panel-heading">
+                    <p class="eyebrow">Servidor</p>
+                    <h2>
+                        Espaço em disco
+                        <span class="status-badge {{ $disk['used_percent'] >= 80 ? 'status-danger' : ($disk['used_percent'] >= 65 ? 'status-warning' : 'status-success') }}">
+                            {{ $disk['used_percent'] }}% em uso
+                        </span>
+                    </h2>
+
+                    <p class="page-description">
+                        {{ $disk['free_gb'] }} GB livres de {{ $disk['total_gb'] }} GB.
+                        Uma limpeza automática de imagens e cache Docker roda todo dia às 03:15
+                        (<code>deploy/disk-guard.sh</code>, log em <code>/var/log/dns-center-disk-guard.log</code>);
+                        acima de 80% vale olhar manualmente.
+                    </p>
+                </div>
+            </article>
+        @endif
+
         <article class="panel">
             <div class="compact-panel-heading">
                 <p class="eyebrow">Como funciona</p>

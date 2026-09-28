@@ -1,0 +1,4 @@
+# Limpa imagens/cache Docker acumulados e avisa se o disco continuar subindo
+# por outro motivo. Instalar em /etc/cron.d/dns-center-disk-guard (root:root,
+# modo 0644). Logs em /var/log/dns-center-disk-guard.log.
+15 3 * * * root /opt/dns-center/deploy/disk-guard.sh >> /var/log/dns-center-disk-guard.log 2>&1

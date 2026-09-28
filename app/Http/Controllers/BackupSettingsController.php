@@ -20,6 +20,7 @@ class BackupSettingsController extends Controller
         $settings = BackupR2Settings::get() ?? [];
 
         return view('settings.backup', [
+            'disk' => $this->diskUsage(),
             'configured' => BackupR2Settings::configured(),
             'settings' => [
                 'account_id' => $settings['account_id'] ?? '',
@@ -110,6 +111,25 @@ class BackupSettingsController extends Controller
             action: $action,
             recordName: 'Backup R2',
         );
+    }
+
+    /**
+     * @return array{total_gb: float, free_gb: float, used_percent: int}|null
+     */
+    private function diskUsage(): ?array
+    {
+        $total = @disk_total_space('/');
+        $free = @disk_free_space('/');
+
+        if ($total === false || $free === false || $total <= 0) {
+            return null;
+        }
+
+        return [
+            'total_gb' => round($total / 1024 / 1024 / 1024, 1),
+            'free_gb' => round($free / 1024 / 1024 / 1024, 1),
+            'used_percent' => (int) round((($total - $free) / $total) * 100),
+        ];
     }
 
     private function ensurePlatformAdmin(Request $request): void

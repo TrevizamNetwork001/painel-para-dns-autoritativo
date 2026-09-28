@@ -69,7 +69,11 @@ class DnsBindDiscoveryDivergenceTest extends TestCase
         $this->actingAs($context['admin'])
             ->get(route('servers.bind.discovery.show', $context['server']))
             ->assertOk()
-            ->assertDontSee('outro-cliente.example')
+            // Não usamos assertDontSee('outro-cliente.example') aqui: o seletor de
+            // "importar e configurar em lote" lista todos os servidores da empresa
+            // como destino de publicação (correto — qualquer servidor pode ser
+            // escolhido), e "ns1-outro-cliente.example" (hostname do servidor não
+            // relacionado) contém esse texto como substring por coincidência.
             ->assertDontSee('Ausente em ns1-outro-cliente')
             ->assertDontSee('Divergente');
     }

@@ -3538,6 +3538,9 @@ html[data-theme='light'] .users-modal-backdrop {
 .discovery-detail-link:hover { color: var(--accent); }
 td.discovery-actions { display: flex; align-items: center; gap: 0.75rem; white-space: nowrap; }
 button.discovery-detail-link { background: none; border: 0; padding: 0; cursor: pointer; font-family: inherit; }
+.bind-discovery-batch-config { margin: 1.1rem 1.2rem 0; padding: 0.9rem 1rem; border: 1px solid var(--border); border-radius: 0.7rem; background: var(--surface-soft); }
+.bind-discovery-batch-config .bind-discovery-note { margin: 0.2rem 0 0.75rem; }
+.bind-discovery-batch-config .domain-form-grid { grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
 .bind-discovery-footer { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: 1rem 1.2rem 0; }
 .bind-discovery-import-action { display: flex; align-items: center; gap: 0.85rem; }
 .bind-discovery-import-action > span { color: var(--text-muted); font-size: 0.72rem; }

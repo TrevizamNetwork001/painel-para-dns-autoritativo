@@ -5,6 +5,8 @@ namespace Tests\Feature;
 use App\Models\DnsAgent;
 use App\Models\DnsBindDiscoveredZone;
 use App\Models\DnsBindOperation;
+use App\Models\DnsNameserverIdentity;
+use App\Models\DnsNameserverProfile;
 use App\Models\DnsServer;
 use App\Models\DnsZone;
 use App\Models\Organization;
@@ -383,6 +385,129 @@ class DnsBindDiscoveryTest extends TestCase
         $record = $zone->records()->where('name', 'www')->firstOrFail();
         $this->assertSame(1800, $record->ttl);
         $this->assertSame('198.51.100.5', $record->content);
+    }
+
+    public function test_import_with_profile_and_servers_configures_and_adopts_in_one_step(): void
+    {
+        $context = $this->context();
+        $secondaryServer = DnsServer::factory()->create([
+            'organization_id' => $context['organization']->id,
+            'name' => 'secundario',
+        ]);
+        [$profile, $firstIdentity] = $this->nameserverProfile($context['organization']);
+
+        $discovered = $this->discoveredZone($context, [
+            'name' => 'lote.example.com',
+            'serial' => 2026091807,
+            'records' => [
+                ['name' => 'lote.example.com.', 'ttl' => 3600, 'type' => 'NS', 'content' => 'ns-antiga.legado.example.'],
+                ['name' => 'www', 'ttl' => 1800, 'type' => 'A', 'content' => '198.51.100.5'],
+            ],
+            'comparison_state' => 'new',
+        ]);
+
+        $response = $this->actingAs($context['admin'])
+            ->post(route('servers.bind.discovery.import', $context['server']), [
+                'zone_ids' => [$discovered->id],
+                'nameserver_profile_id' => $profile->id,
+                'primary_server_id' => $context['server']->id,
+                'secondary_server_id' => $secondaryServer->id,
+            ])
+            ->assertRedirect();
+
+        $response->assertSessionHas('status', fn (string $status) => str_contains($status, 'já saíram configuradas e adotadas'));
+
+        $zone = DnsZone::query()->where('name', 'lote.example.com')->firstOrFail();
+        $this->assertSame('managed', $zone->origin, 'zona configurada em lote já deve sair adotada');
+        $this->assertSame($profile->id, $zone->dns_nameserver_profile_id);
+
+        $roles = $zone->servers()->pluck('dns_server_zone.role', 'dns_servers.id');
+        $this->assertSame('primary', $roles[$context['server']->id]);
+        $this->assertSame('secondary', $roles[$secondaryServer->id]);
+
+        // Apex NS veio do perfil, não do legado descoberto (mesmo synchronizer já testado).
+        $this->assertDatabaseHas('dns_records', [
+            'dns_zone_id' => $zone->id,
+            'name' => $zone->name,
+            'type' => 'NS',
+            'content' => $firstIdentity->hostname,
+        ]);
+        $this->assertDatabaseMissing('dns_records', ['content' => 'ns-antiga.legado.example.']);
+
+        // Zona já adotada publica normalmente (ao contrário do import "só importar").
+        $this->actingAs($context['admin'])
+            ->post(route('zones.publish', $zone))
+            ->assertRedirect();
+    }
+
+    public function test_import_without_profile_still_just_imports_as_before(): void
+    {
+        $context = $this->context();
+        $discovered = $this->discoveredZone($context, [
+            'name' => 'so-importar.example.com',
+            'records' => [
+                ['name' => 'so-importar.example.com.', 'ttl' => 3600, 'type' => 'NS', 'content' => 'ns1.so-importar.example.com.'],
+            ],
+            'comparison_state' => 'new',
+        ]);
+
+        $response = $this->actingAs($context['admin'])
+            ->post(route('servers.bind.discovery.import', $context['server']), [
+                'zone_ids' => [$discovered->id],
+            ])
+            ->assertRedirect();
+
+        $response->assertSessionHas('status', fn (string $status) => ! str_contains($status, 'configuradas e adotadas'));
+
+        $zone = DnsZone::query()->where('name', 'so-importar.example.com')->firstOrFail();
+        $this->assertSame('bind_import', $zone->origin);
+        $this->assertTrue($zone->servers()->doesntExist());
+    }
+
+    public function test_import_batch_rejects_profile_from_another_organization(): void
+    {
+        $context = $this->context();
+        $foreign = $this->context('Outra Organização');
+        [$foreignProfile] = $this->nameserverProfile($foreign['organization']);
+
+        $discovered = $this->discoveredZone($context, [
+            'name' => 'cross-org.example.com',
+            'records' => [
+                ['name' => 'cross-org.example.com.', 'ttl' => 3600, 'type' => 'NS', 'content' => 'ns1.cross-org.example.com.'],
+            ],
+            'comparison_state' => 'new',
+        ]);
+
+        $this->actingAs($context['admin'])
+            ->post(route('servers.bind.discovery.import', $context['server']), [
+                'zone_ids' => [$discovered->id],
+                'nameserver_profile_id' => $foreignProfile->id,
+                'primary_server_id' => $context['server']->id,
+            ])
+            ->assertSessionHasErrors();
+
+        $this->assertDatabaseMissing('dns_zones', ['name' => 'cross-org.example.com']);
+    }
+
+    public function test_import_batch_requires_primary_server_when_profile_is_chosen(): void
+    {
+        $context = $this->context();
+        [$profile] = $this->nameserverProfile($context['organization']);
+
+        $discovered = $this->discoveredZone($context, [
+            'name' => 'sem-servidor.example.com',
+            'records' => [
+                ['name' => 'sem-servidor.example.com.', 'ttl' => 3600, 'type' => 'NS', 'content' => 'ns1.sem-servidor.example.com.'],
+            ],
+            'comparison_state' => 'new',
+        ]);
+
+        $this->actingAs($context['admin'])
+            ->post(route('servers.bind.discovery.import', $context['server']), [
+                'zone_ids' => [$discovered->id],
+                'nameserver_profile_id' => $profile->id,
+            ])
+            ->assertSessionHasErrors('primary_server_id');
     }
 
     public function test_imported_zone_blocks_publish(): void
@@ -915,6 +1040,42 @@ class DnsBindDiscoveryTest extends TestCase
             'validation_status' => 'ok',
             'comparison_state' => 'new',
         ], $overrides));
+    }
+
+    /**
+     * @return array{0: DnsNameserverProfile, 1: DnsNameserverIdentity}
+     */
+    private function nameserverProfile(Organization $organization): array
+    {
+        $first = DnsNameserverIdentity::query()->create([
+            'organization_id' => $organization->id,
+            'name' => 'NS 1',
+            'hostname' => 'ns1.'.Str::slug($organization->name).'.example',
+            'ipv4_address' => '192.0.2.10',
+            'enabled' => true,
+        ]);
+
+        $second = DnsNameserverIdentity::query()->create([
+            'organization_id' => $organization->id,
+            'name' => 'NS 2',
+            'hostname' => 'ns2.'.Str::slug($organization->name).'.example',
+            'ipv4_address' => '192.0.2.20',
+            'enabled' => true,
+        ]);
+
+        $profile = DnsNameserverProfile::query()->create([
+            'organization_id' => $organization->id,
+            'name' => 'Perfil '.$organization->name,
+            'is_default' => false,
+            'enabled' => true,
+        ]);
+
+        $profile->identities()->sync([
+            $first->id => ['position' => 1],
+            $second->id => ['position' => 2],
+        ]);
+
+        return [$profile, $first];
     }
 
     private function zoneAttributes(array $context, string $name, array $overrides = []): array

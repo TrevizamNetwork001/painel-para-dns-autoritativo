@@ -28,7 +28,9 @@ class BackupSettingsTest extends TestCase
             ->get(route('settings.backup.edit'))
             ->assertOk()
             ->assertSee('Não configurado')
-            ->assertSee('Salvar configuração');
+            ->assertSee('Salvar configuração')
+            ->assertSee('Espaço em disco')
+            ->assertSee('% em uso', false);
 
         $this->actingAs($this->orgAdmin())
             ->get(route('settings.backup.edit'))
