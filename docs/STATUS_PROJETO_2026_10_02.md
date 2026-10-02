@@ -6,7 +6,7 @@ onde algo não foi conferido, está dito.
 
 ## Em produção agora
 
-- **Painel 1.3.54**, containers saudáveis (`/up` 200), disco em 58%.
+- **Painel 1.3.55**, containers saudáveis (`/up` 200), disco em 58%.
 - **Agentes 0.14.0** nos dois servidores autoritativos, com contato recente.
 - **Backup local do banco** diário (02:30), com limpeza e teste de restauração
   semanal; último dump de 02/10. **Sem cópia fora do servidor** (ver pendências).
@@ -31,6 +31,7 @@ onde algo não foi conferido, está dito.
 | DISC-001: falso conflito por grafia de nome DNS (canonização no modelo + comando de reconciliação) | 1.3.52 |
 | Limpeza automática de disco; importar e configurar zonas em lote | 1.3.53 |
 | Log do BIND no painel; forçar transferência de zona (agente 0.14.0) | 1.3.54 |
+| Auditoria de lógica: retenção dos eventos dos agentes, alerta de secundário sem a zona, backup que não falha em silêncio | 1.3.55 |
 
 Itens que outras sessões entregaram sem que eu os tivesse pedido, conferidos
 no código: alerta de secundário atrasado no Dashboard e restauração de versão
@@ -48,32 +49,36 @@ verdes. Não houve mudança de código depois disso; não foram reexecutados em 
    cópia dela fora do servidor, e rodar um backup para ver o `.gpg` no bucket.
    O token antigo teve as chaves expostas numa captura de tela — **não foi
    confirmado que foi apagado na Cloudflare**.
-2. **Enviar ao GitHub:** 4 commits e 11 tags (`v1.3.44`–`v1.3.54`) ainda locais.
-   O repositório é **público** — ver "Riscos antes de enviar".
+2. **GitHub:** enviado em 02/10/2026 (sem force): as tags `v1.3.44`–`v1.3.54` e depois a
+   `main` com a `v1.3.55`. O repositório é **público** — ver "Riscos antes de enviar".
 3. **Branch antiga `cleanup/estrutura-limpa`** (29/06/2026), no remoto, com
    histórico divergente da `main` (219 commits só nela). Arquivar ou apagar; não
    mexi.
 
 ### Higiene
-- O Account ID real do R2 ainda aparece em `tests/Agent/test_deploy_script.py`
-  (não é credencial, mas é desnecessário; trocar por valor fictício).
-- `tiringa` aparece em 2 testes e `trevizamnetwork.com.br` em 28 arquivos
-  (domínio da própria empresa). Avaliar se quer isso num repositório público.
-- Dois commits do remoto (`d9c60f6`, `627d552`) ainda contêm, no histórico, o
-  nome de um cliente antigo (2 linhas em cada). O estado atual (HEAD) está limpo.
+- Feito em 02/10/2026: o Account ID real do R2 e o hostname de um cliente antigo
+  saíram dos testes (valores fictícios). O que já foi publicado no histórico não muda.
+- `trevizamnetwork.com.br` aparece em docs e em 3 arquivos de código (padrão da URL do
+  painel no instalador/agente): é o domínio da própria empresa e é funcional; mantido.
+- Dois commits do remoto (`d9c60f6`, `627d552`) ainda contêm, no histórico, o nome de um
+  cliente antigo (2 linhas em cada). O estado atual (HEAD) está limpo.
 
 ### Produto
-- **Firewall via agente:** a Fase 1 (inventário somente leitura, agente 0.13.0)
-  está implementada. A homologação em produção
-  (`docs/HOMOLOGACAO_FIREWALL_FASE_1.md`) e as fases seguintes de
-  `docs/PROPOSTA_FIREWALL_VIA_AGENT_2026_09_19.md` **não foram conferidas** nesta
-  rodada.
-- Perfil de nameservers padrão está "Não definido" (só sugere ao criar zona).
-- Reversas importadas herdam `retry > refresh` no SOA e geram um alerta (não
-  bloqueia publicação).
+- **Firewall via agente, Fase 1 (inventário somente leitura):** conferido em produção em
+  02/10/2026 — os dois agentes reportam `status: absent` (nftables disponível, tabela
+  `inet dns_center` ausente), com horário de observação atual e sem nenhuma regra criada.
+  É o resultado esperado do roteiro (passo 4). **Não testado:** o passo 6 (host com a tabela
+  presente) e as fases seguintes de `docs/PROPOSTA_FIREWALL_VIA_AGENT_2026_09_19.md`,
+  que não estão implementadas.
+- Perfil de nameservers padrão está "Não definido" (só sugere ao criar zona); é uma opção
+  de dados (Nameservers → Perfis), não de código.
 - Resultado de "Forçar transferência" traz `zone_state` vazio — provavelmente o
-  `rndc zonestatus` do BIND 9.20 não imprime essa linha; cosmético, não conferido.
+  `rndc zonestatus` do BIND 9.20 não imprime essa linha. **Mantido de propósito:** a tela não
+  usa o campo e corrigir exigiria uma nova versão do agente e um upgrade nos servidores.
+  Entra junto com a próxima mudança do agente.
 - `TRUSTED_PROXIES` vazio gera aviso no deploy (correto sem proxy na frente).
+- Resolvido: o alerta de SOA `retry > refresh` nas reversas importadas não aparece mais
+  (nenhuma zona está nessa condição hoje).
 
 ### Fora de escopo, por decisão
 - Painel de estatísticas para o cliente (descartado — estatística fica no Zabbix).

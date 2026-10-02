@@ -254,7 +254,7 @@ class DeployScriptTest(unittest.TestCase):
 
     def test_upload_from_panel_credentials_signs_encrypts_and_verifies(self):
         lines = "\n".join([
-            "R2_ACCOUNT_ID=bec407d758365446312d1c62e87d8acf",
+            "R2_ACCOUNT_ID=0123456789abcdef0123456789abcdef",
             "R2_BUCKET=dns-center-backups",
             "R2_PREFIX=dns-center/",
             f"R2_ACCESS_KEY_ID={ACCESS_KEY}",
@@ -278,7 +278,7 @@ class DeployScriptTest(unittest.TestCase):
 
     def test_upload_falls_back_to_env_file_and_skips_when_nothing_configured(self):
         env = (
-            "R2_ACCOUNT_ID=bec407d758365446312d1c62e87d8acf\n"
+            "R2_ACCOUNT_ID=0123456789abcdef0123456789abcdef\n"
             "R2_BUCKET=dns-center-backups\nR2_PREFIX=dns-center/\n"
             f"R2_ACCESS_KEY_ID={ACCESS_KEY}\nR2_SECRET_ACCESS_KEY={SECRET_KEY}\n"
         )
@@ -294,7 +294,7 @@ class DeployScriptTest(unittest.TestCase):
 
     def test_upload_with_wrong_secret_fails_and_leaves_no_encrypted_file(self):
         lines = "\n".join([
-            "R2_ACCOUNT_ID=bec407d758365446312d1c62e87d8acf",
+            "R2_ACCOUNT_ID=0123456789abcdef0123456789abcdef",
             "R2_BUCKET=dns-center-backups",
             "R2_PREFIX=dns-center/",
             f"R2_ACCESS_KEY_ID={ACCESS_KEY}",
@@ -325,7 +325,7 @@ class DeployScriptTest(unittest.TestCase):
 
     def test_unreachable_panel_falls_back_to_env_file_when_it_exists(self):
         env = (
-            "R2_ACCOUNT_ID=bec407d758365446312d1c62e87d8acf\n"
+            "R2_ACCOUNT_ID=0123456789abcdef0123456789abcdef\n"
             "R2_BUCKET=dns-center-backups\nR2_PREFIX=dns-center/\n"
             f"R2_ACCESS_KEY_ID={ACCESS_KEY}\nR2_SECRET_ACCESS_KEY={SECRET_KEY}\n"
         )

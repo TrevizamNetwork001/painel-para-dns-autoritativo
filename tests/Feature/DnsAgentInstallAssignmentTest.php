@@ -20,7 +20,7 @@ class DnsAgentInstallAssignmentTest extends TestCase
         [$organization, $admin] = $this->organizationUser('organization_admin', true);
         [$foreignOrganization, $foreignAdmin] = $this->organizationUser('organization_admin', true);
         [, $viewer] = $this->organizationUser('viewer', false, $organization);
-        $first = $this->server($organization, 'ns1.tiringa.com.br');
+        $first = $this->server($organization, 'ns1.cliente-a.example');
         $second = $this->server($organization, 'ns1.legacy.example');
         $foreign = $this->server($foreignOrganization, 'ns2.foreign.test');
         $disabled = $this->server($organization, 'ns1.disabled.test', false);
@@ -100,7 +100,7 @@ class DnsAgentInstallAssignmentTest extends TestCase
     public function test_explicit_assignment_preserves_request_and_does_not_approve(): void
     {
         [$organization, $admin] = $this->organizationUser('organization_admin', true);
-        $this->server($organization, 'ns1.tiringa.com.br');
+        $this->server($organization, 'ns1.cliente-a.example');
         $server = $this->server($organization, 'ns1.legacy.example');
         $installRequest = $this->installRequest();
         $originalRequestId = $installRequest->request_id;

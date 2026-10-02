@@ -82,7 +82,7 @@ class DnsAgentPrelinkedEnrollmentTest extends TestCase
             'organization_id' => $organization->id,
             'hostname' => 'ns1.legacy.example', 'ipv4_address' => '198.51.100.242',
         ]);
-        DnsServer::factory()->create(['organization_id' => $organization->id, 'hostname' => 'ns1.tiringa.com.br']);
+        DnsServer::factory()->create(['organization_id' => $organization->id, 'hostname' => 'ns1.cliente-a.example']);
         DnsServer::factory()->create(['organization_id' => $organization->id, 'hostname' => 'ns1.customer.example']);
         [$code, $plain] = $this->code($server);
 
