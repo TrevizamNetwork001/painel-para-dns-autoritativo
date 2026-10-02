@@ -1,8 +1,35 @@
+<div align="center">
+
 # DNS Center
 
-Plataforma centralizada para gerenciamento de DNS autoritativo com BIND9.
-O DNS Center mantém o estado desejado das zonas, coordena agentes remotos e
-acompanha a aplicação e a operação dos servidores primary e secondary.
+**Plataforma para gerenciar DNS autoritativo com BIND9: zonas, agentes remotos, publicação e acompanhamento dos servidores primary e secondary.**
+
+O painel guarda o estado desejado; um agente em cada servidor BIND busca, valida, aplica e reporta.
+
+[Estado atual](#estado-atual) · [Arquitetura](#arquitetura) · [Deploy](#deploy) · [Agente](#agente) · [Status do projeto](#status-do-projeto) · [RUNBOOK (incidentes)](RUNBOOK.md)
+
+</div>
+
+---
+
+> [!IMPORTANT]
+> Problema em produção agora? Vá direto ao **[`RUNBOOK.md`](RUNBOOK.md)**: site fora do ar, disco cheio,
+> reverter deploy, backup/restauração, agente offline, publicação de zona falhando.
+
+## 📌 Sumário
+
+- [📍 Estado atual](#estado-atual)
+- [🗺️ Arquitetura](#arquitetura)
+- [📡 Fluxo de publicação](#fluxo-de-publicação)
+- [🔐 Segurança](#segurança)
+- [🚀 Deploy](#deploy) · [`deploy/README.md`](deploy/README.md)
+- [🤖 Agente](#agente)
+- [🧪 Desenvolvimento e testes](#desenvolvimento-e-testes)
+- [✅ Homologação](#homologação)
+- [🧱 Stack tecnológica](#stack-tecnológica)
+- [📚 Documentação](#documentação) · [Changelog](docs/CHANGELOG.md) · [Pendências conhecidas](docs/KNOWN_ISSUES.md)
+- [📊 Status do projeto](#status-do-projeto) · [levantamento de 02/10/2026](docs/STATUS_PROJETO_2026_10_02.md)
+- [🛣️ Pendências futuras](#pendências-futuras)
 
 O BIND é usado exclusivamente como servidor autoritativo na arquitetura do
 projeto. Recursão não é uma função oferecida pelo DNS Center e deve permanecer
@@ -13,8 +40,9 @@ desabilitada nos servidores gerenciados.
 A avaliação atual do produto e do agente está em
 [Revisão do produto](docs/REVISAO_PRODUTO_2026_09_18.md) e
 [Revisão do agente](docs/REVISAO_AGENT_2026_09_18.md).
-O código do agente neste checkout declara a versão 0.11.0; a instalação
-nos servidores requer rollout separado. As avaliações e releases anteriores
+O agente declara a versão 0.14.0 e está instalado nos dois servidores
+autoritativos em produção; cada nova versão exige uma atualização feita pelo
+painel (Servidores → Agente). As avaliações e releases anteriores
 permanecem no histórico em `docs/`.
 O endurecimento e o procedimento de rollout dessa versão estão em
 [Endurecimento do agent 0.11.0](docs/AGENT_HARDENING_2026_09_19.md).
@@ -276,6 +304,9 @@ em produção. As evidências e limitações estão em
 
 | Documento | Conteúdo |
 | --- | --- |
+| [RUNBOOK](RUNBOOK.md) | Incidentes: site fora, disco cheio, rollback, backup/restauração, agente offline, publicação falhando |
+| [Changelog](docs/CHANGELOG.md) | Histórico consolidado por release, com data e link para cada nota |
+| [deploy/](deploy/README.md) | Arquivos de instalação, deploy, cron, hooks e variáveis |
 | [Status do projeto (02/10/2026)](docs/STATUS_PROJETO_2026_10_02.md) | Concluído, pendente e riscos antes de enviar ao GitHub |
 | [Pendências técnicas conhecidas](docs/KNOWN_ISSUES.md) | Falhas confirmadas, impacto, contorno e critérios para correção futura |
 | [API do agente](docs/AGENT_API.md) | Enrollment, autenticação e contrato operacional do agente |

@@ -53,3 +53,15 @@ existiam; a tag em si ficou faltando). Criadas apontando para o commit que
 introduziu cada `docs/RELEASE_X.Y.Z.md`, sem alterar histórico.
 
 Sem migration.
+
+## Correção posterior (02/10/2026)
+
+A primeira versão do `disk-guard.sh` removia imagens com `docker image prune -a
+--filter until=168h`. Esse filtro usa a data de **criação** da imagem, então a imagem da
+versão anterior — o alvo do `dns-center-deploy rollback` — seria apagada após 7 dias e o
+rollback falharia (o painel não tem registry; `pull` não encontra a imagem). Corrigido: só
+remove tags de release (`dns-center-app`/`dns-center-web`) que não sejam a versão atual
+nem a anterior (lidas de `/var/lib/dns-center-deploy`) nem as 3 mais recentes
+(`DNS_CENTER_KEEP_IMAGE_VERSIONS`); `docker rmi` sem `-f` recusa imagem em uso. O prune
+de imagens "dangling" e do cache de build (>7 dias) continua. Os testes agora usam um
+`docker` falso: antes, rodar a suíte no servidor executava o prune de verdade.

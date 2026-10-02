@@ -1,0 +1,36 @@
+#!/bin/bash
+# Pre-commit do DNS Center: sintaxe dos arquivos staged + bloqueio de segredos.
+# Git não versiona hooks: instale com
+#   ln -sf ../../deploy/git-hooks/pre-commit .git/hooks/pre-commit
+# A suíte completa roda no CI e antes de cada release (docs/RUNBOOK.md); aqui só
+# o que é rápido e evita o erro mais caro num repositório público: vazar segredo.
+set -e
+
+cd "$(git rev-parse --show-toplevel)"
+
+echo "==> sintaxe dos arquivos staged"
+for f in $(git diff --cached --name-only --diff-filter=ACM -- '*.php'); do
+    if command -v php >/dev/null 2>&1; then
+        php -l "$f" >/dev/null || { echo "ERRO de sintaxe PHP em $f"; exit 1; }
+    fi
+done
+for f in $(git diff --cached --name-only --diff-filter=ACM -- '*.py'); do
+    python3 -m py_compile "$f" || { echo "ERRO de sintaxe Python em $f"; exit 1; }
+done
+for f in $(git diff --cached --name-only --diff-filter=ACM -- '*.sh' 'deploy/dns-center-deploy'); do
+    bash -n "$f" || { echo "ERRO de sintaxe shell em $f"; exit 1; }
+done
+
+echo "==> procurando segredos nas linhas adicionadas"
+PATTERN='(cfat_[A-Za-z0-9]{20,}|AKIA[0-9A-Z]{16}|-----BEGIN [A-Z ]*PRIVATE KEY-----|R2_SECRET_ACCESS_KEY=[A-Za-z0-9]{20,}|APP_KEY=base64:[A-Za-z0-9+/=]{20,}|DB_PASSWORD=[^[:space:]]{8,})'
+# Ignora os valores de exemplo documentados pela AWS e o APP_KEY de teste do CI.
+FOUND=$(git diff --cached -U0 -- . ':!vendor' ':!*.lock' ':!deploy/git-hooks/pre-commit' | grep -E '^\+[^+]' \
+    | grep -E "$PATTERN" | grep -vE 'AKIAIOSFODNN7EXAMPLE|AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=|ci-only-password' || true)
+if [ -n "$FOUND" ]; then
+    echo "POSSÍVEL SEGREDO nas linhas adicionadas — commit bloqueado:"
+    echo "$FOUND" | sed -E 's/(=|:)[A-Za-z0-9+\/=_-]{12,}/\1[...]/' | head -5
+    echo "Se for falso positivo, revise e use 'git commit --no-verify' conscientemente."
+    exit 1
+fi
+
+echo "==> ok"
