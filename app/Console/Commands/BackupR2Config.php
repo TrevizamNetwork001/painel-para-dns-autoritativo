@@ -7,6 +7,8 @@ use Illuminate\Console\Command;
 
 class BackupR2Config extends Command
 {
+    public const NOT_CONFIGURED = 3;
+
     protected $signature = 'dns-center:backup-r2-config';
 
     protected $description = 'Imprime (KEY=VALOR) as credenciais do R2 configuradas no painel, para o script de backup do servidor';
@@ -14,7 +16,10 @@ class BackupR2Config extends Command
     public function handle(): int
     {
         if (! BackupR2Settings::configured()) {
-            return self::FAILURE;
+            // Código próprio (≠ 1): o script de backup precisa distinguir "não
+            // configurado" (segue só local) de "não consegui perguntar ao painel"
+            // (app fora do ar, erro de PHP...), que deve falhar alto no log.
+            return self::NOT_CONFIGURED;
         }
 
         $settings = BackupR2Settings::get();

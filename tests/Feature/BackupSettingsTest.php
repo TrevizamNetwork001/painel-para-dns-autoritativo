@@ -190,7 +190,7 @@ class BackupSettingsTest extends TestCase
 
     public function test_artisan_command_prints_settings_for_the_backup_script_only_when_configured(): void
     {
-        $this->assertSame(1, Artisan::call('dns-center:backup-r2-config'));
+        $this->assertSame(3, Artisan::call('dns-center:backup-r2-config'));
         $this->assertSame('', trim(Artisan::output()));
 
         $this->actingAs($this->platformAdmin())->put(route('settings.backup.update'), $this->payload());

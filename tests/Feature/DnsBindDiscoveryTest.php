@@ -489,6 +489,36 @@ class DnsBindDiscoveryTest extends TestCase
         $this->assertDatabaseMissing('dns_zones', ['name' => 'cross-org.example.com']);
     }
 
+    public function test_import_batch_rejects_profile_without_enough_identities_before_importing_anything(): void
+    {
+        $context = $this->context();
+        $emptyProfile = DnsNameserverProfile::query()->create([
+            'organization_id' => $context['organization']->id,
+            'name' => 'Perfil vazio',
+            'is_default' => false,
+            'enabled' => true,
+        ]);
+
+        $discovered = $this->discoveredZone($context, [
+            'name' => 'perfil-vazio.example.com',
+            'records' => [
+                ['name' => 'perfil-vazio.example.com.', 'ttl' => 3600, 'type' => 'NS', 'content' => 'ns1.perfil-vazio.example.com.'],
+            ],
+            'comparison_state' => 'new',
+        ]);
+
+        $this->actingAs($context['admin'])
+            ->post(route('servers.bind.discovery.import', $context['server']), [
+                'zone_ids' => [$discovered->id],
+                'nameserver_profile_id' => $emptyProfile->id,
+                'primary_server_id' => $context['server']->id,
+            ])
+            ->assertSessionHasErrors('dns_nameserver_profile_id');
+
+        // Já recusado por profileForOrganization() antes de tocar em qualquer zona.
+        $this->assertDatabaseMissing('dns_zones', ['name' => 'perfil-vazio.example.com']);
+    }
+
     public function test_import_batch_requires_primary_server_when_profile_is_chosen(): void
     {
         $context = $this->context();

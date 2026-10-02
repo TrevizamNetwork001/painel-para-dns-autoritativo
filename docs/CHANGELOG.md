@@ -6,6 +6,10 @@ geral continua na tabela de documentação do `README.md`. Gerado a partir dessa
 tabela e das datas das tags do git — releases sem tag (anteriores à v1.3.29
 em alguns casos) aparecem sem data.
 
+## 1.3.55 — 2026-10-02
+
+Auditoria: retenção dos eventos dos agentes, alerta de secundário sem a zona e backup que não falha em silêncio. [Nota completa](RELEASE_1.3.55.md)
+
 ## Sem release (02/10/2026) — correção em `deploy/disk-guard.sh`
 
 A limpeza automática de disco da 1.3.53 usava `docker image prune -a --filter until=168h`,

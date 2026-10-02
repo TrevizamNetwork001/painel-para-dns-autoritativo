@@ -380,12 +380,13 @@ em produção. As evidências e limitações estão em
 | [Release 1.3.52](docs/RELEASE_1.3.52.md) | Corrige DISC-001: falso conflito de descoberta por grafia de nome DNS (canonização única no modelo + comando de reconciliação) |
 | [Release 1.3.53](docs/RELEASE_1.3.53.md) | Limpeza automática de disco (cron) e importar+configurar zonas em lote na descoberta |
 | [Release 1.3.54](docs/RELEASE_1.3.54.md) | Agente 0.14.0: log do BIND no painel e forçar transferência de zona (destrava secundário atrasado) |
+| [Release 1.3.55](docs/RELEASE_1.3.55.md) | Auditoria: retenção dos eventos dos agentes, alerta de secundário sem a zona e backup que não falha em silêncio |
 | [Homologação do firewall — Fase 1](docs/HOMOLOGACAO_FIREWALL_FASE_1.md) | Roteiro seguro e critérios de aprovação em servidor não crítico |
 | [Operação Cliente Exemplo — 18/09/2026](docs/OPERACAO_CLIENTE_EXEMPLO_2026_09_18.md) | Adoção das zonas reversas do dns-primary/secondary, runbook e pendências |
 
 ## Status do projeto
 
-**v1.3.54 em produção** (painel) com agentes 0.14.0. Estado completo, com o que está
+**v1.3.55 em produção** (painel) com agentes 0.14.0. Estado completo, com o que está
 concluído e o que está pendente (cópia do backup no R2, envio ao GitHub, higiene do
 repositório): [docs/STATUS_PROJETO_2026_10_02.md](docs/STATUS_PROJETO_2026_10_02.md).
 Runbook da operação de adoção de zonas:

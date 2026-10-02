@@ -11,6 +11,7 @@ use App\Models\DnsZone;
 use App\Models\Organization;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Tests\TestCase;
 
@@ -165,6 +166,57 @@ class DnsAuthoritativeObservationTest extends TestCase
         ]);
         $this->assertDatabaseHas('security_audits', [
             'event' => 'dns.serial_converged',
+        ]);
+    }
+
+    public function test_dashboard_flags_secondary_that_never_received_the_zone(): void
+    {
+        [, $server, $zone] = $this->authoritativeAgent();
+        $this->awaitingTransferObservation($server, $zone);
+        DB::table('dns_zones')
+            ->where('id', $zone->id)
+            ->update(['updated_at' => now()->subMinutes(30)]);
+
+        $admin = $this->organizationUser($zone->organization, 'organization_admin');
+
+        $this->actingAs($admin)
+            ->get(route('dashboard'))
+            ->assertOk()
+            ->assertSee('Secundário sem receber a zona')
+            ->assertSee('Ainda não recebeu a zona do primário');
+    }
+
+    public function test_dashboard_does_not_flag_awaiting_transfer_right_after_publishing(): void
+    {
+        [, $server, $zone] = $this->authoritativeAgent();
+        $this->awaitingTransferObservation($server, $zone);
+        DB::table('dns_zones')
+            ->where('id', $zone->id)
+            ->update(['updated_at' => now()->subMinutes(2)]);
+
+        $admin = $this->organizationUser($zone->organization, 'organization_admin');
+
+        $this->actingAs($admin)
+            ->get(route('dashboard'))
+            ->assertOk()
+            ->assertDontSee('Secundário sem receber a zona');
+    }
+
+    private function awaitingTransferObservation($server, $zone): void
+    {
+        DnsAuthoritativeObservation::query()->create([
+            'organization_id' => $zone->organization_id,
+            'dns_server_id' => $server->id,
+            'dns_zone_id' => $zone->id,
+            'expected_serial' => $zone->serial,
+            'observed_serial' => null,
+            'status' => 'awaiting_transfer',
+            'zone_role' => 'secondary',
+            'source' => 'agent',
+            'event_id' => (string) Str::uuid(),
+            'sequence' => 1,
+            'agent_observed_at' => now(),
+            'server_received_at' => now(),
         ]);
     }
 

@@ -130,9 +130,17 @@ prune_backups() {
 panel_backup_config() {
     # Credenciais do R2 cadastradas no painel (Configurações → Backup), lidas do app
     # em execução. Só linhas KEY=VALOR com caracteres seguros passam pelo filtro.
-    compose exec -T app php artisan dns-center:backup-r2-config 2>/dev/null \
-        | grep -E '^R2_(ACCOUNT_ID|BUCKET|PREFIX|ACCESS_KEY_ID|SECRET_ACCESS_KEY)=[A-Za-z0-9._/-]*$' \
-        || true
+    # Códigos do artisan: 0 = configurado, 3 = não configurado no painel (segue só
+    # local, sem erro); qualquer outro = não consegui perguntar ao painel (app fora do
+    # ar, erro de PHP...) — nesse caso devolve erro para o chamador falar alto.
+    local output rc=0
+    output="$(compose exec -T app php artisan dns-center:backup-r2-config 2>/dev/null)" || rc=$?
+    case "${rc}" in
+        0) printf '%s\n' "${output}" \
+            | grep -E '^R2_(ACCOUNT_ID|BUCKET|PREFIX|ACCESS_KEY_ID|SECRET_ACCESS_KEY)=[A-Za-z0-9._/-]*$' || true ;;
+        3) return 0 ;;
+        *) return "${rc}" ;;
+    esac
 }
 
 upload_backup_remote() {
@@ -143,7 +151,16 @@ upload_backup_remote() {
     local file="$1" remote_env="${DNS_CENTER_BACKUP_REMOTE_ENV:-}"
     local pass_file="${DNS_CENTER_BACKUP_PASSPHRASE_FILE:-}" panel_lines
 
-    panel_lines="$(panel_backup_config)"
+    if ! panel_lines="$(panel_backup_config)"; then
+        # Sem resposta do painel: se há arquivo de credenciais, usa-o; senão FALHA —
+        # antes isto virava "somente local" em silêncio, justo quando a cópia
+        # externa mais importa (app caído no horário do backup).
+        panel_lines=""
+        if [ -z "${remote_env}" ] || [ ! -f "${remote_env}" ]; then
+            fail "não consegui ler as credenciais do R2 no painel (app fora do ar?); cópia remota NÃO foi feita"
+        fi
+        printf 'AVISO: painel indisponível; usando %s para a cópia remota.\n' "${remote_env}" >&2
+    fi
 
     if [ -z "${panel_lines}" ]; then
         if [ -z "${remote_env}" ] || [ ! -f "${remote_env}" ]; then

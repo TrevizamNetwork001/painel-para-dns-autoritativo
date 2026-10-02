@@ -23,8 +23,9 @@
 
     $dashboardZones = App\Models\DnsZone::query()
         ->forOrganization($organizationId)
-        ->get(['id', 'name']);
+        ->get(['id', 'name', 'updated_at']);
     $zoneNames = $dashboardZones->pluck('name', 'id');
+    $zoneUpdatedAt = $dashboardZones->pluck('updated_at', 'id');
     $serverCount = $dashboardServers->count();
     $zoneCount = $dashboardZones->count();
 
@@ -104,10 +105,17 @@
             'transfer_failed' => 'Transferência falhando',
             'primary_unreachable' => 'Primário indisponível',
             'expired' => 'Zona expirada',
+            // Secundário que ainda não recebeu a zona: logo após publicar é normal, mas
+            // se a zona foi alterada há mais de 10 min e continua assim, a transferência
+            // não está acontecendo (ACL/TSIG/primário errado) — e nenhum log de falha
+            // aparece nesse caso, então os outros alertas não pegam.
+            'awaiting_transfer' => ($zoneUpdatedAt[$observation->dns_zone_id] ?? null)?->lt(now()->subMinutes(10))
+                ? 'Secundário sem receber a zona'
+                : null,
             default => null,
         };
         if ($type) {
-            $pendingItems->push(['type' => $type, 'object' => $zoneNames[$observation->dns_zone_id] ?? 'Zona #'.$observation->dns_zone_id, 'detail' => ($observation->status === 'serial_mismatch' ? 'Serial observado difere do esperado' : 'Estado reportado pelo agente').($dashboardServers->firstWhere('id', $observation->dns_server_id) ? ' · '.$dashboardServers->firstWhere('id', $observation->dns_server_id)->name : ''), 'severity' => in_array($observation->status, ['expired', 'transfer_failed', 'primary_unreachable'], true) ? 'critical' : 'warning', 'at' => $observation->updated_at, 'url' => route('zones.index')]);
+            $pendingItems->push(['type' => $type, 'object' => $zoneNames[$observation->dns_zone_id] ?? 'Zona #'.$observation->dns_zone_id, 'detail' => ($observation->status === 'serial_mismatch' ? 'Serial observado difere do esperado' : ($observation->status === 'awaiting_transfer' ? 'Ainda não recebeu a zona do primário' : 'Estado reportado pelo agente')).($dashboardServers->firstWhere('id', $observation->dns_server_id) ? ' · '.$dashboardServers->firstWhere('id', $observation->dns_server_id)->name : ''), 'severity' => in_array($observation->status, ['expired', 'transfer_failed', 'primary_unreachable'], true) ? 'critical' : 'warning', 'at' => $observation->updated_at, 'url' => route('zones.index')]);
         }
     }
     foreach ($dashboardPublications as $publication) {

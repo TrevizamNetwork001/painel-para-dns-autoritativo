@@ -190,7 +190,7 @@ class DeployScriptTest(unittest.TestCase):
         self.assertIn("use_running_version", branch)
         self.assertIn("backup-verify", script)
 
-    def _run_upload(self, panel_lines, remote_env_content=None):
+    def _run_upload(self, panel_lines, remote_env_content=None, panel_rc=0):
         """Executa upload_backup_remote do script real contra um R2 falso."""
         if not (shutil.which("gpg") and shutil.which("curl")):
             self.skipTest("gpg/curl indisponíveis")
@@ -226,6 +226,7 @@ class DeployScriptTest(unittest.TestCase):
                 "  cat <<'PANEL_EOF'\n"
                 f"{panel_lines}\n"
                 "PANEL_EOF\n"
+                f"  return {panel_rc}\n"
                 "}\n"
                 f"DNS_CENTER_BACKUP_PASSPHRASE_FILE={passphrase}\n"
                 f"DNS_CENTER_BACKUP_REMOTE_ENV={remote_env}\n"
@@ -305,6 +306,35 @@ class DeployScriptTest(unittest.TestCase):
         self.assertEqual({}, objects)
         self.assertTrue(rejected)
         self.assertEqual([], leftover)
+
+    def test_panel_not_configured_exit_code_keeps_backup_local_only_without_error(self):
+        result, objects, _, _, _, _ = self._run_upload("", None, panel_rc=3)
+
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertIn("não configurada", result.stdout)
+        self.assertEqual({}, objects)
+
+    def test_unreachable_panel_fails_loudly_instead_of_silently_staying_local(self):
+        # Reproduz o buraco corrigido: app fora do ar na hora do backup virava
+        # "somente local" sem nenhum sinal — justo quando a cópia externa importa.
+        result, objects, _, _, _, _ = self._run_upload("", None, panel_rc=1)
+
+        self.assertNotEqual(0, result.returncode)
+        self.assertIn("NÃO foi feita", result.stderr)
+        self.assertEqual({}, objects)
+
+    def test_unreachable_panel_falls_back_to_env_file_when_it_exists(self):
+        env = (
+            "R2_ACCOUNT_ID=bec407d758365446312d1c62e87d8acf\n"
+            "R2_BUCKET=dns-center-backups\nR2_PREFIX=dns-center/\n"
+            f"R2_ACCESS_KEY_ID={ACCESS_KEY}\nR2_SECRET_ACCESS_KEY={SECRET_KEY}\n"
+        )
+        result, objects, rejected, _, _, _ = self._run_upload("", env, panel_rc=1)
+
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertIn("painel indisponível", result.stderr)
+        self.assertEqual(1, len(objects))
+        self.assertEqual([], rejected)
 
 
 if __name__ == "__main__":

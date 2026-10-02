@@ -107,6 +107,9 @@ sudo ./deploy/dns-center-deploy rollback
 
 ## O backup parou de rodar
 
+Se a cópia externa (R2) estiver configurada e o app estiver fora do ar na hora do backup, o
+backup **falha com a mensagem "NÃO foi feita"** no log (não fica mais só local em silêncio).
+
 1. `sudo tail -20 /var/log/dns-center-backup.log` — erro? disco cheio?
 2. `cat /etc/cron.d/dns-center-backup` — o arquivo existe e está com modo 0644?
 3. Rodar à mão: `sudo ./deploy/dns-center-deploy backup`.
