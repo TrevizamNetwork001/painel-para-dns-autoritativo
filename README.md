@@ -276,6 +276,7 @@ em produção. As evidências e limitações estão em
 
 | Documento | Conteúdo |
 | --- | --- |
+| [Status do projeto (02/10/2026)](docs/STATUS_PROJETO_2026_10_02.md) | Concluído, pendente e riscos antes de enviar ao GitHub |
 | [Pendências técnicas conhecidas](docs/KNOWN_ISSUES.md) | Falhas confirmadas, impacto, contorno e critérios para correção futura |
 | [API do agente](docs/AGENT_API.md) | Enrollment, autenticação e contrato operacional do agente |
 | [Operação segura do agente](docs/BIND_AGENT_OPERATIONS.md) | Download, validação, aplicação e rollback local |
@@ -353,13 +354,10 @@ em produção. As evidências e limitações estão em
 
 ## Status do projeto
 
-**v1.3.48 publicada no painel** (artefato do agente 0.10.2; atualização dos hosts
-autoritativos acompanhada separadamente). Desde a v1.3.29: página Reversos
-(1.3.30), desativar/excluir empresa (1.3.31), remover bloco antigo + publicar
-num passo (1.3.32/1.3.38), descoberta com comparação entre servidores e zonas
-ignoradas (1.3.33–1.3.35), correção dos NS duplicados (1.3.37), espera do
-secundário pela transferência (agente 0.10.1, 1.3.39) e mensagem clara quando
-não há nada a publicar (1.3.40) e alerta de NS repetido (1.3.41). Detalhes e runbook em
+**v1.3.54 em produção** (painel) com agentes 0.14.0. Estado completo, com o que está
+concluído e o que está pendente (cópia do backup no R2, envio ao GitHub, higiene do
+repositório): [docs/STATUS_PROJETO_2026_10_02.md](docs/STATUS_PROJETO_2026_10_02.md).
+Runbook da operação de adoção de zonas:
 [docs/OPERACAO_CLIENTE_EXEMPLO_2026_09_18.md](docs/OPERACAO_CLIENTE_EXEMPLO_2026_09_18.md).
 
 Histórico anterior: **v1.3.29** (hotfix pego ao vivo no primeiro uso
