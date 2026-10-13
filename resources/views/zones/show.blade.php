@@ -443,6 +443,9 @@
                                         ?? ($currentReverseBlock && $fullRecordName === $zoneNameLower
                                             ? $currentReverseBlock
                                             : null);
+                                    $displayRecordName = rtrim(trim($record->name), '.');
+                                    $showQualifiedName = ! $friendlyName
+                                        && strtolower($displayRecordName) !== $fullRecordName;
                                 @endphp
 
                                 <div
@@ -464,14 +467,14 @@
                                         @if ($friendlyName) title="{{ $fullRecordName }}" @endif
                                     >
                                         <strong>
-                                            {{ $friendlyName ?? $record->name }}
+                                            {{ $friendlyName ?? $displayRecordName }}
                                         </strong>
 
-                                        @unless ($friendlyName)
+                                        @if ($showQualifiedName)
                                             <small title="{{ $fullRecordName }}">
                                                 {{ $fullRecordName }}
                                             </small>
-                                        @endunless
+                                        @endif
                                     </div>
 
                                     <div>

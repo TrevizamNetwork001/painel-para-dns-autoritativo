@@ -154,6 +154,17 @@ class DnsReverseZoneWizardTest extends TestCase
         $context = $this->context();
         $zone = $this->createZone($context, 'example.com');
 
+        DnsRecord::query()->create([
+            'organization_id' => $context['organization']->id,
+            'dns_zone_id' => $zone->id,
+            'name' => 'example.com.',
+            'type' => 'A',
+            'ttl' => null,
+            'priority' => null,
+            'content' => '192.0.2.1',
+            'enabled' => true,
+        ]);
+
         foreach ([255, 10, 2] as $octet) {
             foreach (['AAAA', 'A'] as $type) {
                 DnsRecord::query()->create([
@@ -175,7 +186,9 @@ class DnsReverseZoneWizardTest extends TestCase
             ->get(route('zones.show', $zone))
             ->assertOk()
             ->assertDontSee('data-record-type="NS"', false)
+            ->assertDontSee('example.com.</strong>', false)
             ->assertSeeInOrder([
+                '192.0.2.1',
                 '192.0.2.2',
                 '2001:db8::2',
                 '192.0.2.10',
