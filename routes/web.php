@@ -11,6 +11,7 @@ use App\Http\Controllers\DnsBindApplyController;
 use App\Http\Controllers\DnsBindDiagnosticsController;
 use App\Http\Controllers\DnsBindDiscoveryController;
 use App\Http\Controllers\DnsBindLegacyZoneBlockController;
+use App\Http\Controllers\DnsFirewallPolicyController;
 use App\Http\Controllers\DnsNameserverController;
 use App\Http\Controllers\DnsServerController;
 use App\Http\Controllers\DnsServerTransferController;
@@ -271,6 +272,11 @@ Route::middleware([
         '/servidores/{server}/agente',
         [DnsAgentEnrollmentController::class, 'show'],
     )->name('servers.agent.show');
+
+    Route::get('/servidores/{server}/firewall', [DnsFirewallPolicyController::class, 'show'])->name('servers.firewall.show');
+    Route::put('/servidores/{server}/firewall', [DnsFirewallPolicyController::class, 'update'])->name('servers.firewall.update');
+    Route::post('/servidores/{server}/firewall/validar', [DnsFirewallPolicyController::class, 'validatePolicy'])->middleware('throttle:5,1')->name('servers.firewall.validate');
+    Route::get('/servidores/{server}/firewall/validar/{operation}', [DnsFirewallPolicyController::class, 'status'])->name('servers.firewall.status');
 
     Route::get(
         '/servidores/{server}/agente/solicitacoes/status',

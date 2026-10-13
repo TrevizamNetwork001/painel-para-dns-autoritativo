@@ -150,4 +150,9 @@ class DnsServer extends Model
     {
         return $this->hasMany(DnsAuthoritativeObservation::class, 'dns_server_id');
     }
+
+    public function firewallPolicy(): HasOne
+    {
+        return $this->hasOne(DnsFirewallPolicy::class, 'dns_server_id');
+    }
 }

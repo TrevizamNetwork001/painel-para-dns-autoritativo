@@ -7,7 +7,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class DnsBindOperation extends Model
 {
-    public const ACTIONS = ['install_bind', 'configure_bind', 'discover_bind_zones', 'upgrade_agent', 'apply_zones', 'remove_legacy_zone_block', 'tail_bind_log', 'force_zone_transfer'];
+    public const ACTIONS = ['install_bind', 'configure_bind', 'discover_bind_zones', 'upgrade_agent', 'apply_zones', 'remove_legacy_zone_block', 'tail_bind_log', 'force_zone_transfer', 'validate_firewall_policy'];
 
     public const STATUSES = [
         'planned',

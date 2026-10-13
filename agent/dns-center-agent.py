@@ -37,7 +37,7 @@ from email.utils import parsedate_to_datetime
 from pathlib import Path
 from typing import Any
 
-AGENT_VERSION = "0.14.0"
+AGENT_VERSION = "0.15.0"
 OFFICIAL_BASE_URL = "https://dnscenter.trevizamnetwork.com.br"
 DEFAULT_CONFIG = Path("/etc/dns-center-agent/agent.json")
 DEFAULT_STATE_DIR = Path("/var/lib/dns-center-agent")
@@ -784,6 +784,76 @@ def firewall_inventory() -> dict[str, Any]:
         "table_present": True,
         "table_hash": hashlib.sha256(canonical).hexdigest(),
         "counts": counts,
+    }
+
+
+def validate_firewall_policy(params: dict[str, Any]) -> dict[str, Any]:
+    """Validate the isolated policy with nft --check; never apply it."""
+    if params.get("version") != 1 or params.get("table") != "inet dns_center":
+        raise AgentError("Contrato de firewall inválido ou incompatível.")
+    nft = detected_binary(NFT_CANDIDATES)
+    if nft is None:
+        raise AgentError("nftables não está disponível neste servidor.")
+
+    acls = params.get("administrative_acls")
+    admin_ports = params.get("administrative_ports")
+    public_ports = params.get("public_ports")
+    if not isinstance(acls, list) or not acls or not isinstance(admin_ports, list) or not isinstance(public_ports, list):
+        raise AgentError("Campos do contrato de firewall inválidos.")
+
+    networks: dict[int, list[str]] = {4: [], 6: []}
+    try:
+        for value in acls:
+            network = ipaddress.ip_network(str(value), strict=False)
+            if network.prefixlen == 0:
+                raise ValueError("open network")
+            networks[network.version].append(str(network))
+    except ValueError as exception:
+        raise AgentError("ACL administrativa inválida.") from exception
+
+    def split_ports(values: list[Any]) -> dict[str, list[int]]:
+        result: dict[str, list[int]] = {"tcp": [], "udp": []}
+        for value in values:
+            match = re.fullmatch(r"(tcp|udp)/(\d{1,5})", str(value).lower())
+            if match is None or not 1 <= int(match.group(2)) <= 65535:
+                raise AgentError("Porta de firewall inválida.")
+            result[match.group(1)].append(int(match.group(2)))
+        return result
+
+    administrative = split_ports(admin_ports)
+    public = split_ports(public_ports)
+    lines = ["table inet dns_center {"]
+    for version, family in ((4, "ipv4_addr"), (6, "ipv6_addr")):
+        if networks[version]:
+            lines.append(f"  set admin_v{version} {{ type {family}; flags interval; elements = {{ {', '.join(networks[version])} }} }}")
+    lines.extend(["  chain input {", "    type filter hook input priority 0; policy accept;", "    tcp dport 53 accept", "    udp dport 53 accept"])
+    for protocol in ("tcp", "udp"):
+        if public[protocol]:
+            lines.append(f"    {protocol} dport {{ {', '.join(map(str, sorted(set(public[protocol]))))} }} accept")
+        if administrative[protocol]:
+            ports = ", ".join(map(str, sorted(set(administrative[protocol]))))
+            if networks[4]:
+                lines.append(f"    ip saddr @admin_v4 {protocol} dport {{ {ports} }} accept")
+            if networks[6]:
+                lines.append(f"    ip6 saddr @admin_v6 {protocol} dport {{ {ports} }} accept")
+    lines.extend(["  }", "}", ""])
+    ruleset = "\n".join(lines)
+
+    descriptor, temporary_name = tempfile.mkstemp(prefix="dns-center-nft-", suffix=".nft")
+    try:
+        with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
+            handle.write(ruleset)
+        result = run_command([nft, "--check", "--file", temporary_name], timeout=15)
+        if result.returncode != 0:
+            raise AgentError("Validação nft falhou: " + sanitize_message(result.stderr))
+    finally:
+        Path(temporary_name).unlink(missing_ok=True)
+
+    return {
+        "configuration_valid": True,
+        "desired_hash": str(params.get("desired_hash", "")),
+        "validated_at": utc_now(),
+        "rules_applied": False,
     }
 
 
@@ -3148,6 +3218,7 @@ SUPPORTED_OPERATION_ACTIONS = {
     "remove_legacy_zone_block",
     "tail_bind_log",
     "force_zone_transfer",
+    "validate_firewall_policy",
 }
 
 
@@ -3183,6 +3254,11 @@ def execute_authorized_operation(
             if not isinstance(params, dict):
                 raise AgentError("Parâmetros de transferência ausentes.")
             return force_zone_transfer(config, params)
+        if action == "validate_firewall_policy":
+            params = operation.get("params")
+            if not isinstance(params, dict):
+                raise AgentError("Parâmetros de firewall ausentes.")
+            return validate_firewall_policy(params)
         return configure_bind(action)
 
 

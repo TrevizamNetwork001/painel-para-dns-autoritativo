@@ -142,7 +142,7 @@
     <article class="agent-metric-card"><span>Memória</span><strong>{{ is_numeric($memoryUsedPercent) ? number_format($memoryUsedPercent, 1, ',', '.').'%' : 'Não informada' }}</strong><small>{{ data_get($hostInventory, 'memory_available_mb') !== null ? number_format(data_get($hostInventory, 'memory_available_mb'), 0, ',', '.').' MB disponíveis' : 'Aguardando inventário 0.12.0+' }}</small></article>
     <article class="agent-metric-card"><span>Disco raiz</span><strong>{{ is_numeric($diskUsedPercent) ? number_format($diskUsedPercent, 1, ',', '.').'%' : 'Não informado' }}</strong><small>{{ data_get($hostInventory, 'disk_free_gb') !== null ? number_format(data_get($hostInventory, 'disk_free_gb'), 1, ',', '.').' GB livres' : 'Aguardando inventário 0.12.0+' }}</small></article>
     <article class="agent-metric-card"><span>Uptime</span><strong>{{ $uptimeLabel }}</strong><small>Tempo desde a última inicialização</small></article>
-    <article class="agent-metric-card"><span>Firewall</span><strong>{{ $firewallStatusLabel }}</strong><small>Inventário somente leitura · tabela inet dns_center</small></article>
+    <article class="agent-metric-card"><span>Firewall</span><strong>{{ $firewallStatusLabel }}</strong><small>Inventário somente leitura · tabela inet dns_center</small><a href="{{ route('servers.firewall.show', $server) }}">Configurar e validar</a></article>
 </section>
 
 <section class="agent-ops-grid">

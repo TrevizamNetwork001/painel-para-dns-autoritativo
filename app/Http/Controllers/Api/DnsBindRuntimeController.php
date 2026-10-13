@@ -772,6 +772,9 @@ class DnsBindRuntimeController extends Controller
                 'serial_before',
                 'serial_after',
                 'zone_state',
+                'desired_hash',
+                'validated_at',
+                'rules_applied',
             ])
             ->map(function ($value, $key) use ($pathBearingKeys) {
                 if ($key === 'diagnostics') {

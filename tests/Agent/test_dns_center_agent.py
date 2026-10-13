@@ -38,6 +38,35 @@ SPEC.loader.exec_module(agent)
 
 
 class AgentTests(unittest.TestCase):
+    def test_firewall_policy_validation_only_checks_temporary_ruleset(self) -> None:
+        captured = {}
+
+        def validate(command, **kwargs):
+            captured["command"] = command
+            captured["ruleset"] = Path(command[-1]).read_text(encoding="utf-8")
+            return subprocess.CompletedProcess(command, 0, stdout="", stderr="")
+
+        params = {
+            "version": 1, "table": "inet dns_center",
+            "administrative_acls": ["192.0.2.10/32", "2001:db8::10/128"],
+            "administrative_ports": ["tcp/22"],
+            "public_ports": ["tcp/53", "udp/53"], "desired_hash": "a" * 64,
+        }
+        with patch.object(agent, "detected_binary", return_value="/usr/sbin/nft"), patch.object(agent, "run_command", side_effect=validate):
+            result = agent.validate_firewall_policy(params)
+
+        self.assertEqual(["/usr/sbin/nft", "--check", "--file"], captured["command"][:-1])
+        self.assertIn("table inet dns_center", captured["ruleset"])
+        self.assertTrue(result["configuration_valid"])
+        self.assertFalse(result["rules_applied"])
+        self.assertFalse(Path(captured["command"][-1]).exists())
+
+    def test_firewall_policy_validation_rejects_open_admin_acl(self) -> None:
+        params = {"version": 1, "table": "inet dns_center", "administrative_acls": ["0.0.0.0/0"], "administrative_ports": ["tcp/22"], "public_ports": []}
+        with patch.object(agent, "detected_binary", return_value="/usr/sbin/nft"), patch.object(agent, "run_command") as run, self.assertRaisesRegex(agent.AgentError, "ACL administrativa inválida"):
+            agent.validate_firewall_policy(params)
+        run.assert_not_called()
+
     def test_firewall_inventory_reports_absent_without_listing_rules(self) -> None:
         tables = subprocess.CompletedProcess(
             [], 0, stdout='{"nftables": [{"metainfo": {}}]}', stderr="",
