@@ -51,9 +51,10 @@ verdes. Não houve mudança de código depois disso; não foram reexecutados em 
    confirmado que foi apagado na Cloudflare**.
 2. **GitHub:** enviado em 02/10/2026 (sem force): as tags `v1.3.44`–`v1.3.54` e depois a
    `main` com a `v1.3.55`. O repositório é **público** — ver "Riscos antes de enviar".
-3. **Branch antiga `cleanup/estrutura-limpa`** (29/06/2026), no remoto, com
-   histórico divergente da `main` (219 commits só nela). Arquivar ou apagar; não
-   mexi.
+3. **Resolvido em 13/10/2026:** a branch remota antiga
+   `cleanup/estrutura-limpa` (29/06/2026), com histórico divergente da `main`,
+   foi removida após autorização do responsável. A `main` permanece como a
+   única branch remota do projeto.
 
 ### Higiene
 - Feito em 02/10/2026: o Account ID real do R2 e o hostname de um cliente antigo
