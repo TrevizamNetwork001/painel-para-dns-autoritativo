@@ -6,6 +6,10 @@ geral continua na tabela de documentação do `README.md`. Gerado a partir dessa
 tabela e das datas das tags do git — releases sem tag (anteriores à v1.3.29
 em alguns casos) aparecem sem data.
 
+## 1.3.63 — 2026-10-13
+
+Alinha o perfil de nameservers e o domínio associado no assistente de DNS reverso. [Nota completa](RELEASE_1.3.63.md)
+
 ## 1.3.62 — 2026-10-13
 
 Mantém o seletor de perfil de nameservers compacto ao abrir o formato PTR personalizado. [Nota completa](RELEASE_1.3.62.md)

@@ -7165,22 +7165,28 @@ body.has-open-modal {
     font-size: 0.66rem;
 }
 
+.reverse-associated-domain-field {
+    display: grid;
+    min-width: 0;
+    gap: 0.4rem;
+}
+
+.reverse-associated-domain-field > span {
+    color: var(--text);
+    font-size: 0.68rem;
+    font-weight: 800;
+}
+
 .reverse-associated-domain {
     display: flex;
     gap: 0.5rem;
     align-items: center;
-    justify-content: space-between;
     margin-bottom: 0.65rem;
-    padding: 0.65rem;
+    min-height: 42px;
+    padding: 0.62rem 0.75rem;
     border: 1px solid var(--border);
     border-radius: 9px;
     background: var(--surface-soft);
-}
-
-.reverse-associated-domain span {
-    color: var(--text-muted);
-    font-size: 0.62rem;
-    font-weight: 700;
 }
 
 .reverse-associated-domain strong {

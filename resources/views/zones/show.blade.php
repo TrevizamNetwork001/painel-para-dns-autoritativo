@@ -2168,9 +2168,10 @@
                         </select>
                     </label>
 
-                    <div>
+                    <div class="reverse-associated-domain-field">
+                        <span>Domínio associado</span>
+
                         <div class="reverse-associated-domain">
-                            <span>Domínio associado</span>
                             <strong>{{ $zone->name }}</strong>
                         </div>
 
