@@ -58,6 +58,31 @@ class DnsReverseZoneWizardTest extends TestCase
         $this->assertFalse($zone->isReverseZone());
     }
 
+    public function test_reverse_zone_page_does_not_offer_nested_reverse_creation(): void
+    {
+        $context = $this->context();
+        $forwardZone = $this->createZone($context, 'example.com');
+
+        $this->actingAs($context['admin'])
+            ->post(route('zones.reverse.store'), $this->reversePayload($context, [
+                'family' => 'ipv6',
+                'cidr' => '2001:db8::/32',
+            ]))
+            ->assertSessionHasNoErrors();
+
+        $reverseZone = DnsZone::query()
+            ->where('organization_id', $context['organization']->id)
+            ->where('name', '8.b.d.0.1.0.0.2.ip6.arpa')
+            ->firstOrFail();
+
+        $this->actingAs($context['admin'])
+            ->get(route('zones.show', $reverseZone))
+            ->assertOk()
+            ->assertDontSee('<h2 id="reverse-modal-title">', false)
+            ->assertSee('Para criar outra zona reversa')
+            ->assertSee(route('zones.show', $forwardZone), false);
+    }
+
     public function test_wizard_rejects_non_octet_aligned_ipv4_block(): void
     {
         $context = $this->context();

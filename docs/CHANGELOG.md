@@ -6,6 +6,10 @@ geral continua na tabela de documentação do `README.md`. Gerado a partir dessa
 tabela e das datas das tags do git — releases sem tag (anteriores à v1.3.29
 em alguns casos) aparecem sem data.
 
+## 1.3.61 — 2026-10-13
+
+Impede que zonas `ip6.arpa` ou `in-addr.arpa` sejam usadas como domínio associado na criação de outra zona reversa. [Nota completa](RELEASE_1.3.61.md)
+
 ## 1.3.60 — 2026-10-13
 
 Restaura a divisão de redes IPv4 `/16`–`/24` em zonas `/24`, preserva blocos existentes e compacta o assistente de DNS reverso. [Nota completa](RELEASE_1.3.60.md)

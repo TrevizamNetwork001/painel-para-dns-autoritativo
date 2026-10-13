@@ -1116,7 +1116,7 @@
                     </div>
                 </header>
 
-                @if ($canManageDomain)
+                @if ($canManageDomain && ! $zone->isReverseZone() && ! $zone->isIpv6ReverseZone())
                     <div class="domain-publication-action">
                         <button
                             type="button"
@@ -1132,6 +1132,17 @@
                             registros PTR com os registros desta zona
                             direta.
                         </small>
+                    </div>
+                @elseif ($canManageDomain && ($zone->isReverseZone() || $zone->isIpv6ReverseZone()))
+                    <div class="domain-readonly-message">
+                        Para criar outra zona reversa, abra primeiro o domínio
+                        direto que será usado nos nomes PTR.
+
+                        @if ($forwardZones->isNotEmpty())
+                            <a href="{{ route('zones.show', $forwardZones->first()) }}">
+                                Abrir {{ $forwardZones->first()->name }}
+                            </a>
+                        @endif
                     </div>
                 @endif
 
@@ -2072,7 +2083,7 @@
     </div>
 @endif
 
-@if ($canManageDomain)
+@if ($canManageDomain && ! $zone->isReverseZone() && ! $zone->isIpv6ReverseZone())
     <div
         class="record-modal-backdrop"
         data-reverse-modal
@@ -2092,7 +2103,7 @@
 
                     <p>
                         Informe o bloco de endereços exato (endereço de
-                        rede, não um IP individual dentro dele). Por
+                        rede, não um IP individual dentro dele).
                         No IPv4, blocos entre /16 e /24 são divididos
                         automaticamente em zonas /24. No IPv6, o
                         prefixo precisa estar alinhado em nibble.
@@ -2326,10 +2337,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (reverseFamily?.value !== 'ipv4') {
             setPtrFormatReady(false);
-            reversePreviewHelp.textContent = 'A prévia detalhada de formato está disponível para IPv4.';
+            reversePreview.hidden = true;
             reversePreviewValues.hidden = true;
             return;
         }
+
+        reversePreview.hidden = false;
 
         const match = reverseCidr?.value.trim().match(
             /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})\/(1[6-9]|2[0-4])$/
