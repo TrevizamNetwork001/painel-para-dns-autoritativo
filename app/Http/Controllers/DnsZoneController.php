@@ -304,7 +304,7 @@ class DnsZoneController extends Controller
                     ->where('organization_id', $organizationId),
             ],
             'ptr_name_template' => $this->ptrNameTemplateRules(),
-            'ptr_name_format' => ['nullable', Rule::in(['original', 'script', 'host', 'ip', 'custom'])],
+            'ptr_name_format' => ['nullable', Rule::in(['original', 'script', 'host', 'ip', 'iprede', 'rede', 'custom'])],
             'ptr_name_custom' => [
                 'nullable',
                 'required_if:ptr_name_format,custom',
@@ -523,7 +523,7 @@ class DnsZoneController extends Controller
             ],
             'notes' => ['nullable', 'string', 'max:2000'],
             'ptr_name_template' => $this->ptrNameTemplateRules(),
-            'ptr_name_format' => ['nullable', Rule::in(['original', 'script', 'host', 'ip', 'custom'])],
+            'ptr_name_format' => ['nullable', Rule::in(['original', 'script', 'host', 'ip', 'iprede', 'rede', 'custom'])],
             'ptr_name_custom' => [
                 'nullable',
                 'required_if:ptr_name_format,custom',
@@ -1679,6 +1679,8 @@ class DnsZoneController extends Controller
             'script' => '{ip}',
             'host' => 'host-$',
             'ip' => 'ip-$',
+            'iprede' => 'ip-{ip-dash}',
+            'rede' => '{ip-dash}',
             'custom' => $validated['ptr_name_custom'],
             default => $validated['ptr_name_template'] ?? null,
         };

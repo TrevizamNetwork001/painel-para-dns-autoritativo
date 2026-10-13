@@ -219,6 +219,30 @@ class DnsReverseZoneWizardTest extends TestCase
         $this->assertSame('ip-$', $zone->ptr_name_template);
     }
 
+    public function test_wizard_saves_legacy_full_ip_ptr_formats(): void
+    {
+        $context = $this->context();
+
+        foreach ([
+            'iprede' => ['192.0.2.0/24', '2.0.192.in-addr.arpa', 'ip-{ip-dash}'],
+            'rede' => ['198.51.100.0/24', '100.51.198.in-addr.arpa', '{ip-dash}'],
+        ] as $format => [$cidr, $zoneName, $template]) {
+            $this->actingAs($context['admin'])
+                ->post(route('zones.reverse.store'), $this->reversePayload($context, [
+                    'family' => 'ipv4',
+                    'cidr' => $cidr,
+                    'ptr_name_format' => $format,
+                ]))
+                ->assertSessionHasNoErrors();
+
+            $zone = DnsZone::query()
+                ->where('organization_id', $context['organization']->id)
+                ->where('name', $zoneName)
+                ->firstOrFail();
+            $this->assertSame($template, $zone->ptr_name_template);
+        }
+    }
+
     public function test_wizard_script_format_generates_ptr_target_with_full_ipv4(): void
     {
         $context = $this->context();

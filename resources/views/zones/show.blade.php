@@ -903,6 +903,8 @@
                                             '{ip}' => 'script',
                                             'host-$' => 'host',
                                             'ip-$' => 'ip',
+                                            'ip-{ip-dash}' => 'iprede',
+                                            '{ip-dash}' => 'rede',
                                             default => 'custom',
                                         }
                                     );
@@ -924,6 +926,12 @@
                                             </option>
                                             <option value="ip" @selected($savedPtrFormat === 'ip')>
                                                 ip-$ (ex.: ip-10)
+                                            </option>
+                                            <option value="iprede" @selected($savedPtrFormat === 'iprede')>
+                                                IP completo com prefixo ip- (ex.: ip-192-168-0-10)
+                                            </option>
+                                            <option value="rede" @selected($savedPtrFormat === 'rede')>
+                                                IP completo com hífens (ex.: 192-168-0-10)
                                             </option>
                                             <option value="custom" @selected($savedPtrFormat === 'custom')>
                                                 Personalizado
@@ -2148,18 +2156,47 @@
                         </select>
                     </label>
 
-                    <div data-ptr-template-control>
-                        <label class="domain-field">
-                            <span>Formato do nome do PTR (só IPv4)</span>
+                <div data-ptr-template-control>
+                    <div class="reverse-associated-domain">
+                        <span>Domínio associado</span>
+                        <strong>{{ $zone->name }}</strong>
+                    </div>
 
-                            <select name="ptr_name_format" data-ptr-template-format>
-                                <option value="original">Usar o nome do registro A</option>
-                                <option value="script">IP completo com pontos (padrão do script)</option>
-                                <option value="host">host-$ (ex.: host-10)</option>
-                                <option value="ip">ip-$ (ex.: ip-10)</option>
-                                <option value="custom">Personalizado</option>
-                            </select>
-                        </label>
+                    <fieldset class="ptr-format-options">
+                            <legend>Como será o nome reverso?</legend>
+
+                            <label>
+                                <input type="radio" name="ptr_name_format" value="host" data-ptr-template-format checked>
+                                <span>
+                                    <strong>host-10</strong>
+                                    <small>Exemplo: <code>host-10.{{ $zone->name }}</code></small>
+                                </span>
+                            </label>
+
+                            <label>
+                                <input type="radio" name="ptr_name_format" value="iprede" data-ptr-template-format>
+                                <span>
+                                    <strong>ip + endereço completo</strong>
+                                    <small>Exemplo: <code>ip-192-168-0-10.{{ $zone->name }}</code></small>
+                                </span>
+                            </label>
+
+                            <label>
+                                <input type="radio" name="ptr_name_format" value="rede" data-ptr-template-format>
+                                <span>
+                                    <strong>Endereço completo</strong>
+                                    <small>Exemplo: <code>192-168-0-10.{{ $zone->name }}</code></small>
+                                </span>
+                            </label>
+
+                            <label>
+                                <input type="radio" name="ptr_name_format" value="custom" data-ptr-template-format>
+                                <span>
+                                    <strong>Montar meu próprio formato</strong>
+                                    <small>Exemplo: <code>cliente-10.{{ $zone->name }}</code></small>
+                                </span>
+                            </label>
+                        </fieldset>
 
                         <label class="domain-field" data-ptr-template-custom hidden>
                             <span>Formato personalizado</span>
@@ -2184,24 +2221,13 @@
                     data-forward-zone="{{ $zone->name }}"
                     aria-live="polite"
                 >
-                    <strong>Prévia da zona reversa</strong>
+                    <strong data-reverse-preview-title>Exemplo do nome PTR</strong>
                     <p data-reverse-preview-help>
-                        Digite um bloco IPv4 válido para visualizar como a zona e o PTR ficarão.
+                        Digite um bloco IPv4 válido para visualizar o exemplo.
                     </p>
-                    <dl hidden data-reverse-preview-values>
-                        <div>
-                            <dt>Zona criada</dt>
-                            <dd><code data-reverse-preview-zone></code></dd>
-                        </div>
-                        <div>
-                            <dt>Exemplo de IP</dt>
-                            <dd><code data-reverse-preview-ip></code></dd>
-                        </div>
-                        <div>
-                            <dt>Registro PTR</dt>
-                            <dd><code data-reverse-preview-ptr></code></dd>
-                        </div>
-                    </dl>
+                    <div hidden data-reverse-preview-values>
+                        <code data-reverse-preview-ptr></code>
+                    </div>
                 </section>
 
                 <div class="reverse-modal-grid" data-zone-server-pair>
@@ -2261,12 +2287,16 @@ document.addEventListener('DOMContentLoaded', () => {
     const reverseModal = document.querySelector('[data-reverse-modal]');
 
     document.querySelectorAll('[data-ptr-template-control]').forEach((control) => {
-        const format = control.querySelector('[data-ptr-template-format]');
+        const formatFields = control.querySelectorAll('[data-ptr-template-format]');
+        const formatSelect = control.querySelector('select[data-ptr-template-format]');
         const custom = control.querySelector('[data-ptr-template-custom]');
         const customInput = custom?.querySelector('input');
 
+        const selectedFormat = () => formatSelect?.value
+            || control.querySelector('input[data-ptr-template-format]:checked')?.value;
+
         const updateCustomTemplate = () => {
-            const isCustom = format?.value === 'custom';
+            const isCustom = selectedFormat() === 'custom';
 
             if (custom) {
                 custom.hidden = !isCustom;
@@ -2277,7 +2307,9 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         };
 
-        format?.addEventListener('change', updateCustomTemplate);
+        formatFields.forEach((field) => {
+            field.addEventListener('change', updateCustomTemplate);
+        });
         updateCustomTemplate();
     });
 
@@ -2285,10 +2317,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const reversePtrTemplate = reverseModal?.querySelector('[data-ptr-template-control]');
     const reverseCidr = reverseModal?.querySelector('[data-reverse-cidr]');
     const reversePreview = reverseModal?.querySelector('[data-reverse-preview]');
+    const reversePreviewTitle = reversePreview?.querySelector('[data-reverse-preview-title]');
     const reversePreviewHelp = reversePreview?.querySelector('[data-reverse-preview-help]');
     const reversePreviewValues = reversePreview?.querySelector('[data-reverse-preview-values]');
-    const reversePreviewZone = reversePreview?.querySelector('[data-reverse-preview-zone]');
-    const reversePreviewIp = reversePreview?.querySelector('[data-reverse-preview-ip]');
     const reversePreviewPtr = reversePreview?.querySelector('[data-reverse-preview-ptr]');
 
     const updateReversePreview = () => {
@@ -2327,12 +2358,12 @@ document.addEventListener('DOMContentLoaded', () => {
         exampleOctets[3] = 10;
         const exampleIp = exampleOctets.join('.');
         const hostPart = exampleOctets.slice(networkOctets).join('-');
-        const zoneName = octets.slice(0, networkOctets).reverse().join('.') + '.in-addr.arpa';
         const forwardZone = reversePreview.dataset.forwardZone;
-        const format = reversePtrTemplate?.querySelector('[data-ptr-template-format]')?.value;
+        const format = reversePtrTemplate
+            ?.querySelector('input[data-ptr-template-format]:checked')?.value
+            || reversePtrTemplate?.querySelector('select[data-ptr-template-format]')?.value;
         const custom = reversePtrTemplate?.querySelector('[data-ptr-template-custom] input')?.value;
 
-        const ptrOwner = [...exampleOctets].reverse().join('.') + '.in-addr.arpa.';
         let ptrTarget = `nome-do-registro-A.${forwardZone}.`;
 
         if (format === 'script') {
@@ -2341,16 +2372,19 @@ document.addEventListener('DOMContentLoaded', () => {
             ptrTarget = `host-${hostPart}.${forwardZone}.`;
         } else if (format === 'ip') {
             ptrTarget = `ip-${hostPart}.${forwardZone}.`;
+        } else if (format === 'iprede') {
+            ptrTarget = `ip-${exampleIp.replaceAll('.', '-')}.${forwardZone}.`;
+        } else if (format === 'rede') {
+            ptrTarget = `${exampleIp.replaceAll('.', '-')}.${forwardZone}.`;
         } else if (format === 'custom') {
             ptrTarget = custom?.includes('$')
                 ? `${custom.replace('$', hostPart)}.${forwardZone}.`
                 : 'Digite um formato personalizado contendo $.';
         }
 
-        reversePreviewHelp.textContent = 'Exemplo usando um endereço do bloco informado:';
-        reversePreviewZone.textContent = zoneName;
-        reversePreviewIp.textContent = exampleIp;
-        reversePreviewPtr.textContent = `${ptrOwner} PTR ${ptrTarget}`;
+        reversePreviewTitle.textContent = `Exemplo para o IP .${exampleOctets[3]}`;
+        reversePreviewHelp.textContent = 'O nome PTR gerado será:';
+        reversePreviewPtr.textContent = ptrTarget;
         reversePreviewValues.hidden = false;
     };
 

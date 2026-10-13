@@ -6,6 +6,10 @@ geral continua na tabela de documentação do `README.md`. Gerado a partir dessa
 tabela e das datas das tags do git — releases sem tag (anteriores à v1.3.29
 em alguns casos) aparecem sem data.
 
+## 1.3.59 — 2026-10-13
+
+Recupera a experiência do painel antigo na criação de reversa IPv4: domínio associado visível, formatos de hostname com exemplos e prévia simples para o IP `.10`. [Nota completa](RELEASE_1.3.59.md)
+
 ## 1.3.58 — 2026-10-13
 
 Restaura a prévia interativa no assistente de zona reversa, mostrando zona, IP de exemplo e PTR antes da criação. [Nota completa](RELEASE_1.3.58.md)

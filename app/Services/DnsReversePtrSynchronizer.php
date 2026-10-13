@@ -156,6 +156,12 @@ class DnsReversePtrSynchronizer
             return $ip.'.'.strtolower(rtrim(trim($forwardZoneName), '.'));
         }
 
+        if (str_contains($nameTemplate, '{ip-dash}')) {
+            $label = str_replace('{ip-dash}', str_replace('.', '-', $ip), $nameTemplate);
+
+            return $label.'.'.strtolower(rtrim(trim($forwardZoneName), '.'));
+        }
+
         $network = $this->ipv4ZoneNetwork($reverseZoneName);
         $ipOctets = array_map('intval', explode('.', $ip));
 
