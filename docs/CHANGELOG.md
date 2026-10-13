@@ -6,6 +6,10 @@ geral continua na tabela de documentação do `README.md`. Gerado a partir dessa
 tabela e das datas das tags do git — releases sem tag (anteriores à v1.3.29
 em alguns casos) aparecem sem data.
 
+## 1.3.58 — 2026-10-13
+
+Restaura a prévia interativa no assistente de zona reversa, mostrando zona, IP de exemplo e PTR antes da criação. [Nota completa](RELEASE_1.3.58.md)
+
 ## 1.3.57 — 2026-10-13
 
 Adoção protegida de zonas importadas e formatos explícitos de PTR no assistente de DNS reverso. [Nota completa](RELEASE_1.3.57.md)

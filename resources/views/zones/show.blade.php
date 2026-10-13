@@ -2123,6 +2123,7 @@
                         <input
                             type="text"
                             name="cidr"
+                            data-reverse-cidr
                             placeholder="192.0.2.0/24 ou 2001:db8::/32"
                             required
                         >
@@ -2176,6 +2177,32 @@
                         </label>
                     </div>
                 </div>
+
+                <section
+                    class="reverse-zone-preview"
+                    data-reverse-preview
+                    data-forward-zone="{{ $zone->name }}"
+                    aria-live="polite"
+                >
+                    <strong>Prévia da zona reversa</strong>
+                    <p data-reverse-preview-help>
+                        Digite um bloco IPv4 válido para visualizar como a zona e o PTR ficarão.
+                    </p>
+                    <dl hidden data-reverse-preview-values>
+                        <div>
+                            <dt>Zona criada</dt>
+                            <dd><code data-reverse-preview-zone></code></dd>
+                        </div>
+                        <div>
+                            <dt>Exemplo de IP</dt>
+                            <dd><code data-reverse-preview-ip></code></dd>
+                        </div>
+                        <div>
+                            <dt>Registro PTR</dt>
+                            <dd><code data-reverse-preview-ptr></code></dd>
+                        </div>
+                    </dl>
+                </section>
 
                 <div class="reverse-modal-grid" data-zone-server-pair>
                     <label class="domain-field">
@@ -2256,6 +2283,76 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const reverseFamily = reverseModal?.querySelector('[data-reverse-family]');
     const reversePtrTemplate = reverseModal?.querySelector('[data-ptr-template-control]');
+    const reverseCidr = reverseModal?.querySelector('[data-reverse-cidr]');
+    const reversePreview = reverseModal?.querySelector('[data-reverse-preview]');
+    const reversePreviewHelp = reversePreview?.querySelector('[data-reverse-preview-help]');
+    const reversePreviewValues = reversePreview?.querySelector('[data-reverse-preview-values]');
+    const reversePreviewZone = reversePreview?.querySelector('[data-reverse-preview-zone]');
+    const reversePreviewIp = reversePreview?.querySelector('[data-reverse-preview-ip]');
+    const reversePreviewPtr = reversePreview?.querySelector('[data-reverse-preview-ptr]');
+
+    const updateReversePreview = () => {
+        if (!reversePreview || !reversePreviewHelp || !reversePreviewValues) {
+            return;
+        }
+
+        if (reverseFamily?.value !== 'ipv4') {
+            reversePreviewHelp.textContent = 'A prévia detalhada de formato está disponível para IPv4.';
+            reversePreviewValues.hidden = true;
+            return;
+        }
+
+        const match = reverseCidr?.value.trim().match(
+            /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})\/(8|16|24)$/
+        );
+
+        if (!match) {
+            reversePreviewHelp.textContent = 'Digite um bloco IPv4 /8, /16 ou /24 válido para visualizar a prévia.';
+            reversePreviewValues.hidden = true;
+            return;
+        }
+
+        const octets = match.slice(1, 5).map(Number);
+        const prefix = Number(match[5]);
+        const networkOctets = prefix / 8;
+
+        if (octets.some((octet) => octet > 255)
+            || octets.slice(networkOctets).some((octet) => octet !== 0)) {
+            reversePreviewHelp.textContent = 'Use o endereço inicial da rede, com os octetos de host zerados.';
+            reversePreviewValues.hidden = true;
+            return;
+        }
+
+        const exampleOctets = [...octets];
+        exampleOctets[3] = 10;
+        const exampleIp = exampleOctets.join('.');
+        const hostPart = exampleOctets.slice(networkOctets).join('-');
+        const zoneName = octets.slice(0, networkOctets).reverse().join('.') + '.in-addr.arpa';
+        const forwardZone = reversePreview.dataset.forwardZone;
+        const format = reversePtrTemplate?.querySelector('[data-ptr-template-format]')?.value;
+        const custom = reversePtrTemplate?.querySelector('[data-ptr-template-custom] input')?.value;
+
+        const ptrOwner = [...exampleOctets].reverse().join('.') + '.in-addr.arpa.';
+        let ptrTarget = `nome-do-registro-A.${forwardZone}.`;
+
+        if (format === 'script') {
+            ptrTarget = `${exampleIp}.${forwardZone}.`;
+        } else if (format === 'host') {
+            ptrTarget = `host-${hostPart}.${forwardZone}.`;
+        } else if (format === 'ip') {
+            ptrTarget = `ip-${hostPart}.${forwardZone}.`;
+        } else if (format === 'custom') {
+            ptrTarget = custom?.includes('$')
+                ? `${custom.replace('$', hostPart)}.${forwardZone}.`
+                : 'Digite um formato personalizado contendo $.';
+        }
+
+        reversePreviewHelp.textContent = 'Exemplo usando um endereço do bloco informado:';
+        reversePreviewZone.textContent = zoneName;
+        reversePreviewIp.textContent = exampleIp;
+        reversePreviewPtr.textContent = `${ptrOwner} PTR ${ptrTarget}`;
+        reversePreviewValues.hidden = false;
+    };
 
     const updateReverseFamily = () => {
         if (!reversePtrTemplate) {
@@ -2270,7 +2367,12 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     reverseFamily?.addEventListener('change', updateReverseFamily);
+    reverseFamily?.addEventListener('change', updateReversePreview);
+    reverseCidr?.addEventListener('input', updateReversePreview);
+    reversePtrTemplate?.addEventListener('input', updateReversePreview);
+    reversePtrTemplate?.addEventListener('change', updateReversePreview);
     updateReverseFamily();
+    updateReversePreview();
 
     const openReverseModal = () => {
         reverseModal?.classList.add('is-open');
