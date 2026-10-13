@@ -6959,6 +6959,37 @@ body.has-open-modal {
     text-align: center;
 }
 
+.domain-publication-statusline {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.45rem;
+    margin: 0.75rem 1rem 0;
+}
+
+.domain-publication-statusline > span {
+    padding: 0.4rem 0.55rem;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    background: var(--surface-soft);
+    color: var(--text-muted);
+    font-size: 0.62rem;
+    white-space: nowrap;
+}
+
+.domain-publication-statusline strong {
+    color: var(--text);
+}
+
+.domain-publication-statusline .is-warning {
+    border-color: rgba(245, 158, 11, 0.3);
+    color: #d97706;
+}
+
+.domain-publication-statusline .is-danger {
+    border-color: rgba(239, 68, 68, 0.3);
+    color: #dc2626;
+}
+
 .domain-bind-preview {
     max-height: 520px;
     overflow: auto;
@@ -6979,9 +7010,10 @@ body.has-open-modal {
 
 .domain-history-item {
     display: grid;
-    grid-template-columns: 130px minmax(0, 1fr);
-    gap: 1rem;
-    padding: 0.9rem 1rem;
+    grid-template-columns: minmax(170px, max-content) minmax(0, 1fr) auto;
+    gap: 0.8rem;
+    align-items: center;
+    padding: 0.65rem 1rem;
     border-bottom: 1px solid var(--border);
 }
 
@@ -6991,9 +7023,23 @@ body.has-open-modal {
 
 .domain-history-version,
 .domain-history-description {
-    display: grid;
+    display: flex;
     min-width: 0;
-    gap: 0.2rem;
+    gap: 0.55rem;
+    align-items: center;
+}
+
+.domain-history-description strong {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.domain-history-item span,
+.domain-history-item time,
+.domain-history-item form,
+.domain-history-item .button {
+    white-space: nowrap;
 }
 
 .domain-history-item strong {
@@ -7005,6 +7051,17 @@ body.has-open-modal {
 .domain-history-item time {
     color: var(--text-muted);
     font-size: 0.62rem;
+}
+
+@media (max-width: 760px) {
+    .domain-history-item {
+        grid-template-columns: 1fr;
+        align-items: start;
+    }
+
+    .domain-history-description {
+        justify-content: space-between;
+    }
 }
 
 .record-modal-backdrop {

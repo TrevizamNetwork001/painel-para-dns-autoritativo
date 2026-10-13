@@ -404,28 +404,28 @@ class DnsZoneManagementTest extends TestCase
             $output,
         );
 
-        $this->assertStringContainsString(
-            'www 300 IN A 192.0.2.20',
+        $this->assertMatchesRegularExpression(
+            '/^www\s+300\s+A\s+192\.0\.2\.20$/m',
             $output,
         );
 
-        $this->assertStringContainsString(
-            'ns1.example.com. IN A 192.0.2.53',
+        $this->assertMatchesRegularExpression(
+            '/^ns1\s+A\s+192\.0\.2\.53$/m',
             $output,
         );
 
         $this->assertStringNotContainsString(
-            'ns1.example.com IN A 192.0.2.53',
+            'ns1.example.com. IN A 192.0.2.53',
             $output,
         );
 
-        $this->assertStringContainsString(
-            '@ IN NS ns1.provider.example.',
+        $this->assertMatchesRegularExpression(
+            '/^\s+NS\s+ns1\.provider\.example\.$/m',
             $output,
         );
 
-        $this->assertStringContainsString(
-            '@ IN NS ns2.provider.example.',
+        $this->assertMatchesRegularExpression(
+            '/^\s+NS\s+ns2\.provider\.example\.$/m',
             $output,
         );
     }

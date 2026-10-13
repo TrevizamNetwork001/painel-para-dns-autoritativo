@@ -268,7 +268,7 @@ class DnsBindLegacyZoneBlockTest extends TestCase
             ->get(route('zones.show', $zone))
             ->assertOk()
             ->assertSee('Publicar e sincronizar')
-            ->assertSee('Só publicar')
+            ->assertDontSee('Só publicar')
             ->assertDontSee('Declaração de zona legada bloqueia a publicação');
     }
 

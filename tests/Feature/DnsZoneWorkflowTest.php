@@ -268,7 +268,7 @@ class DnsZoneWorkflowTest extends TestCase
             ->getJson('/api/agent/zones/'.$zone->id.'/artifact')
             ->assertOk()
             ->assertHeader('X-DNS-Zone-Version', (string) $zone->version)
-            ->assertSee('$ORIGIN example.com.', false);
+            ->assertSee('$ORIGIN .', false);
 
         $publishedVersion = $zone->version;
 

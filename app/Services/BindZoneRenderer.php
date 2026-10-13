@@ -12,27 +12,83 @@ class BindZoneRenderer
     {
         $zone->loadMissing([
             'records' => fn ($query) => $query
-                ->where('enabled', true)
-                ->orderBy('type')
-                ->orderBy('name'),
+                ->where('enabled', true),
         ]);
 
+        $records = $zone->records
+            ->where('enabled', true)
+            ->sortBy(fn (DnsRecord $record): string => sprintf(
+                '%s:%02d',
+                $this->owner($record->name, $zone->name),
+                $this->typeOrder($record->type),
+            ))
+            ->values();
+
+        $apexRecords = $records->filter(
+            fn (DnsRecord $record): bool => $this->isApex(
+                $record->name,
+                $zone->name,
+            ),
+        );
+
+        $hostRecords = $records->reject(
+            fn (DnsRecord $record): bool => $this->isApex(
+                $record->name,
+                $zone->name,
+            ),
+        );
+
         $lines = [
-            '$ORIGIN '.$this->fqdn($zone->name),
+            '$ORIGIN .',
             '$TTL '.$zone->default_ttl,
             '',
-            '@ IN SOA '.$this->fqdn($zone->soa_mname).' '.$this->fqdn($zone->soa_rname).' (',
-            '    '.$zone->serial.' ; serial',
-            '    '.$zone->soa_refresh.' ; refresh',
-            '    '.$zone->soa_retry.' ; retry',
-            '    '.$zone->soa_expire.' ; expire',
-            '    '.$zone->soa_minimum.' ; minimum',
-            ')',
-            '',
+            sprintf(
+                '%-24s IN SOA  %s %s (',
+                $zone->name,
+                $this->fqdn($zone->soa_mname),
+                $this->fqdn($zone->soa_rname),
+            ),
+            '                            '.$zone->serial.' ; serial',
+            '                            '.$zone->soa_refresh.' ; refresh',
+            '                            '.$zone->soa_retry.' ; retry',
+            '                            '.$zone->soa_expire.' ; expire',
+            '                            '.$zone->soa_minimum.' ; minimum',
+            '                            )',
         ];
 
-        foreach ($zone->records as $record) {
-            $lines[] = $this->renderRecord($record, $zone);
+        foreach ($apexRecords as $record) {
+            $lines[] = $this->renderRecord($record, $zone, '');
+        }
+
+        if ($hostRecords->isNotEmpty()) {
+            $hostTtl = $this->preferredTtl($hostRecords, $zone->default_ttl);
+
+            $lines[] = '';
+            $lines[] = '$ORIGIN '.$this->fqdn($zone->name);
+
+            if ($hostTtl !== (int) $zone->default_ttl) {
+                $lines[] = '$TTL '.$hostTtl;
+            }
+
+            $lines[] = '';
+
+            $lastOwner = null;
+
+            foreach ($hostRecords as $record) {
+                $owner = $this->owner($record->name, $zone->name);
+
+                if ($lastOwner !== null && $lastOwner !== $owner) {
+                    $lines[] = '';
+                }
+
+                $lines[] = $this->renderRecord(
+                    $record,
+                    $zone,
+                    $lastOwner === $owner ? '' : $owner,
+                    $hostTtl,
+                );
+                $lastOwner = $owner;
+            }
         }
 
         return implode(PHP_EOL, $lines).PHP_EOL;
@@ -125,10 +181,18 @@ class BindZoneRenderer
         ];
     }
 
-    private function renderRecord(DnsRecord $record, DnsZone $zone): string
-    {
-        $name = $this->owner($record->name, $zone->name);
-        $ttl = $record->ttl ? ' '.$record->ttl : '';
+    private function renderRecord(
+        DnsRecord $record,
+        DnsZone $zone,
+        ?string $displayOwner = null,
+        ?int $inheritedTtl = null,
+    ): string {
+        $name = $displayOwner ?? $this->owner($record->name, $zone->name);
+        $inheritedTtl ??= (int) $zone->default_ttl;
+        $ttl = $record->ttl
+            && (int) $record->ttl !== $inheritedTtl
+                ? (string) $record->ttl
+                : '';
 
         $content = match ($record->type) {
             'A' => $this->ip($record->content, FILTER_FLAG_IPV4),
@@ -140,7 +204,13 @@ class BindZoneRenderer
             default => throw new InvalidArgumentException('Tipo DNS não suportado.'),
         };
 
-        return sprintf('%s%s IN %s %s', $name, $ttl, $record->type, $content);
+        return rtrim(sprintf(
+            '%-24s %-7s %-7s %s',
+            $name,
+            $ttl,
+            $record->type,
+            $content,
+        ));
     }
 
     private function owner(string $name, string $zoneName): string
@@ -153,10 +223,44 @@ class BindZoneRenderer
         }
 
         if (str_ends_with($name, '.'.$zoneName)) {
-            return $name.'.';
+            return substr($name, 0, -strlen('.'.$zoneName));
         }
 
-        return $name;
+        return str_contains($name, '.') ? $name.'.' : $name;
+    }
+
+    private function isApex(string $name, string $zoneName): bool
+    {
+        $name = rtrim(strtolower(trim($name)), '.');
+        $zoneName = rtrim(strtolower(trim($zoneName)), '.');
+
+        return $name === '@' || $name === '' || $name === $zoneName;
+    }
+
+    private function typeOrder(string $type): int
+    {
+        $position = array_search($type, [
+            'NS',
+            'A',
+            'AAAA',
+            'MX',
+            'CNAME',
+            'TXT',
+            'CAA',
+            'PTR',
+        ], true);
+
+        return $position === false ? 99 : $position;
+    }
+
+    private function preferredTtl($records, int $defaultTtl): int
+    {
+        return (int) $records
+            ->map(fn (DnsRecord $record): int => (int) ($record->ttl ?: $defaultTtl))
+            ->countBy()
+            ->sortDesc()
+            ->keys()
+            ->first();
     }
 
     private function fqdn(string $value): string

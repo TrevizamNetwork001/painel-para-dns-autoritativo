@@ -1383,35 +1383,10 @@
                             </button>
 
                             <small>
-                                Publica a versão salva e já envia a
-                                atualização pra todos os servidores
-                                configurados, em um só passo.
+                                Publica e aplica nos servidores configurados.
                             </small>
                         </div>
 
-                        <form
-                            method="POST"
-                            action="{{ route('zones.publish', $zone) }}"
-                            class="domain-publication-action"
-                            onsubmit="return confirm('Publicar agora a versão salva desta zona?')"
-                        >
-                            @csrf
-
-                            <button
-                                type="submit"
-                                class="button button-secondary"
-                                @disabled(! $validationOk)
-                            >
-                                Só publicar
-                            </button>
-
-                            <small>
-                                Salvar não publica. Esta ação disponibiliza o
-                                artefato aos agentes configurados, sem enviar
-                                pros servidores — use "Aplicar agora" por
-                                servidor depois, se preferir revisar antes.
-                            </small>
-                        </form>
                     @endif
 
                     @if ($canManageDomain && $zone->isReverseZone())
@@ -1525,58 +1500,31 @@
                                 ->count();
                         @endphp
 
-                        <dl class="agent-server-details">
-                            <div>
-                                <dt>Agentes aplicáveis</dt>
-                                <dd>{{ $publicationTargets->count() }}</dd>
-                            </div>
-                            <div>
-                                <dt>Aplicação confirmada</dt>
-                                <dd>{{ $appliedCount }}</dd>
-                            </div>
-                            <div>
-                                <dt>Serial SOA confirmado</dt>
-                                <dd>
-                                    {{ $serialConfirmedCount }}
-                                    / {{ $publicationTargets->count() }}
-                                    · {{ $lastPublication->serial }}
-                                </dd>
-                            </div>
-                            <div>
-                                <dt>Pendentes</dt>
-                                <dd>{{ $pendingCount }}</dd>
-                            </div>
-                            <div>
-                                <dt>Falharam</dt>
-                                <dd>{{ $failedCount }}</dd>
-                            </div>
-                            <div>
-                                <dt>Agentes offline</dt>
-                                <dd>{{ $offlineCount }}</dd>
-                            </div>
-                        </dl>
-
-                        @if ($canManageDomain && $secondaryServer)
-                            <div class="domain-publication-action" data-transfer-action>
-                                <button
-                                    type="button"
-                                    class="button button-secondary"
-                                    data-force-transfer-open
-                                    data-force-transfer-server-name="{{ $secondaryServer->name }}"
-                                    data-force-transfer-store-url="{{ route('servers.bind.transfer.store', [$secondaryServer, $zone]) }}"
-                                    data-force-transfer-status-url-template="{{ route('servers.bind.transfer.status', [$secondaryServer, 'OPERATION_ID']) }}"
-                                    data-force-transfer-csrf="{{ csrf_token() }}"
-                                >
-                                    Forçar transferência em {{ $secondaryServer->name }}
-                                </button>
-
-                                <small>
-                                    Pede ao secundário para buscar a zona de novo agora,
-                                    em vez de esperar o próximo refresh natural. Não altera
-                                    nenhuma configuração.
-                                </small>
-                            </div>
-                        @endif
+                        <div class="domain-publication-statusline">
+                            <span>
+                                <strong>{{ $appliedCount }}/{{ $publicationTargets->count() }}</strong>
+                                aplicados
+                            </span>
+                            <span>
+                                <strong>{{ $serialConfirmedCount }}/{{ $publicationTargets->count() }}</strong>
+                                serial confirmado · {{ $lastPublication->serial }}
+                            </span>
+                            @if ($pendingCount > 0)
+                                <span class="is-warning">
+                                    <strong>{{ $pendingCount }}</strong> pendente(s)
+                                </span>
+                            @endif
+                            @if ($failedCount > 0)
+                                <span class="is-danger">
+                                    <strong>{{ $failedCount }}</strong> falha(s)
+                                </span>
+                            @endif
+                            @if ($offlineCount > 0)
+                                <span class="is-warning">
+                                    <strong>{{ $offlineCount }}</strong> offline
+                                </span>
+                            @endif
+                        </div>
 
                         @if ($canManageDomain)
                             @php
@@ -1664,7 +1612,7 @@
                             </div>
 
                             <div class="domain-history-description">
-                                <strong>
+                                <strong title="{{ $version->reason ?: 'Alteração registrada' }}">
                                     {{ $version->reason ?: 'Alteração registrada' }}
                                 </strong>
 

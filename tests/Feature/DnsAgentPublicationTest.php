@@ -317,9 +317,8 @@ class DnsAgentPublicationTest extends TestCase
         $this->actingAs($context['admin'])
             ->get(route('zones.show', $context['zone']))
             ->assertOk()
-            ->assertSee('Agentes aplicáveis')
-            ->assertSee('Aplicação confirmada')
-            ->assertSee('Agentes offline');
+            ->assertSee('aplicados')
+            ->assertSee('serial confirmado');
 
         $this->actingAs($foreign['admin'])
             ->get(route('zones.show', $context['zone']))
