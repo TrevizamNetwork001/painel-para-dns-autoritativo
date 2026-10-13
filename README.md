@@ -315,7 +315,7 @@ em produção. As evidências e limitações estão em
 | [Primary/secondary](docs/BIND_PRIMARY_SECONDARY.md) | Topologia, TSIG, AXFR/NOTIFY e continuidade |
 | [Readiness e instalação](docs/BIND_READINESS_INSTALLATION.md) | Detecção e operações allowlisted do BIND |
 | [Homologação real](docs/BIND_REAL_HOMOLOGATION.md) | Evidências do agente e BIND em ambiente descartável |
-| [Descoberta e adoção de BIND](docs/BIND_ADOPTION_1.md) | Discover/Import somente leitura de BIND existente; Adopt fora de escopo |
+| [Descoberta e adoção de BIND](docs/BIND_ADOPTION_1.md) | Discover/Import de BIND existente e adoção protegida por zona |
 | [Observabilidade](docs/OBSERVABILITY_1.md) | Seriais, transferências, hardening e alertas internos |
 | [Baseline de segurança](docs/SECURITY_BASELINE_1.md) | Controles da superfície administrativa |
 | [Baseline de deploy](docs/DEPLOY_BASELINE_1.md) | Build, instalação, atualização, backup e rollback |

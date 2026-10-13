@@ -274,7 +274,7 @@ class DnsBindDiscoveryController extends Controller
         $status = "Importação concluída: {$imported} zona(s) importada(s), {$skipped} ignorada(s).";
 
         if ($configured > 0) {
-            $status .= " {$configured} já saíram configuradas e adotadas — falta só publicar.";
+            $status .= " {$configured} saíram configuradas e aguardam a adoção protegida na tela da zona.";
         }
 
         return redirect()
@@ -469,10 +469,9 @@ class DnsBindDiscoveryController extends Controller
                     return 'imported';
                 }
 
-                // Mesmos passos de "Configuração → Salvar" + "Concluir adoção" na
-                // tela da zona, aplicados aqui para poupar o clique-a-clique de
-                // adotar várias zonas do mesmo cliente/servidor de uma vez —
-                // reaproveita o mesmo synchronizer, sem lógica nova de escrita.
+                // Configura a topologia e os nameservers, mas não adota
+                // automaticamente. A adoção exige descoberta recente, ausência
+                // de drift e confirmação forte na tela da zona.
                 $servers = [$primaryServerId => ['role' => 'primary']];
 
                 if ($secondaryServerId !== null) {
@@ -481,9 +480,7 @@ class DnsBindDiscoveryController extends Controller
 
                 $zone->servers()->sync($servers);
                 $nameservers->synchronize($zone, $nameserverProfile);
-                $zone->forceFill(['origin' => 'managed'])->save();
-
-                $this->auditImport($request, $discovered, 'dns.bind_zone_imported_and_configured', 'success');
+                $this->auditImport($request, $discovered, 'dns.bind_zone_imported_and_configured_pending_adoption', 'success');
 
                 return 'imported_and_configured';
             });

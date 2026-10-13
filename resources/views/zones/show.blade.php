@@ -891,27 +891,62 @@
                                     </p>
                                 </div>
 
-                                <label class="domain-field">
-                                    <span>Modelo de nome do PTR (opcional)</span>
+                                @php
+                                    $savedPtrTemplate = old(
+                                        'ptr_name_custom',
+                                        $zone->ptr_name_template
+                                    );
+                                    $savedPtrFormat = old(
+                                        'ptr_name_format',
+                                        match ($zone->ptr_name_template) {
+                                            null, '' => 'original',
+                                            '{ip}' => 'script',
+                                            'host-$' => 'host',
+                                            'ip-$' => 'ip',
+                                            default => 'custom',
+                                        }
+                                    );
+                                @endphp
 
-                                    <input
-                                        type="text"
-                                        name="ptr_name_template"
-                                        placeholder="host-$"
-                                        maxlength="50"
-                                        value="{{ old(
-                                            'ptr_name_template',
-                                            $zone->ptr_name_template
-                                        ) }}"
-                                    >
+                                <div data-ptr-template-control>
+                                    <label class="domain-field">
+                                        <span>Formato do nome do PTR</span>
 
-                                    <small>
-                                        Use <code>$</code> no lugar do IP
-                                        do host, ex. <code>host-$</code>.
-                                        Em branco, usa o nome do próprio
-                                        registro A.
-                                    </small>
-                                </label>
+                                        <select name="ptr_name_format" data-ptr-template-format>
+                                            <option value="original" @selected($savedPtrFormat === 'original')>
+                                                Usar o nome do registro A
+                                            </option>
+                                            <option value="script" @selected($savedPtrFormat === 'script')>
+                                                IP completo com pontos (padrão do script)
+                                            </option>
+                                            <option value="host" @selected($savedPtrFormat === 'host')>
+                                                host-$ (ex.: host-10)
+                                            </option>
+                                            <option value="ip" @selected($savedPtrFormat === 'ip')>
+                                                ip-$ (ex.: ip-10)
+                                            </option>
+                                            <option value="custom" @selected($savedPtrFormat === 'custom')>
+                                                Personalizado
+                                            </option>
+                                        </select>
+                                    </label>
+
+                                    <label class="domain-field" data-ptr-template-custom>
+                                        <span>Formato personalizado</span>
+
+                                        <input
+                                            type="text"
+                                            name="ptr_name_custom"
+                                            placeholder="cliente-$"
+                                            maxlength="50"
+                                            value="{{ $savedPtrTemplate }}"
+                                        >
+
+                                        <small>
+                                            Use <code>$</code> no lugar da parte do host do IP.
+                                        </small>
+                                    </label>
+                                </div>
                             </div>
                         @endif
 
@@ -1220,24 +1255,47 @@
                         </div>
 
                         @if ($canManageDomain)
+                            @if (! $adoptionReadiness['ok'])
+                                <div class="domain-validation-warnings">
+                                    <strong>Adoção bloqueada</strong>
+                                    <ul>
+                                        @foreach ($adoptionReadiness['issues'] as $issue)
+                                            <li>{{ $issue }}</li>
+                                        @endforeach
+                                    </ul>
+                                </div>
+                            @endif
+
                             <form
                                 method="POST"
                                 action="{{ route('zones.adopt', $zone) }}"
                                 class="domain-publication-action"
-                                onsubmit="return confirm('Concluir a adoção do gerenciamento desta zona?')"
                             >
                                 @csrf
+
+                                <label>
+                                    Confirmação forte
+                                    <input
+                                        type="text"
+                                        name="confirmation"
+                                        required
+                                        autocomplete="off"
+                                        placeholder="ADOTAR {{ strtoupper($zone->name) }}"
+                                    >
+                                </label>
 
                                 <button
                                     type="submit"
                                     class="button button-primary"
+                                    @disabled(! $adoptionReadiness['ok'])
                                 >
                                     Concluir adoção
                                 </button>
 
                                 <small>
-                                    Depois de adotada, a zona poderá ser
-                                    publicada normalmente.
+                                    Digite <strong>ADOTAR {{ strtoupper($zone->name) }}</strong>.
+                                    Depois da adoção a zona poderá ser publicada; nenhuma
+                                    publicação acontece automaticamente nesta etapa.
                                 </small>
                             </form>
                         @endif
@@ -2053,7 +2111,7 @@
                     <label class="domain-field">
                         <span>Família</span>
 
-                        <select name="family" required>
+                        <select name="family" required data-reverse-family>
                             <option value="ipv4">IPv4 (in-addr.arpa)</option>
                             <option value="ipv6">IPv6 (ip6.arpa)</option>
                         </select>
@@ -2089,23 +2147,34 @@
                         </select>
                     </label>
 
-                    <label class="domain-field">
-                        <span>Modelo de nome do PTR (opcional, só IPv4)</span>
+                    <div data-ptr-template-control>
+                        <label class="domain-field">
+                            <span>Formato do nome do PTR (só IPv4)</span>
 
-                        <input
-                            type="text"
-                            name="ptr_name_template"
-                            placeholder="host-$"
-                            maxlength="50"
-                        >
+                            <select name="ptr_name_format" data-ptr-template-format>
+                                <option value="original">Usar o nome do registro A</option>
+                                <option value="script">IP completo com pontos (padrão do script)</option>
+                                <option value="host">host-$ (ex.: host-10)</option>
+                                <option value="ip">ip-$ (ex.: ip-10)</option>
+                                <option value="custom">Personalizado</option>
+                            </select>
+                        </label>
 
-                        <small>
-                            Use <code>$</code> no lugar do IP do host,
-                            ex. <code>host-$</code>. Só vale pra PTR
-                            gerado a partir de registros A; deixe em
-                            branco pra usar o nome do próprio A.
-                        </small>
-                    </label>
+                        <label class="domain-field" data-ptr-template-custom hidden>
+                            <span>Formato personalizado</span>
+
+                            <input
+                                type="text"
+                                name="ptr_name_custom"
+                                placeholder="cliente-$"
+                                maxlength="50"
+                            >
+
+                            <small>
+                                Use <code>$</code> no lugar da parte do host do IP.
+                            </small>
+                        </label>
+                    </div>
                 </div>
 
                 <div class="reverse-modal-grid" data-zone-server-pair>
@@ -2163,6 +2232,45 @@
 <script nonce="{{ $cspNonce ?? '' }}">
 document.addEventListener('DOMContentLoaded', () => {
     const reverseModal = document.querySelector('[data-reverse-modal]');
+
+    document.querySelectorAll('[data-ptr-template-control]').forEach((control) => {
+        const format = control.querySelector('[data-ptr-template-format]');
+        const custom = control.querySelector('[data-ptr-template-custom]');
+        const customInput = custom?.querySelector('input');
+
+        const updateCustomTemplate = () => {
+            const isCustom = format?.value === 'custom';
+
+            if (custom) {
+                custom.hidden = !isCustom;
+            }
+
+            if (customInput) {
+                customInput.required = isCustom;
+            }
+        };
+
+        format?.addEventListener('change', updateCustomTemplate);
+        updateCustomTemplate();
+    });
+
+    const reverseFamily = reverseModal?.querySelector('[data-reverse-family]');
+    const reversePtrTemplate = reverseModal?.querySelector('[data-ptr-template-control]');
+
+    const updateReverseFamily = () => {
+        if (!reversePtrTemplate) {
+            return;
+        }
+
+        const isIpv4 = reverseFamily?.value === 'ipv4';
+        reversePtrTemplate.hidden = !isIpv4;
+        reversePtrTemplate.querySelectorAll('select, input').forEach((field) => {
+            field.disabled = !isIpv4;
+        });
+    };
+
+    reverseFamily?.addEventListener('change', updateReverseFamily);
+    updateReverseFamily();
 
     const openReverseModal = () => {
         reverseModal?.classList.add('is-open');

@@ -14,6 +14,7 @@ use App\Models\DnsZoneVersion;
 use App\Services\BindZoneRenderer;
 use App\Services\DnsBindConfigConflicts;
 use App\Services\DnsReversePtrSynchronizer;
+use App\Services\DnsZoneAdoptionGuard;
 use App\Services\DnsZoneNameserverSynchronizer;
 use App\Services\DnsZoneValidator;
 use App\Services\ReverseZoneNameCalculator;
@@ -303,6 +304,12 @@ class DnsZoneController extends Controller
                     ->where('organization_id', $organizationId),
             ],
             'ptr_name_template' => $this->ptrNameTemplateRules(),
+            'ptr_name_format' => ['nullable', Rule::in(['original', 'script', 'host', 'ip', 'custom'])],
+            'ptr_name_custom' => [
+                'nullable',
+                'required_if:ptr_name_format,custom',
+                ...$this->ptrNameTemplateRules(),
+            ],
         ]);
 
         try {
@@ -357,7 +364,7 @@ class DnsZoneController extends Controller
             [
                 'kind' => 'primary',
                 'ptr_name_template' => $validated['family'] === 'ipv4'
-                    ? ($validated['ptr_name_template'] ?? null)
+                    ? $this->resolvePtrNameTemplate($validated)
                     : null,
             ],
             $nameserverProfile,
@@ -516,6 +523,12 @@ class DnsZoneController extends Controller
             ],
             'notes' => ['nullable', 'string', 'max:2000'],
             'ptr_name_template' => $this->ptrNameTemplateRules(),
+            'ptr_name_format' => ['nullable', Rule::in(['original', 'script', 'host', 'ip', 'custom'])],
+            'ptr_name_custom' => [
+                'nullable',
+                'required_if:ptr_name_format,custom',
+                ...$this->ptrNameTemplateRules(),
+            ],
         ]);
 
         $nameserverProfile =
@@ -556,7 +569,7 @@ class DnsZoneController extends Controller
                 'soa_minimum' => $validated['soa_minimum'],
                 'notes' => $validated['notes'] ?? null,
                 'ptr_name_template' => $zone->isReverseZone()
-                    ? ($validated['ptr_name_template'] ?? null)
+                    ? $this->resolvePtrNameTemplate($validated)
                     : null,
             ])->save();
 
@@ -608,6 +621,7 @@ class DnsZoneController extends Controller
         BindZoneRenderer $renderer,
         DnsZoneValidator $validator,
         ReverseZoneNameCalculator $calculator,
+        DnsZoneAdoptionGuard $adoptionGuard,
     ): View {
         $this->authorizeZone($request, $zone);
 
@@ -715,6 +729,9 @@ class DnsZoneController extends Controller
                         'server_name' => $server->name,
                     ]))
                 ->values(),
+            'adoptionReadiness' => $zone->isImportedUnmanaged()
+                ? $adoptionGuard->inspect($zone)
+                : null,
         ]);
     }
 
@@ -982,13 +999,38 @@ class DnsZoneController extends Controller
     public function adopt(
         Request $request,
         DnsZone $zone,
+        DnsZoneAdoptionGuard $adoptionGuard,
     ): RedirectResponse {
         $this->authorizeWrite($request);
         $this->authorizeZone($request, $zone);
 
         abort_unless($zone->isImportedUnmanaged(), 404);
 
+        $validated = $request->validate([
+            'confirmation' => ['required', 'string', 'max:300'],
+        ]);
+
+        abort_unless(
+            hash_equals('ADOTAR '.Str::upper($zone->name), Str::upper(trim($validated['confirmation']))),
+            422,
+            'A confirmação forte não corresponde ao nome da zona.',
+        );
+
+        $readiness = $adoptionGuard->inspect($zone);
+        if (! $readiness['ok']) {
+            throw ValidationException::withMessages(['adoption' => $readiness['issues']]);
+        }
+
         $zone->forceFill(['origin' => 'managed'])->save();
+
+        DnsAuditLogger::record(
+            organizationId: $zone->organization_id,
+            user: $request->user(),
+            action: 'zone.adopted',
+            domain: $zone->name,
+            recordName: $zone->name,
+            newValue: 'managed',
+        );
 
         return redirect(route('zones.show', $zone).'#publication')->with(
             'status',
@@ -1625,6 +1667,21 @@ class DnsZoneController extends Controller
             'max:50',
             'regex:/^[a-z0-9_-]*\$[a-z0-9_-]*$/i',
         ];
+    }
+
+    /**
+     * @param  array<string, mixed>  $validated
+     */
+    private function resolvePtrNameTemplate(array $validated): ?string
+    {
+        return match ($validated['ptr_name_format'] ?? null) {
+            'original' => null,
+            'script' => '{ip}',
+            'host' => 'host-$',
+            'ip' => 'ip-$',
+            'custom' => $validated['ptr_name_custom'],
+            default => $validated['ptr_name_template'] ?? null,
+        };
     }
 
     private function authorizeZone(Request $request, DnsZone $zone): void

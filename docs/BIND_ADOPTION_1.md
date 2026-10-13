@@ -9,10 +9,13 @@ O DNS Center separa três conceitos que nunca podem ser confundidos:
 - **Importar**: copiar a representação lógica de uma zona descoberta para o
   banco do DNS Center, marcada como importada e **não gerenciada**. Ainda não
   é publicação.
-- **Adotar**: fase futura onde o DNS Center passa a gerar e aplicar a
-  configuração ativa daquela zona. Não implementada nesta fase.
+- **Adotar**: autorizar explicitamente o DNS Center a passar a gerenciar uma
+  zona importada, depois de validar configuração, descoberta recente e ausência
+  de mudança externa. Implementado na 1.3.57; publicação continua sendo uma
+  ação posterior e separada.
 
-Esta fase implementa somente Descobrir e Importar.
+Descoberta e importação foram a primeira fase. A adoção protegida foi adicionada
+na 1.3.57 como etapa explícita e separada da publicação.
 
 ## Garantias read-only da descoberta
 
@@ -121,8 +124,8 @@ por comando, saída de comando truncada. Excedentes viram aviso
 - Não aplica, publica ou envia zona para o agente.
 - Não recarrega/reinicia BIND.
 - Não altera `named.conf`, include, TSIG ou topologia.
-- Não adota gerenciamento automaticamente — isso é uma fase futura separada,
-  autorizada explicitamente por zona.
+- Não adota gerenciamento automaticamente — a adoção é uma etapa separada,
+  autorizada explicitamente por zona e protegida contra drift.
 
 ## Homologação em servidor real — DISCOVER
 
@@ -186,7 +189,7 @@ com mais de 1000 registros, quatro reversas IPv4 reais, uma reversa IPv6
 real, SOA/NS/PTR/serial reais, paths reais, preview real, operação
 assíncrona real ponta a ponta — sem nenhuma alteração no BIND.
 
-### IMPORT e ADOPT — pendentes, por decisão explícita
+### IMPORT piloto ainda pendente; ADOPT implementado
 
 **IMPORT não foi executado nesta rodada.** Nenhuma zona (nem as reversas, nem
 `legacy.example`) foi importada. Isso é proposital: o servidor
@@ -196,8 +199,9 @@ operacional real. O próximo IMPORT — quando decidido explicitamente — deve
 começar por uma zona piloto pequena (candidata natural: a reversa IPv6,
 5 registros), autorizada separadamente desta homologação.
 
-**ADOPT continua fora de escopo** — não há fluxo implementado para o DNS
-Center assumir gerenciamento ativo de uma zona.
+**ADOPT foi implementado na 1.3.57.** Exige configuração válida, descoberta
+recente sem drift e confirmação forte pelo nome da zona. A adoção não publica
+nem altera o BIND automaticamente.
 
 Estado atual do servidor, sem ambiguidade:
 
@@ -222,8 +226,9 @@ evidência desta homologação.
 - IMPORT ainda não foi exercitado em servidor real (só em teste automatizado)
   — o primeiro IMPORT real deve ser tratado como piloto, com uma zona
   pequena, não com a zona forward de 1038 registros.
-- ADOPT não existe; qualquer expectativa de gerenciamento ativo continua
-  dependendo 100% do CLI até essa fase futura ser implementada e homologada.
+- ADOPT existe, mas ainda precisa ser exercitado no IMPORT-PILOT antes de uso
+  em lote; gerenciamento externo continua valendo até concluir adoção e uma
+  publicação explícita.
 
 ## Roadmap (futuro, não iniciado)
 
@@ -232,5 +237,4 @@ evidência desta homologação.
 2. Validação de round-trip do conteúdo importado no banco.
 3. Confirmação do bloqueio de publicação em zona importada, em servidor real.
 4. Comparação de alteração externa (drift) após um import.
-5. **ADOPT** — fluxo explícito e protegido para o DNS Center assumir
-   gerenciamento de uma zona, autorizado separadamente por zona.
+5. **ADOPT** — implementado na 1.3.57; falta homologação no piloto real.

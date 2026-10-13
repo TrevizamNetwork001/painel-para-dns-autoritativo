@@ -387,7 +387,7 @@ class DnsBindDiscoveryTest extends TestCase
         $this->assertSame('198.51.100.5', $record->content);
     }
 
-    public function test_import_with_profile_and_servers_configures_and_adopts_in_one_step(): void
+    public function test_import_with_profile_and_servers_configures_but_requires_protected_adoption(): void
     {
         $context = $this->context();
         $secondaryServer = DnsServer::factory()->create([
@@ -415,10 +415,10 @@ class DnsBindDiscoveryTest extends TestCase
             ])
             ->assertRedirect();
 
-        $response->assertSessionHas('status', fn (string $status) => str_contains($status, 'já saíram configuradas e adotadas'));
+        $response->assertSessionHas('status', fn (string $status) => str_contains($status, 'aguardam a adoção protegida'));
 
         $zone = DnsZone::query()->where('name', 'lote.example.com')->firstOrFail();
-        $this->assertSame('managed', $zone->origin, 'zona configurada em lote já deve sair adotada');
+        $this->assertSame('bind_import', $zone->origin, 'configuração em lote não pode contornar a adoção protegida');
         $this->assertSame($profile->id, $zone->dns_nameserver_profile_id);
 
         $roles = $zone->servers()->pluck('dns_server_zone.role', 'dns_servers.id');
@@ -434,10 +434,10 @@ class DnsBindDiscoveryTest extends TestCase
         ]);
         $this->assertDatabaseMissing('dns_records', ['content' => 'ns-antiga.legado.example.']);
 
-        // Zona já adotada publica normalmente (ao contrário do import "só importar").
+        // Mesmo configurada, a zona permanece bloqueada até a adoção protegida.
         $this->actingAs($context['admin'])
             ->post(route('zones.publish', $zone))
-            ->assertRedirect();
+            ->assertStatus(409);
     }
 
     public function test_import_without_profile_still_just_imports_as_before(): void
@@ -462,6 +462,64 @@ class DnsBindDiscoveryTest extends TestCase
         $zone = DnsZone::query()->where('name', 'so-importar.example.com')->firstOrFail();
         $this->assertSame('bind_import', $zone->origin);
         $this->assertTrue($zone->servers()->doesntExist());
+    }
+
+    public function test_adoption_requires_strong_confirmation_and_unchanged_recent_discovery(): void
+    {
+        $context = $this->context();
+        [$profile] = $this->nameserverProfile($context['organization']);
+        $discovered = $this->discoveredZone($context, [
+            'name' => 'adotar.example.com',
+            'records' => [
+                ['name' => 'www', 'ttl' => 300, 'type' => 'A', 'content' => '192.0.2.20'],
+            ],
+            'comparison_state' => 'new',
+        ]);
+
+        $this->actingAs($context['admin'])->post(route('servers.bind.discovery.import', $context['server']), [
+            'zone_ids' => [$discovered->id],
+            'nameserver_profile_id' => $profile->id,
+            'primary_server_id' => $context['server']->id,
+        ])->assertRedirect();
+
+        $zone = DnsZone::query()->where('name', 'adotar.example.com')->firstOrFail();
+        $this->actingAs($context['admin'])->post(route('zones.adopt', $zone), [
+            'confirmation' => 'ADOTAR OUTRA.EXAMPLE.COM',
+        ])->assertStatus(422);
+        $this->assertSame('bind_import', $zone->fresh()->origin);
+
+        $this->actingAs($context['admin'])->post(route('zones.adopt', $zone), [
+            'confirmation' => 'ADOTAR ADOTAR.EXAMPLE.COM',
+        ])->assertRedirect();
+        $this->assertSame('managed', $zone->fresh()->origin);
+        $this->assertDatabaseHas('dns_audit_logs', ['action' => 'zone.adopted', 'domain' => 'adotar.example.com']);
+    }
+
+    public function test_adoption_is_blocked_when_bind_changed_after_import(): void
+    {
+        $context = $this->context();
+        [$profile] = $this->nameserverProfile($context['organization']);
+        $discovered = $this->discoveredZone($context, [
+            'name' => 'drift.example.com',
+            'records' => [['name' => 'www', 'ttl' => 300, 'type' => 'A', 'content' => '192.0.2.20']],
+            'comparison_state' => 'new',
+        ]);
+        $this->actingAs($context['admin'])->post(route('servers.bind.discovery.import', $context['server']), [
+            'zone_ids' => [$discovered->id], 'nameserver_profile_id' => $profile->id,
+            'primary_server_id' => $context['server']->id,
+        ]);
+        $zone = DnsZone::query()->where('name', 'drift.example.com')->firstOrFail();
+        $this->discoveredZone($context, [
+            'name' => 'drift.example.com',
+            'serial' => ($discovered->serial ?? 1) + 1,
+            'records' => [['name' => 'www', 'ttl' => 300, 'type' => 'A', 'content' => '192.0.2.21']],
+            'comparison_state' => 'conflict',
+        ]);
+
+        $this->actingAs($context['admin'])->post(route('zones.adopt', $zone), [
+            'confirmation' => 'ADOTAR DRIFT.EXAMPLE.COM',
+        ])->assertSessionHasErrors('adoption');
+        $this->assertSame('bind_import', $zone->fresh()->origin);
     }
 
     public function test_import_batch_rejects_profile_from_another_organization(): void
