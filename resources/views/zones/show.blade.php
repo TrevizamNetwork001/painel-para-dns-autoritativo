@@ -422,6 +422,10 @@
                                         ? ($reverseCalculator->ptrNameToIpv4($fullRecordName)
                                             ?? $reverseCalculator->ptrNameToIpv6($fullRecordName))
                                         : null;
+                                    $friendlyName = $friendlyIp
+                                        ?? ($currentReverseBlock && $fullRecordName === $zoneNameLower
+                                            ? $currentReverseBlock
+                                            : null);
                                 @endphp
 
                                 <div
@@ -434,18 +438,18 @@
                                         . ' '
                                         . $record->content
                                         . ' '
-                                        . $friendlyIp
+                                        . $friendlyName
                                     ) }}"
                                 >
                                     <div
                                         class="domain-record-name"
-                                        @if ($friendlyIp) title="{{ $fullRecordName }}" @endif
+                                        @if ($friendlyName) title="{{ $fullRecordName }}" @endif
                                     >
                                         <strong>
-                                            {{ $friendlyIp ?? $record->name }}
+                                            {{ $friendlyName ?? $record->name }}
                                         </strong>
 
-                                        @unless ($friendlyIp)
+                                        @unless ($friendlyName)
                                             <small title="{{ $fullRecordName }}">
                                                 {{ $fullRecordName }}
                                             </small>

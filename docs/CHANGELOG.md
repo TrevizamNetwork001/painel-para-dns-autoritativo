@@ -6,6 +6,10 @@ geral continua na tabela de documentação do `README.md`. Gerado a partir dessa
 tabela e das datas das tags do git — releases sem tag (anteriores à v1.3.29
 em alguns casos) aparecem sem data.
 
+## 1.3.65 — 2026-10-13
+
+Ordena numericamente os PTR nas zonas reversas e traduz o ápice para o bloco IP legível. [Nota completa](RELEASE_1.3.65.md)
+
 ## 1.3.64 — 2026-10-13
 
 Compacta cada versão do histórico e reorganiza o artefato BIND por domínio e host. [Nota completa](RELEASE_1.3.64.md)

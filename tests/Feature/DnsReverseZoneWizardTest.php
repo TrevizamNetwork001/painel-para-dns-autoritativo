@@ -9,6 +9,7 @@ use App\Models\DnsServer;
 use App\Models\DnsZone;
 use App\Models\Organization;
 use App\Models\User;
+use App\Services\ReverseZoneNameCalculator;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Str;
 use Tests\TestCase;
@@ -81,6 +82,68 @@ class DnsReverseZoneWizardTest extends TestCase
             ->assertDontSee('<h2 id="reverse-modal-title">', false)
             ->assertSee('Para criar outra zona reversa')
             ->assertSee(route('zones.show', $forwardZone), false);
+    }
+
+    public function test_ipv4_reverse_zone_page_lists_ptr_records_in_numeric_order(): void
+    {
+        $context = $this->context();
+        $reverseZone = $this->createReverseZone($context, '2.0.192.in-addr.arpa');
+
+        foreach ([255, 10, 2, 0] as $octet) {
+            DnsRecord::query()->create([
+                'organization_id' => $context['organization']->id,
+                'dns_zone_id' => $reverseZone->id,
+                'name' => $octet.'.2.0.192.in-addr.arpa',
+                'type' => 'PTR',
+                'ttl' => null,
+                'priority' => null,
+                'content' => 'host-'.$octet.'.example.',
+                'enabled' => true,
+            ]);
+        }
+
+        $this->actingAs($context['admin'])
+            ->get(route('zones.show', $reverseZone))
+            ->assertOk()
+            ->assertSeeInOrder([
+                'host-0.example.',
+                'host-2.example.',
+                'host-10.example.',
+                'host-255.example.',
+            ]);
+    }
+
+    public function test_ipv6_reverse_zone_page_translates_apex_and_sorts_ptr_records(): void
+    {
+        $context = $this->context();
+        $reverseZone = $this->createReverseZone(
+            $context,
+            'c.2.1.7.4.0.8.2.ip6.arpa',
+        );
+        $calculator = app(ReverseZoneNameCalculator::class);
+
+        foreach (['2804:712c::ff', '2804:712c::10', '2804:712c::2'] as $ip) {
+            DnsRecord::query()->create([
+                'organization_id' => $context['organization']->id,
+                'dns_zone_id' => $reverseZone->id,
+                'name' => $calculator->ipv6ToPtrName($ip),
+                'type' => 'PTR',
+                'ttl' => null,
+                'priority' => null,
+                'content' => 'host-'.str_replace(':', '-', $ip).'.example.',
+                'enabled' => true,
+            ]);
+        }
+
+        $this->actingAs($context['admin'])
+            ->get(route('zones.show', $reverseZone))
+            ->assertOk()
+            ->assertSee('title="c.2.1.7.4.0.8.2.ip6.arpa"', false)
+            ->assertSeeInOrder([
+                'host-2804-712c--2.example.',
+                'host-2804-712c--10.example.',
+                'host-2804-712c--ff.example.',
+            ]);
     }
 
     public function test_wizard_rejects_non_octet_aligned_ipv4_block(): void

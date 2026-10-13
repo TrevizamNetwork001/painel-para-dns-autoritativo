@@ -684,6 +684,44 @@ class DnsZoneController extends Controller
             $relations[] = 'authoritativeObservations.server';
         }
         $zone->load($relations);
+        if ($zone->isReverseZone() || $zone->isIpv6ReverseZone()) {
+            $zone->setRelation(
+                'records',
+                $zone->records
+                    ->sortBy(function (DnsRecord $record) use ($calculator, $zone): string {
+                        $recordName = strtolower(rtrim(trim($record->name), '.'));
+                        $zoneName = strtolower(rtrim(trim($zone->name), '.'));
+                        $fullRecordName = $recordName === '@'
+                            ? $zoneName
+                            : ($recordName === $zoneName
+                                || str_ends_with($recordName, '.'.$zoneName)
+                                ? $recordName
+                                : $recordName.'.'.$zoneName);
+                        $ip = $record->type === 'PTR'
+                            ? ($calculator->ptrNameToIpv4($fullRecordName)
+                                ?? $calculator->ptrNameToIpv6($fullRecordName))
+                            : null;
+
+                        if ($ip === null) {
+                            return sprintf(
+                                '0:%s:%s:%010d',
+                                $record->type,
+                                $record->name,
+                                $record->id,
+                            );
+                        }
+
+                        $binaryIp = inet_pton($ip);
+
+                        return sprintf(
+                            '1:%s:%010d',
+                            $binaryIp === false ? $ip : bin2hex($binaryIp),
+                            $record->id,
+                        );
+                    })
+                    ->values(),
+            );
+        }
         if (! $hasAuthoritativeObservations) {
             $zone->setRelation('authoritativeObservations', collect());
         }
