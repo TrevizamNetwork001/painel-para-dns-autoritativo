@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 
@@ -131,6 +132,13 @@ class DnsServer extends Model
             DnsAgentPublication::class,
             'dns_server_id',
         );
+    }
+
+    public function zones(): BelongsToMany
+    {
+        return $this->belongsToMany(DnsZone::class, 'dns_server_zone')
+            ->withPivot('role')
+            ->withTimestamps();
     }
 
     public function nameserverIdentities(): HasMany

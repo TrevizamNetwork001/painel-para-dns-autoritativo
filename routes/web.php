@@ -14,6 +14,7 @@ use App\Http\Controllers\DnsBindLegacyZoneBlockController;
 use App\Http\Controllers\DnsFirewallPolicyController;
 use App\Http\Controllers\DnsNameserverController;
 use App\Http\Controllers\DnsServerController;
+use App\Http\Controllers\DnsServerRecoveryController;
 use App\Http\Controllers\DnsServerTransferController;
 use App\Http\Controllers\DnsTsigKeyController;
 use App\Http\Controllers\DnsZoneController;
@@ -307,6 +308,11 @@ Route::middleware([
         '/servidores/{server}/agente/revogar',
         [DnsAgentEnrollmentController::class, 'revoke'],
     )->name('servers.agent.revoke');
+
+    Route::post(
+        '/servidores/{server}/recuperar',
+        [DnsServerRecoveryController::class, 'store'],
+    )->middleware('throttle:3,1')->name('servers.recovery.store');
 
     Route::post(
         '/servidores/{server}/agente/atualizar',

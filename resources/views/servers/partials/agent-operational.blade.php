@@ -253,5 +253,25 @@
 
 <details class="panel-card agent-collapsible agent-risk-zone">
     <summary><span><span class="eyebrow">Ações administrativas</span><strong>Zona de risco</strong></span><small>Ações que podem interromper a comunicação do agente</small></summary>
+    <div class="agent-collapsible-body agent-risk-action">
+        <div>
+            <h3>Recuperar esta máquina</h3>
+            <p>Reenvia as versões já publicadas das {{ $recoverableZoneCount }} zona(s) vinculadas. Use após substituir ou reinstalar a VM. Registros e seriais não serão alterados.</p>
+            @if ($server->role === 'secondary')
+                <p>Recupere o servidor primário primeiro para que este secundário consiga transferir as zonas.</p>
+            @endif
+        </div>
+        <form class="agent-strong-confirmation" method="POST" action="{{ route('servers.recovery.store', $server) }}" onsubmit="return confirm('Iniciar a reconstrução das zonas gerenciadas nesta máquina?');">
+            @csrf
+            <label>
+                Confirmação forte
+                <input name="confirmation" required autocomplete="off" placeholder="RECUPERAR {{ Str::upper($server->name) }}">
+            </label>
+            @error('confirmation')<p class="agent-inline-error" role="alert">{{ $message }}</p>@enderror
+            <button type="submit" class="button button-danger-soft" @disabled($recoverableZoneCount === 0)>
+                Reenviar todas as zonas
+            </button>
+        </form>
+    </div>
     <div class="agent-collapsible-body agent-risk-action"><div><h3>Revogar credencial</h3><p>O agente perderá acesso à API e precisará de um novo vínculo para voltar a operar.</p></div><form method="POST" action="{{ route('servers.agent.revoke', $server) }}" onsubmit="return confirm('Revogar a credencial deste agente?')">@csrf<button type="submit" class="button button-danger-soft">Revogar credencial</button></form></div>
 </details>

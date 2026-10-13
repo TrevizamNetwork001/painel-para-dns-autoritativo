@@ -97,6 +97,12 @@ class DnsAgentEnrollmentController extends Controller
             ->whereIn('status', ['pending', 'downloaded', 'applying', 'failed'])
             ->count();
 
+        $recoverableZoneCount = $server->zones()
+            ->where('dns_zones.status', 'published')
+            ->where('dns_zones.enabled', true)
+            ->whereHas('versions')
+            ->count();
+
         $installedAgentVersion = $agent?->metadata['agent_version'] ?? $server->agent_version;
         $availableAgentVersion = AgentArtifact::availableVersion();
         $legacyZoneConflicts = (new DnsBindConfigConflicts)->forServer($server);
@@ -118,6 +124,7 @@ class DnsAgentEnrollmentController extends Controller
             'discoveredZoneCount' => $discoveryStats['total'],
             'discoveryStats' => $discoveryStats,
             'pendingPublicationCount' => $pendingPublicationCount,
+            'recoverableZoneCount' => $recoverableZoneCount,
             'legacyZoneConflicts' => $legacyZoneConflicts,
         ]);
     }

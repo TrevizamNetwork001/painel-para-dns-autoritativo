@@ -6,6 +6,10 @@ geral continua na tabela de documentação do `README.md`. Gerado a partir dessa
 tabela e das datas das tags do git — releases sem tag (anteriores à v1.3.29
 em alguns casos) aparecem sem data.
 
+## 1.3.69 — 2026-10-13
+
+Adiciona recuperação de servidor para reconstruir todas as zonas publicadas em uma VM substituta. [Nota completa](RELEASE_1.3.69.md)
+
 ## 1.3.68 — 2026-10-13
 
 Remove a repetição visual do nome completo dos registros DNS. [Nota completa](RELEASE_1.3.68.md)

@@ -33,6 +33,7 @@ class DnsAuditLog extends Model
         'server.created' => 'Servidor DNS criado',
         'server.updated' => 'Servidor DNS atualizado',
         'server.status_changed' => 'Status do servidor alterado',
+        'server.recovery_queued' => 'Recuperação do servidor iniciada',
         'user.created' => 'Usuário criado',
         'user.role_updated' => 'Papel do usuário alterado',
         'user.status_updated' => 'Status do usuário alterado',
