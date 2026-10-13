@@ -174,6 +174,7 @@ class DnsReverseZoneWizardTest extends TestCase
         $this->actingAs($context['admin'])
             ->get(route('zones.show', $zone))
             ->assertOk()
+            ->assertDontSee('data-record-type="NS"', false)
             ->assertSeeInOrder([
                 '192.0.2.2',
                 '2001:db8::2',
@@ -182,6 +183,8 @@ class DnsReverseZoneWizardTest extends TestCase
                 '192.0.2.255',
                 '2001:db8::ff',
             ]);
+
+        $this->assertSame(2, $zone->records()->where('type', 'NS')->count());
     }
 
     public function test_wizard_rejects_non_octet_aligned_ipv4_block(): void

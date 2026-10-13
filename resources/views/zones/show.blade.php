@@ -73,8 +73,8 @@
 
     $zoneNameForDisplay = strtolower(rtrim(trim($zone->name), '.'));
     $displayRecords = $zone->records
-        ->reject(function ($record) use ($currentReverseBlock, $zoneNameForDisplay): bool {
-            if (! $currentReverseBlock || $record->type !== 'NS') {
+        ->reject(function ($record) use ($zoneNameForDisplay): bool {
+            if ($record->type !== 'NS') {
                 return false;
             }
 

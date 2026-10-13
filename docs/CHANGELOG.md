@@ -6,6 +6,10 @@ geral continua na tabela de documentação do `README.md`. Gerado a partir dessa
 tabela e das datas das tags do git — releases sem tag (anteriores à v1.3.29
 em alguns casos) aparecem sem data.
 
+## 1.3.67 — 2026-10-13
+
+Oculta os NS administrativos do ápice também nas zonas diretas. [Nota completa](RELEASE_1.3.67.md)
+
 ## 1.3.66 — 2026-10-13
 
 Organiza registros por IP, simplifica zonas reversas e adiciona exclusão segura de usuários. [Nota completa](RELEASE_1.3.66.md)
