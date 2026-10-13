@@ -6,6 +6,55 @@ use InvalidArgumentException;
 
 class ReverseZoneNameCalculator
 {
+    /**
+     * @return list<string>
+     */
+    public function ipv4Slash24Blocks(string $cidr): array
+    {
+        if (! str_contains($cidr, '/')) {
+            throw new InvalidArgumentException(
+                'Informe o bloco no formato CIDR, ex.: 192.0.2.0/24.',
+            );
+        }
+
+        [$address, $prefix] = explode('/', $cidr, 2);
+
+        if (! filter_var($address, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4)) {
+            throw new InvalidArgumentException('Endereço IPv4 inválido.');
+        }
+
+        if (! ctype_digit($prefix) || (int) $prefix < 16 || (int) $prefix > 24) {
+            throw new InvalidArgumentException(
+                'A máscara IPv4 deve estar entre /16 e /24.',
+            );
+        }
+
+        $prefix = (int) $prefix;
+        $addressValue = ip2long($address);
+        $blockSize = 2 ** (32 - $prefix);
+
+        if ($addressValue === false || ($addressValue & ($blockSize - 1)) !== 0) {
+            $networkValue = $addressValue === false
+                ? 0
+                : $addressValue & ~($blockSize - 1);
+
+            throw new InvalidArgumentException(sprintf(
+                'O endereço inicial correto para esse bloco é %s/%d.',
+                long2ip($networkValue),
+                $prefix,
+            ));
+        }
+
+        $blocks = [];
+        $total = 2 ** (24 - $prefix);
+
+        for ($index = 0; $index < $total; $index++) {
+            $blocks[] = long2ip($addressValue + ($index * 256)).'/24';
+        }
+
+        return $blocks;
+    }
+
     public function fromIpv4Cidr(string $cidr): string
     {
         if (! str_contains($cidr, '/')) {

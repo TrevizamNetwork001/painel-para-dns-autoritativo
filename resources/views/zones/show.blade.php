@@ -2093,8 +2093,9 @@
                     <p>
                         Informe o bloco de endereços exato (endereço de
                         rede, não um IP individual dentro dele). Por
-                        enquanto só blocos alinhados em octeto (IPv4
-                        /8, /16, /24) ou em nibble (IPv6) são aceitos.
+                        No IPv4, blocos entre /16 e /24 são divididos
+                        automaticamente em zonas /24. No IPv6, o
+                        prefixo precisa estar alinhado em nibble.
                     </p>
                 </div>
 
@@ -2156,62 +2157,45 @@
                         </select>
                     </label>
 
-                <div data-ptr-template-control>
-                    <div class="reverse-associated-domain">
-                        <span>Domínio associado</span>
-                        <strong>{{ $zone->name }}</strong>
-                    </div>
+                    <div>
+                        <div class="reverse-associated-domain">
+                            <span>Domínio associado</span>
+                            <strong>{{ $zone->name }}</strong>
+                        </div>
 
-                    <fieldset class="ptr-format-options">
-                            <legend>Como será o nome reverso?</legend>
+                        <div data-ptr-template-control hidden>
+                            <label class="domain-field">
+                                <span>Formato do nome PTR</span>
 
-                            <label>
-                                <input type="radio" name="ptr_name_format" value="host" data-ptr-template-format checked>
-                                <span>
-                                    <strong>host-10</strong>
-                                    <small>Exemplo: <code>host-10.{{ $zone->name }}</code></small>
-                                </span>
+                                <select name="ptr_name_format" data-ptr-template-format>
+                                    <option value="host">
+                                        host-10.{{ $zone->name }}
+                                    </option>
+                                    <option value="iprede">
+                                        ip-192-168-0-10.{{ $zone->name }}
+                                    </option>
+                                    <option value="rede">
+                                        192-168-0-10.{{ $zone->name }}
+                                    </option>
+                                    <option value="custom">Personalizado</option>
+                                </select>
                             </label>
 
-                            <label>
-                                <input type="radio" name="ptr_name_format" value="iprede" data-ptr-template-format>
-                                <span>
-                                    <strong>ip + endereço completo</strong>
-                                    <small>Exemplo: <code>ip-192-168-0-10.{{ $zone->name }}</code></small>
-                                </span>
+                            <label class="domain-field" data-ptr-template-custom hidden>
+                                <span>Formato personalizado</span>
+
+                                <input
+                                    type="text"
+                                    name="ptr_name_custom"
+                                    placeholder="cliente-$"
+                                    maxlength="50"
+                                >
+
+                                <small>
+                                    Use <code>$</code> no lugar da parte do host do IP.
+                                </small>
                             </label>
-
-                            <label>
-                                <input type="radio" name="ptr_name_format" value="rede" data-ptr-template-format>
-                                <span>
-                                    <strong>Endereço completo</strong>
-                                    <small>Exemplo: <code>192-168-0-10.{{ $zone->name }}</code></small>
-                                </span>
-                            </label>
-
-                            <label>
-                                <input type="radio" name="ptr_name_format" value="custom" data-ptr-template-format>
-                                <span>
-                                    <strong>Montar meu próprio formato</strong>
-                                    <small>Exemplo: <code>cliente-10.{{ $zone->name }}</code></small>
-                                </span>
-                            </label>
-                        </fieldset>
-
-                        <label class="domain-field" data-ptr-template-custom hidden>
-                            <span>Formato personalizado</span>
-
-                            <input
-                                type="text"
-                                name="ptr_name_custom"
-                                placeholder="cliente-$"
-                                maxlength="50"
-                            >
-
-                            <small>
-                                Use <code>$</code> no lugar da parte do host do IP.
-                            </small>
-                        </label>
+                        </div>
                     </div>
                 </div>
 
@@ -2227,6 +2211,7 @@
                     </p>
                     <div hidden data-reverse-preview-values>
                         <code data-reverse-preview-ptr></code>
+                        <small data-reverse-preview-blocks></small>
                     </div>
                 </section>
 
@@ -2321,6 +2306,18 @@ document.addEventListener('DOMContentLoaded', () => {
     const reversePreviewHelp = reversePreview?.querySelector('[data-reverse-preview-help]');
     const reversePreviewValues = reversePreview?.querySelector('[data-reverse-preview-values]');
     const reversePreviewPtr = reversePreview?.querySelector('[data-reverse-preview-ptr]');
+    const reversePreviewBlocks = reversePreview?.querySelector('[data-reverse-preview-blocks]');
+
+    const setPtrFormatReady = (ready) => {
+        if (!reversePtrTemplate) {
+            return;
+        }
+
+        reversePtrTemplate.hidden = !ready;
+        reversePtrTemplate.querySelectorAll('select, input').forEach((field) => {
+            field.disabled = !ready;
+        });
+    };
 
     const updateReversePreview = () => {
         if (!reversePreview || !reversePreviewHelp || !reversePreviewValues) {
@@ -2328,28 +2325,32 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         if (reverseFamily?.value !== 'ipv4') {
+            setPtrFormatReady(false);
             reversePreviewHelp.textContent = 'A prévia detalhada de formato está disponível para IPv4.';
             reversePreviewValues.hidden = true;
             return;
         }
 
         const match = reverseCidr?.value.trim().match(
-            /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})\/(8|16|24)$/
+            /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})\/(1[6-9]|2[0-4])$/
         );
 
         if (!match) {
-            reversePreviewHelp.textContent = 'Digite um bloco IPv4 /8, /16 ou /24 válido para visualizar a prévia.';
+            setPtrFormatReady(false);
+            reversePreviewHelp.textContent = 'Digite um bloco IPv4 entre /16 e /24 para visualizar a prévia.';
             reversePreviewValues.hidden = true;
             return;
         }
 
         const octets = match.slice(1, 5).map(Number);
         const prefix = Number(match[5]);
-        const networkOctets = prefix / 8;
+        const blockSize = 2 ** (32 - prefix);
+        const addressValue = octets.reduce((value, octet) => (value * 256) + octet, 0);
 
         if (octets.some((octet) => octet > 255)
-            || octets.slice(networkOctets).some((octet) => octet !== 0)) {
-            reversePreviewHelp.textContent = 'Use o endereço inicial da rede, com os octetos de host zerados.';
+            || addressValue % blockSize !== 0) {
+            setPtrFormatReady(false);
+            reversePreviewHelp.textContent = 'Use o endereço inicial correto para a máscara informada.';
             reversePreviewValues.hidden = true;
             return;
         }
@@ -2357,12 +2358,31 @@ document.addEventListener('DOMContentLoaded', () => {
         const exampleOctets = [...octets];
         exampleOctets[3] = 10;
         const exampleIp = exampleOctets.join('.');
-        const hostPart = exampleOctets.slice(networkOctets).join('-');
+        const hostPart = String(exampleOctets[3]);
+        const zoneCount = 2 ** (24 - prefix);
+        const slash24Blocks = Array.from({ length: zoneCount }, (_, index) => {
+            const blockValue = addressValue + (index * 256);
+
+            return [24, 16, 8, 0]
+                .map((shift) => Math.floor(blockValue / (2 ** shift)) % 256)
+                .join('.') + '/24';
+        });
         const forwardZone = reversePreview.dataset.forwardZone;
         const format = reversePtrTemplate
             ?.querySelector('input[data-ptr-template-format]:checked')?.value
             || reversePtrTemplate?.querySelector('select[data-ptr-template-format]')?.value;
         const custom = reversePtrTemplate?.querySelector('[data-ptr-template-custom] input')?.value;
+
+        const formatSelect = reversePtrTemplate?.querySelector('select[data-ptr-template-format]');
+        const exampleIpDashed = exampleIp.replaceAll('.', '-');
+
+        if (formatSelect) {
+            formatSelect.querySelector('option[value="host"]').textContent = `host-${hostPart}.${forwardZone}`;
+            formatSelect.querySelector('option[value="iprede"]').textContent = `ip-${exampleIpDashed}.${forwardZone}`;
+            formatSelect.querySelector('option[value="rede"]').textContent = `${exampleIpDashed}.${forwardZone}`;
+        }
+
+        setPtrFormatReady(true);
 
         let ptrTarget = `nome-do-registro-A.${forwardZone}.`;
 
@@ -2373,9 +2393,9 @@ document.addEventListener('DOMContentLoaded', () => {
         } else if (format === 'ip') {
             ptrTarget = `ip-${hostPart}.${forwardZone}.`;
         } else if (format === 'iprede') {
-            ptrTarget = `ip-${exampleIp.replaceAll('.', '-')}.${forwardZone}.`;
+            ptrTarget = `ip-${exampleIpDashed}.${forwardZone}.`;
         } else if (format === 'rede') {
-            ptrTarget = `${exampleIp.replaceAll('.', '-')}.${forwardZone}.`;
+            ptrTarget = `${exampleIpDashed}.${forwardZone}.`;
         } else if (format === 'custom') {
             ptrTarget = custom?.includes('$')
                 ? `${custom.replace('$', hostPart)}.${forwardZone}.`
@@ -2383,8 +2403,13 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         reversePreviewTitle.textContent = `Exemplo para o IP .${exampleOctets[3]}`;
-        reversePreviewHelp.textContent = 'O nome PTR gerado será:';
+        reversePreviewHelp.textContent = zoneCount === 1
+            ? 'Será criada 1 zona reversa /24. O nome PTR de exemplo será:'
+            : `Serão criadas ${zoneCount} zonas reversas /24. O nome PTR de exemplo será:`;
         reversePreviewPtr.textContent = ptrTarget;
+        reversePreviewBlocks.textContent = zoneCount <= 8
+            ? `Blocos: ${slash24Blocks.join(', ')}`
+            : `Blocos: ${slash24Blocks.slice(0, 4).join(', ')} … ${slash24Blocks.at(-1)}`;
         reversePreviewValues.hidden = false;
     };
 
@@ -2393,11 +2418,9 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
-        const isIpv4 = reverseFamily?.value === 'ipv4';
-        reversePtrTemplate.hidden = !isIpv4;
-        reversePtrTemplate.querySelectorAll('select, input').forEach((field) => {
-            field.disabled = !isIpv4;
-        });
+        if (reverseFamily?.value !== 'ipv4') {
+            setPtrFormatReady(false);
+        }
     };
 
     reverseFamily?.addEventListener('change', updateReverseFamily);

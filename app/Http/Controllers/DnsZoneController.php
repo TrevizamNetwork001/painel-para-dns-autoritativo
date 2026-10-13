@@ -313,26 +313,40 @@ class DnsZoneController extends Controller
         ]);
 
         try {
-            $zoneName = $validated['family'] === 'ipv4'
-                ? $calculator->fromIpv4Cidr($validated['cidr'])
-                : $calculator->fromIpv6Prefix($validated['cidr']);
+            $zoneNames = $validated['family'] === 'ipv4'
+                ? array_map(
+                    fn (string $cidr): string => $calculator->fromIpv4Cidr($cidr),
+                    $calculator->ipv4Slash24Blocks($validated['cidr']),
+                )
+                : [$calculator->fromIpv6Prefix($validated['cidr'])];
         } catch (InvalidArgumentException $exception) {
             throw ValidationException::withMessages([
                 'cidr' => $exception->getMessage(),
             ]);
         }
 
-        $exists = DnsZone::query()
+        $existingZoneNames = DnsZone::query()
             ->forOrganization($organizationId)
-            ->where('name', $zoneName)
-            ->exists();
+            ->whereIn('name', $zoneNames)
+            ->pluck('name')
+            ->all();
 
-        if ($exists) {
+        $missingZoneNames = array_values(array_diff($zoneNames, $existingZoneNames));
+
+        if ($missingZoneNames === []) {
+            $message = count($zoneNames) === 1
+                ? sprintf(
+                    'A zona reversa do bloco %s já existe nesta organização.',
+                    $validated['cidr'],
+                )
+                : sprintf(
+                    'Todas as %d zonas reversas /24 do bloco %s já existem nesta organização.',
+                    count($zoneNames),
+                    $validated['cidr'],
+                );
+
             throw ValidationException::withMessages([
-                'cidr' => sprintf(
-                    'Já existe uma zona reversa %s nesta organização.',
-                    $zoneName,
-                ),
+                'cidr' => $message,
             ]);
         }
 
@@ -355,29 +369,56 @@ class DnsZoneController extends Controller
                 ->findOrFail((int) $validated['secondary_server_id']);
         }
 
-        $zone = $this->createZone(
+        $zones = DB::transaction(function () use (
             $request,
             $renderer,
             $nameservers,
             $organizationId,
-            $zoneName,
-            [
-                'kind' => 'primary',
-                'ptr_name_template' => $validated['family'] === 'ipv4'
-                    ? $this->resolvePtrNameTemplate($validated)
-                    : null,
-            ],
+            $missingZoneNames,
+            $validated,
             $nameserverProfile,
             $primaryServer,
             $secondaryServer,
-        );
+        ): array {
+            $zones = [];
+
+            foreach ($missingZoneNames as $zoneName) {
+                $zones[] = $this->createZone(
+                    $request,
+                    $renderer,
+                    $nameservers,
+                    $organizationId,
+                    $zoneName,
+                    [
+                        'kind' => 'primary',
+                        'ptr_name_template' => $validated['family'] === 'ipv4'
+                            ? $this->resolvePtrNameTemplate($validated)
+                            : null,
+                    ],
+                    $nameserverProfile,
+                    $primaryServer,
+                    $secondaryServer,
+                );
+            }
+
+            return $zones;
+        });
+
+        $zone = $zones[0];
+        $existingCount = count($existingZoneNames);
+        $status = $validated['family'] === 'ipv4'
+            ? sprintf(
+                '%d zona(s) reversa(s) /24 criada(s)%s.',
+                count($zones),
+                $existingCount > 0
+                    ? sprintf('; %d já existente(s) foi(ram) mantida(s)', $existingCount)
+                    : '',
+            )
+            : sprintf('Zona reversa %s criada.', $zone->name);
 
         return redirect()
             ->route('zones.show', $zone)
-            ->with(
-                'status',
-                sprintf('Zona reversa %s criada.', $zoneName),
-            );
+            ->with('status', $status);
     }
 
     public function generatePtrFromForwardZone(

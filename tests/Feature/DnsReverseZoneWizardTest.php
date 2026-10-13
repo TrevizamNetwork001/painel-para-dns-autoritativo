@@ -96,6 +96,48 @@ class DnsReverseZoneWizardTest extends TestCase
         );
     }
 
+    public function test_wizard_splits_slash22_and_skips_existing_slash24_zone(): void
+    {
+        $context = $this->context();
+
+        $this->actingAs($context['admin'])
+            ->post(route('zones.reverse.store'), $this->reversePayload($context, [
+                'family' => 'ipv4',
+                'cidr' => '192.168.20.0/24',
+            ]))
+            ->assertSessionHasNoErrors();
+
+        $this->actingAs($context['admin'])
+            ->post(route('zones.reverse.store'), $this->reversePayload($context, [
+                'family' => 'ipv4',
+                'cidr' => '192.168.20.0/22',
+            ]))
+            ->assertSessionHasNoErrors()
+            ->assertSessionHas('status', fn (string $status): bool => str_contains($status, '3 zona(s)')
+                && str_contains($status, '1 já existente'));
+
+        foreach (range(20, 23) as $thirdOctet) {
+            $this->assertDatabaseHas('dns_zones', [
+                'organization_id' => $context['organization']->id,
+                'name' => sprintf('%d.168.192.in-addr.arpa', $thirdOctet),
+            ]);
+        }
+    }
+
+    public function test_wizard_rejects_misaligned_ipv4_range(): void
+    {
+        $context = $this->context();
+
+        $this->actingAs($context['admin'])
+            ->post(route('zones.reverse.store'), $this->reversePayload($context, [
+                'family' => 'ipv4',
+                'cidr' => '192.168.21.0/22',
+            ]))
+            ->assertSessionHasErrors('cidr');
+
+        $this->assertDatabaseCount('dns_zones', 0);
+    }
+
     public function test_wizard_is_forbidden_for_non_admin_roles(): void
     {
         $context = $this->context();

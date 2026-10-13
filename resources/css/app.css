@@ -7117,6 +7117,22 @@ body.has-open-modal {
     font-size: 0.65rem;
 }
 
+.reverse-zone-preview [data-reverse-preview-values] {
+    display: grid;
+    gap: 0.4rem;
+}
+
+.reverse-zone-preview [data-reverse-preview-values][hidden] {
+    display: none;
+}
+
+.reverse-zone-preview [data-reverse-preview-blocks] {
+    overflow-wrap: anywhere;
+    color: var(--text-muted);
+    font-size: 0.6rem;
+    line-height: 1.45;
+}
+
 .reverse-zone-preview dl {
     display: grid;
     gap: 0.45rem;
@@ -7148,15 +7164,6 @@ body.has-open-modal {
     font-size: 0.66rem;
 }
 
-.ptr-format-options {
-    display: grid;
-    gap: 0.45rem;
-    min-width: 0;
-    margin: 0;
-    padding: 0;
-    border: 0;
-}
-
 .reverse-associated-domain {
     display: flex;
     gap: 0.5rem;
@@ -7179,51 +7186,6 @@ body.has-open-modal {
     overflow-wrap: anywhere;
     color: var(--text);
     font-size: 0.68rem;
-}
-
-.ptr-format-options legend {
-    margin-bottom: 0.4rem;
-    color: var(--text);
-    font-size: 0.68rem;
-    font-weight: 800;
-}
-
-.ptr-format-options > label {
-    display: flex;
-    gap: 0.65rem;
-    align-items: flex-start;
-    padding: 0.65rem;
-    border: 1px solid var(--border);
-    border-radius: 9px;
-    background: var(--surface-soft);
-    cursor: pointer;
-}
-
-.ptr-format-options > label:has(input:checked) {
-    border-color: var(--primary);
-    background: color-mix(in srgb, var(--primary) 8%, var(--surface-soft));
-}
-
-.ptr-format-options input {
-    margin-top: 0.15rem;
-    accent-color: var(--primary);
-}
-
-.ptr-format-options span {
-    display: grid;
-    min-width: 0;
-    gap: 0.15rem;
-}
-
-.ptr-format-options strong {
-    color: var(--text);
-    font-size: 0.67rem;
-}
-
-.ptr-format-options small {
-    color: var(--text-muted);
-    font-size: 0.6rem;
-    line-height: 1.4;
 }
 
 .record-modal-value-grid {
