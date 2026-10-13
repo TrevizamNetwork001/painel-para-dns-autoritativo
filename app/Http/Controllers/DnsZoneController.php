@@ -684,12 +684,67 @@ class DnsZoneController extends Controller
             $relations[] = 'authoritativeObservations.server';
         }
         $zone->load($relations);
-        if ($zone->isReverseZone() || $zone->isIpv6ReverseZone()) {
-            $zone->setRelation(
-                'records',
-                $zone->records
-                    ->sortBy(function (DnsRecord $record) use ($calculator, $zone): string {
+        $isReverseZone = $zone->isReverseZone() || $zone->isIpv6ReverseZone();
+        $addressSortKeys = $isReverseZone
+            ? collect()
+            : $zone->records
+                ->whereIn('type', ['A', 'AAAA'])
+                ->filter(fn (DnsRecord $record): bool => filter_var(
+                    $record->content,
+                    FILTER_VALIDATE_IP,
+                ) !== false)
+                ->groupBy(fn (DnsRecord $record): string => strtolower(
+                    rtrim(trim($record->name), '.'),
+                ))
+                ->map(function ($records): string {
+                    $preferred = $records->where('type', 'A');
+                    if ($preferred->isEmpty()) {
+                        $preferred = $records->where('type', 'AAAA');
+                    }
+
+                    return $preferred
+                        ->map(function (DnsRecord $record): string {
+                            $binaryIp = inet_pton($record->content);
+
+                            return ($record->type === 'A' ? '0:' : '1:')
+                                .($binaryIp === false
+                                    ? $record->content
+                                    : bin2hex($binaryIp));
+                        })
+                        ->sort()
+                        ->first();
+                });
+        $zone->setRelation(
+            'records',
+            $zone->records
+                ->sortBy(
+                    function (DnsRecord $record) use ($addressSortKeys, $calculator, $zone, $isReverseZone): string {
                         $recordName = strtolower(rtrim(trim($record->name), '.'));
+
+                        if (! $isReverseZone) {
+                            $addressSortKey = $addressSortKeys->get($recordName);
+                            $typeOrder = match ($record->type) {
+                                'A' => 0,
+                                'AAAA' => 1,
+                                default => 2,
+                            };
+
+                            return $addressSortKey === null
+                                ? sprintf(
+                                    '1:%s:%s:%010d',
+                                    $recordName,
+                                    $record->type,
+                                    $record->id,
+                                )
+                                : sprintf(
+                                    '0:%s:%s:%02d:%010d',
+                                    $addressSortKey,
+                                    $recordName,
+                                    $typeOrder,
+                                    $record->id,
+                                );
+                        }
+
                         $zoneName = strtolower(rtrim(trim($zone->name), '.'));
                         $fullRecordName = $recordName === '@'
                             ? $zoneName
@@ -718,10 +773,10 @@ class DnsZoneController extends Controller
                             $binaryIp === false ? $ip : bin2hex($binaryIp),
                             $record->id,
                         );
-                    })
-                    ->values(),
-            );
-        }
+                    },
+                )
+                ->values(),
+        );
         if (! $hasAuthoritativeObservations) {
             $zone->setRelation('authoritativeObservations', collect());
         }

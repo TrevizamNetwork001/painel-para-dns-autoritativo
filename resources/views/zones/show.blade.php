@@ -70,6 +70,21 @@
         'expired',
         'primary_unreachable',
     ]);
+
+    $zoneNameForDisplay = strtolower(rtrim(trim($zone->name), '.'));
+    $displayRecords = $zone->records
+        ->reject(function ($record) use ($currentReverseBlock, $zoneNameForDisplay): bool {
+            if (! $currentReverseBlock || $record->type !== 'NS') {
+                return false;
+            }
+
+            $recordName = strtolower(rtrim(trim($record->name), '.'));
+
+            return $recordName === '@'
+                || $recordName === ''
+                || $recordName === $zoneNameForDisplay;
+        })
+        ->values();
 @endphp
 
 @section('content')
@@ -96,7 +111,7 @@
                 @endif
 
                 <p class="page-description">
-                    {{ $zone->records->count() }} registro(s)
+                    {{ $displayRecords->count() }} registro(s)
                     · versão {{ $zone->version }}
                     · serial {{ $zone->serial }}
                 </p>
@@ -301,7 +316,7 @@
                 data-domain-tab="records"
             >
                 Registros DNS
-                <span>{{ $zone->records->count() }}</span>
+                <span>{{ $displayRecords->count() }}</span>
             </button>
 
             <button
@@ -312,13 +327,15 @@
                 Configuração
             </button>
 
-            <button
-                type="button"
-                class="domain-tab"
-                data-domain-tab="reverse"
-            >
-                DNS reverso
-            </button>
+            @unless ($currentReverseBlock)
+                <button
+                    type="button"
+                    class="domain-tab"
+                    data-domain-tab="reverse"
+                >
+                    DNS reverso
+                </button>
+            @endunless
 
             <button
                 type="button"
@@ -381,12 +398,12 @@
                     </label>
 
                     <span class="domain-record-total">
-                        {{ $zone->records->count() }}
+                        {{ $displayRecords->count() }}
                         registro(s)
                     </span>
                 </div>
 
-                @if ($zone->records->isNotEmpty())
+                @if ($displayRecords->isNotEmpty())
                     <div class="domain-record-table-wrapper">
                         <div class="domain-record-table">
                             <div class="domain-record-table-header">
@@ -404,7 +421,7 @@
                                 );
                             @endphp
 
-                            @foreach ($zone->records as $record)
+                            @foreach ($displayRecords as $record)
                                 @php
                                     $recordNameLower = strtolower(
                                         rtrim(trim($record->name), '.'),
@@ -431,6 +448,7 @@
                                 <div
                                     class="domain-record-row"
                                     data-record-row
+                                    data-record-type="{{ $record->type }}"
                                     data-record-search-value="{{ mb_strtolower(
                                         $record->name
                                         . ' '
@@ -1102,11 +1120,12 @@
             </article>
         </section>
 
-        <section
-            class="domain-tab-panel"
-            data-domain-panel="reverse"
-            hidden
-        >
+        @unless ($currentReverseBlock)
+            <section
+                class="domain-tab-panel"
+                data-domain-panel="reverse"
+                hidden
+            >
             <article class="domain-section-card">
                 <header class="domain-section-header">
                     <div>
@@ -1190,7 +1209,8 @@
                     </ul>
                 @endif
             </article>
-        </section>
+            </section>
+        @endunless
 
         <section
             class="domain-tab-panel"
@@ -1410,9 +1430,7 @@
                             </button>
 
                             <small>
-                                Atualiza os registros PTR desta zona reversa
-                                pra apontar às identidades de nameserver cujo
-                                IPv4 está dentro dela.
+                                Cria os PTR dos nameservers presentes neste bloco.
                             </small>
                         </form>
                     @endif
@@ -1448,17 +1466,12 @@
                             </button>
 
                             <small>
-                                Cria/atualiza um PTR nesta zona pra cada
-                                registro A do domínio selecionado cujo
-                                endereço esteja dentro deste bloco.
+                                Cria os PTR dos registros A presentes neste bloco.
                                 @if ($zone->ptr_name_template)
-                                    Usará o modelo de nome
+                                    Modelo:
                                     <code>{{ $zone->ptr_name_template }}</code>
-                                    (configurável na aba Configuração).
                                 @else
-                                    Usará o nome do próprio registro A
-                                    (defina um modelo de nome na aba
-                                    Configuração pra mudar isso).
+                                    Será usado o nome do registro A.
                                 @endif
                             </small>
                         </form>

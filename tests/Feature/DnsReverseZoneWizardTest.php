@@ -59,10 +59,9 @@ class DnsReverseZoneWizardTest extends TestCase
         $this->assertFalse($zone->isReverseZone());
     }
 
-    public function test_reverse_zone_page_does_not_offer_nested_reverse_creation(): void
+    public function test_reverse_zone_page_hides_redundant_reverse_area(): void
     {
         $context = $this->context();
-        $forwardZone = $this->createZone($context, 'example.com');
 
         $this->actingAs($context['admin'])
             ->post(route('zones.reverse.store'), $this->reversePayload($context, [
@@ -80,8 +79,8 @@ class DnsReverseZoneWizardTest extends TestCase
             ->get(route('zones.show', $reverseZone))
             ->assertOk()
             ->assertDontSee('<h2 id="reverse-modal-title">', false)
-            ->assertSee('Para criar outra zona reversa')
-            ->assertSee(route('zones.show', $forwardZone), false);
+            ->assertDontSee('data-domain-tab="reverse"', false)
+            ->assertDontSee('data-domain-panel="reverse"', false);
     }
 
     public function test_ipv4_reverse_zone_page_lists_ptr_records_in_numeric_order(): void
@@ -105,12 +104,16 @@ class DnsReverseZoneWizardTest extends TestCase
         $this->actingAs($context['admin'])
             ->get(route('zones.show', $reverseZone))
             ->assertOk()
+            ->assertDontSee('data-record-type="NS"', false)
+            ->assertSee('data-record-type="PTR"', false)
             ->assertSeeInOrder([
                 'host-0.example.',
                 'host-2.example.',
                 'host-10.example.',
                 'host-255.example.',
             ]);
+
+        $this->assertSame(2, $reverseZone->records()->where('type', 'NS')->count());
     }
 
     public function test_ipv6_reverse_zone_page_translates_apex_and_sorts_ptr_records(): void
@@ -143,6 +146,41 @@ class DnsReverseZoneWizardTest extends TestCase
                 'host-2804-712c--2.example.',
                 'host-2804-712c--10.example.',
                 'host-2804-712c--ff.example.',
+            ]);
+    }
+
+    public function test_forward_zone_page_lists_address_records_in_numeric_order(): void
+    {
+        $context = $this->context();
+        $zone = $this->createZone($context, 'example.com');
+
+        foreach ([255, 10, 2] as $octet) {
+            foreach (['AAAA', 'A'] as $type) {
+                DnsRecord::query()->create([
+                    'organization_id' => $context['organization']->id,
+                    'dns_zone_id' => $zone->id,
+                    'name' => 'host-'.$octet,
+                    'type' => $type,
+                    'ttl' => null,
+                    'priority' => null,
+                    'content' => $type === 'A'
+                        ? '192.0.2.'.$octet
+                        : '2001:db8::'.dechex($octet),
+                    'enabled' => true,
+                ]);
+            }
+        }
+
+        $this->actingAs($context['admin'])
+            ->get(route('zones.show', $zone))
+            ->assertOk()
+            ->assertSeeInOrder([
+                '192.0.2.2',
+                '2001:db8::2',
+                '192.0.2.10',
+                '2001:db8::a',
+                '192.0.2.255',
+                '2001:db8::ff',
             ]);
     }
 

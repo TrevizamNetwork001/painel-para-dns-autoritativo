@@ -210,6 +210,41 @@ class UserManagementController extends Controller
         );
     }
 
+    public function destroy(Request $request, User $user): RedirectResponse
+    {
+        $organization = $this->organization($request);
+
+        abort_unless(
+            $this->hasOrganizationMembership($user, $organization),
+            404
+        );
+
+        if ($request->user()->is($user)) {
+            return back()->withErrors([
+                'user' => 'Você não pode excluir sua própria conta.',
+            ]);
+        }
+
+        if ($user->is_platform_admin && ! $request->user()->is_platform_admin) {
+            abort(403, 'Você não pode excluir um administrador da plataforma.');
+        }
+
+        DB::transaction(function () use ($request, $user, $organization): void {
+            DnsAuditLogger::record(
+                organizationId: $organization->id,
+                user: $request->user(),
+                action: 'user.deleted',
+                recordName: $user->email,
+            );
+
+            $user->delete();
+        });
+
+        return redirect()
+            ->route('users.index')
+            ->with('status', 'Usuário excluído com sucesso.');
+    }
+
     private function organization(Request $request): Organization
     {
         $organization = $request->user()

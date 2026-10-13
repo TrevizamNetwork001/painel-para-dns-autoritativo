@@ -150,6 +150,42 @@ class UserManagementTest extends TestCase
         ]);
     }
 
+    public function test_admin_can_delete_organization_user(): void
+    {
+        [$organization, $admin] = $this->makeAdmin();
+        $operator = User::factory()->create([
+            'current_organization_id' => $organization->id,
+        ]);
+        $operator->organizations()->attach($organization->id, [
+            'role' => 'operator',
+            'status' => 'active',
+            'is_default' => true,
+        ]);
+
+        $this->actingAs($admin)
+            ->delete(route('users.destroy', $operator))
+            ->assertRedirect(route('users.index'))
+            ->assertSessionHas('status', 'Usuário excluído com sucesso.');
+
+        $this->assertDatabaseMissing('users', ['id' => $operator->id]);
+        $this->assertDatabaseHas('dns_audit_logs', [
+            'organization_id' => $organization->id,
+            'action' => 'user.deleted',
+            'record_name' => $operator->email,
+        ]);
+    }
+
+    public function test_admin_cannot_delete_own_account(): void
+    {
+        [, $admin] = $this->makeAdmin();
+
+        $this->actingAs($admin)
+            ->delete(route('users.destroy', $admin))
+            ->assertSessionHasErrors('user');
+
+        $this->assertDatabaseHas('users', ['id' => $admin->id]);
+    }
+
     private function makeAdmin(): array
     {
         $organization = Organization::query()->create([

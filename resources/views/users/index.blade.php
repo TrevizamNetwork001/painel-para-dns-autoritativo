@@ -277,34 +277,52 @@
                                             Administrador da plataforma
                                         </span>
                                     @else
-                                        <form
-                                            method="POST"
-                                            action="{{ route(
-                                                'users.status',
-                                                $user
-                                            ) }}"
-                                        >
-                                            @csrf
-
-                                            <button
-                                                type="submit"
-                                                @class([
-                                                    'button',
-                                                    'button-small',
-                                                    'button-danger-soft' =>
-                                                        $membershipStatus ===
-                                                        'active',
-                                                    'button-success-soft' =>
-                                                        $membershipStatus !==
-                                                        'active',
-                                                ])
+                                        <div class="users-row-actions">
+                                            <form
+                                                method="POST"
+                                                action="{{ route(
+                                                    'users.status',
+                                                    $user
+                                                ) }}"
                                             >
-                                                {{ $membershipStatus ===
-                                                    'active'
-                                                    ? 'Desativar'
-                                                    : 'Ativar' }}
-                                            </button>
-                                        </form>
+                                                @csrf
+
+                                                <button
+                                                    type="submit"
+                                                    @class([
+                                                        'button',
+                                                        'button-small',
+                                                        'button-danger-soft' =>
+                                                            $membershipStatus ===
+                                                            'active',
+                                                        'button-success-soft' =>
+                                                            $membershipStatus !==
+                                                            'active',
+                                                    ])
+                                                >
+                                                    {{ $membershipStatus ===
+                                                        'active'
+                                                        ? 'Desativar'
+                                                        : 'Ativar' }}
+                                                </button>
+                                            </form>
+
+                                            <form
+                                                method="POST"
+                                                action="{{ route('users.destroy', $user) }}"
+                                                onsubmit="return confirm('Excluir definitivamente este usuário?')"
+                                            >
+                                                @csrf
+                                                @method('DELETE')
+
+                                                <button
+                                                    type="submit"
+                                                    class="button button-small button-danger-soft"
+                                                >
+                                                    Excluir
+                                                </button>
+                                            </form>
+                                        </div>
                                     @endif
                                 </td>
                             </tr>

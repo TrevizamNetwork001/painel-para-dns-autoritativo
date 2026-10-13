@@ -157,6 +157,11 @@ Route::middleware([
         '/{user}/status',
         [UserManagementController::class, 'updateStatus']
     )->name('status');
+
+    Route::delete(
+        '/{user}',
+        [UserManagementController::class, 'destroy']
+    )->name('destroy');
 });
 
 Route::middleware([
