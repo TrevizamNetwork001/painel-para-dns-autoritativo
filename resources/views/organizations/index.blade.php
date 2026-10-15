@@ -7,7 +7,7 @@
 <div class="app-shell">
     <x-app-sidebar active="organizations" />
 
-    <main class="main-content">
+    <main class="main-content admin-page organizations-page">
         <header class="topbar">
             <div>
                 <p class="eyebrow">Plataforma</p>

@@ -7,7 +7,7 @@
 <div class="app-shell">
     <x-app-sidebar active="audit" />
 
-    <main class="main-content">
+    <main class="main-content admin-page audit-page">
         <header class="topbar">
             <div>
                 <p class="eyebrow">Operações</p>
@@ -32,7 +32,7 @@
         </header>
 
         <section class="domain-section-card">
-            <form method="GET" class="domain-form-grid domain-form-grid-three">
+            <form method="GET" class="domain-form-grid domain-form-grid-three admin-filter-form">
                 <label class="domain-field">
                     <span>Domínio</span>
 

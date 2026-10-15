@@ -7,7 +7,7 @@
 <div class="app-shell">
     <x-app-sidebar active="settings" />
 
-    <main class="main-content">
+    <main class="main-content admin-page backup-settings-page">
         <header class="topbar">
             <div>
                 <p class="eyebrow">Configurações</p>

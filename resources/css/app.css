@@ -6544,6 +6544,79 @@ body.has-open-modal {
 
 /* DNS CENTER REVERSE ZONES UX END */
 
+/* DNS CENTER ADMIN PAGES UX START */
+
+.admin-page > .panel,
+.admin-page > .domain-section-card {
+    margin-bottom: 1rem;
+    box-shadow: 0 8px 28px rgba(15, 23, 42, 0.04);
+}
+
+.admin-page .compact-panel-heading {
+    padding-bottom: 0.9rem;
+    border-bottom: 1px solid var(--border);
+}
+
+.audit-page .admin-filter-form {
+    padding: 1rem;
+}
+
+.audit-page .admin-filter-form .topbar-actions {
+    align-self: end;
+    justify-content: flex-start;
+}
+
+.audit-page .table-wrapper {
+    overflow-x: auto;
+}
+
+.audit-page .data-table {
+    min-width: 1050px;
+}
+
+.audit-page .data-table td {
+    max-width: 260px;
+    overflow-wrap: anywhere;
+    vertical-align: top;
+}
+
+.organizations-page > .panel > form,
+.backup-settings-page > .panel > form,
+.backup-settings-page > .panel > .page-description,
+.backup-settings-page > .panel > .form-actions,
+.backup-settings-page > .panel > ul {
+    padding-right: 1.1rem;
+    padding-left: 1.1rem;
+}
+
+.backup-settings-page > .panel > ul {
+    color: var(--text-muted);
+    line-height: 1.65;
+}
+
+.backup-settings-page > .panel > ul strong {
+    color: var(--text);
+}
+
+@media (max-width: 760px) {
+    .audit-page .admin-filter-form .topbar-actions {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+    }
+
+    .audit-page .admin-filter-form .button {
+        width: 100%;
+    }
+}
+
+@media (max-width: 520px) {
+    .audit-page .admin-filter-form .topbar-actions {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* DNS CENTER ADMIN PAGES UX END */
+
 /* DNS CENTER DOMAIN WORKSPACE START */
 
 .domain-workspace-page {
