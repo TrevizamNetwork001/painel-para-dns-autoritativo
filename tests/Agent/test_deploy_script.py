@@ -108,6 +108,14 @@ class DeployScriptTest(unittest.TestCase):
         )
         self.assertEqual(0, result.returncode, result.stderr)
 
+    def test_deploy_prechecks_disk_before_pull_but_rollback_remains_available(self):
+        deploy = self._function("deploy_release")
+        rollback = self._function("rollback_release")
+
+        self.assertIn('"${DISK_PRECHECK}"', deploy)
+        self.assertLess(deploy.index('"${DISK_PRECHECK}"'), deploy.index("compose pull"))
+        self.assertNotIn("DISK_PRECHECK", rollback)
+
     def test_prune_keeps_newest_ten_and_removes_only_old_extras(self):
         body = self._function("prune_backups")
 

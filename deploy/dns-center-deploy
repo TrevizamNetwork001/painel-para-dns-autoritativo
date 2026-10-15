@@ -8,6 +8,7 @@ SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(cd -- "${SCRIPT_DIR}/.." && pwd)"
 COMPOSE_FILE="${PROJECT_DIR}/compose.production.yaml"
 DEPLOY_CONFIG="${DNS_CENTER_DEPLOY_CONFIG:-/etc/dns-center/deployment.env}"
+DISK_PRECHECK="${SCRIPT_DIR}/disk-precheck.sh"
 
 fail() {
     printf 'ERRO: %s\n' "$*" >&2
@@ -42,6 +43,9 @@ load_config() {
     export DNS_CENTER_BACKUP_DIR DNS_CENTER_STATE_DIR
     export DNS_CENTER_HTTP_PORT="${DNS_CENTER_HTTP_PORT:-80}"
     export DNS_CENTER_HTTPS_PORT="${DNS_CENTER_HTTPS_PORT:-443}"
+    export DNS_CENTER_PRECHECK_MAX_USED_PERCENT="${DNS_CENTER_PRECHECK_MAX_USED_PERCENT:-80}"
+    export DNS_CENTER_PRECHECK_MIN_FREE_BYTES="${DNS_CENTER_PRECHECK_MIN_FREE_BYTES:-5368709120}"
+    export DNS_CENTER_PRECHECK_RESERVE_BYTES="${DNS_CENTER_PRECHECK_RESERVE_BYTES:-5368709120}"
 }
 
 validate_version() {
@@ -317,6 +321,11 @@ deploy_release() {
     [ "${target}" != "${current}" ] || fail "versão ${target} já está ativa"
 
     set_version "${target}"
+    # Pull e preparação podem baixar/criar várias camadas. Rollback não usa este
+    # bloqueio: uma recuperação emergencial deve continuar possível.
+    "${DISK_PRECHECK}" \
+        --operation "deploy-${mode}-${target}" \
+        --estimated-bytes "${DNS_CENTER_DEPLOY_ESTIMATED_BYTES:-3221225472}"
     compose pull --policy missing app web queue scheduler
     compose run --rm --no-deps init
     preflight_release

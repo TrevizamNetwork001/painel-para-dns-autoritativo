@@ -64,12 +64,67 @@ docker rmi dns-center-app:X.Y.Z dns-center-web:X.Y.Z
 - **Não apague a imagem da versão anterior** (`previous-version`): é o alvo do rollback.
   O `disk-guard.sh` já protege a atual, a anterior e as 3 mais recentes.
 
+### Níveis preventivos e notificações
+
+O código versionado do Disk Guard reconhece três níveis configuráveis:
+
+| Nível | Padrão | Conduta |
+| --- | ---: | --- |
+| `WARNING` | 80% | alerta e revisão de capacidade |
+| `CRITICAL` | 90% | intervenção manual; nenhuma limpeza é iniciada pelo guard |
+| `EMERGENCY` | 95% | interromper operações pesadas e liberar/expandir espaço de forma controlada |
+
+O estado fica em `${DNS_CENTER_STATE_DIR}/disk-guard.state`. Alertas externos só
+são enviados em mudança de nível e há uma notificação quando o estado volta a
+`OK`; execuções repetidas no mesmo nível não reenviam o alerta. O webhook HTTPS
+é opcional e desabilitado por padrão (`DNS_CENTER_DISK_WEBHOOK_URL` vazio). Ele
+não depende de Laravel, banco ou Redis, usa timeout curto e sua falha aparece
+como `NOTIFY_ERROR` sem revelar a URL.
+
+Antes de ativar em produção, instale o script versionado de forma controlada,
+configure os limites fora do repositório e teste o webhook com um receptor de
+homologação. Para voltar atrás, restaure o script/agendamento anterior; o estado
+`disk-guard.state` pode permanecer, pois não afeta aplicação, banco ou DNS.
+
+### Precheck antes de operação pesada
+
+Use antes de build, pull, CI local ou homologação:
+
+```bash
+deploy/disk-precheck.sh --operation build-release --estimated-bytes 4294967296
+```
+
+Por padrão ele bloqueia (código 20) quando o uso é `>= 80%`, quando há menos de
+5 GiB livres ou quando a estimativa deixaria menos de 5 GiB de reserva. Erro de
+leitura/configuração retorna 21. Não há bypass silencioso: ajuste de limites deve
+ser explícito, autorizado e registrado. `install/update` executam o precheck
+antes do pull; rollback não é bloqueado.
+
+Produção e CI/homologação não devem disputar o mesmo volume sem reserva. Para o
+perfil atual, 40 GB é o mínimo sustentável e 60 GB é preferível se builds locais
+continuarem. Cache de build deve ser tratado pelo espaço privado efetivamente
+recuperável; não some camadas compartilhadas como se fossem bytes garantidos.
+
+### Frequência e concorrência
+
+O agendamento instalado continua diário até uma implantação autorizada. A
+proposta é executar o guard a cada hora (`15 * * * *`). O script usa `flock` para
+impedir instâncias simultâneas e também respeita o lock de deploy/backup. Se o
+lock estiver ocupado, registra `SKIP` e termina sem limpar.
+
+Uma política futura de cache deve combinar idade e pressão de disco: manter
+cache recente em `WARNING`, não limpar automaticamente em `CRITICAL/EMERGENCY`
+e exigir plano manual com estimativa conservadora. Nunca use `docker system
+prune`; confirme primeiro versão atual, anterior, três mais recentes, containers
+referenciando imagens e checksums dos backups.
+
 ## Fazer um deploy
 
 ```bash
 # 1. código testado e commitado; tag da release
 git tag -a vX.Y.Z -m "..." HEAD
 # 2. imagens
+deploy/disk-precheck.sh --operation build-release --estimated-bytes 4294967296
 DNS_CENTER_VERSION=X.Y.Z docker compose --env-file /dev/null -f compose.build.yaml build
 # 3. deploy (faz backup do banco, migrations, healthcheck e security-check)
 sudo ./deploy/dns-center-deploy update X.Y.Z
