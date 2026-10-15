@@ -907,12 +907,12 @@
                         @if ($zone->isReverseZone())
                             <div class="domain-configuration-section">
                                 <div class="domain-configuration-heading">
-                                    <h3>Geração de PTR</h3>
+                                    <h3>Padrão para geração manual de PTR</h3>
 
                                     <p>
-                                        Modelo de nome usado ao gerar PTR
-                                        a partir de registros A (botão na
-                                        aba Publicação).
+                                        Define somente o formato usado pela ação
+                                        manual da aba Publicação. Salvar estas
+                                        configurações não cria registros PTR.
                                     </p>
                                 </div>
 
@@ -937,7 +937,7 @@
 
                                 <div data-ptr-template-control>
                                     <label class="domain-field">
-                                        <span>Formato do nome do PTR</span>
+                                        <span>Padrão do nome do PTR</span>
 
                                         <select name="ptr_name_format" data-ptr-template-format>
                                             <option value="original" @selected($savedPtrFormat === 'original')>
@@ -1469,7 +1469,8 @@
                             </button>
 
                             <small>
-                                Cria os PTR dos registros A presentes neste bloco.
+                                Ação manual: cria ou atualiza os PTR dos registros A
+                                presentes neste bloco após sua confirmação.
                                 @if ($zone->ptr_name_template)
                                     Modelo:
                                     <code>{{ $zone->ptr_name_template }}</code>
