@@ -78,13 +78,13 @@
         @endif
 
         <section class="servers-summary-grid">
-            <article class="server-summary-card">
+            <article class="server-summary-card server-summary-total">
                 <span>Total</span>
                 <strong>{{ $servers->count() }}</strong>
                 <small>Servidores cadastrados</small>
             </article>
 
-            <article class="server-summary-card">
+            <article class="server-summary-card server-summary-online">
                 <span>Online</span>
                 <strong>
                     {{ $servers->where('status', 'online')->count() }}
@@ -92,7 +92,7 @@
                 <small>Operacionais</small>
             </article>
 
-            <article class="server-summary-card">
+            <article class="server-summary-card server-summary-warning">
                 <span>Atenção</span>
                 <strong>
                     {{ $servers->where('status', 'warning')->count() }}
@@ -100,7 +100,7 @@
                 <small>Requerem análise</small>
             </article>
 
-            <article class="server-summary-card">
+            <article class="server-summary-card server-summary-pending">
                 <span>Aguardando</span>
                 <strong>
                     {{ $servers->where('status', 'pending')->count() }}

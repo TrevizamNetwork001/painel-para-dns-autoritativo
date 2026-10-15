@@ -96,7 +96,7 @@
         @endif
 
         <section class="nameservers-summary">
-            <article>
+            <article class="nameservers-summary-card nameservers-summary-identities">
                 <span>Identidades</span>
                 <strong>{{ $identities->count() }}</strong>
                 <small>
@@ -104,7 +104,7 @@
                 </small>
             </article>
 
-            <article>
+            <article class="nameservers-summary-card nameservers-summary-profiles">
                 <span>Perfis</span>
                 <strong>{{ $profiles->count() }}</strong>
                 <small>
@@ -113,7 +113,7 @@
                 </small>
             </article>
 
-            <article>
+            <article class="nameservers-summary-card nameservers-summary-default">
                 <span>Perfil padrão</span>
                 <strong class="nameservers-summary-text">
                     {{ $profiles->firstWhere('is_default', true)?->name
@@ -122,7 +122,7 @@
                 <small>Usado como sugestão para novas zonas</small>
             </article>
 
-            <article>
+            <article class="nameservers-summary-card nameservers-summary-external">
                 <span>Externos</span>
                 <strong>
                     {{ $identities->whereNull('dns_server_id')->count() }}
