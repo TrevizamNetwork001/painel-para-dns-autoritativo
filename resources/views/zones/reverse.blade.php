@@ -18,7 +18,7 @@
 <div class="app-shell dashboard-v2">
     <x-app-sidebar active="zones-reverse" />
 
-    <main class="main-content domains-page">
+    <main class="main-content domains-page reverse-zones-page">
         <header class="topbar domains-topbar">
             <div>
                 <p class="eyebrow">DNS autoritativo</p>
